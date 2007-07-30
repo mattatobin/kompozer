@@ -1,0 +1,45 @@
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:621: checking host system type
+configure:642: checking target system type
+configure:660: checking build system type
+configure:1021: checking for whoami
+configure:1873: checking for c++
+configure:1905: checking whether the C++ compiler (c++  ) works
+configure:1921: c++ -o conftest    conftest.C  1>&5
+configure:1947: checking whether the C++ compiler (c++  ) is a cross-compiler
+configure:1952: checking whether we are using GNU C++
+configure:1980: checking whether c++ accepts -g
+configure:2029: cc -c   conftest.c 1>&5
+configure:2046: cc -c   conftest.c 1>&5
+configure: In function 'main':
+configure:2042: warning: incompatible implicit declaration of built-in function 'exit'
+configure:2068: checking for gcc
+configure:2181: checking whether the C compiler (gcc  ) works
+configure:2197: gcc -o conftest    conftest.c  1>&5
+configure:2223: checking whether the C compiler (gcc  ) is a cross-compiler
+configure:2228: checking whether we are using GNU C
+configure:2256: checking whether gcc accepts -g
+configure:2289: checking how to run the C preprocessor
+configure:2371: checking for ranlib
+configure:2403: checking for as
+configure:2444: checking for ar
+configure:2485: checking for ld
+configure:2526: checking for strip
+configure:2567: checking for windres
+configure:2629: checking for gcc -pipe support
+configure:2651: gcc -c  -pipe  conftest.c 1>&5
+configure:2684: checking for perl5
+configure:4853: checking for dlopen in -ldl
+configure:4889: checking for dlfcn.h
+configure:4932: checking whether gcc needs -traditional
+configure:4980: checking for lchown
+configure:4980: checking for strerror
+configure:5083: checking for pthread_create in -lpthreads
+gcc -o dummy dummy.c  -pipe -ansi -Wall  -lpthreads  
+/usr/lib/gcc/i486-slackware-linux/4.1.2/../../../../i486-slackware-linux/bin/ld: cannot find -lpthreads
+collect2: ld returned 1 exit status
+configure:5105: checking for pthread_create in -lpthread
+gcc -o dummy dummy.c  -pipe -ansi -Wall  -lpthread  
+configure:5301: checking whether gcc accepts -pthread

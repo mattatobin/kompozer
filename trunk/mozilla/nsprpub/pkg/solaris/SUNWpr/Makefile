@@ -1,0 +1,22 @@
+# Generated automatically from Makefile.in by configure.
+#
+# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
+# Use is subject to license terms.
+#
+#ident	"$Id: Makefile.in,v 1.1.2.1 2003/01/07 15:29:37 wtc%netscape.com Exp $"
+#
+
+MOD_DEPTH = ../../..
+topsrcdir   = ../../..
+srcdir	    = .
+
+include $(MOD_DEPTH)/config/autoconf.mk
+
+include $(srcdir)/../Makefile.com
+
+DATAFILES += 
+
+all:: $(FILES)
+publish:: all pkg
+
+include $(srcdir)/../Makefile.targ
