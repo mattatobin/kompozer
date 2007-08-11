@@ -3910,7 +3910,9 @@ function loadExternalURL( url )
                                    .getService(Components.interfaces.nsIExternalProtocolService);
 
     // <Kaze> on Linux, extProtocolSvc won't work if the corresponding prefs aren't set
-    if (!extProtocolSvc.externalProtocolHandlerExists(GetScheme(url))) { 
+    /* TODO: open a dialog to define a default browser
+    var scheme = GetScheme(url);
+    if (!extProtocolSvc.externalProtocolHandlerExists(scheme)) { 
       // this scheme isn't handled yet: ask user to select a browser
       alert("No application is defined for " + scheme + "yet.\nSelect your preferred browser...");
       var pref = Components.classes["@mozilla.org/preferences-service;1"]
@@ -3931,7 +3933,7 @@ function loadExternalURL( url )
           pref.setCharPref("ftp"  , fp.file.path);
         }
       } catch(e) {}
-    }
+    } */
     // </Kaze>
 
     extProtocolSvc.loadUrl(uri);
@@ -4032,7 +4034,7 @@ function addMadeWithNvuButton()
   //~ const kMadeWithNvuImageURL = "http://www.nvu.com/images/madewithNvu80x15clear.png";
   //~ const kMadeWithNvuAlt = "Document made with Nvu";
   const kMadeWithNvuURL      = "http://kompozer.net/";
-  const kMadeWithNvuImageURL = "http://kompozer.net/images/madewithKz80x15.png";
+  const kMadeWithNvuImageURL = "http://kompozer.sourceforge.net/images/kompozer_80x15.png";
   const kMadeWithNvuAlt      = "Document made with KompoZer";
   // </Kaze>
 

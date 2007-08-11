@@ -207,6 +207,9 @@ function persistCurrentSets()
     }
   }
   
+  if (!gToolbox.toolbarset) // Kaze: quick and dirty but avoids a bug
+    return;
+
   // Remove toolbarX attributes for removed toolbars.
   while (gToolbox.toolbarset.hasAttribute("toolbar"+(++customCount))) {
     gToolbox.toolbarset.removeAttribute("toolbar"+customCount);

@@ -83,7 +83,7 @@ table[empty-cells],
 /* Kaze: same thing for <div> containers */
 div
 {
-  border: thin dotted red;
+  -moz-outline: thin dotted red;
 }
 
 /* give a green dashed border to forms otherwise they are invisible
@@ -121,9 +121,16 @@ script
   background-position: top left;
   font-size: 0; /* hide script content */
 }
+/* hide noscript content, because it's displayed as raw text. :-( */
 noscript
 {
   display: block;
+  overflow: hidden;
+  width: 16px; height: 44px; margin-top: 1px;
+  background-image: url(chrome://editor/content/images/tag-nsc.gif);
+  background-repeat: no-repeat; 
+  background-position: top left;
+  font-size: 0; 
 }
 
 /* Kaze: same thing for objects (not working!)
