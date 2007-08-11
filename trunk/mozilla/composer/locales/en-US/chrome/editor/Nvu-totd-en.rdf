@@ -49,14 +49,14 @@
     <language>en-us</language>
   
     <item>
-      <title>...you can move elements?</title>
+      <title>…you can move elements?</title>
       <description>Just place the caret in the block you'd like to move and
                    click once on the Layer button to make the block movable.
       </description>
     </item>
   
     <item>
-      <title>...you can customize the toolbars?</title>
+      <title>…you can customize the toolbars?</title>
       <description>Use the menu "View > Show/Hide > Customize Toolbar" to open
                    the toolbar customization panel. Then use drag and drop to
                    add, move or remove buttons and spaces/separators.
@@ -64,7 +64,7 @@
     </item>
   
     <item>
-      <title>...you can create a new toolbar?</title>
+      <title>…you can create a new toolbar?</title>
       <description>Use the menu "View > Show/Hide > Customize Toolbar > Format
                    toolbar" to open the toolbar customization panel. Then
                    click on the "Add new toolbar" button. Empty toolbars
@@ -73,19 +73,19 @@
     </item>
   
     <item>
-      <title>...&brandShortName; has a CSS editor?</title>
+      <title>…&brandShortName; has a CSS editor?</title>
       <description>&brandShortName; integrates the CaScadeS CSS editor. Open it using the
                    Tool > CSS Editor menu.</description>
     </item>
   
     <item>
-      <title>...&brandShortName; has a Site Manager?</title>
+      <title>…&brandShortName; has a Site Manager?</title>
       <description>Use the F9 key or the "View > Show/Hide > Site Manager"
                    menu to show or hide the Site Manager.</description>
     </item>
 
     <item>
-      <title>...you can apply CSS styles to any element?</title>
+      <title>…you can apply CSS styles to any element?</title>
       <description>Place the caret in the element you wish to style and right-
                    click on the element's tag in the structure toolbar at the
                    bottom of the main window of &brandShortName;. The "Inline styles" and
@@ -94,67 +94,67 @@
     </item>
 
     <item>
-      <title>...you can control the writing direction?</title>
+      <title>…you can control the writing direction?</title>
       <description>Customize your toolbars and add the two direction control
                    buttons.</description>
     </item>
 
     <item>
-      <title>...you can resize table with the mouse?</title>
+      <title>…you can resize table with the mouse?</title>
       <description>Just show the rulers using View > Show/Hide > Rulers and
                    place the caret inside a table cell to see resizers appear.
       </description>
     </item>
 
     <item>
-      <title>...you can very easily customize a toolbar?</title>
-      <description>Just right-click on it...</description>
+      <title>…you can very easily customize a toolbar?</title>
+      <description>Just right-click on it…</description>
     </item>
 
     <item>
-      <title>...you have direct access to the &brandShortName; community?</title>
+      <title>…you have direct access to the &brandShortName; community?</title>
       <description>Just select the Help > Forums menu entry.</description>
     </item>
 
     <item>
-      <title>...&brandShortName; can automatically open a document at launch?</title>
+      <title>…&brandShortName; can automatically open a document at launch?</title>
       <description>Use the command-line:      kompozer _your_url_</description>
     </item>
 
     <item>
-      <title>...you can edit more than one site at the same time?</title>
+      <title>…you can edit more than one site at the same time?</title>
       <description>The Site Manager can open and show the contents of multiple web sites
                    at the same time.</description>
     </item>
 
     <item>
-      <title>...&brandShortName; is cross-platform?</title>
+      <title>…&brandShortName; is cross-platform?</title>
       <description>&brandShortName; exists on a wide variety of operating systems, including
-                   Windows, Mac OS X, many flavors of Linux, OS/2, ...</description>
+                   Windows, Mac OS X, many flavors of Linux, OS/2, …</description>
     </item>
 
     <item>
-      <title>...you can create a new tab with a key combination?</title>
+      <title>…you can create a new tab with a key combination?</title>
       <description>Control+t (Command+t on Mac OS X) will create a new blank tab</description>
     </item>
 
     <item>
-      <title>...you can create a new window with a key combination?</title>
+      <title>…you can create a new window with a key combination?</title>
       <description>Control+shift+n (Command+shift+t on Mac OS X) will create a new blank window</description>
     </item>
 
     <item>
-      <title>...you can change the border of a single table cell?</title>
+      <title>…you can change the border of a single table cell?</title>
       <description>Place the caret in that cell, right-click on the cell in the status bar and select Inline Styles &gt; Border Properties</description>
     </item>
 
     <item>
-      <title>...you can close a tab with one click?</title>
+      <title>…you can close a tab with one click?</title>
       <description>Just middle-click on the tab itself</description>
     </item>
 
     <item>
-      <title>...you can close the current tab with one key?</title>
+      <title>…you can close the current tab with one key?</title>
       <description>Control-F4 will close the current tab.</description>
     </item>
 

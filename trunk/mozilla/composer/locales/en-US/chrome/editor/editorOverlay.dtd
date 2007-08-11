@@ -716,28 +716,30 @@
 <!ENTITY helpMenu.label           "Help">
 <!ENTITY helpmenu.accesskey       "H">
 
-<!ENTITY nvuComMenu.label         "&brandShortName;'s web site">
-<!ENTITY nvucommenu.accesskey     "K">
-<!ENTITY faqMenu.label            "FAQ">
-<!ENTITY faqmenu.accesskey        "F">
-<!ENTITY bugReportsMenu.label     "Bug reports and suggestions">
-<!ENTITY bugreportsmenu.accesskey "B">
-<!ENTITY nvudevOrgMenu.label      "Developers' community">
-<!ENTITY nvudevorgmenu.accesskey  "D">
-<!ENTITY nvuForumsMenu.label      "Forums">
-<!ENTITY nvuforumsmenu.accesskey  "o">
-<!ENTITY tipofthedayMenu.label    "Tip of the day">
+<!ENTITY nvuComMenu.label          "&brandShortName;'s web site">
+<!ENTITY nvucommenu.accesskey      "K">
+<!ENTITY faqMenu.label             "FAQ">
+<!ENTITY faqmenu.accesskey         "F">
+<!ENTITY bugReportsMenu.label      "Bug reports and suggestions">
+<!ENTITY bugreportsmenu.accesskey  "B">
+<!ENTITY nvudevOrgMenu.label       "Developers' community">
+<!ENTITY nvudevorgmenu.accesskey   "D">
+<!ENTITY nvuForumsMenu.label       "Forums">
+<!ENTITY nvuforumsmenu.accesskey   "o">
+<!ENTITY supportKompoZer.label     "Support &brandShortName;">
+<!ENTITY supportKompoZer.accesskey "s">
+<!ENTITY tipofthedayMenu.label     "Tip of the day">
 <!ENTITY tipofthedaymenu.accesskey "T">
-<!ENTITY aboutMenu.label          "About &brandShortName;">
-<!ENTITY aboutmenu.accesskey      "A">
-<!ENTITY localizingnvu.accesskey  "Z">
-<!ENTITY localizingNvu.label      "Localizing &brandShortName;">
-<!ENTITY userGuideMenu.label      "User Guide">
-<!ENTITY userguidemenu.accesskey  "U">
-<!ENTITY aboutLinspire.label      "About Linspire Inc.">
-<!ENTITY aboutlinspire.accesskey  "L">
-<!ENTITY aboutDI.label            "About Disruptive Innovations">
-<!ENTITY aboutDI.accesskey        "I">
+<!ENTITY aboutMenu.label           "About &brandShortName;">
+<!ENTITY aboutmenu.accesskey       "A">
+<!ENTITY localizingnvu.accesskey   "Z">
+<!ENTITY localizingNvu.label       "Localizing &brandShortName;">
+<!ENTITY userGuideMenu.label       "User Guide">
+<!ENTITY userguidemenu.accesskey   "U">
+<!ENTITY aboutLinspire.label       "About Linspire Inc.">
+<!ENTITY aboutlinspire.accesskey   "L">
+<!ENTITY aboutDI.label             "About Disruptive Innovations">
+<!ENTITY aboutDI.accesskey         "I">
 
 <!ENTITY leftGlued.tooltip        "Glue to the left border">
 <!ENTITY rightGlued.tooltip       "Glue to the right border">
