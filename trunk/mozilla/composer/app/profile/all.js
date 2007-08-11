@@ -943,14 +943,16 @@ pref("privacy.popups.statusbar_icon_enabled",     true);
 pref("tipoftheday.openAtStartup",                 true);
 pref("pinger.pinged",                             " ");
 
-pref("network.protocol-handler.app.http",  "/usr/lib/mozilla/mozilla-ext");
-pref("network.protocol-handler.app.https", "/usr/lib/mozilla/mozilla-ext");
-pref("network.protocol-handler.app.ftp",   "/usr/lib/mozilla/mozilla-ext");
-pref("network.protocol-handler.app.file",  "/usr/lib/mozilla/mozilla-ext");
+// Kaze: use the Debian-sensible browser by default
+pref("network.protocol-handler.app.http",  "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.https", "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.ftp",   "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.file",  "/usr/bin/x-www-browser");
 
 pref("spellchecker.enablerealtimespell", false);
 pref("spellchecker.realtimespell.warning_color", "orange");
 
 // Kaze: CSS editor
-pref("extensions.KaZcadeS.expertMode", true);
+pref("extensions.CaScadeS.expertMode", true);
+pref("extensions.CaScadeS.dropdownLists", false);
 

@@ -139,6 +139,7 @@ pref("editor.faq.url",                       "chrome://editor-region/locale/regi
 pref("editor.devorg.url",                    "chrome://editor-region/locale/region.properties");
 pref("editor.forums.url",                    "chrome://editor-region/locale/region.properties");
 pref("editor.bugReports.url",                "chrome://editor-region/locale/region.properties");
+pref("editor.support.url",                   "chrome://editor-region/locale/region.properties");
 pref("editor.L10N.url",                      "chrome://editor-region/locale/region.properties");
 pref("editor.CCuserGuide.url",               "chrome://editor-region/locale/region.properties");
 pref("editor.aboutLinspire.url",             "chrome://editor-region/locale/region.properties");

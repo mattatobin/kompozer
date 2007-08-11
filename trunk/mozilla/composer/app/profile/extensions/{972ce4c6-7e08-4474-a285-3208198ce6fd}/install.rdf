@@ -12,14 +12,14 @@
     <em:targetApplication>
       <Description>
         <em:id>{136c295a-4a5a-41cf-bf24-5cee526720d5}</em:id>
-        <em:minVersion>0.90</em:minVersion>
+        <em:minVersion>0.7</em:minVersion>
         <em:maxVersion>1.0</em:maxVersion>
       </Description>
     </em:targetApplication>
     
     <!-- Front End MetaData -->
-    <em:name>Nvu (default)</em:name>
-    <em:description>Nvu default theme</em:description>
+    <em:name>KompoZer (classic)</em:name>
+    <em:description>KompoZer default theme</em:description>
 
     <em:locked>true</em:locked>
 
@@ -27,8 +27,9 @@
     <em:creator>Linspire Inc.</em:creator>
     <em:contributor>Ingolfur Haraldsson</em:contributor>
     <em:contributor>Daniel Glazman</em:contributor>
+    <em:contributor>Fabien Cazenave</em:contributor>
 
-    <em:homepageURL>http://www.nvu.com/</em:homepageURL>
+    <em:homepageURL>http://kompozer.net/</em:homepageURL>
 
     <em:internalName>classic/1.0</em:internalName>
   </Description>      
