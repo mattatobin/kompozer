@@ -62,15 +62,15 @@
               <menuitem label="Arial, Helvetica, sans-serif"
                         id="sansSerifFontFamilyMenuitem"
                         value="Arial,Helvetica,sans-serif"
-                        oncommand="onFontFamilySelect('Arial,Helvetica,sans-serif');"/>
-              <menuitem label="Times New Roman, Times, serif"
+                        oncommand="onFontFamilySelect(this.value);"/>
+              <menuitem label="&quot;Times New Roman&quot;, Times, serif"
                         id="serifFontFamilyMenuitem"
-                        value="Times New Roman,Times,serif"
-                        oncommand="onFontFamilySelect('Times New Roman,Times,serif');"/>
-              <menuitem label="Courier New, Courier, monospace"
+                        value="&quot;Times New Roman&quot;,Times,serif"
+                        oncommand="onFontFamilySelect(this.value);"/>
+              <menuitem label="&quot;Courier New&quot;, Courier, monospace"
                         id="monospaceFontFamilyMenuitem"
-                        value="Courier New,Courier,monospace"
-                        oncommand="onFontFamilySelect('Courier New,Courier,monospace');"/>
+                        value="&quot;Courier New&quot;,Courier,monospace"
+                        oncommand="onFontFamilySelect(this.value);"/>
             </menupopup>
           </menulist>
           <radio id="customFontFamilyRadio"
@@ -93,68 +93,68 @@
           <rows>
             <row align="center">
               <label value="&fontSize.label;"/>
-                <menulist editable="true"
-                          id="fontSizeInput"
-                          oninput="ChangeValueOnInput(this, 'font-size', 'brownFoxLabel');"
-                          oncommand="DoMenulistCommand(this, 'font-size', 'brownFoxLabel');">
-                  <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'font-size', 'brownFoxLabel', true);">
-                    <menuseparator/>
-                    <menuitem label="&largerFontSize.label;"
-                              value='larger'/>
-                    <menuitem label="&smallerFontSize.label;"
-                              value='smaller'/>
-                    <menuseparator/>
-                    <menuitem label="&xxsmallFontSize.label;"
-                              value='xx-small'/>
-                    <menuitem label="&xsmallFontSize.label;"
-                              value='x-small'/>
-                    <menuitem label="&smallFontSize.label;"
-                              value='small'/>
-                    <menuitem label="&mediumFontSize.label;"
-                              value='medium'/>
-                    <menuitem label="&largeFontSize.label;"
-                              value='large'/>
-                    <menuitem label="&xlargeFontSize.label;"
-                              value='x-large'/>
-                    <menuitem label="&xxlargeFontSize.label;"
-                              value='xx-large'/>
-                  </menupopup>
-                </menulist>
-	      <hbox>
+              <menulist editable="true"
+                        id="fontSizeInput"
+                        oninput="ChangeValueOnInput(this, 'font-size', 'brownFoxLabel');"
+                        oncommand="DoMenulistCommand(this, 'font-size', 'brownFoxLabel');">
+                <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'font-size', 'brownFoxLabel', true);">
+                  <menuseparator/>
+                  <menuitem label="&largerFontSize.label;"
+                            value='larger'/>
+                  <menuitem label="&smallerFontSize.label;"
+                            value='smaller'/>
+                  <menuseparator/>
+                  <menuitem label="&xxsmallFontSize.label;"
+                            value='xx-small'/>
+                  <menuitem label="&xsmallFontSize.label;"
+                            value='x-small'/>
+                  <menuitem label="&smallFontSize.label;"
+                            value='small'/>
+                  <menuitem label="&mediumFontSize.label;"
+                            value='medium'/>
+                  <menuitem label="&largeFontSize.label;"
+                            value='large'/>
+                  <menuitem label="&xlargeFontSize.label;"
+                            value='x-large'/>
+                  <menuitem label="&xxlargeFontSize.label;"
+                            value='xx-large'/>
+                </menupopup>
+              </menulist>
+              <hbox>
                 <spinbuttons onup="Spinbutton(1, 'fontSizeInput', '1em');"
                              ondown="Spinbutton(-1, 'fontSizeInput', '1em');"/>
                 <spacer />
-	      </hbox>
+              </hbox>
             </row>
             <row align="center">
               <label value="&lineHeight.label;"/>
-                <menulist editable="true"
-                          style="width: 8em"
-                          id="lineHeightInput"
-                          oninput="ChangeValueOnInput(this, 'line-height', null);"
-                          oncommand="DoMenulistCommand(this, 'line-height', null);">
-                  <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'line-height', null, true);">
-                    <menuseparator/>
-                    <menuitem label="&normalLineHeight.label;"
-                              value='normal'/>
-                  </menupopup>
-                </menulist>
-	      <hbox>
+              <menulist editable="true"
+                        style="width: 8em"
+                        id="lineHeightInput"
+                        oninput="ChangeValueOnInput(this, 'line-height', null);"
+                        oncommand="DoMenulistCommand(this, 'line-height', null);">
+                <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'line-height', null, true);">
+                  <menuseparator/>
+                  <menuitem label="&normalLineHeight.label;"
+                            value='normal'/>
+                </menupopup>
+              </menulist>
+              <hbox>
                 <spinbuttons onup="Spinbutton(1, 'lineHeightInput', '1em');"
                              ondown="Spinbutton(-1, 'lineHeightInput', '1em');"/>
                 <spacer />
-	      </hbox>
+              </hbox>
             </row>
             <row align="center">
-                <label value="&color.label;"/>
-                <textbox id="textColorInput" flex="1"
-                         size="10" 
-                         oninput="onColorZoneInput(this, 'color', 'brownFoxLabel', 'textCW');"/>
-                <button id="colorButton"
-                        class="color-button"
-                        oncommand="GetColorAndUpdate('textCW');">
-                  <spacer id="textCW" class="color-well"/>
-                </button>
+              <label value="&color.label;"/>
+              <textbox id="textColorInput" flex="1"
+                       size="10" 
+                       oninput="onColorZoneInput(this, 'color', 'brownFoxLabel', 'textCW');"/>
+              <button id="colorButton"
+                      class="color-button"
+                      oncommand="GetColorAndUpdate('textCW');">
+                <spacer id="textCW" class="color-well"/>
+              </button>
             </row>
           </rows>
         </grid>
@@ -329,7 +329,7 @@
           <label value="&opacity.label;"/>
           <scrollbar flex="1"
               id="opacityScrollbar"
-	      orient="horizontal"
+	            orient="horizontal"
               align="horizontal"
               curpos="0"
               maxpos="1000"
@@ -437,7 +437,8 @@
               oncommand="ToggleFourBorderSidesSameStyle(this);"/>
     <separator class="groove"/>
     <grid>
-      <columns><column/><column/><column flex="1"/><column/><column flex="1"/><column/></columns>
+      <!-- <columns><column/><column/><column flex="1"/><column/><column flex="1"/><column/></columns> -->
+      <columns><column/><column/><column/><column/><column/><column/></columns>
       <rows>
         <row align="center">
           <spacer/>
@@ -496,12 +497,23 @@
           <spacer/>
           <hbox align="center">
             <menulist editable="true"
-                      style="width: 8em"
+                      style="width: 10em"
                       id="topBorderWidthInput"
                       oninput="ChangeValueOnInput(this, 'border-top-width', 'borderPreview');
                                IfFourSidesSameStyle('border', 'width', null,
                                                     'allFourBordersSame', 'borderPreview', this);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-top-width', null, false);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-top-width', null, false);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&thinBorderUnit.label;"
+                          value='thin'/>
+                <menuitem label="&mediumBorderUnit.label;"
+                          value='medium'/>
+                <menuitem label="&thickBorderUnit.label;"
+                          value='thick'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons id="topBorderWidthSpins"
                          onup="Spinbutton(1, 'topBorderWidthInput');"
@@ -520,73 +532,9 @@
           </button>
         </row>
         <row align="center">
-          <label value="&leftBorder.label;"/>
-          <menulist id="leftBorderStyleMenulist" style="width: 10em"
-                    oncommand="DoMenulistCommand(this, 'border-left-style', 'borderPreview');">
-            <menupopup>
-              <menuitem label="&unspecifiedValue.label;"
-                        id="unspecifiedleftBorderStyle"
-                        value=''/>
-              <menuseparator/>
-              <menuitem label="&noneBorderStyle.label;"
-                        id="noneleftBorderStyle"
-                        value='none'/>
-              <menuseparator/>
-              <menuitem label="&hiddenBorderStyle.label;"
-                        id="hiddenleftBorderStyle"
-                        value='hidden'/>
-              <menuitem label="&solidBorderStyle.label;"
-                        id="solidleftBorderStyle"
-                        value='solid'/>
-
-              <menuitem label="&dottedBorderStyle.label;"
-                        id="dottedleftBorderStyle"
-                        value='dotted'/>
-              <menuitem label="&dashedBorderStyle.label;"
-                        id="dashedleftBorderStyle"
-                        value='dashed'/>
-              <menuitem label="&doubleBorderStyle.label;"
-                        id="doubleleftBorderStyle"
-                        value='double'/>
-              <menuitem label="&grooveBorderStyle.label;"
-                        id="grooveleftBorderStyle"
-                        value='groove'/>
-              <menuitem label="&ridgeBorderStyle.label;"
-                        id="ridgeleftBorderStyle"
-                        value='ridge'/>
-              <menuitem label="&insetBorderStyle.label;"
-                        id="insetleftBorderStyle"
-                        value='inset'/>
-              <menuitem label="&outsetBorderStyle.label;"
-                        id="outsetleftBorderStyle"
-                        value='outset'/>
-            </menupopup>
-          </menulist>
-          <spacer/>
-          <hbox align="center">
-            <menulist editable="true"
-                      style="width: 8em"
-                      id="leftBorderWidthInput"
-                      oninput="ChangeValueOnInput(this, 'border-left-width', 'borderPreview');">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-left-width', null, false);"/>
-            </menulist>
-            <spinbuttons id="leftBorderWidthSpins"
-                         onup="Spinbutton(1, 'leftBorderWidthInput');"
-                         ondown="Spinbutton(-1, 'leftBorderWidthInput');"/>
-          </hbox>              
-          <spacer/>
-          <textbox id="leftBorderColorInput"
-                   size="10" 
-                   oninput="onColorZoneInput(this, 'border-left-color', 'borderPreview', 'borderleftCW');"/>
-          <button id="leftBorderColorButton"
-                  class="color-button"
-                  oncommand="GetColorAndUpdate('borderleftCW');">
-            <spacer id="borderleftCW" class="color-well"/>
-          </button>
-        </row>
-        <row align="center">
           <label value="&rightBorder.label;"/>
-          <menulist id="rightBorderStyleMenulist" style="width: 10em"
+          <menulist id="rightBorderStyleMenulist"
+                    style="width: 10em"
                     oncommand="DoMenulistCommand(this, 'border-right-style', 'borderPreview');">
             <menupopup>
               <menuitem label="&unspecifiedValue.label;"
@@ -630,10 +578,21 @@
           <spacer/>
           <hbox align="center">
             <menulist editable="true"
-                      style="width: 8em"
+                      style="width: 10em"
                       id="rightBorderWidthInput"
                       oninput="ChangeValueOnInput(this, 'border-right-width', 'borderPreview');">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-right-width', null, false);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-right-width', null, false);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&thinBorderUnit.label;"
+                          value='thin'/>
+                <menuitem label="&mediumBorderUnit.label;"
+                          value='medium'/>
+                <menuitem label="&thickBorderUnit.label;"
+                          value='thick'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons id="rightBorderWidthSpins"
                          onup="Spinbutton(1, 'rightBorderWidthInput');"
@@ -695,10 +654,21 @@
           <spacer/>
           <hbox align="center">
             <menulist editable="true"
-                      style="width: 8em"
+                      style="width: 10em"
                       id="bottomBorderWidthInput"
                       oninput="ChangeValueOnInput(this, 'border-bottom-width', 'borderPreview');">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-bottom-width', null, false);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-bottom-width', null, false);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&thinBorderUnit.label;"
+                          value='thin'/>
+                <menuitem label="&mediumBorderUnit.label;"
+                          value='medium'/>
+                <menuitem label="&thickBorderUnit.label;"
+                          value='thick'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons id="bottomBorderWidthSpins"
                          onup="Spinbutton(1, 'bottomBorderWidthInput');"
@@ -712,6 +682,82 @@
                   class="color-button"
                   oncommand="GetColorAndUpdate('borderbottomCW');">
             <spacer id="borderbottomCW" class="color-well"/>
+          </button>
+        </row>
+        <row align="center">
+          <label value="&leftBorder.label;"/>
+          <menulist id="leftBorderStyleMenulist" style="width: 10em"
+                    oncommand="DoMenulistCommand(this, 'border-left-style', 'borderPreview');">
+            <menupopup>
+              <menuitem label="&unspecifiedValue.label;"
+                        id="unspecifiedleftBorderStyle"
+                        value=''/>
+              <menuseparator/>
+              <menuitem label="&noneBorderStyle.label;"
+                        id="noneleftBorderStyle"
+                        value='none'/>
+              <menuseparator/>
+              <menuitem label="&hiddenBorderStyle.label;"
+                        id="hiddenleftBorderStyle"
+                        value='hidden'/>
+              <menuitem label="&solidBorderStyle.label;"
+                        id="solidleftBorderStyle"
+                        value='solid'/>
+
+              <menuitem label="&dottedBorderStyle.label;"
+                        id="dottedleftBorderStyle"
+                        value='dotted'/>
+              <menuitem label="&dashedBorderStyle.label;"
+                        id="dashedleftBorderStyle"
+                        value='dashed'/>
+              <menuitem label="&doubleBorderStyle.label;"
+                        id="doubleleftBorderStyle"
+                        value='double'/>
+              <menuitem label="&grooveBorderStyle.label;"
+                        id="grooveleftBorderStyle"
+                        value='groove'/>
+              <menuitem label="&ridgeBorderStyle.label;"
+                        id="ridgeleftBorderStyle"
+                        value='ridge'/>
+              <menuitem label="&insetBorderStyle.label;"
+                        id="insetleftBorderStyle"
+                        value='inset'/>
+              <menuitem label="&outsetBorderStyle.label;"
+                        id="outsetleftBorderStyle"
+                        value='outset'/>
+            </menupopup>
+          </menulist>
+          <spacer/>
+          <hbox align="center">
+            <menulist editable="true"
+                      style="width: 10em"
+                      id="leftBorderWidthInput"
+                      oninput="ChangeValueOnInput(this, 'border-left-width', 'borderPreview');">
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'border-left-width', null, false);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&thinBorderUnit.label;"
+                          value='thin'/>
+                <menuitem label="&mediumBorderUnit.label;"
+                          value='medium'/>
+                <menuitem label="&thickBorderUnit.label;"
+                          value='thick'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
+            </menulist>
+            <spinbuttons id="leftBorderWidthSpins"
+                         onup="Spinbutton(1, 'leftBorderWidthInput');"
+                         ondown="Spinbutton(-1, 'leftBorderWidthInput');"/>
+          </hbox>              
+          <spacer/>
+          <textbox id="leftBorderColorInput"
+                   size="10" 
+                   oninput="onColorZoneInput(this, 'border-left-color', 'borderPreview', 'borderleftCW');"/>
+          <button id="leftBorderColorButton"
+                  class="color-button"
+                  oncommand="GetColorAndUpdate('borderleftCW');">
+            <spacer id="borderleftCW" class="color-well"/>
           </button>
         </row>
       </rows>
@@ -1011,7 +1057,14 @@
             <menulist editable="true" style="width: 8em"
                       id="margintopEditableMenulist"
                       oninput="ChangeValueOnInput(this, 'margin-top', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-top', null, true);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-top', null, true);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&autoMarginUnit.label;"
+                          value='auto'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons onup="Spinbutton(1, 'margintopEditableMenulist');"
                          ondown="Spinbutton(-1, 'margintopEditableMenulist');"/>
@@ -1038,44 +1091,19 @@
           </hbox>
         </row>
         <row align="center">
-          <label value="&left.label;"/>
-          <hbox align="center">
-            <menulist editable="true" style="width: 8em"
-                      id="marginleftEditableMenulist"
-                      oninput="ChangeValueOnInput(this, 'margin-left', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-left', null, true);"/>
-            </menulist>
-            <spinbuttons onup="Spinbutton(1, 'marginleftEditableMenulist');"
-                         ondown="Spinbutton(-1, 'marginleftEditableMenulist');"/>
-          </hbox>
-          <spacer flex="1"/>
-          <hbox align="center">
-            <menulist editable="true" style="width: 8em"
-                      id="paddingleftEditableMenulist"
-                      oninput="ChangeValueOnInput(this, 'padding-left', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'padding-left', null, true);"/>
-            </menulist>
-            <spinbuttons onup="Spinbutton(1, 'paddingleftEditableMenulist');"
-                         ondown="Spinbutton(-1, 'paddingleftEditableMenulist');"/>
-          </hbox>
-          <spacer flex="1"/>
-          <hbox align="center">
-            <menulist editable="true" style="width: 8em"
-                      id="leftEditableMenulist"
-                      oninput="ChangeValueOnInput(this, 'left', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'left', null, true);"/>
-            </menulist>
-            <spinbuttons onup="Spinbutton(1, 'leftEditableMenulist');"
-                         ondown="Spinbutton(-1, 'leftEditableMenulist');"/>
-          </hbox>
-        </row>
-        <row align="center">
           <label value="&right.label;"/>
           <hbox align="center">
             <menulist editable="true" style="width: 8em"
                       id="marginrightEditableMenulist"
                       oninput="ChangeValueOnInput(this, 'margin-right', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-right', null, true);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-right', null, true);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&autoMarginUnit.label;"
+                          value='auto'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons onup="Spinbutton(1, 'marginrightEditableMenulist');"
                          ondown="Spinbutton(-1, 'marginrightEditableMenulist');"/>
@@ -1107,7 +1135,14 @@
             <menulist editable="true" style="width: 8em"
                       id="marginbottomEditableMenulist"
                       oninput="ChangeValueOnInput(this, 'margin-bottom', null);">
-              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-bottom', null, true);"/>
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-bottom', null, true);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&autoMarginUnit.label;"
+                          value='auto'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
             </menulist>
             <spinbuttons onup="Spinbutton(1, 'marginbottomEditableMenulist');"
                          ondown="Spinbutton(-1, 'marginbottomEditableMenulist');"/>
@@ -1131,6 +1166,45 @@
             </menulist>
             <spinbuttons onup="Spinbutton(1, 'bottomEditableMenulist');"
                          ondown="Spinbutton(-1, 'bottomEditableMenulist');"/>
+          </hbox>
+        </row>
+        <row align="center">
+          <label value="&left.label;"/>
+          <hbox align="center">
+            <menulist editable="true" style="width: 8em"
+                      id="marginleftEditableMenulist"
+                      oninput="ChangeValueOnInput(this, 'margin-left', null);">
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'margin-left', null, true);">
+                <!-- Kaze -->
+                <menuseparator/>
+                <menuitem label="&autoMarginUnit.label;"
+                          value='auto'/>
+                <menuseparator/>
+                <!-- Kaze -->
+              </menupopup>
+            </menulist>
+            <spinbuttons onup="Spinbutton(1, 'marginleftEditableMenulist');"
+                         ondown="Spinbutton(-1, 'marginleftEditableMenulist');"/>
+          </hbox>
+          <spacer flex="1"/>
+          <hbox align="center">
+            <menulist editable="true" style="width: 8em"
+                      id="paddingleftEditableMenulist"
+                      oninput="ChangeValueOnInput(this, 'padding-left', null);">
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'padding-left', null, true);"/>
+            </menulist>
+            <spinbuttons onup="Spinbutton(1, 'paddingleftEditableMenulist');"
+                         ondown="Spinbutton(-1, 'paddingleftEditableMenulist');"/>
+          </hbox>
+          <spacer flex="1"/>
+          <hbox align="center">
+            <menulist editable="true" style="width: 8em"
+                      id="leftEditableMenulist"
+                      oninput="ChangeValueOnInput(this, 'left', null);">
+              <menupopup onpopupshowing="InitLengthUnitMenuPopup(this, 'left', null, true);"/>
+            </menulist>
+            <spinbuttons onup="Spinbutton(1, 'leftEditableMenulist');"
+                         ondown="Spinbutton(-1, 'leftEditableMenulist');"/>
           </hbox>
         </row>
       </rows>
