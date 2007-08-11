@@ -118,6 +118,6 @@
          mode="full"
          context="main-toolbar-context-menu"
          customizable="true"
-         defaultset="newButton,spacer,openButton,saveButton,publishButton,previewButton,spacer,namedAnchorButton,linkButton,imageButton,tableButton,formButton,spacer,cssButton,spring,throbber-box,spacer">
+         defaultset="newButton,spacer,openButton,saveButton,publishButton,previewButton,spacer,undoButton,redoButton,spacer,namedAnchorButton,linkButton,imageButton,tableButton,formButton,spacer,cssButton,spring,throbber-box,spacer">
          <!-- defaultset="newButton,spacer,openButton,saveButton,publishButton,previewButton,spacer,namedAnchorButton,linkButton,imageButton,tableButton,formButton,spacer,spellingButton,spacer,printButton,spring,throbber-box,spacer"> -->
 </toolbar>

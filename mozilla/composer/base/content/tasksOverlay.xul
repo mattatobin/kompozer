@@ -35,6 +35,11 @@
                     insertbefore="menu_preferences"/>
           <menuseparator
                     insertbefore="menu_preferences"/>
+	  <menuitem label="&javaScriptConsoleCmd.label;" 
+                    accesskey="&javaScriptConsoleCmd.accesskey;" 
+                    oncommand="toJavaScriptConsole();"
+                    insertbefore="menu_preferences"/>
+	  <!-- Kaze: disabled
           <menu label="&webDevelopment.label;" accesskey="&webDevelopment.accesskey;"
                     insertbefore="menu_preferences">
             <menupopup id="toolsPopup" onpopupshowing="javaItemEnabling();">
@@ -42,6 +47,7 @@
               <menuitem id="java" label="&javaConsoleCmd.label;" accesskey="&javaConsoleCmd.accesskey;" oncommand="toJavaConsole()"/>
             </menupopup>
           </menu>
+	  -->
           <menuseparator id="sep_switchprofile"
                     insertbefore="menu_preferences"/>
           <!--menuitem id="cmd_switchprofile" label="&switchProfileCmd.label;" accesskey="&switchProfileCmd.accesskey;" oncommand="toProfileManager();"/-->

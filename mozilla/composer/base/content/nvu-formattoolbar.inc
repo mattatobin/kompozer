@@ -224,7 +224,8 @@
            context="format-toolbar-context-menu"
            toolbarname="Format1"
            mode="icons"
-defaultset="spacer,ParagraphSelectBox,ClassButtonsBox,separator,emButton,strongButton,separator,olButton,ulButton,separator,indentButton,outdentButton,separator,dtButton,ddButton,separator,absolutePositionButton,increaseZIndexButton,decreaseZIndexButton,separator,leftGluedButton,centerGluedButton,rightGluedButton,separator,topGluedButton,middleGluedButton,bottomGluedButton">
+defaultset="spacer,ParagraphSelectBox,ClassButtonsBox,separator,emButton,strongButton,separator,olButton,ulButton,separator,indentButton,outdentButton,separator,dtButton,ddButton,spring,absolutePositionButton,increaseZIndexButton,decreaseZIndexButton">
+<!-- defaultset="spacer,ParagraphSelectBox,ClassButtonsBox,separator,emButton,strongButton,separator,olButton,ulButton,separator,indentButton,outdentButton,separator,dtButton,ddButton,separator,absolutePositionButton,increaseZIndexButton,decreaseZIndexButton,separator,leftGluedButton,centerGluedButton,rightGluedButton,separator,topGluedButton,middleGluedButton,bottomGluedButton" -->
   </toolbar>
   <toolbar class="chromeclass-toolbar" id="FormatToolbar2" persist="hidden" tbalign="center" grippytooltiptext="&formatToolbar.tooltip; 2"
            customizable="true"

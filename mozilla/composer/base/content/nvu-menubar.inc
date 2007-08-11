@@ -46,7 +46,7 @@
         <menuitem id="menu_paste"/>
         <menuitem id="menu_pasteNoFormatting" observes="cmd_pasteNoFormatting"/>"
 
-  <!-- PasteAs not implemented yet
+        <!-- PasteAs not implemented yet
         <menu id="menu_pasteAs" label="&pasteAs.label;" accesskey="&pasteAs.accesskey;">
           <menupopup onpopupshowing="InitPasteAsMenu();">
             <menuitem id="menu_pasteText"    label="&pasteTextCmd.label;"     accesskey="&pasteText.accesskey;"/>
@@ -57,7 +57,7 @@
             <menuitem id="menu_pasteTable"                                    accesskey="&pasteTable.accesskey;"/>
           </menupopup>
         </menu>
-  -->
+        -->
         <menuitem id="menu_delete"/>
         <menuseparator id="edEditMenuSep2" />
         <menuitem id="menu_selectAll"/>
@@ -177,9 +177,9 @@
           </menupopup>
         </menu>
         <menuseparator id="insertMenuSeparator"/>
-  <!-- Activate this after Enter key inserts P tag and not BR
+        <!-- Activate this after Enter key inserts P tag and not BR
         <menuitem accesskey="&insertbreak.accesskey;"      observes="cmd_insertBreak"      label="&insertBreakCmd.label;"/>
-  -->
+        -->
         <menuitem id="insertHTMLSource" accesskey="&insertHTMLCmd.accesskey;"   observes="cmd_insertHTMLWithDialog"  key="inserthtmlkb"/>
         <menuitem id="insertPHPCode" accesskey="&insertphpcode.accesskey;" observes="cmd_insertPHPCode"/>
         <menuitem id="insertComment" accesskey="&insertcomment.accesskey;" observes="cmd_insertComment"/>
@@ -456,6 +456,13 @@
       </menupopup>
       -->
       <menupopup id="menu_HelpPopup">
+        <menuitem accesskey="&nvuforumsmenu.accesskey;" label="&nvuForumsMenu.label;"
+                  oncommand="loadExternalURLPref('editor.forums.url');"/>
+        <menuitem accesskey="&bugreportsmenu.accesskey;" label="&bugReportsMenu.label;"
+                  oncommand="loadExternalURLPref('editor.bugReports.url');"/>
+        <menuitem accesskey="&supportKompoZer.accesskey;" label="&supportKompoZer.label;"
+                  oncommand="loadExternalURLPref('editor.support.url');"/>
+        <menuseparator/>
         <menuitem accesskey="&tipofthedaymenu.accesskey;" label="&tipofthedayMenu.label;"
                   oncommand="document.getElementById('tipoftheday').open(true);"/>
         <menuseparator id="menu_HelpAboutSeparator"/>
