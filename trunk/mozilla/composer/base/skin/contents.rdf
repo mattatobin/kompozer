@@ -10,11 +10,9 @@
 
   <!-- classic Information -->
   <RDF:Description about="urn:mozilla:skin:classic/1.0"
-        chrome:displayName="Nvu"
-        chrome:accessKey="P"
-        chrome:author="Linspire Inc."
-        chrome:authorURL="http://www.nvu.com/"
-        chrome:description="This is the default Nvu theme. Select this theme to return to the original appearance."
+        chrome:displayName="KompoZer"
+        chrome:accessKey="d"
+        chrome:description="This is the default theme. Select this theme to return to the original appearance."
         chrome:name="classic/1.0"
         chrome:image="preview.png">
     <chrome:packages>
