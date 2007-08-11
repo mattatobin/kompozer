@@ -60,12 +60,11 @@ a:link img, a:visited img {
 
 /* We suppress user/author's prefs for link underline, 
    so we must set explicitly. This isn't good!
-*/
 a:link {
   text-decoration: underline -moz-anchor-decoration;
-  /* I never understood why we need the following... */
-  /* color: -moz-hyperlinktext; */
+  color: -moz-hyperlinktext;
 }
+*/
 
 /* Allow double-clicks on these widgets to open properties dialogs
    XXX except when the widget has disabled attribute */
