@@ -26,7 +26,7 @@ MOZILLA_CLIENT	= 1
 BUILD_MODULES	= all
 MOZILLA_VERSION = 1.7.5
 MOZ_APP_NAME	= kompozer
-MOZ_APP_VERSION = 0.7.9
+MOZ_APP_VERSION = 0.7.10
 MOZ_APP_DISPLAYNAME = KompoZer
 
 prefix		= /usr/local
@@ -132,7 +132,7 @@ MOZ_PLUGINS	= 1
 MOZ_POST_DSO_LIB_COMMAND = 
 MOZ_POST_PROGRAM_COMMAND = 
 
-MOZ_BUILD_ROOT             = /mnt/Documents/kompozer/mozilla
+MOZ_BUILD_ROOT             = /home/kaze/Documents/kompozer/mozilla
 
 MOZ_XUL                    = 1
 
@@ -167,16 +167,16 @@ endif
 MOZ_LIBART_LIBS = 
 MOZ_CAIRO_LIBS = 
 
-MOZ_GNOMEVFS_CFLAGS = -pthread -DORBIT2=1 -I/usr/include/gnome-vfs-2.0 -I/usr/lib/gnome-vfs-2.0/include -I/usr/include/gconf/2 -I/usr/include/orbit-2.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/gnome-vfs-module-2.0  
-MOZ_GNOMEVFS_LIBS = -pthread -lgnomevfs-2 -lgconf-2 -lgmodule-2.0 -ldl -lORBit-2 -lgthread-2.0 -lrt -lgobject-2.0 -lglib-2.0  
+MOZ_GNOMEVFS_CFLAGS = 
+MOZ_GNOMEVFS_LIBS = 
 
-MOZ_GCONF_CFLAGS = -DORBIT2=1 -pthread -I/usr/include/gconf/2 -I/usr/include/orbit-2.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include  
-MOZ_GCONF_LIBS = -pthread -lgconf-2 -lORBit-2 -lgthread-2.0 -lrt -lgobject-2.0 -lglib-2.0  
+MOZ_GCONF_CFLAGS = 
+MOZ_GCONF_LIBS = 
 
-MOZ_LIBGNOME_CFLAGS = -DORBIT2=1 -pthread -I/usr/include/libgnome-2.0 -I/usr/include/orbit-2.0 -I/usr/include/gconf/2 -I/usr/include/gnome-vfs-2.0 -I/usr/lib/gnome-vfs-2.0/include -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/libbonobo-2.0 -I/usr/include/bonobo-activation-2.0  
-MOZ_LIBGNOME_LIBS = -Wl,--export-dynamic -pthread -lgnome-2 -lpopt -lbonobo-2 -lbonobo-activation -lgmodule-2.0 -ldl -lORBit-2 -lgthread-2.0 -lrt -lgobject-2.0 -lglib-2.0  
+MOZ_LIBGNOME_CFLAGS = 
+MOZ_LIBGNOME_LIBS = 
 
-MOZ_ENABLE_GNOME_COMPONENT = 1
+MOZ_ENABLE_GNOME_COMPONENT = 
 
 MOZ_INSURE = 
 MOZ_INSURIFYING = 
@@ -188,8 +188,8 @@ MOZ_NATIVE_NSPR =
 CROSS_COMPILE   = 
 
 OS_CPPFLAGS	=  
-OS_CFLAGS	= $(OS_CPPFLAGS) -Wall -W -Wno-unused -Wpointer-arith -Wcast-align -Wno-long-long -pthread -pipe
-OS_CXXFLAGS	= $(OS_CPPFLAGS) -fno-rtti -fno-exceptions -Wall -Wconversion -Wpointer-arith -Wcast-align -Woverloaded-virtual -Wsynth -Wno-ctor-dtor-privacy -Wno-non-virtual-dtor -Wno-long-long -fshort-wchar -pthread -pipe
+OS_CFLAGS	= $(OS_CPPFLAGS) -Wall -W -Wno-unused -Wpointer-arith -Wcast-align -Wno-long-long -DDEBIAN -pthread -pipe
+OS_CXXFLAGS	= $(OS_CPPFLAGS) -fno-rtti -fno-exceptions -Wall -Wconversion -Wpointer-arith -Wcast-align -Woverloaded-virtual -Wsynth -Wno-ctor-dtor-privacy -Wno-non-virtual-dtor -Wno-long-long -DDEBIAN -fshort-wchar -pthread -pipe
 OS_LDFLAGS	= 
 
 OS_COMPILE_CFLAGS = $(OS_CPPFLAGS) -include $(DEPTH)/mozilla-config.h -DMOZILLA_CLIENT $(filter-out %/.pp,-Wp,-MD,$(MDDEPDIR)/$(*F).pp)
@@ -258,8 +258,8 @@ HAVE_GCC3_ABI	= 1
 
 HOST_CC		= gcc
 HOST_CXX	= c++
-HOST_CFLAGS	=  -DXP_UNIX
-HOST_CXXFLAGS	= 
+HOST_CFLAGS	= -DDEBIAN -DXP_UNIX
+HOST_CXXFLAGS	= -DDEBIAN
 HOST_OPTIMIZE_FLAGS = -O3
 HOST_NSPR_MDCPUCFG = \"md/_linux.cfg\"
 HOST_AR		= ar
@@ -320,8 +320,8 @@ PNG_LIBS	= -L$(DIST)/lib -lmozpng
 PNG_REQUIRES	= png
 endif
 
-NSPR_CFLAGS = -I/mnt/Documents/kompozer/mozilla/dist/include/nspr 
-NSPR_LIBS = -L/mnt/Documents/kompozer/mozilla/dist/lib -lplds4 -lplc4 -lnspr4 -lpthread -ldl 
+NSPR_CFLAGS = -I/home/kaze/Documents/kompozer/mozilla/dist/include/nspr 
+NSPR_LIBS = -L/home/kaze/Documents/kompozer/mozilla/dist/lib -lplds4 -lplc4 -lnspr4 -lpthread -ldl -lc -lpthread 
 
 LDAP_CFLAGS	= 
 LDAP_LIBS	= 
@@ -370,15 +370,15 @@ MOZ_ENABLE_XREMOTE	= 1
 MOZ_GTK_CFLAGS		= 
 MOZ_GTK_LDFLAGS		= 
 
-MOZ_GTK2_CFLAGS		= -I/usr/include/gtk-2.0 -I/usr/lib/gtk-2.0/include -I/usr/include/atk-1.0 -I/usr/include/cairo -I/usr/include/pango-1.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/freetype2 -I/usr/include/libpng12  
-MOZ_GTK2_LIBS		= -lgtk-x11-2.0 -lgdk-x11-2.0 -latk-1.0 -lgdk_pixbuf-2.0 -lpng12 -lm -lpangocairo-1.0 -lpango-1.0 -lcairo -lgobject-2.0 -lgmodule-2.0 -ldl -lglib-2.0  
+MOZ_GTK2_CFLAGS		= -I/usr/include/gtk-2.0 -I/usr/lib/gtk-2.0/include -I/usr/include/atk-1.0 -I/usr/include/cairo -I/usr/include/pango-1.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include  
+MOZ_GTK2_LIBS		= -lgtk-x11-2.0 -lgdk-x11-2.0 -latk-1.0 -lgdk_pixbuf-2.0 -lm -lpangocairo-1.0 -lfontconfig -lXext -lXrender -lXinerama -lXi -lXrandr -lXcursor -lXfixes -lpango-1.0 -lcairo -lX11 -lgobject-2.0 -lgmodule-2.0 -ldl -lglib-2.0  
 
 MOZ_XLIB_CFLAGS		= 
 MOZ_XLIB_LDFLAGS	= 
 
 MOZ_XPRINT_CFLAGS	= 
 MOZ_XPRINT_LDFLAGS	=   -lXext -lX11
-MOZ_ENABLE_XPRINT	= 
+MOZ_ENABLE_XPRINT	= 1
 
 MOZ_ENABLE_FREETYPE2   = 
 FT2_CFLAGS             = -I/usr/include/freetype2
@@ -420,7 +420,7 @@ AWT_11=1
 MOZ_BITS=32
 OS_TARGET=Linux
 OS_ARCH=Linux
-OS_RELEASE=2.6.21.3
+OS_RELEASE=2.6.15-28-686
 OS_TEST=i686
 
 # For AIX build
