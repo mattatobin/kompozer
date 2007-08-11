@@ -137,7 +137,8 @@ function StartUp()
       window.close();
       return;
     }
-    gDialog.validatorBrowser.loadURI("http://validator.w3.org/file-upload.html");
+    //gDialog.validatorBrowser.loadURI("http://validator.w3.org/file-upload.html");
+    gDialog.validatorBrowser.loadURI("http://validator.w3.org/#validate_by_upload"); // Kaze
   }
   else
   {

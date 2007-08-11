@@ -73,17 +73,6 @@
     <groupbox><caption label="&LinkURLBox.label;"/>
       <vbox id="LinkLocationBox"/>
     </groupbox>
-  </vbox>
-
-  <hbox>
-    <button id="MoreFewerButton" oncommand="onMoreFewer();" persist="more"/>
-  </hbox>
-
-  <vbox id="MoreSection">
-    <groupbox><caption label="&technoratiTag.label;"/>
-      <checkbox label="&technoratiTagCheckbox.label;" id="technoratiTag"
-                oncommand="ToggleRelValue('tag')"/>
-    </groupbox>
 
     <groupbox><caption label="&targetBox.label;"/>
       <checkbox id="userDefinedTargetCheckbox" label="&userDefinedTarget.label;" oncommand="TargetToggled();"/>
@@ -115,6 +104,18 @@
         </menulist>
         <textbox id="userDefinedTarget" class="indent" disabled="true" flex="1"/>
       </hbox>
+    </groupbox>
+
+  </vbox>
+
+  <hbox>
+    <button id="MoreFewerButton" oncommand="onMoreFewer();" persist="more"/>
+  </hbox>
+
+  <vbox id="MoreSection">
+    <groupbox><caption label="&technoratiTag.label;"/>
+      <checkbox label="&technoratiTagCheckbox.label;" id="technoratiTag"
+                oncommand="ToggleRelValue('tag')"/>
     </groupbox>
 
     <groupbox><caption label="&XFNbox.label;"/>
