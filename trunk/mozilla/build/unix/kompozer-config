@@ -56,12 +56,12 @@ while test $# -gt 0; do
       echo_exec_prefix=yes
       ;;
     --version)
-      echo 0.7.9
+      echo 0.7.10
       exit 0
       ;;
     --cflags)
-      if test "/usr/local/include/kompozer-0.7.9" != /usr/include ; then
-        includes="-I/usr/local/include/kompozer-0.7.9"
+      if test "/usr/local/include/kompozer-0.7.10" != /usr/include ; then
+        includes="-I/usr/local/include/kompozer-0.7.10"
       fi
       echo_cflags=yes
       ;;
@@ -103,9 +103,9 @@ if test "$echo_defines" = "yes"; then
 fi
 
 if test "$echo_cflags" = "yes"; then
-    nspr_cflags="-I/usr/local/include/kompozer-0.7.9/nspr"
+    nspr_cflags="-I/usr/local/include/kompozer-0.7.10/nspr"
     for n in $echo_components; do
-	component_includes="$component_includes -I/usr/local/include/kompozer-0.7.9/$n"
+	component_includes="$component_includes -I/usr/local/include/kompozer-0.7.10/$n"
     done
     echo $component_includes $includes $nspr_cflags
 fi
@@ -114,7 +114,7 @@ if test "$echo_idlflags" = "yes"; then
     echo "-I%{idldir}"
 fi
 
-_nspr_libs="-L/usr/local/lib/kompozer-0.7.9 -lplds4 -lplc4 -lnspr4 -lpthread -ldl"
+_nspr_libs="-L/usr/local/lib/kompozer-0.7.10 -lplds4 -lplc4 -lnspr4 -lpthread -ldl -lc -lpthread"
 _xpcom_libs="-lxpcom $_nspr_libs"
 _js_libs="-ljs"
 
@@ -138,5 +138,5 @@ if test "$echo_libs" = "yes"; then
 	    ;;
         esac
     done
-    echo -L/usr/local/lib/kompozer-0.7.9 $libs
+    echo -L/usr/local/lib/kompozer-0.7.10 $libs
 fi
