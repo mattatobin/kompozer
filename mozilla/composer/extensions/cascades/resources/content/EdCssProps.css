@@ -133,3 +133,9 @@ button .filePicker {
   padding-left: 100px;
   margin-left: 100px;
 }
+
+.radiogrouplabel {
+  padding-left: 25px;
+  margin-bottom: 0.5em;
+  color: #666;
+}

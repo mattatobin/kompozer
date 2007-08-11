@@ -48,7 +48,12 @@
 
 <?xul-overlay href="chrome://cascades/content/tabsOverlay.xul"?>
 
-<!DOCTYPE dialog SYSTEM "chrome://cascades/locale/EdCssProps.dtd">
+<!DOCTYPE dialog [
+<!ENTITY % cascadesDTD SYSTEM "chrome://cascades/locale/EdCssProps.dtd">
+  %cascadesDTD;
+<!ENTITY % editorOverlayDTD SYSTEM "chrome://editor/locale/editorOverlay.dtd">
+  %editorOverlayDTD;
+]>
 <dialog title="&Window.title;"
     xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
     xmlns:html="http://www.w3.org/1999/xhtml"
@@ -76,12 +81,12 @@
   <spacer id="dummy" style="display:none"/>
    -->
   <script type="application/x-javascript">
-// Kaze: prevents to close this window with [Return]
-window.addEventListener("keypress", noReturn, true);
-function noReturn(event) {
-    if (event.keyCode == KeyEvent.DOM_VK_RETURN)
-	  event.stopPropagation();
-}
+    // Kaze: prevents to close this window with [Return]
+    window.addEventListener("keypress", noReturn, true);
+    function noReturn(event) {
+        if (event.keyCode == KeyEvent.DOM_VK_RETURN)
+        event.stopPropagation();
+    }
   </script>
   <keyset id="cascadeKeys">
     <key keycode="VK_F11" oncommand="FlushChanges(); closeWindow(true);"/>
@@ -177,11 +182,49 @@ function noReturn(event) {
       <!-- defined in tabsOverlay -->
       <tabpanels id="TabPanels">
         <!-- STYLESHEET INFORMATION PANEL -->
-        <vbox id="sheetInfoTabPanel"
-              flex="1">
-          <label id="sheetInfoTabPanelTitle"
-                 value=""/>
+        <vbox id="sheetInfoTabPanel" flex="1">
+          <label id="sheetInfoTabPanelTitle" value=""/>
           <vbox flex="1"><!-- should be a deck? -->
+
+            <!-- Kaze: let's use some popups and editable dropdown lists -->
+            <menupopup id="cssSelector-id"    onpopupshowing="findAllAttributes(this, 'id');"/>
+            <menupopup id="cssSelector-class" onpopupshowing="findAllAttributes(this, 'class');"/>
+            <!-- menupopup id="cssSelector-type"  onpopupshowing="findAllElements(this);"/ -->
+            <menupopup id="cssSelector-type"  onpopupshowing="filterAllElements(this);"
+                       oncommand="this.parentNode.value = this.parentNode.value.replace(/\s.*/, '');">
+              <menuitem label="body (&bodyTextCmd.label;)"            value="body"/>
+              <menuitem label="p (&paragraphParagraphCmd.label;)"     value="p"/>
+              <menuitem label="h1 (&heading1Cmd.label;)"              value="h1"/>
+              <menuitem label="h2 (&heading2Cmd.label;)"              value="h2"/>
+              <menuitem label="h3 (&heading3Cmd.label;)"              value="h3"/>
+              <menuitem label="h4 (&heading4Cmd.label;)"              value="h4"/>
+              <menuitem label="h5 (&heading5Cmd.label;)"              value="h5"/>
+              <menuitem label="h6 (&heading6Cmd.label;)"              value="h6"/>
+              <menuitem label="address (&paragraphAddressCmd.label;)" value="address"/>
+              <menuitem label="pre (&paragraphPreformatCmd.label;)"   value="pre"/>
+            </menupopup>
+            <menupopup id="cssSelector-custom">
+              <menuitem label="body, p, li"/>
+              <menuitem label="a:active"/>
+              <menuitem label="a:hover"/>
+              <menuitem label="a:link"/>
+              <menuitem label="a:visited"/>
+              <menuitem label="a img"/>
+            </menupopup>
+            <menupopup id="cssMediaList">
+              <menuitem label="all"/>
+              <menuitem label="aural"/>
+              <menuitem label="braille"/>
+              <menuitem label="embossed"/>
+              <menuitem label="handheld"/>
+              <menuitem label="print"/>
+              <menuitem label="projection"/>
+              <menuitem label="screen"/>
+              <menuitem label="tty"/>
+              <menuitem label="tv"/>
+            </menupopup>
+            <!-- /Kaze -->
+
             <grid id="sheetInfoTabGrid">
               <columns><column/><column flex="1"/></columns>
             </grid>

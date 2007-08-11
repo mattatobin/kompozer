@@ -156,7 +156,8 @@ function Startup()
 
   gDialog.listStyleImageInput           = document.getElementById("listStyleImageInput");
 
-  gDialog.expertMode = true;
+  gDialog.expertMode = true;            // Kaze: this pref isn't used any more
+  gDialog.dropdownLists = false;        // Kaze: new hidden pref
   gDialog.modified = false;
   gDialog.selectedIndex = -1;
 
@@ -309,15 +310,23 @@ function AddSheetEntryToTree(sheetsTree, ownerNode)
       // add a new entry to the tree
       var o = newObject( treeitem, external, SHEET, ownerNode.sheet, false, 0 );
       PushInObjectsArray(o);
-      
       treerow.appendChild(treecell);
       treeitem.appendChild(treerow);
       treeitem.setAttribute("container", "true");
-      // add enties to the tree for the rules in the current stylesheet
+      
+      // add entries to the tree for the rules in the current stylesheet
       var rules = null;
-      if (ownerNode.sheet)
+//Refresh(); // Kaze
+      //if (ownerNode.sheet)
+      if (ownerNode.sheet) try { // Kaze
         rules = ownerNode.sheet.cssRules;
-      AddRulesToTreechildren(treeitem, rules, external, 1);
+        AddRulesToTreechildren(treeitem, rules, external, 1);
+      } catch(e) { // the stylesheet isn't fully loaded yet, retry in a moment
+        //setTimeout("Refresh", 500);
+        var sheetIndex = objectsArray.length - 1;
+        gAsyncLoadingTimerID = setTimeout("sheetLoadedTimeoutCallback(" + sheetIndex + ")", kAsyncTimeout);
+      }
+      //AddRulesToTreechildren(treeitem, rules, external, 1);
 
       sheetsTree.appendChild(treeitem);
     }
@@ -668,12 +677,24 @@ function onSelectCSSTreeItem(tab)
           href = GetString("StyleSheetIsEmbedded");
         }
         var cleanUrl = StripUsernamePassword(href);
+        /* <Kaze> we have to limit the width of this field,
+           in order to avoid sending the OK/Cancel buttons out of the window bounds.
+              if (cleanUrl == href)
+                AddLabelToInfobox(gridrows, "URL:", href, null, false);
+              else
+                AddLabelToInfobox(gridrows, "URL:",
+                                  cleanUrl + " " + GetString("UserPasswdStripped"),
+                                  null, false);
+        */
+        var urlbox;
         if (cleanUrl == href)
-          AddLabelToInfobox(gridrows, "URL:", href, null, false);
+          urlbox = AddEditableZoneToInfobox(gridrows, "URL:", href, null, false);
         else
-          AddLabelToInfobox(gridrows, "URL:",
+          urlbox = AddEditableZoneToInfobox(gridrows, "URL:",
                             cleanUrl + " " + GetString("UserPasswdStripped"),
                             null, false);
+        urlbox.setAttribute("readonly", "true");
+        // </Kaze>
         var mediaList = cssObject.media.mediaText;
         if (!mediaList || mediaList == "") {
           mediaList = "all";
@@ -773,6 +794,7 @@ function UpdateButtons(importState, mediaState, linkState, styleState, ruleState
       //~ ruleState = false;
   }
   ruleState = true;
+  removeState = (objectsArray.length > 0); // Kaze
   var editState = (gDialog.selectedType == STYLE_RULE) && (gDialog.selectedIndex > 0);
   
   EnableUI(gDialog.atimportButton, importState);
@@ -842,6 +864,34 @@ function AddEditableZoneToInfobox(rows, label, value, callback, focus)
     SetTextboxFocus(textbox);
   return textbox;
 }
+
+// <Kaze>
+function AddEditableListToInfobox(rows, label, value, callback, focus)
+{
+  var labelLabel = document.createElementNS(XUL_NS, "label");
+  var row = document.createElementNS(XUL_NS, "row");
+  row.setAttribute("align", "left");
+  labelLabel.setAttribute("value", label);
+  row.appendChild(labelLabel);
+
+  var menulist = document.createElementNS(XUL_NS, "menulist");
+  if (callback != "") {
+    menulist.setAttribute("onkeypress", "setTimeout("+callback+", 0)");
+    menulist.setAttribute("oncommand",  "setTimeout("+callback+", 0)");
+  }
+  menulist.setAttribute("value", value);
+  menulist.setAttribute("editable", true);
+  row.appendChild(menulist);
+  rows.appendChild(row);
+  if (focus)
+    menulist.focus();
+
+  var menupopup = document.createElementNS(XUL_NS, "menupopup");
+  menulist.appendChild(menupopup);
+
+  return menulist;
+}
+// </Kaze>
 
 // * adds a radiogroup to the given treerow
 //   param XULElement rows
@@ -937,6 +987,17 @@ function AddLabelToInfobox(rows, firstLabel, flexibleLabel, lastLabel, strong)
 
   rows.appendChild(row);
 }
+
+// <Kaze>
+function AddLabelToRadiogroup(radiogroup, label, style)
+{
+  var labelLabel = document.createElementNS(XUL_NS, "label");
+  labelLabel.setAttribute("value", label);
+  labelLabel.setAttribute("class", "radiogrouplabel");
+  radiogroup.appendChild(labelLabel);
+}
+// <Kaze>
+
 
 // * adds a declaration's importance to a given treerows
 //   param XULElement rows
@@ -1072,7 +1133,7 @@ function CreateNewStyleRule()
     // let the "expert" user directly enter the selector
     AddLabelToInfobox(gridrows, GetString("Selector"), null, null, false);
     gDialog.newSelectorType = GENERIC_SELECTOR;
-  } else {
+  } else if (false) {
     var radiogroup = AddRadioGroupToInfoBox(gridrows, GetString("CreateNew"));
     // offer choice between class selector and type element selector
     AddRadioToRadioGroup(radiogroup, GetString("NamedStyle"),
@@ -1081,12 +1142,40 @@ function CreateNewStyleRule()
                "onCreationStyleRuleTypeChange", TYPE_ELEMENT_SELECTOR, false);
     AddRadioToRadioGroup(radiogroup, GetString("SelectorStyle"),
                "onCreationStyleRuleTypeChange", GENERIC_SELECTOR, false);
+  } else {
+    var radiogroup = AddRadioGroupToInfoBox(gridrows, GetString("CreateNew"));
+    radiogroup.setAttribute("id", "cssSelectorType");
+
+    // offer choice between class selector and type element selector
+    AddRadioToRadioGroup(radiogroup, GetString("ElementStyle"),
+               "onCreationStyleRuleTypeChange", "'type'", true);
+    AddLabelToRadiogroup(radiogroup, GetString("ElementStyleExample"));
+    AddRadioToRadioGroup(radiogroup, GetString("NamedStyle"),
+               "onCreationStyleRuleTypeChange", "'class'", false);
+    AddLabelToRadiogroup(radiogroup, GetString("NamedStyleExample"));
+    AddRadioToRadioGroup(radiogroup, GetString("IdStyle"),
+               "onCreationStyleRuleTypeChange", "'id'", false);
+    AddLabelToRadiogroup(radiogroup, GetString("IdStyleExample"));
+    AddRadioToRadioGroup(radiogroup, GetString("SelectorStyle"),
+               "onCreationStyleRuleTypeChange", "'custom'", false);
+    AddLabelToRadiogroup(radiogroup, GetString("SelectorStyleExample"));
   }
+  
+  var selectorBox = null;
+  if (gDialog.dropdownLists)
+    selectorBox = AddEditableListToInfobox(gridrows, " ", ".", "onCssSelectorChange", true);
+  else
+    selectorBox = AddEditableZoneToInfobox(gridrows, " ", gDialog.newSelector, "onCssSelectorChange", true);
+  selectorBox.setAttribute("id", "cssSelectorInput");
+  selectorBox.setAttribute("style", "margin-top: 1em; margin-bottom: 1em;");
+  onCreationStyleRuleTypeChange("type");
   // </Kaze>
   
-  AddEditableZoneToInfobox(gridrows, " ", gDialog.newSelector, "onNewSelectorChange", true);
+  //AddEditableZoneToInfobox(gridrows, " ", gDialog.newSelector, "onNewSelectorChange", true);
   
   AddSingleButtonToInfobox(gridrows, GetString("CreateStyleRule"), "onConfirmCreateNewObject");
+
+  // Kaze: add a dynamic description for beginners (TODO)
 }
 
 // * user changed the type of style rule (s)he wants to create
@@ -1094,6 +1183,28 @@ function CreateNewStyleRule()
 function onCreationStyleRuleTypeChange(type)
 {
   gDialog.newSelectorType = type;
+
+  // <Kaze>
+  gDialog.newSelectorType = GENERIC_SELECTOR;
+  UpdateCssSelectorInputPopup(type, true);
+
+  var cssField = document.getElementById("cssSelectorInput");
+
+  switch (type) {
+  case "id":
+    cssField.value = "#";
+    break;
+  case "class":
+    cssField.value = ".";
+    break;
+  default:
+    cssField.value = "";
+    break;
+  }
+
+  cssField.focus();
+  return;
+  // </Kaze>
 }
 
 // * user wants to create a new embedded stylesheet
@@ -1287,15 +1398,34 @@ function GetSubtreeChildren(elt)
 // * here, we create a new sheet or rule
 function onConfirmCreateNewObject()
 {
+  // <Kaze>
+  if (gDialog.newType == STYLE_RULE) {
+    // remove useless spaces in the selector
+    gDialog.newSelector = gDialog.newSelector.replace(/^\s+|\s+$/g, "")
+                                             .replace(/\s*,\s*/g, ", ")
+                                             .replace(/\s+/g, " ");
+    // check that this selector isn't already used in the current stylesheet.
+    var index = FindRuleIndexInObjectArray(gDialog.newSelector);
+    if (index > 0) { // select the existing rule, don't create a new one
+      selectTreeItem(objectsArray[index].xulElt);
+      onSelectCSSTreeItem('general');
+      return;
+    }
+  }
+  // </Kaze>
+
   // first, let's declare we modify the document
   gDialog.modified = true;
   var selector;
 
   // if we are requested to create a style rule in expert mode,
   // let's find the last embedded stylesheet
-  if (!gDialog.expertMode && gDialog.newType == STYLE_RULE) {
+  //if (!gDialog.expertMode && gDialog.newType == STYLE_RULE) {
+  if (gDialog.newType == STYLE_RULE) {
     var indexLastEmbeddedStylesheet = -1;
-    for (var i = objectsArray.length-1; i >= 0 ; i--) {
+
+    //for (var i = objectsArray.length-1; i >= 0 ; i--) {
+    for (var i = gDialog.selectedIndex; i >= 0 ; i--) { // Kaze: use the selected stylesheet!
       if (objectsArray[i].type == SHEET && ! objectsArray[i].external) {
         indexLastEmbeddedStylesheet = i;
         break;
@@ -1369,9 +1499,9 @@ function onConfirmCreateNewObject()
           SetModifiedFlagOnStylesheet();
         }
         
-        if (gDialog.expertMode) { // Kaze
+        //if (gDialog.expertMode) { // Kaze
             gDialog.cssTBox.focus();
-        }
+        //}
       }
       break;
     case IMPORT_RULE:
@@ -1439,7 +1569,12 @@ function onConfirmCreateNewObject()
 
       ClearTreeSelection(gDialog.sheetsTree);
 
-      if (gDialog.newExternal && gDialog.newURL != "") {
+      if (gDialog.newExternal && gDialog.newURL != "") { // Linked stylesheet
+        // <Kaze>
+        var relativeURL = MakeRelativeUrl(gDialog.newURL);
+        var absoluteURL = MakeAbsoluteUrl(gDialog.newURL);
+        // </Kaze>
+
         subtreeitem  = document.createElementNS(XUL_NS, "treeitem");
         var subtreerow   = document.createElementNS(XUL_NS, "treerow");
         var subtreecell  = document.createElementNS(XUL_NS, "treecell");
@@ -1450,7 +1585,8 @@ function onConfirmCreateNewObject()
 
         newSheetOwnerNode = getCurrentEditor().document.createElement("link");
         newSheetOwnerNode.setAttribute("type", "text/css");
-        newSheetOwnerNode.setAttribute("href", gDialog.newURL);
+        //~ newSheetOwnerNode.setAttribute("href", gDialog.newURL);
+        newSheetOwnerNode.setAttribute("href", relativeURL); // Kaze
         if (gDialog.newAlternate) {
           newSheetOwnerNode.setAttribute("rel", "alternate stylesheet");
         }
@@ -1466,9 +1602,11 @@ function onConfirmCreateNewObject()
         headNode = GetHeadElement();
         headNode.appendChild(newSheetOwnerNode);
 
-        subtreecell.setAttribute("label", gDialog.newURL);
+        //~ subtreecell.setAttribute("label", gDialog.newURL);
+        subtreecell.setAttribute("label", relativeURL); // Kaze
         external = true;
-        if ( /(\w*):.*/.test(gDialog.newURL) ) {
+        //~ if ( /(\w*):.*/.test(gDialog.newURL) ) {
+        if ( /(\w*):.*/.test(absoluteURL) ) { // Kaze
           if (RegExp.$1 == "file") {
             external = false;
           }
@@ -1476,7 +1614,15 @@ function onConfirmCreateNewObject()
         if (external)
           subtreecell.setAttribute("properties", "external");
 
-        if (!newSheetOwnerNode.sheet) {
+        // <Kaze> this is a workaround for that bug:
+        // http://www.geckozone.org/forum/viewtopic.php?p=392959#392959
+        var cssRules = null;
+        if (newSheetOwnerNode.sheet) try {
+          cssRules = newSheetOwnerNode.sheet.cssRules;
+        } catch(e) {} 
+        // </Kaze>
+        //if (!newSheetOwnerNode.sheet) {
+        if (!newSheetOwnerNode.sheet || !cssRules) {
           /* hack due to asynchronous load of external stylesheet */        
           var o = newObject( subtreeitem, external, OWNER_NODE, newSheetOwnerNode, false, 0 );
           PushInObjectsArray(o)
@@ -1488,11 +1634,12 @@ function onConfirmCreateNewObject()
         }
         else {
           o = newObject( subtreeitem, external, SHEET, newSheetOwnerNode.sheet, false, 0 );
-          PushInObjectsArray(o)
-          AddRulesToTreechildren(subtreeitem, newSheetOwnerNode.sheet.cssRules, external, 1);
+          PushInObjectsArray(o);
+          //AddRulesToTreechildren(subtreeitem, newSheetOwnerNode.sheet.cssRules, external, 1);
+          AddRulesToTreechildren(subtreeitem, cssRules, external, 1); // Kaze
         }
       }
-      else if (!gDialog.newExternal) {
+      else if (!gDialog.newExternal) { // Internal stylesheet
         newSheetOwnerNode = getCurrentEditor().document.createElement("style");
         newSheetOwnerNode.setAttribute("type", "text/css");
         if (gDialog.newMediaList != "") {
@@ -1522,6 +1669,7 @@ function sheetLoadedTimeoutCallback(index)
   ClearTreeSelection(gDialog.sheetsTree);
   if (objectsArray[index].type == OWNER_NODE && objectsArray[index].cssElt.sheet != null) {
     var sheet = objectsArray[index].cssElt.sheet;
+    // Kaze: this line raises an exception, but the code seems to work. Weird.
     AddRulesToTreechildren(subtreeitem , sheet.cssRules, objectsArray[index].external,
                            objectsArray[index].depth+1);
     objectsArray[index].type = SHEET;
@@ -1733,11 +1881,14 @@ function onExportStylesheet()
   //~ var fileName = getLocalFileURL(false, true); // Kaze: *.css file filter
   if (!fileName) // Kaze (bugfix: erases the current page if cancelled)
     return;
+  gDialog.modified = true; // Kaze
+
   SerializeExternalSheet(gDialog.selectedObject, fileName);
   var ownerNode = gDialog.selectedObject.ownerNode;
   var newSheetOwnerNode = ownerNode.ownerDocument.createElement("link");
   newSheetOwnerNode.setAttribute("type", "text/css");
-  newSheetOwnerNode.setAttribute("href", fileName);
+  //~ newSheetOwnerNode.setAttribute("href", fileName);
+  newSheetOwnerNode.setAttribute("href", MakeRelativeUrl(fileName)); // Kaze
   newSheetOwnerNode.setAttribute("rel", "stylesheet");
   var mediaList = ownerNode.getAttribute("media");
   if (mediaList && mediaList != "")
@@ -1793,15 +1944,16 @@ function GetString(key)
 }
 //
 // <Kaze> KaZcadeS overlay: new globals and functions
-//~ var kzsPrefs = Components.classes["@mozilla.org/preferences-service;1"]
-    //~ .getService(Components.interfaces.nsIPrefService).getBranch("extensions.KaZcadeS.");
+var kzsPrefs = Components.classes["@mozilla.org/preferences-service;1"]
+                         .getService(Components.interfaces.nsIPrefService)
+	                       .getBranch("extensions.CaScadeS.");
 const gModifiedFlagSrc = "chrome://editor/skin/icons/modified.gif";
 var gNewStyleRule = "StyleRule";
 
 function kzsStartup() {
   // normal CaScadeS startup
   Startup();
-  gDialog.cssTBox   = document.getElementById("cssTBox");
+  gDialog.cssTBox     = document.getElementById("cssTBox");
   gDialog.styleMenu   = document.getElementById("styleMenu");
   gDialog.menuTooltip = gDialog.styleMenu.getAttribute("tooltiptext");
   
@@ -1809,6 +1961,16 @@ function kzsStartup() {
   if (objectsArray.length && !objectsArray[0].xulElt.nextSibling)
     objectsArray[0].xulElt.setAttribute("open", "true");
   
+  // select the first stylesheet if any
+  if (objectsArray.length) {
+    selectTreeItem(objectsArray[0].xulElt);
+  }
+  else {
+    // no stylesheet yet: propose to create a new style rule
+    gNewStyleRule = "StyleRule";
+    CreateNewRule();
+  }
+
   // backup <head> element
   gDialog.head = null;
   try {
@@ -1817,7 +1979,10 @@ function kzsStartup() {
   
   // persistant expert / normal mode
   try {
-    gDialog.expertMode = window.opener.kzsPrefs.getBoolPref("expertMode");
+    //gDialog.expertMode = true; // Kaze: expert mode is now the only one
+    //gDialog.expertMode    = window.opener.kzsPrefs.getBoolPref("expertMode");
+    gDialog.expertMode    = kzsPrefs.getBoolPref("expertMode");
+    gDialog.dropdownLists = kzsPrefs.getBoolPref("dropdownLists");
   } catch(e) {}
   document.getElementById("expertModeCheckbox").setAttribute("checked", gDialog.expertMode);
   UpdateButtons(false, false, true, true, false, false);
@@ -1828,6 +1993,7 @@ function CancelAllChanges() {
     GetHeadElement().innerHTML = gDialog.head;
   } catch (e) {}
 }
+
 function MoveRuleUp(rule, index) {  // extracted from the original "MoveObjectUp"
   var ruleText = rule.cssText;
   var subtreeitem;
@@ -2053,9 +2219,7 @@ function SetModifiedFlagOnTreeItem(index, force) {
   objectsArray[index].modified = true;
 }
 
-// </Kaze>
-
-// Kaze: test
+// Kaze: added
 function onDoubleClickCSSTreeItem() {
   if (gDialog.selectedType != STYLE_RULE) return;
   if (gDialog.selectedIndex <= 0) return;
@@ -2106,3 +2270,156 @@ function ChangeSelector() {
     }
   }
 }
+
+// Kaze: test (using drop-down lists to help creating a new style rule)
+function findAllAttributes(menupopup, attr) {
+  if (menupopup.hasChildNodes())
+    return;
+
+  var arr = new Array();
+  var list = GetCurrentEditor().document.getElementsByTagName("*");
+  var menuitem, value, prefix;
+
+  for (var i=0; i<list.length; i++) if (list[i].hasAttribute(attr)) {
+    value = list[i].getAttribute(attr);
+    if (!isInArray(arr, value))
+      arr.push(value);
+  }
+
+  switch(attr) {
+    case "class":
+      prefix = ".";
+      break;
+    case "id":
+      prefix = "#";
+      break;
+    default:
+      prefix = "";
+      break;
+  }
+
+  arr.sort();
+  for (i=0; i<arr.length; i++) {
+    menuitem = document.createElement("menuitem");
+    menuitem.setAttribute("label", prefix + arr[i]);
+    menupopup.appendChild(menuitem);
+  }
+}
+
+function findAllElements(menupopup) {
+  if (menupopup.hasChildNodes())
+    return;
+
+  var menuitem, value, prefix;
+  var arr = new Array();
+  var list = GetCurrentEditor().document.getElementsByTagName("body")[0].getElementsByTagName("*");
+ 
+  for (var i=0; i<list.length; i++) {
+    value = list[i].tagName;
+    if (!isInArray(arr, value))
+      arr.push(value);
+  }
+
+  menuitem = document.createElementNS(XUL_NS, "menuitem");
+  menuitem.setAttribute("label", "html");
+  menupopup.appendChild(menuitem);
+
+  menuitem = document.createElementNS(XUL_NS, "menuitem");
+  menuitem.setAttribute("label", "body");
+  menupopup.appendChild(menuitem);
+
+  menuitem = document.createElementNS(XUL_NS, "menuitem");
+  menuitem.setAttribute("label", "-");
+  menuitem.setAttribute("disabled", "true");
+  menupopup.appendChild(menuitem);
+
+  // this raises an exception in xblpopupshowing() with Gecko 1.7
+  //menuitem = document.createElementNS(XUL_NS, "menuseparator");
+  //menuitem.setAttribute("disabled", "true");
+  //menupopup.appendChild(menuitem);
+
+  arr.sort();
+  for (i=0; i<arr.length; i++) {
+    menuitem = document.createElement("menuitem");
+    menuitem.setAttribute("label", arr[i].toLowerCase());
+    menupopup.appendChild(menuitem);
+  }
+}
+
+function filterAllElements(menupopup) {
+  // TODO
+  return;
+}
+
+function isInArray(arr, elt) {
+  for (var j=0; j<arr.length; j++)
+    if (elt == arr[j])
+      return true;
+  return false;
+}
+
+function onCssSelectorChange() {
+  var cssSelectorType = document.getElementById("cssSelectorType");
+  var value = document.getElementById("cssSelectorInput").value;
+  gDialog.newSelector = value;
+
+  // force to the correct radiobutton if needed
+  var index = cssSelectorType.selectedIndex;
+  if (/^\.[^\s\:\.#,]*$/.test(value))
+    index = 1;
+  else if (/^#[^\s\:\.#,]*$/.test(value))
+    index = 2;
+  else if (!value.length || /[\s\:\.#,]/.test(value))
+    index = 3;
+
+  var arr = ["type", "class", "id", "custom"];
+  if (cssSelectorType.selectedIndex != index) {
+    cssSelectorType.selectedIndex = index;
+    UpdateCssSelectorInputPopup(arr[index]);
+  }
+
+  return;
+}
+
+function UpdateCssSelectorInputPopup(type) {
+  if (!gDialog.dropdownLists)
+    return; // Kaze: dropdown lists are disabled until KompoZer 0.8
+
+  var cssField = document.getElementById("cssSelectorInput");
+  var cssPopup=cssField.getElementsByTagName("menupopup")[0];
+  cssField.removeChild(cssPopup);
+
+  var cssList = document.getElementById("cssSelector-" + type);
+  cssPopup = cssList.cloneNode(true);
+  cssField.appendChild(cssPopup);
+}
+
+function FindRuleIndexInObjectArray(selectorText) {
+  if (!objectsArray.length)
+    return -1; // no stylesheet
+
+  var cssObject = objectsArray[gDialog.selectedIndex].cssElt;
+  var i, index = FindObjectIndexInObjectsArray(cssObject);
+
+  // find the related stylesheet
+  if (objectsArray[gDialog.selectedIndex].type != SHEET) {
+    for (i = index-1; i >= 0 ; i--) {
+      if (objectsArray[i].type == SHEET && ! objectsArray[i].external) {
+        cssObject = objectsArray[i].cssElt;
+        index = i;
+        break;
+      }
+    }
+  }
+
+  // check if this selector isn't already used in the current stylesheet.
+  var l = cssObject.cssRules.length;
+  for (i = index+1; i <= index+l; i++) {
+    if ((objectsArray[i].type == STYLE_RULE) && (objectsArray[i].cssElt.selectorText == selectorText) ) {
+      return i;
+    }
+  }
+  return -1; // not found
+}
+
+// </Kaze>

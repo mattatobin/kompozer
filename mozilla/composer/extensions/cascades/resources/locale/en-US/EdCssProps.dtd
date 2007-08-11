@@ -42,9 +42,9 @@
 <!ENTITY expertModeChecbox.label                "Expert mode">
 <!ENTITY importRuleButton.label                 "@import">
 <!ENTITY mediaRuleButton.label                  "@media">
-<!ENTITY linkedSheetButton.label                "Link elt.">
-<!ENTITY styleSheetButton.label                 "Style elt.">
-<!ENTITY ruleButton.label                       "Rule">
+<!ENTITY linkedSheetButton.label                "Linked stylesheet">
+<!ENTITY styleSheetButton.label                 "Internal stylesheet">
+<!ENTITY ruleButton.label                       "Style rule">
 <!ENTITY upButton.label                         "Up">
 <!ENTITY downButton.label                       "Down">
 <!ENTITY refreshButton.label                    "Refresh">
@@ -271,4 +271,9 @@
 <!ENTITY makeCSSRule.label                      "Extract and create generic style">
 <!ENTITY makecssrule.accesskey                  "E">
 <!ENTITY currentstylesfor.label                 "Current styles for:">
-<!ENTITY renameButton.label                     "Edit">
+<!ENTITY renameButton.label                     "Edit selector">
+
+<!ENTITY autoMarginUnit.label                   "auto">
+<!ENTITY thinBorderUnit.label                   "thin">
+<!ENTITY mediumBorderUnit.label                 "medium">
+<!ENTITY thickBorderUnit.label                  "thick">

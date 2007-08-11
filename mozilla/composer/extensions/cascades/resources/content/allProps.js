@@ -81,9 +81,10 @@ function ExtractInlineStyles() {
   if (window.ExtractStyles)
   {
     // Remove current style properties
-    gDialog.selectedObject.removeAttribute("style");
+    //~ gDialog.selectedObject.removeAttribute("style");
     //~ gDialog.selectedObject.setAttribute("style", "");
     //~ InitGeneralTabPanel();
+    window.opener.ResetStructToolbar(); // Kaze
     window.close();
   }
 }

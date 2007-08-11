@@ -42,7 +42,6 @@ var textColor, backgroundColor, borderColor;
 var gLocalFonts = null;
 const kUrlString = "url(";
 
-
 // * if |value| is not empty, sets the CSS property |property| to |value|
 //   in |elt| element's inline styles ; otherwise removes the property
 //   param XULElement elt
@@ -95,6 +94,16 @@ function onFontFamilySelect(fontFamily)
 
   EnableUI(gDialog.predefFontFamilyMenulist, enablePredefMenu);
   EnableUI(gDialog.customFontFamilyInput, enableCustomInput);
+
+  // <Kaze> if fontFamily has blank spaces, use quotes
+  // solves this bug: http://wysifauthoring.informe.com/viewtopic.php?t=349
+  //var fontFaces = fontFamily.split(/,\s*/);
+  //alert(fontFaces.length);
+  //for (var i=0; i<fontFaces.length; i++)
+    //if (fontFaces[i].indexOf(" ") > 0)
+      //fontFaces[i] = '"' + fontFaces[i] + '"';
+  //fontFamily = fontFaces.join(", ");
+  // </Kaze>
 
   AddStyleToElement(gDialog.brownFoxLabel,  "font-family", fontFamily);
   AddStyleToElement(gDialog.selectedObject, "font-family", fontFamily);
@@ -794,13 +803,17 @@ function InitBorderTabPanel()
   var sideArray = [ "top", "left", "right", "bottom" ];
 
   for (var i=0; i<sideArray.length; i++) {
-    var styleMenu = document.getElementById( sideArray[i]+"BorderStyleMenulist" );
-    var colorInput = document.getElementById( sideArray[i]+"BorderColorInput" );
-    var widthInput = document.getElementById( sideArray[i]+"BorderWidthInput" );
+    var styleMenu   = document.getElementById( sideArray[i]+"BorderStyleMenulist" );
+    var colorInput  = document.getElementById( sideArray[i]+"BorderColorInput" );
+    var widthInput  = document.getElementById( sideArray[i]+"BorderWidthInput" );
+    var widthButton = document.getElementById( sideArray[i]+"BorderWidthSpins" ); // Kaze
+
     if (!i || !sameFourSides) {
       EnableUI(styleMenu, true);
       EnableUI(colorInput, true);
       EnableUI(widthInput, true);
+      //EnableUI(widthButton, true); // Kaze
+      widthButton.removeAttribute("hidden"); // Kaze
 
       SelectsOneChoice("border-"+sideArray[i]+"-style",
                        sideArray[i]+"BorderStyleMenulist",
@@ -819,6 +832,8 @@ function InitBorderTabPanel()
       EnableUI(styleMenu, false);
       EnableUI(colorInput, false);
       EnableUI(widthInput, false);
+      //EnableUI(widthButton, false); // Kaze
+      widthButton.setAttribute("hidden", "true"); // Kaze
       colorInput.value = "";
       setColorWell("border"+sideArray[i]+"CW", "");
       widthInput.value = "";
@@ -835,7 +850,7 @@ function InitBorderTabPanel()
     gDialog.allFourBordersSame.removeAttribute("checked");
   
   // Kaze
-  ToggleFourBorderSidesSameStyle(gDialog.allFourBordersSame);
+  //ToggleFourBorderSidesSameStyle(gDialog.allFourBordersSame);
 }
  
 // * Inits the values shown in the Background tab panel
@@ -1085,9 +1100,11 @@ function SerializeExternalSheet(sheet, href)
     //~ else
         //~ localFile = fileHandler.getFileFromURLSpec(sheet.href).QueryInterface(nsILocalFile);
     // <Kaze>
+    var reFileName = /[^\/]*$/;
+    var newBaseDir = href && (href.replace(reFileName, '') != sheet.href.replace(reFileName, ''));
     if (!href)
         href = sheet.href;
-        var localFile = fileHandler.getFileFromURLSpec(href).QueryInterface(nsILocalFile);
+    var localFile = fileHandler.getFileFromURLSpec(href).QueryInterface(nsILocalFile);
     // </Kaze>
 
     var fileOuputStream = classes[FILEOUT_CTRID].createInstance(nsIFileOutputStream);
@@ -1101,9 +1118,24 @@ function SerializeExternalSheet(sheet, href)
         var cssTextSplitted, ruleIndex, singleDeclIndex;
         
         for (ruleIndex = 0; ruleIndex < l; ruleIndex++) {
-            tmp = sheet.cssRules.item(ruleIndex).cssText;
+            var tmp = sheet.cssRules.item(ruleIndex).cssText;
             // <Kaze>
-            cssText += PrettyPrintCSS(tmp, sheet.href, true);
+
+	    if (newBaseDir) {
+              // replace all relative URLs by absolute ones
+              var fileNodes = tmp.match(/url\([^\)]*/g);
+              if (fileNodes) for (var i = 0; i < fileNodes.length; i++) {
+                fileNodes[i] = fileNodes[i].replace(/^url\(/, '');
+                //~ var tmp2 = MakeAbsoluteUrl(fileNodes[i], href);
+                var tmp2 = MakeAbsoluteUrl(fileNodes[i]);
+                if (tmp2 != fileNodes[i])
+                  tmp = tmp.replace(fileNodes[i], tmp2);
+              }
+	    }
+
+	    // now replace all absolute URLs by relative ones to the new location
+            //~ cssText += PrettyPrintCSS(tmp, sheet.href, true);
+            cssText += PrettyPrintCSS(tmp, href, true); // in case we're exporting the stylesheet in another directory
             /* disabled
             cssTextSplitted = tmp.split(re);
             cssText += "    ";
@@ -1114,6 +1146,7 @@ function SerializeExternalSheet(sheet, href)
             }
             if (l > 1) cssText += "\n\n"; 
             */
+            if (l > 1) cssText += "\n"; 
             // </Kaze>
         }
         
@@ -1216,7 +1249,7 @@ function ToggleFourBorderSidesSameStyle(elt)
       styleMenulist.selectedItem = styleMenuitem;
     }
   }
-}  
+}
 
 // * Enable a XUL element depending on a boolean value
 //   param XULElement elt
@@ -1385,11 +1418,11 @@ function DoMenulistCommand(elt, property, id) {
   }
 }
 
-// Kaze
+// <Kaze>
 function PrettyPrintCSS(cssText, base, fullDeclaration) {
   var i, tmp;
   
-  //~ cssText = MakeHexColors(cssText);
+  // Make Hex Colors
   var colors = cssText.match(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/g);
   if (colors) for (i = 0; i < colors.length; i++) {
     tmp = ConvertRGBColorIntoHEXColor(colors[i]);
@@ -1397,7 +1430,7 @@ function PrettyPrintCSS(cssText, base, fullDeclaration) {
       cssText = cssText.replace(colors[i], tmp);
   }
   
-  //~ cssText = MakeRelativeURLs(cssText, base);
+  // Make relative URLs
   var fileNodes = cssText.match(/"file:\/\/[^"]+|url\(file:\/\/[^\)]+/g);
   if (fileNodes) for (var i = 0; i < fileNodes.length; i++) {
     fileNodes[i] = fileNodes[i].replace(/^"|^url\(/, '');
@@ -1410,7 +1443,8 @@ function PrettyPrintCSS(cssText, base, fullDeclaration) {
   var gIndent = "  ";
   if (fullDeclaration) {
     cssText = cssText.replace(/;[\s]*/g, ";\n" + gIndent)
-                     .replace(/\{[\s]*/, "{\n" + gIndent).replace(/[\s]*\}/, "\n}"); // + "\n";
+                     .replace(/\{[\s]*/, "{\n" + gIndent)
+		     .replace(/[\s]*\}/, "\n}");
   } 
   else { // output the content only
     cssText = cssText.replace(/^.*\{[\s]*/, '').replace(/[\s]*\}[\s]*$/, '') /* remove selector   */
@@ -1424,6 +1458,7 @@ function PrettyPrintCSS(cssText, base, fullDeclaration) {
   cssText = cssText.replace(/\s0pt/g, " 0");
   cssText = cssText.replace(/[\s]*$/g, "");
   
-  return cssText;
+  return cssText; 
 }
 
+// </Kaze>

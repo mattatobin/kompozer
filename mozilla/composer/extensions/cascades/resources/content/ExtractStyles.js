@@ -99,8 +99,10 @@ function ClassTestSelect()
 
 function onAccept()
 {
-  // Kaze
+  // <Kaze>
+  const reFilter = /\s\*\:\.#,/g;
   window.opener.ExtractStyles = true;
+  // </Kaze>
 
   // aaaah, interesting stuff start here ;-)
   // first, get the context
@@ -205,6 +207,7 @@ function onAccept()
   else
     insertionPointOwnerNode = insertionPoint.ownerNode;
 
+  /* <Kaze> the original code causes some bugs, see http://wysifauthoring.informe.com/viewtopic.php?p=1973#1973
   var ruleText = "\n" + selector + "\n{\n";
   var styles = gDialog.firingElement.style;
   if (styles)
@@ -223,22 +226,36 @@ function onAccept()
     }
   }
   ruleText += "}\n\n";
+  */
+  var ruleText = "\n" + selector.replace(reFilter, "")
+    + " {\n" + gDialog.firingElement.style.cssText + "\n}\n";
+  ruleText = PrettyPrintCSS(ruleText, false, true);
+  // </Kaze>
 
   var textNode = doc.createTextNode(ruleText);
   insertionPointOwnerNode.appendChild(textNode);
 
   gDialog.firingElement.removeAttribute("style");
   gDialog.firingElement.removeAttribute("id");
-  gDialog.firingElement.removeAttribute("class");
+  //~ gDialog.firingElement.removeAttribute("class"); // Kaze: do NOT remove the class attribute!
   switch (applicationField)
   {
     case "allElements":
-      if (gDialog.classCheckbox.checked)
-        gDialog.firingElement.setAttribute("class", gDialog.classTextbox.value);
+      if (gDialog.classCheckbox.checked) {
+        // <Kaze> let's add the class to the current element
+        //gDialog.firingElement.setAttribute("class", gDialog.classTextbox.value);
+        var classAttr = "";
+        if (gDialog.firingElement.hasAttribute("class"))
+          classAttr = gDialog.firingElement.getAttribute("class") + " ";
+        classAttr += gDialog.classTextbox.value.replace(reFilter, "");
+        gDialog.firingElement.setAttribute("class", classAttr);
+        // </Kaze>
+      }
       break;
     case "thisElementOnly":
     default:
-      gDialog.firingElement.setAttribute("id", gDialog.idTextbox.value);
+      gDialog.firingElement.setAttribute("id", gDialog.idTextbox.value.replace(reFilter, ""));
+      //gDialog.firingElement.setAttribute("id", gDialog.idTextbox.value);
       break;
   }
 

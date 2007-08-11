@@ -311,8 +311,6 @@ function InitIDSelectMenu(menuPopup) {
   }
 }
 
-
-
 function InitClassSelectMenu(menuPopup) {
   cleanPopup(menuPopup);
 
@@ -432,8 +430,13 @@ function onIDSelectChange() {                // modified
     var value = gContextMenuFiringDocumentElement.getAttribute("id");
     if (resultingID == value)
       GetCurrentEditor().removeAttribute(gContextMenuFiringDocumentElement, "id");
-    else
+    else {
+      try {
+        var currElt = GetCurrentEditor().document.getElementById(resultingID);
+        GetCurrentEditor().removeAttribute(currElt, "id");
+      } catch(e) {}
       GetCurrentEditor().setAttribute(gContextMenuFiringDocumentElement, "id", resultingID);
+    }
   }
   gLastFocusNode = null;
   setTimeout("UpdateStructToolbar();", 100);
