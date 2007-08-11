@@ -140,8 +140,10 @@ var gMarkupCleaner = {
         case "h5":
         case "h6":
           //~ if (/* gMarkupCleanerData.emptyBlocksCheckbox.checked && */
+          // Kaze: a block isn't empty if it has an id attribute (templates...)
           if (gMarkupCleanerData.emptyBlocks &&
-              OnlyWhiteTextNodesStartingAtNode(node.firstChild, true))
+              OnlyWhiteTextNodesStartingAtNode(node.firstChild, true) &&
+              !(node.hasAttribute("id")) ) // Kaze
             return NodeFilter.FILTER_ACCEPT;
           break;
         
