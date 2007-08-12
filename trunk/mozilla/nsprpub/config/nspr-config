@@ -111,6 +111,6 @@ if test "$echo_libs" = "yes"; then
 	  libdirs="$libdirs $i"
         fi
       done
-      echo $libdirs -lpthread -ldl 
+      echo $libdirs -lpthread -ldl -lc -lpthread
 fi      
 

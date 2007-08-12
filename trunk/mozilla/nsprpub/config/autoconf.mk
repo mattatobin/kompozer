@@ -12,7 +12,7 @@ includedir	= ${prefix}/include/nspr
 libdir		= ${exec_prefix}/lib
 datadir		= ${prefix}/share
 
-dist_prefix	= /mnt/Documents/kompozer/mozilla/dist
+dist_prefix	= /home/kaze/Documents/kompozer/mozilla/dist
 dist_bindir	= ${dist_prefix}/bin
 dist_includedir = ${dist_prefix}/include/nspr
 dist_libdir	= ${dist_prefix}/lib
@@ -70,9 +70,9 @@ IMPLIB		=
 CYGWIN_WRAPPER	= 
 
 OS_CPPFLAGS	= 
-OS_CFLAGS	= $(OS_CPPFLAGS)  -pipe -ansi -Wall -pthread -O2 $(DSO_CFLAGS)
-OS_CXXFLAGS	= $(OS_CPPFLAGS)  -pipe -ansi -Wall -pthread -O2 $(DSO_CFLAGS)
-OS_LIBS         = -lpthread -ldl 
+OS_CFLAGS	= $(OS_CPPFLAGS) -DDEBIAN -pipe -ansi -Wall -pthread -O2 $(DSO_CFLAGS)
+OS_CXXFLAGS	= $(OS_CPPFLAGS) -DDEBIAN -pipe -ansi -Wall -pthread -O2 $(DSO_CFLAGS)
+OS_LIBS         = -lpthread -ldl -lc -lpthread
 OS_LDFLAGS	= 
 OS_DLLFLAGS	= 
 DLLFLAGS	= 
@@ -86,7 +86,7 @@ DSO_LDOPTS	= -shared -Wl,-soname -Wl,$(notdir $@)
 RESOLVE_LINK_SYMBOLS = 
 
 HOST_CC		= gcc
-HOST_CFLAGS	=  -DXP_UNIX
+HOST_CFLAGS	= -DDEBIAN -DXP_UNIX
 
 DEFINES		=  -UDEBUG -DMOZILLA_CLIENT=1 -DNDEBUG=1 -DXP_UNIX=1 -D_POSIX_SOURCE=1 -D_BSD_SOURCE=1 -D_SVID_SOURCE=1 -D_LARGEFILE64_SOURCE=1 -DHAVE_FCNTL_FILE_LOCKING=1 -DLINUX=1 -Di386=1 -DHAVE_LCHOWN=1 -DHAVE_STRERROR=1 -D_REENTRANT=1 
 
