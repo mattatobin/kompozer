@@ -2,9 +2,9 @@
 # Generated automatically by configure.
 # Run this file to recreate the current configuration.
 # This directory was configured as follows,
-# on host zenwalk:
+# on host kazdesk:
 #
-# ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --disable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/mnt/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=.
+# ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --enable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/home/kaze/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=.
 #
 # Compiler output produced by configure, useful for debugging
 # configure, is in ./config.log if it exists.
@@ -14,8 +14,8 @@ for ac_option
 do
   case "$ac_option" in
   -recheck | --recheck | --rechec | --reche | --rech | --rec | --re | --r)
-    echo "running ${CONFIG_SHELL-/bin/sh} ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --disable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/mnt/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=. --no-create --no-recursion"
-    exec ${CONFIG_SHELL-/bin/sh} ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --disable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/mnt/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=. --no-create --no-recursion ;;
+    echo "running ${CONFIG_SHELL-/bin/sh} ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --enable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/home/kaze/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=. --no-create --no-recursion"
+    exec ${CONFIG_SHELL-/bin/sh} ./configure  --enable-optimize --disable-debug --disable-svg --without-system-mng --without-system-png --disable-ldap --disable-mailnews --disable-installer --disable-activex --disable-activex-scripting --disable-tests --disable-oji --disable-necko-disk-cache --enable-single-profile --disable-profilesharing --enable-extensions=wallet,xml-rpc,xmlextras,pref,universalchardet,spellcheck --enable-necko-protocols=http,ftp,file,jar,viewsource,res,data --disable-pedantic --disable-short-wchar --enable-xprint --enable-strip-libs --enable-crypto --disable-mathml --with-system-zlib --enable-toolkit=gtk2 --enable-default-toolkit=gtk2 --enable-xft --disable-freetype2 --enable-image-decoders=default,-xbm --with-dist-prefix=/home/kaze/Documents/kompozer/mozilla/dist --with-mozilla --cache-file=.././config.cache --srcdir=. --no-create --no-recursion ;;
   -version | --version | --versio | --versi | --vers | --ver | --ve | --v)
     echo "./config.status generated by autoconf version 2.13"
     exit 0 ;;
@@ -69,9 +69,9 @@ sed 's/%@/@@/; s/@%/@@/; s/%g$/@g/; /@g$/s/[\\&%]/\\&/g;
 /^[ 	]*VPATH[ 	]*=[^:]*$/d
 
 s%@SHELL@%/bin/sh%g
-s%@CFLAGS@% -pipe -ansi -Wall -pthread -O2%g
+s%@CFLAGS@%-DDEBIAN -pipe -ansi -Wall -pthread -O2%g
 s%@CPPFLAGS@%%g
-s%@CXXFLAGS@% -pipe -ansi -Wall -pthread -O2%g
+s%@CXXFLAGS@%-DDEBIAN -pipe -ansi -Wall -pthread -O2%g
 s%@FFLAGS@%%g
 s%@DEFS@%-DMOZILLA_CLIENT=1 -DNDEBUG=1 -DXP_UNIX=1 -D_POSIX_SOURCE=1 -D_BSD_SOURCE=1 -D_SVID_SOURCE=1 -D_LARGEFILE64_SOURCE=1 -DHAVE_FCNTL_FILE_LOCKING=1 -DLINUX=1 -Di386=1 -DHAVE_LCHOWN=1 -DHAVE_STRERROR=1 -D_REENTRANT=1 %g
 s%@LDFLAGS@%%g
@@ -107,7 +107,7 @@ s%@build_cpu@%i686%g
 s%@build_vendor@%pc%g
 s%@build_os@%linux-gnu%g
 s%@CC@%gcc%g
-s%@dist_prefix@%/mnt/Documents/kompozer/mozilla/dist%g
+s%@dist_prefix@%/home/kaze/Documents/kompozer/mozilla/dist%g
 s%@dist_bindir@%${dist_prefix}/bin%g
 s%@dist_includedir@%${dist_prefix}/include/nspr%g
 s%@dist_libdir@%${dist_prefix}/lib%g
@@ -124,7 +124,7 @@ s%@CPP@%gcc -E%g
 s%@PERL@%/usr/bin/perl%g
 s%@SHELL_OVERRIDE@%%g
 s%@MOZILLA_CLIENT@%1%g
-s%@HOST_CFLAGS@% -DXP_UNIX%g
+s%@HOST_CFLAGS@%-DDEBIAN -DXP_UNIX%g
 s%@GNU_CC@%1%g
 s%@GCC_USE_GNU_LD@%%g
 s%@CROSS_COMPILE@%%g
@@ -169,7 +169,7 @@ s%@AR_FLAGS@%cr $@%g
 s%@ASFLAGS@%$(CFLAGS)%g
 s%@FILTER@%%g
 s%@IMPLIB@%%g
-s%@OS_LIBS@%-lpthread -ldl %g
+s%@OS_LIBS@%-lpthread -ldl -lc -lpthread%g
 s%@RESOLVE_LINK_SYMBOLS@%%g
 s%@AIX_LINK_OPTS@%%g
 s%@NOSUCHFILE@%/no-such-file%g
