@@ -1215,13 +1215,15 @@
   <!-- AURAL TAB PANEL-->
   <vbox id="auralTabPanel">
     <grid>
-      <columns><column/><column flex="1"/><column/></columns>
+      <!-- <columns><column/><column flex="1"/><column/></columns> -->
+      <columns><column/><column/><column/></columns>
       <rows>
         <row align="center">
           <label value="&volume.label;"/>
-          <scrollbar
+          <scrollbar style="min-width: 15em;"
               id="volumeScrollbar"
               align="horizontal"
+	            orient="horizontal"
               curpos="500"
               maxpos="1000"
               increment="10"
@@ -1246,11 +1248,6 @@
                     label="&muteVolume.label;"
                     autostretch="never"/>
         </row>
-      </rows>
-    </grid>
-    <grid>
-      <columns><column/><column/><column/></columns>
-      <rows>
         <row align="center">
           <label value="&speak.label;"/>
           <menulist id="speakMenulist"
