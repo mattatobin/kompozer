@@ -20,7 +20,6 @@
  *
  * Contributor(s):
  *   Daniel Glazman (glazman@netscape.com) (Original author)
- *   Fabien Cazenave (kaze@kompozer.net) on behalf of Tyrell System Ltd (www.tyrellsystems.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -353,22 +352,12 @@ nsHTMLEditor::ShowGrabberOnElement(nsIDOMElement * aElement)
   // first, let's keep track of that element...
   mAbsolutelyPositionedObject = aElement;
 
-  // <Kaze> this raises problems when aElement has a container with relative positioning
-  /*
   nsCOMPtr<nsIDOMElement> bodyElement;
   res = GetRootElement(getter_AddRefs(bodyElement));
   if (NS_FAILED(res)) return res;
   if (!bodyElement)   return NS_ERROR_NULL_POINTER;
-  res = CreateGrabber(bodyElement, getter_AddRefs(mGrabber));
-  */
-  // trying to fix it
-  nsCOMPtr<nsIDOMNode> parentNode;
-  res = aElement->GetParentNode(getter_AddRefs(parentNode));
-  if (NS_FAILED(res)) return res;
-  if (!parentNode)    return NS_ERROR_NULL_POINTER;
-  res = CreateGrabber(parentNode, getter_AddRefs(mGrabber));
-  // </Kaze>
 
+  res = CreateGrabber(bodyElement, getter_AddRefs(mGrabber));
   if (NS_FAILED(res)) return res;
   // and set its position
   return RefreshGrabber();
@@ -377,8 +366,6 @@ nsHTMLEditor::ShowGrabberOnElement(nsIDOMElement * aElement)
 nsresult
 nsHTMLEditor::StartMoving(nsIDOMElement *aHandle)
 {
-  // <Kaze>
-  /*
   nsCOMPtr<nsIDOMElement> bodyElement;
   nsresult result = GetRootElement(getter_AddRefs(bodyElement));
   if (NS_FAILED(result)) return result;
@@ -387,17 +374,6 @@ nsHTMLEditor::StartMoving(nsIDOMElement *aHandle)
   // now, let's create the resizing shadow
   result = CreateShadow(getter_AddRefs(mPositioningShadow), bodyElement,
                         mAbsolutelyPositionedObject);
-  */
-  // trying to fix it (this version crashes KompoZer)
-  nsCOMPtr<nsIDOMNode> parentNode;
-  nsresult result = mAbsolutelyPositionedObject->GetParentNode(getter_AddRefs(parentNode));
-  if (NS_FAILED(result)) return result;
-  if (!parentNode)       return NS_ERROR_NULL_POINTER;
-  
-  // now, let's create the resizing shadow
-  result = CreateShadow(getter_AddRefs(mPositioningShadow), parentNode,
-                        mAbsolutelyPositionedObject);
-  // </Kaze>
   if (NS_FAILED(result)) return result;
   result = SetShadowPosition(mPositioningShadow, mAbsolutelyPositionedObject,
                              mPositionedObjectX, mPositionedObjectY);

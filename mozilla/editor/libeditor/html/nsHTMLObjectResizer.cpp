@@ -21,7 +21,6 @@
  *
  * Contributor(s):
  *   Daniel Glazman (glazman@netscape.com) (Original author)
- *   Fabien Cazenave (kaze@kompozer.net) on behalf of Tyrell System Ltd (www.tyrellsystems.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -345,56 +344,38 @@ nsHTMLEditor::ShowResizers(nsIDOMElement *aResizedElement)
   NS_ENSURE_ARG_POINTER(aResizedElement);
   mResizedObject = aResizedElement;
 
-  // <Kaze> this raises problems when aResizedElement has a container with relative positioning
-  // the resizers and the shadow will be anonymous children of the body (!!!)
-
-  // the resizing info tooltip will be an anonymous child of the body
+  // the resizers and the shadow will be anonymous children of the body
   nsCOMPtr<nsIDOMElement> bodyElement;
   nsresult res = GetRootElement(getter_AddRefs(bodyElement));
   if (NS_FAILED(res)) return res;
   if (!bodyElement)   return NS_ERROR_NULL_POINTER;
-  
-  // the resizers and the shadow will be anonymous siblings of aResizedElement
-  nsCOMPtr<nsIDOMNode> parentNode;
-  res = aResizedElement->GetParentNode(getter_AddRefs(parentNode));
-  if (NS_FAILED(res)) return res;
-  if (!parentNode)    return NS_ERROR_NULL_POINTER;
-  // </Kaze>
-  
+
   // let's create the resizers
   res = CreateResizer(getter_AddRefs(mTopLeftHandle),
-                      nsIHTMLObjectResizer::eTopLeft,     parentNode);
-                      //~ nsIHTMLObjectResizer::eTopLeft,     bodyElement);
+                      nsIHTMLObjectResizer::eTopLeft,     bodyElement);
   if (NS_FAILED(res)) return res;
   res = CreateResizer(getter_AddRefs(mTopHandle),
-                      nsIHTMLObjectResizer::eTop,         parentNode);
-                      //~ nsIHTMLObjectResizer::eTop,         bodyElement);
+                      nsIHTMLObjectResizer::eTop,         bodyElement);
   if (NS_FAILED(res)) return res;
   res = CreateResizer(getter_AddRefs(mTopRightHandle),
-                      nsIHTMLObjectResizer::eTopRight,    parentNode);
-                      //~ nsIHTMLObjectResizer::eTopRight,    bodyElement);
+                      nsIHTMLObjectResizer::eTopRight,    bodyElement);
   if (NS_FAILED(res)) return res;
 
   res = CreateResizer(getter_AddRefs(mLeftHandle),
-                      nsIHTMLObjectResizer::eLeft,        parentNode);
-                      //~ nsIHTMLObjectResizer::eLeft,        bodyElement);
+                      nsIHTMLObjectResizer::eLeft,        bodyElement);
   if (NS_FAILED(res)) return res;
   res = CreateResizer(getter_AddRefs(mRightHandle),
-                      nsIHTMLObjectResizer::eRight,       parentNode);
-                      //~ nsIHTMLObjectResizer::eRight,       bodyElement);
+                      nsIHTMLObjectResizer::eRight,       bodyElement);
   if (NS_FAILED(res)) return res;
 
   res = CreateResizer(getter_AddRefs(mBottomLeftHandle),
-                      nsIHTMLObjectResizer::eBottomLeft,  parentNode);
-                      //~ nsIHTMLObjectResizer::eBottomLeft,  bodyElement);
+                      nsIHTMLObjectResizer::eBottomLeft,  bodyElement);
   if (NS_FAILED(res)) return res;
   res = CreateResizer(getter_AddRefs(mBottomHandle),
-                      nsIHTMLObjectResizer::eBottom,      parentNode);
-                      //~ nsIHTMLObjectResizer::eBottom,      bodyElement);
+                      nsIHTMLObjectResizer::eBottom,      bodyElement);
   if (NS_FAILED(res)) return res;
   res = CreateResizer(getter_AddRefs(mBottomRightHandle),
-                      nsIHTMLObjectResizer::eBottomRight, parentNode);
-                      //~ nsIHTMLObjectResizer::eBottomRight, bodyElement);
+                      nsIHTMLObjectResizer::eBottomRight, bodyElement);
   if (NS_FAILED(res)) return res;
 
   res = GetPositionAndDimensions(aResizedElement,
@@ -413,8 +394,7 @@ nsHTMLEditor::ShowResizers(nsIDOMElement *aResizedElement)
   if (NS_FAILED(res)) return res;
 
   // now, let's create the resizing shadow
-  //~ res = CreateShadow(getter_AddRefs(mResizingShadow), bodyElement,
-  res = CreateShadow(getter_AddRefs(mResizingShadow), parentNode,
+  res = CreateShadow(getter_AddRefs(mResizingShadow), bodyElement,
                      aResizedElement);
   if (NS_FAILED(res)) return res;
   // and set its position
@@ -424,7 +404,6 @@ nsHTMLEditor::ShowResizers(nsIDOMElement *aResizedElement)
 
   // and then the resizing info tooltip
   res = CreateResizingInfo(getter_AddRefs(mResizingInfo), bodyElement);
-  //~ res = CreateResizingInfo(getter_AddRefs(mResizingInfo), parentNode);
   if (NS_FAILED(res)) return res;
 
 
