@@ -35,7 +35,7 @@
         
       <handler event="popupshowing">
         <![CDATA[
-          // Kaze: this NEVER works, it ALWAYS raises an exception
+          // Kaze: this raises an exception though it seems to work
           // so let's put that in a try-catch
           // XXX see bug #196755
           // originalTarget is workaround for arrowscrollbox retargeting bug
@@ -420,10 +420,13 @@
             if (document.commandDispatcher.focusedElement != this.inputField) 
               this.inputField.focus();
 
-            if (this.selectedItem)
+            // Kaze: this raises an exception though it seems to work
+            // so let's put that in a try-catch
+            if (this.selectedItem) try {
               // Not ready for auto-setting the active child in hierarchies yet.
               // For now, only do this when the outermost menupopup opens.
               this.menuBoxObject.activeChild = this.selectedInternal;
+            } catch(e) {}    
           }
         ]]>
       </handler>
