@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=KompoZer
+Comment=Create Web Pages
+Categories=Application;Network;
+Encoding=UTF-8
+Exec=kompozer
+Icon=/usr/share/pixmaps/kompozer256.png
+Terminal=false
+Type=Application

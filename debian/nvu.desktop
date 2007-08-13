@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Nvu 
+Name[ja]=Nvu
+Name[de]=Nvu
+Comment=Create Web Pages
+Categories=GNOME;Application;Development;
+Encoding=UTF-8
+Exec=nvu
+Icon=nvu
+Terminal=false
+Type=Application

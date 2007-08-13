@@ -37,7 +37,7 @@ export CXXFLAGS="-DDEBIAN"
 
 # Uncomment and edit this line if you want to build
 # outside of the source tree
-mk_add_options MOZ_OBJDIR=../obj-kompozer
+#mk_add_options MOZ_OBJDIR=/home/kaze/obj-kompozer
 
 # Comment out the following lines for a debug build
 ac_add_options --enable-optimize
