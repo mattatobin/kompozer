@@ -954,5 +954,5 @@ pref("spellchecker.realtimespell.warning_color", "orange");
 
 // Kaze: CSS editor
 pref("extensions.CaScadeS.expertMode", true);
-pref("extensions.CaScadeS.dropdownLists", false);
+pref("extensions.CaScadeS.dropdownLists", true);
 
