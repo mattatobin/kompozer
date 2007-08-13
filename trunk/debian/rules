@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+ndir=$(CURDIR)/debian/install
+
+build: build-stamp  
+
+build-stamp:  
+	dh_testdir
+
+	# Add here commands to compile the package.
+	
+	@echo "bunzipping the source :)"
+	if [ ! -d mozilla ]; then tar xjf ../kompozer*bz2; fi
+	#patch -p0 < debian/patches/amd64.patch
+	cp debian/mozconfig.debian mozilla/.mozconfig
+	cd mozilla && $(MAKE) -f client.mk build_all
+
+	touch build-stamp
+
+clean: 
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	if [ -d mozilla ]; then rm -rf mozilla; fi
+	rm -rf debian/install
+
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k 
+	dh_installdirs
+
+	# Add here commands to install the package into debian/kompozer.
+	mkdir -p $(CURDIR)/debian/install
+	cd mozilla && $(MAKE) install DESTDIR=$(CURDIR)/debian/install
+	cd mozilla
+	
+	#binary
+	mkdir -p $(CURDIR)/debian/kompozer/usr/{lib,bin}
+	cp -r $(ndir)/usr/bin $(CURDIR)/debian/kompozer/usr/
+	mkdir -p $(CURDIR)/debian/kompozer/usr/share/pixmaps/
+	cp  debian/kompozer.png $(CURDIR)/debian/kompozer/usr/share/pixmaps/
+	mkdir -p $(CURDIR)/debian/kompozer/usr/share/applications/
+	cp debian/*.desktop $(CURDIR)/debian/kompozer/usr/share/applications/
+
+	#include	
+	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/{lib,share}
+	cp -r $(ndir)/usr/include $(CURDIR)/debian/kompozer-dev/usr/
+	cp -r $(ndir)/usr/lib/pkgconfig $(CURDIR)/debian/kompozer-dev/usr/lib
+	cp -r $(ndir)/usr/share/aclocal $(CURDIR)/debian/kompozer-dev/usr/share/
+
+	#lib
+	cp -r $(ndir)/usr/lib/kompozer-0.7.10 $(CURDIR)/debian/kompozer/usr/lib
+	
+	#idl
+	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/share
+	cp -r $(ndir)/usr/share/idl $(CURDIR)/debian/kompozer-dev/usr/share
+	
+	# remove internal myspell directory (and myspell dicts) and
+	# symlink it to /usr/share/myspell where all myspell-* dicts
+	# place their stuff
+	rm -rf $(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/myspell
+	ln -s /usr/share/myspell/dicts \
+	$(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/myspell
+	
+	#remove exec bit from .js files to prevent lintian warnings
+	chmod -x $(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/*.js
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i 
+	dh_installdocs -i
+#	dh_installdebconf	
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+	
+#We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installmenu -a
+#	dh_installdebconf	
+	dh_installman -a
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure

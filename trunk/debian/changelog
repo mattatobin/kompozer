@@ -1,0 +1,81 @@
+nvu (1.0-0ubuntu4) dapper; urgency=low
+
+  * Modified .desktop and menu files to change category
+
+ -- Emmet Hikory <emmet.hikory@gmail.com>  Sat,  6 May 2006 10:44:37 +0900
+
+nvu (1.0-0ubuntu3) breezy; urgency=low
+
+  * Change .desktop file comment.  (Closes Malone #1165)
+
+ -- Barry deFreese <bddebian@comcast.net>  Tue, 27 Sep 2005 21:04:49 -0400
+
+nvu (1.0-0ubuntu2) breezy; urgency=low
+
+  * Rebuild with the new cairo version
+
+ -- Sebastien Bacher <seb128@canonical.com>  Thu, 18 Aug 2005 17:22:35 +0000
+
+nvu (1.0-0ubuntu1) breezy; urgency=low
+
+  * new upstream version to fix FTBFS
+  * removed Xprint dependency
+
+ -- Oliver Grawert <ogra@ubuntu.com>  Wed, 10 Aug 2005 20:58:45 +0200
+
+nvu (0.99+1.0pre-1build1) breezy; urgency=low
+
+  * Rebuild for new C++ ABI
+
+ -- Matthias Klose <doko@ubuntu.com>  Tue, 28 Jun 2005 08:42:01 +0000
+
+nvu (0.99+1.0pre-1) unstable; urgency=low
+
+  * Added section conflicts in nvu-dev. (closes: #304912)
+  * forgot a /nvu/ in rules. (nvu.desktop)
+  * new upstream  (closes: #304522)
+  
+ -- Riccardo Setti <giskard@autistici.org>  Thu,  16 Apr 2005 20:32:50 +0100
+
+nvu (1.0pre-1) unstable; urgency=low
+
+  * New upstream.
+
+ -- Riccardo Setti <giskard@autistici.org>  Thu,  15 Apr 2005 20:32:50 +0100
+
+nvu (0.90-1) unstable; urgency=low
+ 
+  * New upstream.
+  * applied patch from Jani Monoses.
+  * applied patch for compile nvu on amd64 thanks to
+    Andreas Jochens and the_nihilant. (closes: #303716)
+  * now i use (and not only provide) nvu.desktop (closes: #304383)
+  
+ -- Riccardo Setti <giskard@autistici.org>  Thu,  31 Mar 2005 20:32:50 +0100
+
+nvu (0.80-4) unstable; urgency=low
+
+  * provided new .desktop (thanks to Jéme Warnieri)
+ 
+ -- Riccardo Setti <giskard@autistici.org>  Thu,  18 Feb 2005 15:32:50 +0100
+
+nvu (0.80-3) unstable; urgency=low
+ 
+  * now nvu can use all myspell dictionaries (thanks rene)
+
+ -- Riccardo Setti <giskard@autistici.org>  Thu,  10 Feb 2005 23:32:50 +0100
+
+nvu (0.80-2) unstable; urgency=low
+
+  * Added menu. (thanks to skodde)
+  * Changed section from net to web.
+  * Improve description.
+
+ -- Riccardo Setti <giskard@autistici.org>  Mon,  7 Feb 2005 10:32:50 +0100
+
+nvu (0.80-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Riccardo Setti <giskard@autistici.org>  Sat,  5 Feb 2005 09:13:50 +0100
+
