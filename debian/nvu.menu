@@ -1,6 +1,0 @@
-?package(nvu):\
-	needs="X11"\
-	section="Apps/Programming"\
-	title="Nvu"\
-	command="/usr/bin/nvu"\
-	icon="/usr/share/pixmaps/nvu.xpm"
