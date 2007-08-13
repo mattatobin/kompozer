@@ -403,6 +403,7 @@ function onClassSelectChange() {             // modified
     GetCurrentEditor().removeAttribute(gContextMenuFiringDocumentElement, "class");
   else
     GetCurrentEditor().setAttribute(gContextMenuFiringDocumentElement, "class", resultingClassAttribute);
+  // refresh the structure toolbar
   gLastFocusNode = null;
   setTimeout("UpdateStructToolbar();", 100);
   // </Kaze>
@@ -426,18 +427,24 @@ function onIDSelectChange() {                // modified
   }
   // <Kaze>
   if (resultingID) {
-    //~ GetCurrentEditor().document.getElementById(resultingID).removeAttribute("id");
-    var value = gContextMenuFiringDocumentElement.getAttribute("id");
-    if (resultingID == value)
+    var currID = null;
+    if (gContextMenuFiringDocumentElement.hasAttribute("id"))
+      currID = gContextMenuFiringDocumentElement.getAttribute("id");
+
+    if (resultingID == currID) { // user reselects the element's current ID
+      // in this case, just remove the current ID attribute
       GetCurrentEditor().removeAttribute(gContextMenuFiringDocumentElement, "id");
-    else {
-      try {
-        var currElt = GetCurrentEditor().document.getElementById(resultingID);
-        GetCurrentEditor().removeAttribute(currElt, "id");
-      } catch(e) {}
+    }
+    else {                       // user selects a new ID
+      // first, check if an element already has this ID
+      var currElt;
+      while (currElt  = GetCurrentEditor().document.getElementById(resultingID))
+	GetCurrentEditor().removeAttribute(currElt, "id");
+      // apply new ID on the selected element
       GetCurrentEditor().setAttribute(gContextMenuFiringDocumentElement, "id", resultingID);
     }
   }
+  // refresh the structure toolbar
   gLastFocusNode = null;
   setTimeout("UpdateStructToolbar();", 100);
   // </Kaze>
