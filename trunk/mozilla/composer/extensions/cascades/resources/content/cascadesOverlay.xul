@@ -21,7 +21,7 @@
    -
    - Contributor(s):
    -   Original author: Daniel Glazman (daniel@glazman.org)
-   -   Fabien Cazenave (Kaze) http://fabiwan.kenobi.free.fr/
+   -   Fabien Cazenave (kaze@kompozer.net)
    -
    - Alternatively, the contents of this file may be used under the terms of
    - either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -51,11 +51,16 @@
   <menupopup id="taskPopup">
     <menuitem label="&cascadesMenuItem.label;" key="stylekb"
               accesskey="&cascadesMenuItem.accesskey;"
-              oncommand="openCascadesDialog();"
+              observes="cmd_cssEditor"
               insertafter="menu_validate"/>
+    <!-- menuitem label="&cascadesMenuItem.label;" key="stylekb"
+              accesskey="&cascadesMenuItem.accesskey;"
+              oncommand="openCascadesDialog();"
+              insertafter="menu_validate"/ -->
   </menupopup>
   <keyset id="editorKeys">
-    <key id="stylekb" keycode="&cascadesMenuItem.keybinding;" oncommand="openCascadesDialog();"/>
+    <!-- key id="stylekb" keycode="&cascadesMenuItem.keybinding;" oncommand="openCascadesDialog();"/ -->
+    <key id="stylekb" keycode="&cascadesMenuItem.keybinding;" observes="cmd_cssEditor"/>
   </keyset>
 
   <!-- Toolbar button -->
@@ -63,9 +68,15 @@
     <toolbarbutton id="cssButton"
       class="toolbarbutton-1" 
       label="CaScadeS"
-      oncommand="openCascadesDialog(event);"
+      observes="cmd_cssEditor"
       tooltiptext="&cascadesMenuItem.label;">
     </toolbarbutton>
+    <!-- toolbarbutton id="cssButton"
+      class="toolbarbutton-1" 
+      label="CaScadeS"
+      oncommand="openCascadesDialog(event);"
+      tooltiptext="&cascadesMenuItem.label;">
+    </toolbarbutton -->
   </toolbarpalette>
 
   <!-- Main window context menu

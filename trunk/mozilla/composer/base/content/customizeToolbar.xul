@@ -86,7 +86,7 @@
     <checkbox id="smallicons" oncommand="updateIconSize(this.checked);" label="&useSmallIcons.label;"/>
     <spacer flex="1"/>
 
-    <button id="newtoolbars" label="&addNewToolbar.label;" oncommand="addNewToolbar();"/>
+    <!-- button id="newtoolbars" label="&addNewToolbar.label;" oncommand="addNewToolbar();"/ -->
     <button label="&restoreDefaultSet.label;" oncommand="restoreDefaultSet();"/>
   </box>
 

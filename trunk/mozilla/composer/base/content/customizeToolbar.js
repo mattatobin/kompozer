@@ -97,10 +97,11 @@ function initDialog()
     document.getElementById("modelabel").hidden = true;
   }
 
+  /* Kaze: the 'new toolbar' button is useless and buggy, let's forget it
   if (!gToolbox.toolbarset)
   {
     document.getElementById("newtoolbars").hidden = true;
-  }
+  } */
 
   if (smallIconsCheckbox)
   {

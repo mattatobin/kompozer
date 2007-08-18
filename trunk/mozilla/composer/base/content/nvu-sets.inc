@@ -22,9 +22,9 @@
       <command id="cmd_close"        label="&closeCmd.label;"         oncommand="goDoCommand('cmd_close')"/>
       <command id="cmd_closeAll"     label="&closeAllCmd.label;"      oncommand="goDoCommand('cmd_closeAll')"/>
       <command id="cmd_printSetup"                                    oncommand="goDoCommand('cmd_printSetup')"/>
-  <!--
+      <!--
       <command id="cmd_printPreview" label="&printPreviewCmd.label;"  oncommand="goDoCommand('cmd_printPreview')"/>
-  -->
+      -->
       <command id="cmd_print"                                         oncommand="goDoCommand('cmd_print')"/>
       <command id="cmd_quit"         oncommand="goDoCommand('cmd_quit')"/>
     </commandset>
@@ -103,6 +103,9 @@
       <command id="cmd_checkLinks"      oncommand="goDoCommand('cmd_checkLinks')"/>
       <command id="cmd_pasteQuote"      oncommand="goDoCommand('cmd_pasteQuote')" label="&pasteAsQuotationCmd.label;"/>
       <command id="cmd_publishSettings" oncommand="goDoCommand('cmd_publishSettings')" label="&publishSettings.label;" accesskey="&publishSettings.accesskey;"/>
+      <!-- Kaze -->
+      <command id="cmd_cssEditor"       oncommand="goDoCommand('cmd_cssEditor')"  />
+      <!-- /Kaze -->
     </commandset>
 
     <commandset id="composerSaveMenuItems"
@@ -282,6 +285,7 @@
     <!-- Kaze -->
     <key id="revertkb"            key="&filerevert.keybinding;"     observes="cmd_revert"     modifiers="accel"/>
     <key id="previewkb"       keycode="&filepreview.keybinding;"    observes="cmd_preview" />
+    <key id="key_openHelp"    keycode="VK_F1" oncommand="openHelp('comp-doc', 'chrome://help/locale/nvu.rdf');"/>
     <!-- /Kaze -->
     <key id="key_quit"/>
     <key id="key_undo"/>
