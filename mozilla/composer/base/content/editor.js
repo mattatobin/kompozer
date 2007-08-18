@@ -2017,10 +2017,17 @@ function SetEditMode(mode)
       var sourceSel = gSourceTextEditor.selection;
       sourceSel.removeAllRanges();
       var range = gSourceTextEditor.document.createRange();
-      if (endSel)
+      if (endSel && (endSel != startSel))
       {
         range.setStartBefore(startSel);
-        range.setEndAfter(endSel);
+        // <Kaze>
+        //range.setEndAfter(endSel);
+        try { // sometimes 'endSel' is out of bonds
+          range.setEndAfter(endSel);
+        } catch(e) {
+          range.setEndAfter(startSel);
+        }
+        // </Kaze>
       }
       else
       {
@@ -2032,7 +2039,7 @@ function SetEditMode(mode)
       setTimeout("gSourceTextEditor.scrollSelectionIntoView(true)", 100)
     }
     else
-    gSourceTextEditor.beginningOfDocument()
+      gSourceTextEditor.beginningOfDocument()
   }
   else if (previousMode == kDisplayModeSource)
   {
@@ -2171,7 +2178,7 @@ function SetDisplayMode(mode)
     // Hide the formatting toolbar if not already hidden
     // <Kaze> splitting the format toolbar
     //~ gFormatToolbarHidden = gFormatToolbar.hidden;
-//~ //    gFormatToolbar.hidden = true;
+    //    gFormatToolbar.hidden = true;
     //~ gFormatToolbar.disabled = true;
     //~ gViewFormatToolbar.hidden = true;
     gFormatToolbarHidden1 = gFormatToolbar1.hidden;

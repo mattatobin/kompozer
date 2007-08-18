@@ -64,15 +64,6 @@
     </item>
   
     <item>
-      <title>…you can create a new toolbar?</title>
-      <description>Use the menu "View > Show/Hide > Customize Toolbar > Format
-                   toolbar" to open the toolbar customization panel. Then
-                   click on the "Add new toolbar" button. Empty toolbars
-                   automatically disappear when the customization panel is
-                   closed.</description>
-    </item>
-  
-    <item>
       <title>…&brandShortName; has a CSS editor?</title>
       <description>&brandShortName; integrates the CaScadeS CSS editor. Open it using the
                    Tool > CSS Editor menu.</description>
@@ -88,8 +79,8 @@
       <title>…you can apply CSS styles to any element?</title>
       <description>Place the caret in the element you wish to style and right-
                    click on the element's tag in the structure toolbar at the
-                   bottom of the main window of &brandShortName;. The "Inline styles" and
-                   its menu items will let you style directly that element.
+                   bottom of the main window of &brandShortName;. The "Inline styles"
+                   menu item will let you style directly that element.
       </description>
     </item>
 
@@ -145,7 +136,7 @@
 
     <item>
       <title>…you can change the border of a single table cell?</title>
-      <description>Place the caret in that cell, right-click on the cell in the status bar and select Inline Styles &gt; Border Properties</description>
+      <description>Place the caret in that cell, right-click on the cell in the status bar and select Inline Styles &gt; Border tab</description>
     </item>
 
     <item>

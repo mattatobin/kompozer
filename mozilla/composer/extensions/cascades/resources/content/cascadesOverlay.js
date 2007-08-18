@@ -436,10 +436,10 @@ function onIDSelectChange() {                // modified
       GetCurrentEditor().removeAttribute(gContextMenuFiringDocumentElement, "id");
     }
     else {                       // user selects a new ID
-      // first, check if an element already has this ID
+      // first, check if an element (or more...) already has this ID
       var currElt;
       while (currElt  = GetCurrentEditor().document.getElementById(resultingID))
-	GetCurrentEditor().removeAttribute(currElt, "id");
+	      GetCurrentEditor().removeAttribute(currElt, "id");
       // apply new ID on the selected element
       GetCurrentEditor().setAttribute(gContextMenuFiringDocumentElement, "id", resultingID);
     }

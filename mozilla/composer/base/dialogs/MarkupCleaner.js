@@ -96,12 +96,36 @@ var gMarkupCleaner = {
         // </Kaze>
         else {
           tmpNode = treeWalker.nextNode();
-          editor.deleteNode(theNode)
+          editor.deleteNode(theNode);
           this.IncreaseReport(gMarkupCleanerData.emptyBlocksReport);
           theNode = tmpNode;
         }
       }
       
+      // <Kaze> remove empty <ul> and <ol> blocks if requested
+      // this should be done in the TreeWalker but I'm lazy... TBD later.
+      if (gMarkupCleanerData.emptyBlocks) {
+        var nodeList = theDocument.getElementsByTagName("ul");
+        for (var i=0; i<nodeList.length; i++) {
+          tmpNode = nodeList[i];
+          if (OnlyWhiteTextNodesStartingAtNode(tmpNode.firstChild, true) &&
+              !(tmpNode.hasAttribute("id")) && !(tmpNode.hasAttribute("class")) )  {
+            editor.deleteNode(tmpNode);
+            this.IncreaseReport(gMarkupCleanerData.emptyBlocksReport);
+          }
+        }
+        nodeList = theDocument.getElementsByTagName("ol");
+        for (i=0; i<nodeList.length; i++) {
+          tmpNode = nodeList[i];
+          if (OnlyWhiteTextNodesStartingAtNode(tmpNode.firstChild, true) &&
+              !(tmpNode.hasAttribute("id")) && !(tmpNode.hasAttribute("class")) )  {
+            editor.deleteNode(tmpNode);
+            this.IncreaseReport(gMarkupCleanerData.emptyBlocksReport);
+          }
+        }
+      }
+      // </Kaze>
+
       editor.endTransaction();
     }
     return;
@@ -129,6 +153,8 @@ var gMarkupCleaner = {
             if (parentTagName == "ul" || parentTagName == "ol")
               return NodeFilter.FILTER_ACCEPT;
           }
+          // Kaze: <ul> and <ol> should be considered as blocks, too
+          // but it would mess the 'cleanupDocument' function - TBD later.
           break;
     
         case "p":
@@ -139,11 +165,20 @@ var gMarkupCleaner = {
         case "h4":
         case "h5":
         case "h6":
+        case "dl":
+        case "dt":
+        case "dd":
+        case "li":
+        case "tr":
+        case "pre":
+        case "address":
+        case "blockquote":
+          // Kaze: added <dl>, <dt>, <dd>, <li>, <tr>, <pre>, <address>, <blockquote>
           //~ if (/* gMarkupCleanerData.emptyBlocksCheckbox.checked && */
-          // Kaze: a block isn't empty if it has an id attribute (templates...)
+          // Kaze: a block isn't empty if it has an id/class attribute (templates...)
           if (gMarkupCleanerData.emptyBlocks &&
               OnlyWhiteTextNodesStartingAtNode(node.firstChild, true) &&
-              !(node.hasAttribute("id")) ) // Kaze
+              !(node.hasAttribute("id")) && !(node.hasAttribute("class")) ) // Kaze
             return NodeFilter.FILTER_ACCEPT;
           break;
         
@@ -274,6 +309,7 @@ var gMarkupCleaner = {
     gMarkupCleanerData.localUrls   = gMarkupCleanerData.localUrlsCheckbox.checked;
       
     this.cleanupDocument();
+    window.opener.RefreshStructToolbar();
     return false;
   }
 };

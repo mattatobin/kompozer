@@ -1163,7 +1163,7 @@ function CreateNewStyleRule()
   
   var selectorBox = null;
   if (gDialog.dropdownLists)
-    selectorBox = AddEditableListToInfobox(gridrows, " ", ".", "onCssSelectorChange", true);
+    selectorBox = AddEditableListToInfobox(gridrows, " ", "", "onCssSelectorChange", true);
   else
     selectorBox = AddEditableZoneToInfobox(gridrows, " ", gDialog.newSelector, "onCssSelectorChange", true);
   selectorBox.setAttribute("id", "cssSelectorInput");
@@ -1957,28 +1957,10 @@ function kzsStartup() {
   gDialog.styleMenu   = document.getElementById("styleMenu");
   gDialog.menuTooltip = gDialog.styleMenu.getAttribute("tooltiptext");
   
-  // unfold first stylesheet if it's the only one
-  if (objectsArray.length && !objectsArray[0].xulElt.nextSibling)
-    objectsArray[0].xulElt.setAttribute("open", "true");
-  
-  // select the first stylesheet if any
-  if (objectsArray.length) {
-    selectTreeItem(objectsArray[0].xulElt);
-  }
-  else {
-    // no stylesheet yet: propose to create a new style rule
-    gNewStyleRule = "StyleRule";
-    CreateNewRule();
-  }
-
-  // backup <head> element
+  // backup <head> element and load prefs
   gDialog.head = null;
   try {
     gDialog.head = GetHeadElement().innerHTML;
-  } catch (e) {}
-  
-  // persistant expert / normal mode
-  try {
     //gDialog.expertMode = true; // Kaze: expert mode is now the only one
     //gDialog.expertMode    = window.opener.kzsPrefs.getBoolPref("expertMode");
     gDialog.expertMode    = kzsPrefs.getBoolPref("expertMode");
@@ -1986,6 +1968,24 @@ function kzsStartup() {
   } catch(e) {}
   document.getElementById("expertModeCheckbox").setAttribute("checked", gDialog.expertMode);
   UpdateButtons(false, false, true, true, false, false);
+  
+  // select the first stylesheet if any
+  if (objectsArray.length) {
+    var xulElt = objectsArray[0].xulElt;
+    selectTreeItem(xulElt);
+    // unfold the stylesheet if it's the only one
+    if (!xulElt.nextSibling)
+      xulElt.setAttribute("open", "true");
+  }
+  else {
+    // no stylesheet yet: let's create one that will contain our rule
+    gDialog.newExternal  = false;
+    gDialog.newMediaList = "";
+    gDialog.newTitle     = "";
+    gDialog.newType      = SHEET;
+    onConfirmCreateNewObject();
+    CreateNewStyleRule();
+  }
 }
 
 function CancelAllChanges() {
@@ -2386,8 +2386,9 @@ function UpdateCssSelectorInputPopup(type) {
     return; // Kaze: dropdown lists are disabled until KompoZer 0.8
 
   var cssField = document.getElementById("cssSelectorInput");
-  var cssPopup=cssField.getElementsByTagName("menupopup")[0];
-  cssField.removeChild(cssPopup);
+  var cssPopup = cssField.getElementsByTagName("menupopup")[0];
+  if (cssPopup)
+    cssField.removeChild(cssPopup);
 
   var cssList = document.getElementById("cssSelector-" + type);
   cssPopup = cssList.cloneNode(true);

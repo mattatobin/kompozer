@@ -190,6 +190,9 @@ function SetupComposerWindowCommands()
     return;
   }
 
+  // Kaze: CaScadeS should be registered here (not working yet)
+  commandTable.registerCommand("cmd_cssEditor",      nsCssEditorCommand);
+
   // File-related commands
   commandTable.registerCommand("cmd_open",           nsOpenCommand);
   commandTable.registerCommand("cmd_openInTab",      nsOpenInTabCommand);
@@ -212,7 +215,7 @@ function SetupComposerWindowCommands()
   commandTable.registerCommand("cmd_closeAll",       nsCloseAllCommand);
   commandTable.registerCommand("cmd_preferences",    nsPreferencesCommand);
   commandTable.registerCommand("cmd_newEdited",      nsNewEditedObjectCommand);
-
+  
   // Edit Mode commands
   if (GetCurrentEditorType() == "html")
   {
@@ -4544,6 +4547,53 @@ var nsConvertToTable =
       window.openDialog("chrome://editor/content/EdConvertToTable.xul","_blank", "chrome,close,titlebar,modal")
     }
     window.content.focus();
+  }
+};
+
+// Kaze: CaScadeS should be registered as a command (not working)
+var nsCssEditorCommand =
+{
+  isCommandEnabled: function(aCommand, dummy)
+  {
+    return (IsEditingRenderedHTML());
+    //return (IsDocumentEditable() && IsEditingRenderedHTML() && DocumentHasBeenSaved() );
+  },
+
+  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
+  doCommandParams: function(aCommand, aParams, aRefCon) {},
+
+  doCommand: function(aCommand)
+  {
+    // the current HTML document must have an URL
+    //if (!DocumentHasBeenSaved() && !CheckAndSaveDocument("cmd_cssEditor", false))
+    if (!DocumentHasBeenSaved() && !SaveDocument(true, false, "text/html"))
+      return;
+
+    // CaScadeS won't work if the <title> is missing
+    var editor = GetCurrentEditor();
+    var docNode = editor.document;
+    var headNode = null;
+    var titleNode = null;
+    try {
+      headNode = docNode.getElementsByTagName("head").item(0);
+      titleNode = docNode.getElementsByTagName("title").item(0);
+    } catch(e) {}
+    if (!headNode) {
+      headNode = docNode.createElement("head");
+      var htmlNode = docNode.getElementsByTagName("html").item(0);
+      var bodyNode = docNode.getElementsByTagName("body").item(0);
+      htmlNode.insertBefore(headNode, bodyNode);
+    }
+    if (!titleNode) {
+      titleNode = docNode.createElement("title");
+      headNode.appendChild(titleNode);
+      editor.incrementModificationCount(1);
+    }
+
+    // open CaScadeS dialog
+    window.openDialog("chrome://cascades/content/EdCssProps.xul", "_blank", "chrome,close,titlebar,modal", "", null);
+    window._content.focus();
+
   }
 };
 
