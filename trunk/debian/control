@@ -1,7 +1,7 @@
 Source: kompozer
 Section: web
 Priority: optional
-Maintainer: Tony Yarusso <tonyyarusso@ubuntu.com>
+Maintainer: Anthony Yarusso <tonyyarusso@ubuntu.com>
 Build-Depends: debhelper (>= 4.0.0)
 Standards-Version: 3.6.2
 
