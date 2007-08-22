@@ -50,7 +50,7 @@ install: build
 	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
 
   # add 'extensions' dir so KompoZer can install extensions without superuser rights
-  # TODO
+	cp -r $(CURDIR)/debian/extensions $(ndir)/usr/lib/kompozer/
 	
   # ------------------------------------------------#
   #        kompozer (binary)                        #
