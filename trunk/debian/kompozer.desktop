@@ -4,6 +4,6 @@ Comment=Create Web Pages
 Categories=Application;Network;
 Encoding=UTF-8
 Exec=kompozer
-Icon=/usr/share/pixmaps/kompozer256.png
+Icon=/usr/share/pixmaps/kompozer.png
 Terminal=false
 Type=Application

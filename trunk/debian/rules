@@ -30,9 +30,9 @@ clean:
 	dh_testroot
 	rm -f build-stamp configure-stamp
 	if [ -d mozilla ]; then rm -rf mozilla; fi
-	rm -rf debian/install
+	rm -rf $(ndir)
 
-	dh_clean 
+	dh_clean
 
 install: build
 	dh_testdir
@@ -41,55 +41,56 @@ install: build
 	dh_installdirs
 
 	# Add here commands to install the package into debian/kompozer.
-	mkdir -p $(CURDIR)/debian/install
-	cd mozilla && $(MAKE) install DESTDIR=$(CURDIR)/debian/install
-	cd mozilla
+  #if [ ! -d $(ndir) ]; then 
+	mkdir -p $(ndir)
+	cd mozilla && $(MAKE) install DESTDIR=$(ndir)
+  #fi
+
+  # remove all empty directories
+	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
+
+  # add 'extensions' dir so KompoZer can install extensions without superuser rights
+  # TODO
 	
+  # ------------------------------------------------#
+  #        kompozer (binary)                        #
+  # ------------------------------------------------#
+
 	#binary
 	mkdir -p $(CURDIR)/debian/kompozer/usr/{lib,bin}
-	cp -r $(ndir)/usr/bin $(CURDIR)/debian/kompozer/usr/
-	mkdir -p $(CURDIR)/debian/kompozer/usr/share/pixmaps/
-	cp  debian/kompozer.png $(CURDIR)/debian/kompozer/usr/share/pixmaps/
-	mkdir -p $(CURDIR)/debian/kompozer/usr/share/applications/
-	cp debian/*.desktop $(CURDIR)/debian/kompozer/usr/share/applications/
-
-	#include	
-	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/{lib,share}
-	cp -r $(ndir)/usr/include $(CURDIR)/debian/kompozer-dev/usr/
-	cp -r $(ndir)/usr/lib/pkgconfig $(CURDIR)/debian/kompozer-dev/usr/lib
-	cp -r $(ndir)/usr/share/aclocal $(CURDIR)/debian/kompozer-dev/usr/share/
-
-	#lib
-	cp -r $(ndir)/usr/lib/kompozer-0.7.10 $(CURDIR)/debian/kompozer/usr/lib
-	
-	#idl
-	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/share
-	cp -r $(ndir)/usr/share/idl $(CURDIR)/debian/kompozer-dev/usr/share
+	cp -r $(ndir)/usr/bin          $(CURDIR)/debian/kompozer/usr/
+	cp -r $(ndir)/usr/lib/kompozer $(CURDIR)/debian/kompozer/usr/lib
 	
 	# remove internal myspell directory (and myspell dicts) and
 	# symlink it to /usr/share/myspell where all myspell-* dicts
 	# place their stuff
-	rm -rf $(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/myspell
-	ln -s /usr/share/myspell/dicts \
-	$(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/myspell
+	rm -rf $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/myspell
+	ln -s /usr/share/myspell/dicts $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/myspell
 	
-	#remove exec bit from .js files to prevent lintian warnings
-	chmod -x $(CURDIR)/debian/kompozer/usr/lib/kompozer-0.7.10/components/*.js
+	# remove exec bit from .js files to prevent lintian warnings
+	chmod -x $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/*.js
 
-binary-indep: build install
-	dh_testdir -i
-	dh_testroot -i
-	dh_installchangelogs -i 
-	dh_installdocs -i
-#	dh_installdebconf	
-	dh_compress -i
-	dh_fixperms -i
-	dh_installdeb -i
-	dh_shlibdeps -i
-	dh_gencontrol -i
-	dh_md5sums -i
-	dh_builddeb -i
+  #pixmaps
+	mkdir -p $(CURDIR)/debian/kompozer/usr/share/pixmaps/
+	cp $(ndir)/usr/lib/kompozer/icons/mozicon50.xpm  $(CURDIR)/debian/kompozer/usr/share/pixmaps/kompozer.xpm
+	cp $(ndir)/usr/lib/kompozer/icons/mozicon256.png $(CURDIR)/debian/kompozer/usr/share/pixmaps/kompozer.png
 	
+  #desktop
+	mkdir -p $(CURDIR)/debian/kompozer/usr/share/applications/
+	cp $(CURDIR)/debian/*.desktop $(CURDIR)/debian/kompozer/usr/share/applications/
+
+  # ------------------------------------------------#
+  #        kompozer-dev (development files)         #
+  # ------------------------------------------------#
+
+	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/{lib,share}
+	cp -r $(ndir)/usr/include       $(CURDIR)/debian/kompozer-dev/usr/
+	cp -r $(ndir)/usr/lib/pkgconfig $(CURDIR)/debian/kompozer-dev/usr/lib/
+	cp -r $(ndir)/usr/share/aclocal $(CURDIR)/debian/kompozer-dev/usr/share/
+	cp -r $(ndir)/usr/share/idl     $(CURDIR)/debian/kompozer-dev/usr/share/
+
+	
+binary-indep: build install
 #We have nothing to do by default.
 
 # Build architecture-dependent files here.
@@ -99,7 +100,7 @@ binary-arch: build install
 	dh_installchangelogs -a
 	dh_installdocs -a
 	dh_installexamples -a
-	dh_installmenu -a
+# dh_installmenu -a
 #	dh_installdebconf	
 	dh_installman -a
 	dh_link -a
