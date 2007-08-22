@@ -1,21 +1,22 @@
-Package: kompozer
-Version: 0.7.10-0ubuntu1
+Source: kompozer
 Section: web
 Priority: optional
-Architecture: i386
-Depends: libatk1.0-0 (>= 1.9.0), libc6 (>= 2.3.4-1), libcairo2 (>= 1.0.2-2), libfontconfig1 (>= 2.3.0), libfreetype6 (>= 2.1.10-1), libgcc1 (>= 1:4.0.2), libgconf2-4 (>= 2.13.5), libglib2.0-0 (>= 2.10.0), libgtk2.0-0 (>= 2.8.0), libidl0, liborbit2 (>= 1:2.10.0), libpango1.0-0 (>= 1.12.2), libpopt0 (>= 1.7), libstdc++6 (>= 4.0.2-4), libx11-6, libxcursor1 (>> 1.1.2), libxext6, libxfixes3, libxft2 (>> 2.1.1), libxi6, libxinerama1, libxrandr2, libxrender1, libxt6, zlib1g (>= 1:1.2.1)
-Recommends: myspell-dictionary
-Suggests: firefox, www-browser
-Maintainer: Tony Yarusso <tonyyarusso@comcast.net>
+Maintainer: Tony Yarusso <tonyyarusso@ubuntu.com>
+Build-Depends: debhelper (>= 4.0.0)
+Standards-Version: 3.6.2
+
+Package: kompozer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Complete Web Authoring System
- .
- KompoZer is a complete Web Authoring System that 
- combines web file management and easy-to-use WYSIWYG 
- (What You See Is What You Get) web page editing.
- .
- KompoZer is designed to be extremely easy to use,
- making it ideal for non-technical computer users
- who want to create an attractive, professional-looking 
- web site without needing to know HTML or web coding.
- .
- For more details look at http://kompozer.sourceforge.net
+  .
+  KompoZer is a complete Web Authoring System that 
+  combines web file management and easy-to-use WYSIWYG 
+  (What You See Is What You Get) web page editing.
+  .
+  KompoZer is designed to be extremely easy to use,
+  making it ideal for non-technical computer users
+  who want to create an attractive, professional-looking 
+  web site without needing to know HTML or web coding.
+  .
+  For more details look at http://kompozer.sourceforge.net
