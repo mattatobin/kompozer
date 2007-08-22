@@ -10,6 +10,7 @@ MOZ_OBJDIR=../obj-kompozer
 # --enable-optimize is used by configure (not client.mk)
 # --disable-debug is used by configure (not client.mk)
 # --prefix=/usr is used by configure (not client.mk)
+# --disable-profilelocking is used by configure (not client.mk)
 # --disable-svg is used by configure (not client.mk)
 # --without-system-mng is used by configure (not client.mk)
 # --without-system-png is used by configure (not client.mk)

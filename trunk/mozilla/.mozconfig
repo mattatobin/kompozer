@@ -4,8 +4,9 @@
 # See http://www.mozilla.org/build/unix.html for build instructions.
 #
 
-export MOZILLA_OFFICIAL=1
-export BUILD_OFFICIAL=1
+# Kaze: maybe the Nvu icon will stop showing off if these two lines are disabled...
+#export MOZILLA_OFFICIAL=1
+#export BUILD_OFFICIAL=1
 
 export MOZ_STANDALONE_COMPOSER=1
 mk_add_options MOZ_STANDALONE_COMPOSER=1
@@ -47,8 +48,11 @@ ac_add_options --disable-debug
 # just uncomment it
 #ac_add_options --with-default-mozilla-five-home=/usr/lib/mozilla
 
-# You probably have nothing to change below that line
+# Kaze was here ;-)
 ac_add_options  --prefix=/usr
+ac_add_options  --disable-profilelocking
+
+# You probably have nothing to change below that line
 ac_add_options  --disable-svg
 ac_add_options  --without-system-mng
 ac_add_options  --without-system-png

@@ -54,7 +54,7 @@ static const nsXREAppData kAppData = {
   "KompoZer", /* "Nvu", */
   APP_VERSION,
   BUILD_ID,
-  "Copyright (c) 2006 Contributors", /* "Copyright (c) 2004 Linspire Inc.", */
+  "Copyright (c) 2007 Contributors", /* "Copyright (c) 2004 Linspire Inc.", */
   PR_FALSE
 };
 
