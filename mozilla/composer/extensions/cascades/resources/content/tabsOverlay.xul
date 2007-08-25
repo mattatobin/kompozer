@@ -304,7 +304,6 @@
     <spacer flex="1" />
   </vbox>
 
-
   <!-- BACKGROUND PANEL -->
   <vbox id="backgroundTabPanel">
     <grid>
@@ -428,7 +427,6 @@
       </rows>
     </grid>
   </vbox>
-
 
   <!-- BORDER PANEL -->
   <vbox id="borderTabPanel">
@@ -766,7 +764,6 @@
       <spacer flex="1"/>
     </hbox>
   </vbox>
-
 
   <!-- BOX TAB PANEL -->
   <vbox id="boxTabPanel">
@@ -1202,7 +1199,6 @@
       </rows>
     </grid>
   </vbox>
-
 
   <!-- AURAL TAB PANEL-->
   <vbox id="auralTabPanel">

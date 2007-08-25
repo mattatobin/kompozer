@@ -103,9 +103,9 @@ function noReturn(event) {
         <tab id="boxTab"
              label="&boxTab.label;"
              oncommand="InitBoxTabPanel();"/>
-        <!-- tab id="listTab"
+        <tab id="listTab"
              label="&listTab.label;"
-             oncommand="onSelectCSSTreeItem('list');"/ -->
+             oncommand="onSelectCSSTreeItem('list');"/>
         <tab id="auralTab"
              label="&auralTab.label;"
              oncommand="InitAuralTabPanel();"/>
@@ -135,7 +135,7 @@ function noReturn(event) {
         <vbox id="backgroundTabPanel" />
         <vbox id="borderTabPanel" />
         <vbox id="boxTabPanel" />
-        <!-- vbox id="listTabPanel" / -->
+        <vbox id="listTabPanel" />
         <vbox id="auralTabPanel" />
       </tabpanels>
     </tabbox>
