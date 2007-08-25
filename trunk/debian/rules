@@ -9,6 +9,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 ndir=$(CURDIR)/debian/install
+kdir=$(CURDIR)/debian/kompozer
 
 build: build-stamp  
 
@@ -18,7 +19,7 @@ build-stamp:
 	# Add here commands to compile the package.
 	
 	@echo "bunzipping the source :)"
-	if [ ! -d mozilla ]; then tar xjf ../kompozer*bz2; fi
+	if [ ! -d mozilla ]; then tar xjf ../kompozer*tar.gz; fi
 	#patch -p0 < debian/patches/amd64.patch
 	cp debian/mozconfig.debian mozilla/.mozconfig
 	cd mozilla && $(MAKE) -f client.mk build_all
@@ -31,64 +32,45 @@ clean:
 	rm -f build-stamp configure-stamp
 	if [ -d mozilla ]; then rm -rf mozilla; fi
 	rm -rf $(ndir)
-
 	dh_clean
 
 install: build
 	dh_testdir
 	dh_testroot
 	dh_clean -k 
-	dh_installdirs
 
 	# Add here commands to install the package into debian/kompozer.
-  #if [ ! -d $(ndir) ]; then 
+	#if [ ! -d debian/tmp ]; then mkdir -p $(ndir); cd mozilla && $(MAKE) install DESTDIR=$(ndir); fi
 	mkdir -p $(ndir)
 	cd mozilla && $(MAKE) install DESTDIR=$(ndir)
-  #fi
 
-  # remove all empty directories
+	# remove all empty directories
 	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
 
-  # add 'extensions' dir so KompoZer can install extensions without superuser rights
-	cp -r $(CURDIR)/debian/extensions $(ndir)/usr/lib/kompozer/
-	
-  # ------------------------------------------------#
-  #        kompozer (binary)                        #
-  # ------------------------------------------------#
+	# ------------------------------------------------#
+	#        kompozer (binary)                        #
+	# ------------------------------------------------#
 
-	#binary
-	mkdir -p $(CURDIR)/debian/kompozer/usr/{lib,bin}
-	cp -r $(ndir)/usr/bin          $(CURDIR)/debian/kompozer/usr/
-	cp -r $(ndir)/usr/lib/kompozer $(CURDIR)/debian/kompozer/usr/lib
-	
-	# remove internal myspell directory (and myspell dicts) and
-	# symlink it to /usr/share/myspell where all myspell-* dicts
-	# place their stuff
-	rm -rf $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/myspell
-	ln -s /usr/share/myspell/dicts $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/myspell
+	# remove internal myspell directory and myspell dicts
+	# dh_install symlinks it to /usr/share/myspell where all myspell-* dicts place their stuff
+	rm -rf $(ndir)/usr/lib/kompozer/components/myspell
 	
 	# remove exec bit from .js files to prevent lintian warnings
-	chmod -x $(CURDIR)/debian/kompozer/usr/lib/kompozer/components/*.js
+	chmod -x $(ndir)/usr/lib/kompozer/components/*.js
 
-  #pixmaps
-	mkdir -p $(CURDIR)/debian/kompozer/usr/share/pixmaps/
-	cp $(ndir)/usr/lib/kompozer/icons/mozicon50.xpm  $(CURDIR)/debian/kompozer/usr/share/pixmaps/kompozer.xpm
-	cp $(ndir)/usr/lib/kompozer/icons/mozicon256.png $(CURDIR)/debian/kompozer/usr/share/pixmaps/kompozer.png
-	
-  #desktop
-	mkdir -p $(CURDIR)/debian/kompozer/usr/share/applications/
-	cp $(CURDIR)/debian/*.desktop $(CURDIR)/debian/kompozer/usr/share/applications/
+	# ------------------------------------------------#
+	#        kompozer-dev (development files)         #
+	# ------------------------------------------------#
 
-  # ------------------------------------------------#
-  #        kompozer-dev (development files)         #
-  # ------------------------------------------------#
+	mkdir -p $(kdir)-dev/usr/{lib,share}
+	cp -r $(ndir)/usr/include       $(kdir)-dev/usr/
+	cp -r $(ndir)/usr/lib/pkgconfig $(kdir)-dev/usr/lib/
+	cp -r $(ndir)/usr/share/aclocal $(kdir)-dev/usr/share/
+	cp -r $(ndir)/usr/share/idl     $(kdir)-dev/usr/share/
 
-	mkdir -p $(CURDIR)/debian/kompozer-dev/usr/{lib,share}
-	cp -r $(ndir)/usr/include       $(CURDIR)/debian/kompozer-dev/usr/
-	cp -r $(ndir)/usr/lib/pkgconfig $(CURDIR)/debian/kompozer-dev/usr/lib/
-	cp -r $(ndir)/usr/share/aclocal $(CURDIR)/debian/kompozer-dev/usr/share/
-	cp -r $(ndir)/usr/share/idl     $(CURDIR)/debian/kompozer-dev/usr/share/
-
+	dh_installdirs
+	dh_install
+	dh_link
 	
 binary-indep: build install
 #We have nothing to do by default.
