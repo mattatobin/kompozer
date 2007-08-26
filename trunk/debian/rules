@@ -45,10 +45,6 @@ install: build
 	# remove all empty directories
 	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
 
-	# ------------------------------------------------#
-	#        kompozer (binary)                        #
-	# ------------------------------------------------#
-
 	# remove internal myspell directory and myspell dicts
 	# dh_install symlinks it to /usr/share/myspell where all myspell-* dicts place their stuff
 	rm -rf $(ndir)/usr/lib/kompozer/components/myspell
@@ -56,22 +52,24 @@ install: build
 	# remove exec bit from .js files to prevent lintian warnings
 	chmod -x $(ndir)/usr/lib/kompozer/components/*.js
 
-	# ------------------------------------------------#
-	#        kompozer-dev (development files)         #
-	# ------------------------------------------------#
-
-	mkdir -p $(kdir)-dev/usr/{lib,share}
-	cp -r $(ndir)/usr/include       $(kdir)-dev/usr/
-	cp -r $(ndir)/usr/lib/pkgconfig $(kdir)-dev/usr/lib/
-	cp -r $(ndir)/usr/share/aclocal $(kdir)-dev/usr/share/
-	cp -r $(ndir)/usr/share/idl     $(kdir)-dev/usr/share/
-
 	dh_installdirs
 	dh_install
 	dh_link
 	
 binary-indep: build install
 #We have nothing to do by default.
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i 
+	dh_installdocs -i
+#	dh_installdebconf	
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
 
 # Build architecture-dependent files here.
 binary-arch: build install
