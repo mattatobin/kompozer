@@ -2,21 +2,20 @@ Source: kompozer
 Section: web
 Priority: optional
 Maintainer: Anthony Yarusso <tonyyarusso@ubuntu.com>
-Build-Depends: debhelper (>= 4.0.0)
-Standards-Version: 3.6.2
+Build-Depends: debhelper (>= 4), pkg-config (>= 0.20), zip (>= 2.31), libgtk2.0-dev (>= 2.8), libidl-dev (>= 0.8)
 
 Package: kompozer
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}
 Description: Complete Web Authoring System
   .
-  KompoZer is a complete Web Authoring System that 
-  combines web file management and easy-to-use WYSIWYG 
+  KompoZer is a complete Web Authoring System that
+  combines web file management and easy-to-use WYSIWYG
   (What You See Is What You Get) web page editing.
   .
   KompoZer is designed to be extremely easy to use,
   making it ideal for non-technical computer users
-  who want to create an attractive, professional-looking 
+  who want to create an attractive, professional-looking
   web site without needing to know HTML or web coding.
   .
   For more details look at http://kompozer.sourceforge.net

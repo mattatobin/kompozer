@@ -17,9 +17,7 @@ build-stamp:
 	dh_testdir
 
 	# Add here commands to compile the package.
-	
-	@echo "bunzipping the source :)"
-	if [ ! -d mozilla ]; then tar xjf ../kompozer*tar.gz; fi
+	#if [ ! -d mozilla ]; then tar xjf ../kompozer*.orig.tar.gz; fi
 	#patch -p0 < debian/patches/amd64.patch
 	cp debian/mozconfig.debian mozilla/.mozconfig
 	cd mozilla && $(MAKE) -f client.mk build_all
@@ -30,7 +28,7 @@ clean:
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp configure-stamp
-	if [ -d mozilla ]; then rm -rf mozilla; fi
+	#if [ -d mozilla ]; then rm -rf mozilla; fi
 	rm -rf $(ndir)
 	dh_clean
 
@@ -82,7 +80,7 @@ binary-arch: build install
 	dh_installchangelogs -a
 	dh_installdocs -a
 	dh_installexamples -a
-# dh_installmenu -a
+#	dh_installmenu -a
 #	dh_installdebconf	
 	dh_installman -a
 	dh_link -a
