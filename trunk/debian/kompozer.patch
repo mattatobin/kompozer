@@ -1,0 +1,109 @@
+--- kompozer.orig	2007-08-22 17:29:18.000000000 +0200
++++ kompozer	2007-08-22 19:49:00.000000000 +0200
+@@ -20,7 +20,7 @@
+ ## 
+ ## Usage:
+ ##
+-## $ mozilla [args]
++## $ kompozer [args]
+ ##
+ ## This script is meant to run the mozilla-bin binary from either 
+ ## mozilla/xpfe/bootstrap or mozilla/dist/bin.
+@@ -32,58 +32,56 @@
+ #uncomment for debugging
+ #set -x
+ 
++# Use run-mozilla.sh in the current dir if it exists
++# If not, check the default compile-time libdirs
++# then start resolving symlinks until we find run-mozilla.sh
++found=0
++progname=$0
++curdir=`dirname "$progname"`
++libdir="$curdir/../lib/kompozer"
+ moz_libdir=/usr/lib/kompozer
+-MRE_HOME=/usr/lib/mre/mre-0.7.10
+ 
+-# honor MOZILLA_FIVE_HOME if it's there
+-if [ -n "$MOZILLA_FIVE_HOME" ] ; then
+-  dist_bin="$MOZILLA_FIVE_HOME"
++if [ -x "$curdir/run-mozilla.sh" ]; then
++  dist_bin="$curdir"
++  found=1
++elif [ -x "$libdir/run-mozilla.sh" ]; then
++  dist_bin="$libdir"
++  found=1
+ else
+-  # Use run-mozilla.sh in the current dir if it exists
+-  # If not, then start resolving symlinks until we find run-mozilla.sh
+-  found=0
+-  progname=$0
+-  curdir=`dirname "$progname"`
+-  run_moz="$curdir/run-mozilla.sh"
+-  if test -x "$run_moz"; then
+-    dist_bin=$curdir
+-    found=1
+-  else
+-    here=`/bin/pwd`
+-    while [ -h "$progname" ]; do
+-      bn=`basename "$progname"`
+-      cd `dirname "$progname"`
+-      progname=`/bin/ls -l "$bn" |sed -e 's/^.* -> //' `
+-      if [ ! -x "$progname" ]; then
+-        break
+-      fi
+-      curdir=`dirname "$progname"`
+-      run_moz="$curdir/run-mozilla.sh"
+-      if [ -x "$run_moz" ]; then
+-        cd "$curdir"
+-        dist_bin=`pwd`
+-        found=1
+-        break
+-      fi
+-    done
+-    cd "$here"
+-  fi
+-  if [ $found = 0 ]; then
+-    # Check default compile-time libdir
+-    if [ -x "$moz_libdir/run-mozilla.sh" ]; then
+-      dist_bin=$moz_libdir
+-    else 
+-      echo "Cannot find mozilla runtime directory. Exiting."
+-      exit 1
++  here=`/bin/pwd`
++  while [ -h "$progname" ]; do
++    bn=`basename "$progname"`
++    cd `dirname "$progname"`
++    progname=`/bin/ls -l "$bn" |sed -e 's/^.* -> //' `
++    if [ ! -x "$progname" ]; then
++      break
++    fi
++    curdir=`dirname "$progname"`
++    if [ -x "$curdir/run-mozilla.sh" ]; then
++      cd "$curdir"
++      dist_bin=`pwd`
++      found=1
++      break
+     fi
++  done
++  cd "$here"
++fi
++
++if [ $found = 0 ]; then
++  # Check default install-time libdir
++  if [ -x "$moz_libdir/run-mozilla.sh" ]; then
++    dist_bin=$moz_libdir
++  else 
++    echo "Cannot find mozilla runtime directory. Exiting."
++    exit 1
+   fi
+ fi
+ 
+ script_args=""
+ moreargs=""
+ debugging=0
+-#MOZILLA_BIN="nvu-bin"
+ MOZILLA_BIN="kompozer-bin"
++MRE_HOME=$dist_bin
+ 
+ if [ "$OSTYPE" = "beos" ]; then
+   mimeset -F $MOZILLA_BIN
