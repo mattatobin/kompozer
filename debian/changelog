@@ -1,6 +1,5 @@
-kompozer (0.7.10-0ubuntu1) dapper; urgency=low
+kompozer (0.7.10-0ubuntu1) gutsy; urgency=low
 
   * Initial release Closes: #104728
 
- -- Anthony Yarusso <tonyyarusso@ubuntu.com>  Mon, 13 Aug 2007 21:16:45 +0200
-
+ -- Anthony Yarusso <tonyyarusso@ubuntu.com>  Mon, 27 Aug 2007 01:11:03 -0500

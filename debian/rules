@@ -30,34 +30,33 @@ clean:
 	rm -f build-stamp configure-stamp
 	#if [ -d mozilla ]; then rm -rf mozilla; fi
 	rm -rf $(ndir)
+	rm -f mozilla/config.status
+	rm -f mozilla/config.log
+	rm -f mozilla/nsprpub/config.status
+	rm -f mozilla/nsprpub/config.log
 	dh_clean
 
 install: build
 	dh_testdir
 	dh_testroot
 	dh_clean -k 
-
 	# Add here commands to install the package into debian/kompozer.
 	#if [ ! -d debian/tmp ]; then mkdir -p $(ndir); cd mozilla && $(MAKE) install DESTDIR=$(ndir); fi
 	mkdir -p $(ndir)
 	cd mozilla && $(MAKE) install DESTDIR=$(ndir)
-
 	# remove all empty directories
 	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
-
 	# remove internal myspell directory and myspell dicts
 	# dh_install symlinks it to /usr/share/myspell where all myspell-* dicts place their stuff
 	rm -rf $(ndir)/usr/lib/kompozer/components/myspell
-	
 	# remove exec bit from .js files to prevent lintian warnings
 	chmod -x $(ndir)/usr/lib/kompozer/components/*.js
-
+	# copy and symlink files to debian/kompozer
 	dh_installdirs
 	dh_install
 	dh_link
 	
 binary-indep: build install
-#We have nothing to do by default.
 	dh_testdir -i
 	dh_testroot -i
 	dh_installchangelogs -i 

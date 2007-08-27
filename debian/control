@@ -2,13 +2,13 @@ Source: kompozer
 Section: web
 Priority: optional
 Maintainer: Anthony Yarusso <tonyyarusso@ubuntu.com>
-Build-Depends: debhelper (>= 4.0), zip (>= 2.31), libgtk2.0-dev (>= 2.8), libidl-dev (>= 0.8), libxt-dev (>= 1.0)
+Build-Depends: debhelper (>= 5.0), zip (>= 2.31), libgtk2.0-dev (>= 2.8), libidl-dev (>= 0.8), libxt-dev (>= 1.0)
+Standards-Version: 3.7.2
 
 Package: kompozer
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: Complete Web Authoring System
-  .
   KompoZer is a complete Web Authoring System that
   combines web file management and easy-to-use WYSIWYG
   (What You See Is What You Get) web page editing.
@@ -18,7 +18,7 @@ Description: Complete Web Authoring System
   who want to create an attractive, professional-looking
   web site without needing to know HTML or web coding.
   .
-  For more details look at http://kompozer.sourceforge.net
+   For more details look at http://kompozer.sourceforge.net/
 
 Package: kompozer-dev
 Section: devel
@@ -26,7 +26,6 @@ Architecture: all
 Depends: ${shlibs:Depends}
 Conflicts: libnspr-dev
 Description: KompoZer development files
-  .
   KompoZer is a complete Web Authoring System that
   combines web file management and easy-to-use WYSIWYG
   (What You See Is What You Get) web page editing.
@@ -38,3 +37,4 @@ Description: KompoZer development files
   .
   This package contains the files needed to build 
   plugins/add-ons for KompoZer.
+
