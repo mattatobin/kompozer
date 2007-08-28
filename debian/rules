@@ -16,15 +16,13 @@ build: build-stamp
 build-stamp:  
 	dh_testdir
 	# Add here commands to compile the package.
-	#if [ ! -d mozilla ]; then tar xjf ../kompozer*.orig.tar.gz; fi
-	#patch -p0 < debian/patches/amd64.patch
 	cp debian/mozconfig.debian mozilla/.mozconfig
-ifneq "$(wildcard /usr/share/misc/config.sub)" ""
-	cp -f /usr/share/misc/config.sub config.sub
-endif
-ifneq "$(wildcard /usr/share/misc/config.guess)" ""
-	cp -f /usr/share/misc/config.guess config.guess
-endif
+	ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+		cp -f /usr/share/misc/config.sub config.sub
+	endif
+	ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+		cp -f /usr/share/misc/config.guess config.guess
+	endif
 	cd mozilla && $(MAKE) -f client.mk build_all
 	touch build-stamp
 
@@ -48,25 +46,23 @@ install: build
 	#if [ ! -d debian/tmp ]; then mkdir -p $(ndir); cd mozilla && $(MAKE) install DESTDIR=$(ndir); fi
 	mkdir -p $(ndir)
 	cd mozilla && $(MAKE) install DESTDIR=$(ndir)
-	# remove all empty directories
+	# Remove all empty directories.
 	perl -MFile::Find -e"finddepth(sub{rmdir},'$(ndir)')"
-	# remove internal myspell directory and myspell dicts
+	# Remove internal myspell directory and myspell dicts.
 	# dh_install symlinks it to /usr/share/myspell where all myspell-* dicts place their stuff
 	rm -rf $(ndir)/usr/lib/kompozer/components/myspell
-	# remove exec bit from .js files to prevent lintian warnings
+	# Remove exec bit from .js files to prevent lintian warnings.
 	chmod -x $(ndir)/usr/lib/kompozer/components/*.js
-	# copy and symlink files to debian/kompozer
+	# Copy and symlink files to debian/kompozer.
 	dh_installdirs
 	dh_install
 	dh_link
 	
 binary-indep: build install
-
 	dh_testdir -i
 	dh_testroot -i
 	dh_installchangelogs -i 
 	dh_installdocs -i
-#	dh_installdebconf	
 	dh_compress -i
 	dh_fixperms -i
 	dh_installdeb -i
@@ -82,8 +78,6 @@ binary-arch: build install
 	dh_installchangelogs -a
 	dh_installdocs -a
 	dh_installexamples -a
-#	dh_installmenu -a
-#	dh_installdebconf	
 	dh_installman -a
 	dh_link -a
 	dh_strip -a
