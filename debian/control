@@ -9,16 +9,16 @@ Package: kompozer
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: Complete Web Authoring System
-  KompoZer is a complete Web Authoring System that
-  combines web file management and easy-to-use WYSIWYG
-  (What You See Is What You Get) web page editing.
-  .
-  KompoZer is designed to be extremely easy to use,
-  making it ideal for non-technical computer users
-  who want to create an attractive, professional-looking
-  web site without needing to know HTML or web coding.
-  .
-   For more details look at http://kompozer.sourceforge.net/
+ KompoZer is a complete Web Authoring System that
+ combines web file management and easy-to-use WYSIWYG
+ (What You See Is What You Get) web page editing.
+ .
+ KompoZer is designed to be extremely easy to use,
+ making it ideal for non-technical computer users
+ who want to create an attractive, professional-looking
+ web site without needing to know HTML or web coding.
+ .
+  For more details look at http://kompozer.sourceforge.net/
 
 Package: kompozer-dev
 Section: devel
@@ -26,15 +26,15 @@ Architecture: all
 Depends: kompozer (= ${source:Version})
 Conflicts: libnspr-dev
 Description: KompoZer development files
-  KompoZer is a complete Web Authoring System that
-  combines web file management and easy-to-use WYSIWYG
-  (What You See Is What You Get) web page editing.
-  .
-  KompoZer is designed to be extremely easy to use,
-  making it ideal for non-technical computer users
-  who want to create an attractive, professional-looking
-  web site without needing to know HTML or web coding.
-  .
-  This package contains the files needed to build 
-  plugins/add-ons for KompoZer.
+ KompoZer is a complete Web Authoring System that
+ combines web file management and easy-to-use WYSIWYG
+ (What You See Is What You Get) web page editing.
+ .
+ KompoZer is designed to be extremely easy to use,
+ making it ideal for non-technical computer users
+ who want to create an attractive, professional-looking
+ web site without needing to know HTML or web coding.
+ .
+ This package contains the files needed to build 
+ plugins/add-ons for KompoZer.
 
