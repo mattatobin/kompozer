@@ -2,8 +2,7 @@ Source: kompozer
 Section: web
 Priority: optional
 Maintainer: Anthony Yarusso <tonyyarusso@ubuntu.com>
-Build-Depends: debhelper (>= 5.0), zip (>= 2.31), libgtk2.0-dev (>= 2.8), libidl-dev (>= 0.8), libxt-dev (>= 1.0), autotools-dev (>=
- 20050803.1)
+Build-Depends: debhelper (>= 5.0), zip (>= 2.31), libgtk2.0-dev (>= 2.8), libidl-dev (>= 0.8), libxt-dev (>= 1.0), autotools-dev (>= 20050803.1)
 Standards-Version: 3.7.2
 
 Package: kompozer
