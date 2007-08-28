@@ -24,7 +24,7 @@ Description: Complete Web Authoring System
 Package: kompozer-dev
 Section: devel
 Architecture: all
-Depends: ${shlibs:Depends}
+Depends: kompozer (= ${source:Version})
 Conflicts: libnspr-dev
 Description: KompoZer development files
   KompoZer is a complete Web Authoring System that
