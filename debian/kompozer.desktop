@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=KompoZer
 Comment=Create Web Pages
-Categories=Application;Network;
+Categories=Network;WebDevelopment;
 Encoding=UTF-8
 Exec=kompozer
-Icon=/usr/share/pixmaps/kompozer.png
+Icon=kompozer.png
 Terminal=false
 Type=Application
