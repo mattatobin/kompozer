@@ -1,0 +1,3 @@
+en-US.jar:
+        locale/en-US/navigator-platform/mac/platformNavigationBindings.dtd
+        locale/en-US/navigator-platform/mac/navigator.properties
