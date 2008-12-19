@@ -1,5 +1,0 @@
-pinger.jar:
-	content/pinger/contents.rdf                    (content/contents.rdf)
-	content/pinger/pinger.xul                      (content/pinger.xul)
-	content/pinger/pinger.js                       (content/pinger.js)
-	content/pinger/pinger.css                      (content/pinger.css)
