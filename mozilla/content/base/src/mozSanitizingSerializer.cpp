@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,35 +14,39 @@
  *
  * The Original Code is mozilla.org HTML Sanitizer code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Ben Bucksch <mozilla@bucksch.org>.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Netscape
+ *     Netscape
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
-
-// Removes potentially insecure or offending HTML
 
 /* I used nsPlaintextSerializer as base for this class. I don't understand
    all of the functions in the beginning. Possible that I fail to do
    something or do something useless.
    I am not proud about the implementation here at all.
    Feel free to fix it :-).
+
+   I am moderately concerned about methods to obfuscate HTML, which the
+   parser can decode during execution.
+   E.g. there are these dreaded data: and javascript URLs and
+   base64 encoding (which I don't really understand how it alloies
 */
 
 #include "mozSanitizingSerializer.h"
@@ -55,18 +59,13 @@
 #include "nsContentUtils.h"
 #include "nsReadableUtils.h"
 #include "plstr.h"
+//#include "nsDependentString.h"
 #include "nsIProperties.h"
 #include "nsUnicharUtils.h"
 #include "nsIURI.h"
 #include "nsNetUtil.h"
-#include "nsEscape.h"
 
 //#define DEBUG_BenB
-
-static inline PRUnichar* escape(const nsString& source)
-{
-  return nsEscapeHTML2(source.get(), source.Length()); 
-}
 
 /* XXX: |printf|s in some error conditions. They are intended as information
    for the user, because they complain about malformed pref values.
@@ -91,18 +90,16 @@ nsresult NS_NewSanitizingHTMLSerializer(nsIContentSerializer** aSerializer)
 mozSanitizingHTMLSerializer::mozSanitizingHTMLSerializer()
   : mAllowedTags(30) // Just some initial buffer size
 {
+
   mOutputString = nsnull;
 }
 
 mozSanitizingHTMLSerializer::~mozSanitizingHTMLSerializer()
 {
-#ifdef DEBUG_BenB
-  printf("Output:\n%s\n", NS_LossyConvertUCS2toASCII(*mOutputString).get());
-#endif
   mAllowedTags.Enumerate(ReleaseProperties);
 }
 
-//<copy from="xpcom/ds/nsProperties.cpp">
+//<copied from="xpcom/ds/nsProperties.cpp">
 PRBool PR_CALLBACK 
 mozSanitizingHTMLSerializer::ReleaseProperties(nsHashKey* key, void* data,
                                                void* closure)
@@ -111,7 +108,7 @@ mozSanitizingHTMLSerializer::ReleaseProperties(nsHashKey* key, void* data,
   NS_IF_RELEASE(prop);
   return PR_TRUE;
 }
-//</copy>
+//</copied>
 
 NS_IMPL_ISUPPORTS4(mozSanitizingHTMLSerializer,
                    nsIContentSerializer,
@@ -153,8 +150,8 @@ mozSanitizingHTMLSerializer::Initialize(nsAString* aOutString,
 NS_IMETHODIMP
 mozSanitizingHTMLSerializer::Flush(nsAString& aStr)
 {
-#ifdef DEBUG_BenB
-  printf("Flush: -%s-", NS_LossyConvertUCS2toASCII(aStr).get());
+#if DEBUG_BenB
+  printf("Flush: -%s-", NS_LossyConvertUCS2toASCII(aString).get());
 #endif
   Write(aStr);
   return NS_OK;
@@ -170,6 +167,7 @@ mozSanitizingHTMLSerializer::AppendDocumentStart(nsIDOMDocument *aDocument,
 void
 mozSanitizingHTMLSerializer::Write(const nsAString& aString)
 {
+  //  printf("%s", NS_LossyConvertUCS2toASCII(aString).get());
   mOutputString->Append(aString);
 }
 
@@ -216,8 +214,11 @@ mozSanitizingHTMLSerializer::GetIdForContent(nsIContent* aContent)
 
   nsIParserService* parserService = nsContentUtils::GetParserServiceWeakRef();
 
-  return parserService ? parserService->HTMLAtomTagToId(aContent->Tag()) :
-                         eHTMLTag_unknown;
+  PRInt32 id;
+  nsresult rv = parserService->HTMLAtomTagToId(aContent->Tag(), &id);
+  NS_ASSERTION(NS_SUCCEEDED(rv), "Can't map HTML tag to id!");
+
+  return id;
 }
 
 NS_IMETHODIMP 
@@ -257,7 +258,7 @@ mozSanitizingHTMLSerializer::AppendElementStart(nsIDOMElement *aElement,
     rv = DoOpenContainer(id);
   }
   else {
-    rv = DoAddLeaf(id, EmptyString());
+    rv = DoAddLeaf(id, nsString());
   }
 
   mContent = 0;
@@ -320,19 +321,6 @@ mozSanitizingHTMLSerializer::AddHeadContent(const nsIParserNode& aNode)
       eHTMLTag_entity == type) {
     rv = AddLeaf(aNode);
   }
-  else if (eHTMLTag_title == type) {
-    NS_ASSERTION(mParser, "Only CNavDTD treats title this way.");
-
-    nsString skippedContent;
-    PRInt32 lineNo;
-
-    nsCOMPtr<nsIDTD> dtd;
-    mParser->GetDTD(getter_AddRefs(dtd));
-    NS_ENSURE_TRUE(dtd, NS_ERROR_UNEXPECTED);
-
-    dtd->CollectSkippedContent(type, skippedContent, lineNo);
-    SetTitle(skippedContent);
-  }
   else {
     rv = OpenContainer(aNode);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -373,7 +361,7 @@ mozSanitizingHTMLSerializer::SetTitle(const nsString& aValue)
     // missing </title> tag won't result in everything
     // being eaten up as the title.
     Write(NS_LITERAL_STRING("<title>"));
-    Write(nsAdoptingString(escape(aValue)));
+    Write(aValue);
     Write(NS_LITERAL_STRING("</title>"));
   }
   return NS_OK;
@@ -392,8 +380,7 @@ mozSanitizingHTMLSerializer::SetDocumentCharset(nsACString& aCharset)
   Write(NS_LITERAL_STRING("\n<meta http-equiv=\"Context-Type\" content=\"text/html; charset=")
         /* Danger: breaking the line within the string literal, like
            "foo"\n"bar", breaks win32! */
-        + nsAdoptingString(escape(NS_ConvertASCIItoUCS2(aCharset)))
-        + NS_LITERAL_STRING("\">\n"));
+        + NS_ConvertASCIItoUCS2(aCharset) + NS_LITERAL_STRING("\">\n"));
   return NS_OK;
 }
 
@@ -471,7 +458,8 @@ mozSanitizingHTMLSerializer::DoOpenContainer(PRInt32 aTag)
       nsContentUtils::GetParserServiceWeakRef();
     if (!parserService)
       return NS_ERROR_OUT_OF_MEMORY;
-    const PRUnichar* tag_name = parserService->HTMLIdToStringTag(aTag);
+    const PRUnichar* tag_name;
+    parserService->HTMLIdToStringTag(aTag, &tag_name);
     NS_ENSURE_TRUE(tag_name, NS_ERROR_INVALID_POINTER);
 
     Write(NS_LITERAL_STRING("<") + nsDependentString(tag_name));
@@ -518,7 +506,8 @@ mozSanitizingHTMLSerializer::DoCloseContainer(PRInt32 aTag)
       nsContentUtils::GetParserServiceWeakRef();
     if (!parserService)
       return NS_ERROR_OUT_OF_MEMORY;
-    const PRUnichar* tag_name = parserService->HTMLIdToStringTag(aTag);
+    const PRUnichar* tag_name;
+    parserService->HTMLIdToStringTag(aTag, &tag_name);
     NS_ENSURE_TRUE(tag_name, NS_ERROR_INVALID_POINTER);
 
     Write(NS_LITERAL_STRING("</") + nsDependentString(tag_name)
@@ -541,7 +530,7 @@ mozSanitizingHTMLSerializer::DoAddLeaf(PRInt32 aTag,
   if (type == eHTMLTag_whitespace ||
       type == eHTMLTag_newline)
   {
-    Write(aText); // sure to be safe?
+    Write(aText);
   }
   else if (type == eHTMLTag_text)
   {
@@ -550,44 +539,14 @@ mozSanitizingHTMLSerializer::DoAddLeaf(PRInt32 aTag,
       Write(text);
     else
       Write(NS_LITERAL_STRING(TEXT_REMOVED)); // Does not happen (yet)
-    NS_ENSURE_SUCCESS(rv, rv);
+    if (NS_FAILED(rv))
+      return rv;
   }
   else if (type == eHTMLTag_entity)
   {
     Write(NS_LITERAL_STRING("&"));
-    Write(aText); // sure to be safe?
+    Write(aText);
     // using + operator here might give an infinitive loop, see above.
-    // not adding ";", because Gecko delivers that as part of |aText| (freaky)
-  }
-  else if (type == eHTMLTag_script ||
-           type == eHTMLTag_style ||
-           type == eHTMLTag_server)
-  {
-    // These special tags require some extra care. The parser gives them
-    // to us as leaves, but they're really containers. Their content is
-    // contained in the "skipped content" of the parser. This code is
-    // adapted from nsHTMLContentSink.cpp
-    nsString skippedContent;
-    PRInt32 lineNo;
-
-    NS_ASSERTION(mParser, "We are receiving containers as leaves with "
-                          "no skipped content.");
-
-    nsCOMPtr<nsIDTD> dtd;
-    mParser->GetDTD(getter_AddRefs(dtd));
-    NS_ENSURE_TRUE(dtd, NS_ERROR_UNEXPECTED);
-
-    // Note: we want to collect the skipped content no matter what. We
-    // may end up throwing it away anyway, but the DTD doesn't care
-    // about that.
-    dtd->CollectSkippedContent(type, skippedContent, lineNo);
-
-    DoOpenContainer(type);
-    if (IsAllowedTag(type))
-    {
-      Write(skippedContent);
-    }
-    DoCloseContainer(type);
   }
   else
   {
@@ -604,7 +563,19 @@ mozSanitizingHTMLSerializer::DoAddLeaf(PRInt32 aTag,
 nsresult
 mozSanitizingHTMLSerializer::SanitizeTextNode(nsString& aText /*inout*/)
 {
-  aText.Adopt(escape(aText));
+  nsString& text = aText; // alias
+
+  PRInt32 pos;
+  if ((pos = text.Find("base64")) != kNotFound)
+    // Probably useless, not sure, but perfhit
+    //    return NS_ERROR_ILLEGAL_VALUE; -- this is too extreme
+    text.Insert(NS_LITERAL_STRING(TEXT_BREAKER), pos + 1);
+         /* Insert some other text after the first char of the problematic
+            text, so we prevent the processing by Gecko.
+            No idea, if that is needed, but better do it than being sorry.
+            Somebody who knows all the dangers and how they are reflected
+            in Gecko please jump in. */
+
   return NS_OK;
 }
 
@@ -614,14 +585,14 @@ mozSanitizingHTMLSerializer::SanitizeTextNode(nsString& aText /*inout*/)
    unwanted / dangerous URLs appear in the document
    (like javascript: and data:).
 
-   Pass the value as |aValue| arg. It will be modified in-place.
+   Pass the value as |value| arg. It will be modified in-place.
 
    If the value is not allowed at all, we return with NS_ERROR_ILLEGAL_VALUE.
-   In that case, do not use the |aValue|, but output nothing.
+   In that case, do not use the |value|, but output nothing.
  */
 nsresult
 mozSanitizingHTMLSerializer::SanitizeAttrValue(nsHTMLTag aTag,
-                                               const nsAString& anAttrName,
+                                               const nsAString& attr_name,
                                                nsString& aValue /*inout*/)
 {
   /* First, cut the attribute to 1000 chars.
@@ -629,40 +600,41 @@ mozSanitizingHTMLSerializer::SanitizeAttrValue(nsHTMLTag aTag,
      considering that we don't support any JS. The longest attributes
      I can think of are URLs, and URLs with 1000 chars are likely to be
      bogus, too. */
-  aValue = Substring(aValue, 0, 1000);
-  //aValue.Truncate(1000); //-- this cuts half of the document !!?!!
+  nsAutoString value(Substring(aValue, 0, 1000));
+  //value.Truncate(1000); //-- this cuts half of the document !!?!!
 
-  aValue.Adopt(escape(aValue));
+#ifdef DEBUG_BenB
+          printf("7: %s\n", ToNewUTF8String(value));
+#endif
+
+  value.StripChars("\"'");  /* This will break javascript attributes,
+                               but who wants javascript in
+                               sanitized HTML? */
 
   /* Check some known bad stuff. Add more!
      I don't care too much, if it happens to trigger in some innocent cases
      (like <img alt="Statistical data: Mortage rates and newspapers">) -
      security first. */
-  if (aValue.Find("javascript:") != kNotFound ||
-      aValue.Find("data:") != kNotFound ||
-      aValue.Find("base64") != kNotFound)
+  if (value.Find("javascript:") != kNotFound ||
+      value.Find("data:") != kNotFound ||
+      value.Find("base64") != kNotFound)
     return NS_ERROR_ILLEGAL_VALUE;
 
   // Check img src scheme
   if (aTag == eHTMLTag_img && 
-      anAttrName.LowerCaseEqualsLiteral("src"))
+      attr_name.Equals(NS_LITERAL_STRING("src"), nsCaseInsensitiveStringComparator()))
   {
     nsresult rv;
-    nsCOMPtr<nsIIOService> ioService = do_GetIOService(&rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIIOService> ioService;
+    ioService = do_GetIOService(&rv);
+    if (NS_FAILED(rv)) return rv;
     nsCAutoString scheme;
-    rv = ioService->ExtractScheme(NS_LossyConvertUCS2toASCII(aValue), scheme);
-    NS_ENSURE_SUCCESS(rv, rv);
+    rv = ioService->ExtractScheme(NS_LossyConvertUCS2toASCII(value), scheme);
+    if (NS_FAILED(rv)) return rv;
 
     if (!scheme.Equals("cid", nsCaseInsensitiveCStringComparator()))
       return NS_ERROR_ILLEGAL_VALUE;
   }
-
-#ifdef DEBUG_BenB
-  printf("attribute value for %s: -%s-\n",
-         NS_LossyConvertUCS2toASCII(anAttrName).get(),
-         NS_LossyConvertUCS2toASCII(aValue).get());
-#endif
 
   return NS_OK;
 }
@@ -736,6 +708,9 @@ nsresult
 mozSanitizingHTMLSerializer::ParsePrefs(const nsAString& aPref)
 {
   char* pref = ToNewCString(aPref);
+#ifdef DEBUG_BenB
+  printf("pref: -%s-\n", pref);
+#endif
   char* tags_lasts;
   for (char* iTag = PL_strtok_r(pref, " ", &tags_lasts);
        iTag;
@@ -760,29 +735,45 @@ mozSanitizingHTMLSerializer::ParseTagPref(const nsCAutoString& tagpref)
     return NS_ERROR_OUT_OF_MEMORY;
 
   // Parsing tag
-  PRInt32 bracket = tagpref.FindChar('(');
-  if (bracket == 0)
+#ifdef DEBUG_BenB
+  printf("Processing tag pref -%s-\n", tagpref.get());
+#endif
+  PRInt32 bracket = tagpref.Find("(");
+  nsCAutoString tag = tagpref;
+  if (bracket != kNotFound)
+    tag.Truncate(bracket);
+#ifdef DEBUG_BenB
+  printf( "Tag -%s-\n", tag.get());
+#endif
+  if (tag.Equals(""))
   {
     printf(" malformed pref: %s\n", tagpref.get());
     return NS_ERROR_CANNOT_CONVERT_DATA;
   }
 
-  nsAutoString tag;
-  CopyUTF8toUTF16(StringHead(tagpref, bracket), tag);
-
   // Create key
-  PRInt32 tag_id = parserService->HTMLStringTagToId(tag);
-  if (tag_id == eHTMLTag_userdefined)
+  NS_ConvertASCIItoUCS2 tag_widestr(tag);
+  PRInt32 tag_id;
+  parserService->HTMLStringTagToId(tag_widestr, &tag_id);
+#ifdef DEBUG_BenB
+  printf(" Have tag %d\n", tag_id);
+  const PRUnichar* tag_back;
+  parserService->HTMLIdToStringTag(tag_id, &tag_back);
+  printf(" Equals -%s-\n", tag_back
+                           ? NS_ConvertUCS2toUTF8(tag_back).get()
+                           : "");
+#endif
+  if (tag_id == eHTMLTag_userdefined ||
+      tag_id == eHTMLTag_unknown)
   {
-    printf(" unknown tag <%s>, won't add.\n",
-           NS_ConvertUTF16toUTF8(tag).get());
+    printf(" unknown tag <%s>, won't add.\n", tag.get());
     return NS_ERROR_CANNOT_CONVERT_DATA;
   }
   nsPRUint32Key tag_key(tag_id);
 
   if (mAllowedTags.Exists(&tag_key))
   {
-    printf(" duplicate tag: %s\n", NS_ConvertUTF16toUTF8(tag).get());
+    printf(" duplicate tag: %s\n", tag.get());
     return NS_ERROR_CANNOT_CONVERT_DATA;
   }
   if (bracket == kNotFound)
@@ -809,12 +800,18 @@ mozSanitizingHTMLSerializer::ParseTagPref(const nsCAutoString& tagpref)
     attrList.Append(Substring(tagpref,
                               bracket + 1,
                               tagpref.Length() - 2 - bracket));
+#ifdef DEBUG_BenB
+    printf(" Attr list: -%s-\n", attrList.get());
+#endif
     char* attrs_lasts;
     for (char* iAttr = PL_strtok_r(attrList.BeginWriting(),
                                    ",", &attrs_lasts);
          iAttr;
          iAttr = PL_strtok_r(NULL, ",", &attrs_lasts))
     {
+#ifdef DEBUG_BenB
+      printf(" Processing attr -%s-\n", iAttr);
+#endif
       attr_bag->Set(iAttr, 0);
     }
 
@@ -830,3 +827,13 @@ mozSanitizingHTMLSerializer::ParseTagPref(const nsCAutoString& tagpref)
   might be useful:
   htmlparser/public/nsHTMLTokens.h for tag categories
 */
+
+NS_IMETHODIMP
+mozSanitizingHTMLSerializer::PreserveSelection(nsIDOMNode * aStartContainer,
+                                               PRInt32 aStartOffset,
+                                               nsIDOMNode * aEndContainer,
+                                               PRInt32 aEndOffset)
+{
+  // do nothin
+  return NS_OK;
+}

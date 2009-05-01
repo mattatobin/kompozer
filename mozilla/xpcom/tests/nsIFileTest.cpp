@@ -69,7 +69,10 @@ void GetPaths(nsILocalFile* file)
 void InitTest(const char* creationPath, const char* appendPath)
 {
     nsILocalFile* file = nsnull;
-    nsresult rv = CallCreateInstance(NS_LOCAL_FILE_CONTRACTID, &file);
+    nsresult rv = nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, 
+                                              nsnull, 
+                                              NS_GET_IID(nsILocalFile), 
+                                              (void**)&file);
     
     if (NS_FAILED(rv) || (!file)) 
     {
@@ -117,9 +120,12 @@ void InitTest(const char* creationPath, const char* appendPath)
 void CreationTest(const char* creationPath, const char* appendPath,
 		  PRInt32 whatToCreate, PRInt32 perm)
 {
-    nsresult rv;
-    nsCOMPtr<nsILocalFile> file =
-        do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+    nsCOMPtr<nsILocalFile> file;
+    nsresult rv = 
+    nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, 
+                                              nsnull, 
+                                              NS_GET_IID(nsILocalFile), 
+                                              (void **)getter_AddRefs(file));
 
     if (NS_FAILED(rv) || (!file)) 
     {
@@ -166,9 +172,12 @@ void CreationTest(const char* creationPath, const char* appendPath,
 void CreateUniqueTest(const char* creationPath, const char* appendPath,
                  PRInt32 whatToCreate, PRInt32 perm)
 {
-    nsresult rv;
-    nsCOMPtr<nsILocalFile> file =
-        do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+    nsCOMPtr<nsILocalFile> file;
+    nsresult rv = 
+    nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, 
+                                              nsnull, 
+                                              NS_GET_IID(nsILocalFile), 
+                                              (void **)getter_AddRefs(file));
 
     if (NS_FAILED(rv) || (!file)) 
     {
@@ -216,11 +225,15 @@ void CreateUniqueTest(const char* creationPath, const char* appendPath,
 void
 CopyTest(const char *testFile, const char *targetDir)
 {
+  nsCOMPtr<nsILocalFile> file;
+  nsCOMPtr<nsILocalFile> dir;
+
   printf("start copy test\n");
 
-  nsresult rv;
-  nsCOMPtr<nsILocalFile> file =
-      do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+  nsresult rv =
+    nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, NULL,
+				       NS_GET_IID(nsILocalFile), 
+				       (void**)getter_AddRefs(file));
     
   if (NS_FAILED(rv) || (!file)) 
   {
@@ -231,8 +244,9 @@ CopyTest(const char *testFile, const char *targetDir)
   rv = file->InitWithNativePath(nsDependentCString(testFile));
   VerifyResult(rv);
   
-  nsCOMPtr<nsILocalFile> dir =
-      do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+  rv = nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, NULL,
+					  NS_GET_IID(nsILocalFile), 
+					  (void**)getter_AddRefs(dir));
 
   if (NS_FAILED(rv) || (!dir)) 
   {
@@ -243,7 +257,7 @@ CopyTest(const char *testFile, const char *targetDir)
   rv = dir->InitWithNativePath(nsDependentCString(targetDir));
   VerifyResult(rv);
 
-  rv = file->CopyTo(dir, EmptyString());
+  rv = file->CopyTo(dir, nsString());
   VerifyResult(rv);
 
   printf("end copy test\n");
@@ -252,9 +266,11 @@ CopyTest(const char *testFile, const char *targetDir)
 void
 DeletionTest(const char* creationPath, const char* appendPath, PRBool recursive)
 {
-    nsresult rv;
-    nsCOMPtr<nsILocalFile> file =
-            do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+    nsCOMPtr<nsILocalFile> file;
+    nsresult rv = 
+      nsComponentManager::CreateInstance(NS_LOCAL_FILE_CONTRACTID, NULL,
+					 NS_GET_IID(nsILocalFile),
+					 (void**)getter_AddRefs(file));
     
     if (NS_FAILED(rv) || (!file)) 
     {
@@ -346,8 +362,8 @@ int main(void)
     registrar->AutoRegister(nsnull);
   
 #if defined(XP_WIN) || defined(XP_OS2)
-    InitTest("c:\\temp\\", "sub1/sub2/"); // expect failure
-    InitTest("d:\\temp\\", "sub1\\sub2\\"); // expect failure
+    InitTest("c:\\temp\\", "sub1/sub2/");
+    InitTest("d:\\temp\\", "sub1\\sub2\\");
 
     CreationTest("c:\\temp\\", "file.txt", nsIFile::NORMAL_FILE_TYPE, 0644);
     DeletionTest("c:\\temp\\", "file.txt", PR_FALSE);
@@ -368,18 +384,14 @@ int main(void)
 
 #else
 #ifdef XP_UNIX
-    InitTest("/tmp/", "sub1/sub2/"); // expect failure
+    InitTest("/tmp/", "sub1/sub2/");
     
     CreationTest("/tmp", "file.txt", nsIFile::NORMAL_FILE_TYPE, 0644);
     DeletionTest("/tmp/", "file.txt", PR_FALSE);
     
     CreationTest("/tmp", "mumble/a/b/c/d/e/f/g/h/i/j/k/", nsIFile::DIRECTORY_TYPE, 0644);
     DeletionTest("/tmp", "mumble", PR_TRUE);
-
-    CreationTest("/tmp", "file", nsIFile::NORMAL_FILE_TYPE, 0644);
-    CopyTest("/tmp/file", "/tmp/newDir");
-    MoveTest("/tmp/file", "/tmp/newDir/anotherNewDir");
-    DeletionTest("/tmp", "newDir", PR_TRUE);
+    CopyTest("/tmp/test.txt", "/tmp/foo");
 
 #endif /* XP_UNIX */
 #endif /* XP_WIN || XP_OS2 */

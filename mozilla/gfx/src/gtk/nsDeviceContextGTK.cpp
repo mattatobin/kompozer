@@ -1,12 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 // vim:cindent:ts=2:et:sw=2:
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,25 +15,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
+ *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de> 
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -92,7 +93,7 @@ static NS_DEFINE_CID(kPrefCID, NS_PREF_CID);
 
 #ifdef MOZ_WIDGET_GTK
 // this is specific to gtk 1.2
-extern NS_IMPORT_(GdkFont *) default_font;
+extern GdkFont *default_font;
 #endif /* MOZ_WIDGET_GTK */
 
 /**
@@ -159,7 +160,7 @@ nsDeviceContextGTK::~nsDeviceContextGTK()
   nsresult rv;
   nsCOMPtr<nsIPref> prefs = do_GetService(kPrefCID, &rv);
   if (NS_SUCCEEDED(rv)) {
-    prefs->UnregisterCallback("layout.css.dpi",
+    prefs->UnregisterCallback("browser.display.screen_resolution",
                               prefChanged, (void *)this);
   }
 }
@@ -234,7 +235,7 @@ NS_IMETHODIMP nsDeviceContextGTK::Init(nsNativeWidget aNativeWidget)
     initialized = 1;
 
     // Set prefVal the value of the preference
-    // "layout.css.dpi"
+    // "browser.display.screen_resolution"
     // or -1 if we can't get it.
     // If it's negative, we pretend it's not set.
     // If it's 0, it means force use of the operating system's logical
@@ -244,11 +245,11 @@ NS_IMETHODIMP nsDeviceContextGTK::Init(nsNativeWidget aNativeWidget)
 
     nsCOMPtr<nsIPref> prefs(do_GetService(kPrefCID, &res));
     if (NS_SUCCEEDED(res) && prefs) {
-      res = prefs->GetIntPref("layout.css.dpi", &prefVal);
+      res = prefs->GetIntPref("browser.display.screen_resolution", &prefVal);
       if (NS_FAILED(res)) {
         prefVal = -1;
       }
-      prefs->RegisterCallback("layout.css.dpi", prefChanged,
+      prefs->RegisterCallback("browser.display.screen_resolution", prefChanged,
                               (void *)this);
     }
 
@@ -663,7 +664,7 @@ int nsDeviceContextGTK::prefChanged(const char *aPref, void *aClosure)
   nsDeviceContextGTK *context = (nsDeviceContextGTK*)aClosure;
   nsresult rv;
   
-  if (nsCRT::strcmp(aPref, "layout.css.dpi")==0) {
+  if (nsCRT::strcmp(aPref, "browser.display.screen_resolution")==0) {
     PRInt32 dpi;
     nsCOMPtr<nsIPref> prefs(do_GetService(kPrefCID, &rv));
     rv = prefs->GetIntPref(aPref, &dpi);
@@ -672,19 +673,13 @@ int nsDeviceContextGTK::prefChanged(const char *aPref, void *aClosure)
 
     // If this pref changes, we have to clear our cache of stored system
     // fonts.
-    ClearCachedSystemFonts();
+    if (gSystemFonts) {
+      delete gSystemFonts;
+      gSystemFonts = nsnull;
+    }
   }
-
+  
   return 0;
-}
-
-void nsDeviceContextGTK::ClearCachedSystemFonts()
-{
-  //clear our cache of stored system fonts
-  if (gSystemFonts) {
-    delete gSystemFonts;
-    gSystemFonts = nsnull;
-  }
 }
 
 #define DEFAULT_TWIP_FONT_SIZE 240
@@ -1224,6 +1219,5 @@ xlfd_from_pango_font_description(GtkWidget *aWidget,
     g_free(subfont_charsets);
   }
   g_free(spec);
-  g_object_unref(font);
 }
 #endif /* MOZ_WIDGET_GTK2 && MOZ_ENABLE_COREXFONTS */

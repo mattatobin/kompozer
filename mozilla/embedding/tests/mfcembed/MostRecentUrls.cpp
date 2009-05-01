@@ -25,7 +25,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Contributor(s):
- *   Rod Spears <rods@netscape.com>
+ *   Rod Spears <rods@netscape.com>   
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,9 +41,7 @@
 #include "StdAfx.h"
 #include "nsIFile.h"
 #include "nsILocalFile.h"
-#include "nsServiceManagerUtils.h"
 #include "nsAppDirectoryServiceDefs.h"
-#include "nsDirectoryServiceUtils.h"
 #include "MostRecentUrls.h"
 
 //--------------------------------------------------------
@@ -77,7 +75,7 @@ FILE * CMostRecentUrls::GetFD(const char * aMode)
     nsresult rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR, getter_AddRefs(file));
     if (NS_SUCCEEDED(rv)) {
         nsCOMPtr<nsILocalFile> local_file(do_QueryInterface(file));
-        local_file->AppendNative(nsEmbedCString("urls.txt"));
+        local_file->AppendNative(NS_LITERAL_CSTRING("urls.txt"));
         local_file->OpenANSIFileDesc(aMode, &fd);
     }
 
@@ -117,8 +115,7 @@ void CMostRecentUrls::AddURL(const char * aURL)
     szTemp[sizeof(szTemp) - 1] = '\0';
 
     // check to see if an existing url matches the one passed in
-    int i = 0;
-    for (; i<MAX_URLS-1; i++)
+    for (int i=0; i<MAX_URLS-1; i++)
     {
         if(mURLs[i])
         {

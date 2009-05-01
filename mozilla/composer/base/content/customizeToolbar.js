@@ -11,8 +11,7 @@
 # for the specific language governing rights and limitations under the
 # License.
 #
-# The Original Code is Mozilla Communicator client code, released
-# March 31, 1998.
+# The Original Code is Mozilla.org
 #
 # The Initial Developer of the Original Code is
 # David Hyatt.
@@ -23,6 +22,7 @@
 #   David Hyatt (hyatt@apple.com)
 #   Blake Ross (blaker@netscape.com)
 #   Joe Hewitt (hewitt@netscape.com)
+#   Daniel Glazman (glazman@disruptive-innovations.com), on behalf of Linspire Inc.
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -39,22 +39,19 @@
 # ***** END LICENSE BLOCK *****
 
 const kRowMax = 4;
+const kWindowWidth = 600;
+const kWindowHeight = 400;
+const kAnimateIncrement = 50;
+const kAnimateSteps = kWindowHeight / kAnimateIncrement - 1;
 
 var gToolboxDocument = null;
 var gToolbox = null;
 var gCurrentDragOverItem = null;
 var gToolboxChanged = false;
-var gToolboxIconSize = false;
 
 function onLoad()
 {
-  InitWithToolbox(window.arguments[0]);
-  repositionDialog();
-}
-
-function InitWithToolbox(aToolbox)
-{
-  gToolbox = aToolbox;
+  gToolbox = window.arguments[0];
   gToolboxDocument = gToolbox.ownerDocument;
   
   gToolbox.addEventListener("draggesture", onToolbarDragGesture, false);
@@ -62,10 +59,15 @@ function InitWithToolbox(aToolbox)
   gToolbox.addEventListener("dragexit", onToolbarDragExit, false);
   gToolbox.addEventListener("dragdrop", onToolbarDragDrop, false);
 
-  initDialog();
+  document.documentElement.setAttribute("hidechrome", "true");
+
+  repositionDialog();
+  window.outerWidth = kWindowWidth;
+  window.outerHeight = 50;
+  slideOpen(0);
 }
 
-function finishToolbarCustomization()
+function onUnload(aEvent)
 {
   removeToolboxListeners();
   unwrapToolbarItems();
@@ -74,16 +76,10 @@ function finishToolbarCustomization()
   notifyParentComplete();
 }
 
-function onUnload(aEvent)
-{
-  finishToolbarCustomization();
-  window.close();
-}
-
 function onAccept(aEvent)
 {
   document.getElementById("main-box").collapsed = true;
-  window.close();
+  slideClosed(0);
 }
 
 function initDialog()
@@ -92,12 +88,28 @@ function initDialog()
   
   var mode = gToolbox.getAttribute("mode");
   document.getElementById("modelist").value = mode;
-  gToolboxIconSize = gToolbox.getAttribute("iconsize");
+  var iconSize = gToolbox.getAttribute("iconsize");
   var smallIconsCheckbox = document.getElementById("smallicons");
-  if (mode == "text")
-    smallIconsCheckbox.disabled = true;
-  else
-    smallIconsCheckbox.checked = gToolboxIconSize == "small"; 
+
+  if (gToolbox.getAttribute("canchangemode") == "false")
+  {
+    document.getElementById("modelist").hidden = true;
+    document.getElementById("modelabel").hidden = true;
+  }
+
+  /* Kaze: the 'new toolbar' button is useless and buggy, let's forget it
+  if (!gToolbox.toolbarset)
+  {
+    document.getElementById("newtoolbars").hidden = true;
+  } */
+
+  if (smallIconsCheckbox)
+  {
+    if ( mode == "text")
+      smallIconsCheckbox.disabled = true;
+    else
+      smallIconsCheckbox.checked = iconSize == "small"; 
+  }
 
   // Build up the palette of other items.
   buildPalette();
@@ -106,19 +118,31 @@ function initDialog()
   wrapToolbarItems();
 }
 
+function slideOpen(aStep)
+{
+  if (aStep < kAnimateSteps) {
+    window.outerHeight += kAnimateIncrement;
+    setTimeout(slideOpen, 20, ++aStep);
+  } else {
+    initDialog();
+  }
+}
+
+function slideClosed(aStep)
+{
+  if (aStep < kAnimateSteps) {
+    window.outerHeight -= kAnimateIncrement;
+    setTimeout(slideClosed, 10, ++aStep);
+  } else {
+    window.close();
+  }
+}
+
 function repositionDialog()
 {
-  // Position the dialog touching the bottom of the toolbox and centered with 
-  // it.
-  var width;
-  if (document.documentElement.hasAttribute("width"))
-    width = document.documentElement.getAttribute("width");
-  else
-    width = parseInt(document.documentElement.style.width);
-  var screenX = gToolbox.boxObject.screenX 
-                + ((gToolbox.boxObject.width - width) / 2);
+  // Position the dialog touching the bottom of the toolbox and centered with it
+  var screenX = gToolbox.boxObject.screenX + ((gToolbox.boxObject.width - kWindowWidth) / 2);
   var screenY = gToolbox.boxObject.screenY + gToolbox.boxObject.height;
-
   window.moveTo(screenX, screenY);
 }
 
@@ -184,6 +208,9 @@ function persistCurrentSets()
     }
   }
   
+  if (!gToolbox.toolbarset) // Kaze: quick and dirty but avoids a bug
+    return;
+
   // Remove toolbarX attributes for removed toolbars.
   while (gToolbox.toolbarset.hasAttribute("toolbar"+(++customCount))) {
     gToolbox.toolbarset.removeAttribute("toolbar"+customCount);
@@ -204,8 +231,7 @@ function wrapToolbarItems()
         if (isToolbarItem(item)) {
           var nextSibling = item.nextSibling;
           
-          var wrapper = wrapToolbarItem(item);
-          
+          var wrapper = wrapToolbarItem(item);     
           if (nextSibling)
             toolbar.insertBefore(wrapper, nextSibling);
           else
@@ -219,25 +245,36 @@ function wrapToolbarItems()
 /**
  * Unwraps all items in all customizable toolbars in a toolbox.
  */
-function unwrapToolbarItems()
+ function unwrapToolbarItems()
 {
-  var paletteItems = gToolbox.getElementsByTagName("toolbarpaletteitem");
-  var paletteItem;
-  while ((paletteItem = paletteItems.item(0)) != null) {
-    var toolbarItem = paletteItem.firstChild;
+  for (var i = 0; i < gToolbox.childNodes.length; ++i) {
+    var toolbar = getToolbarAt(i);
+    if (isCustomizableToolbar(toolbar)) {
+      for (var k = 0; k < toolbar.childNodes.length; ++k) {
+        var paletteItem = toolbar.childNodes[k];
+        var toolbarItem = paletteItem.firstChild;
 
-    if (paletteItem.hasAttribute("itemdisabled"))
-      toolbarItem.disabled = true;
+        if (isToolbarItem(toolbarItem)) {
+          var nextSibling = paletteItem.nextSibling;
 
-    if (paletteItem.hasAttribute("itemcommand"))
-      toolbarItem.setAttribute("command", paletteItem.getAttribute("itemcommand"));
+          if (paletteItem.hasAttribute("itemcommand"))
+            toolbarItem.setAttribute("command", paletteItem.getAttribute("itemcommand"));
+          if (paletteItem.hasAttribute("itemobserves"))
+            toolbarItem.setAttribute("observes", paletteItem.getAttribute("itemobserves"));
 
-    // We need the removeChild here because replaceChild and XBL no workee
-    // together.  See bug 193298.
-    paletteItem.removeChild(toolbarItem);
-    paletteItem.parentNode.replaceChild(toolbarItem, paletteItem);
+          paletteItem.removeChild(toolbarItem); 
+          paletteItem.parentNode.removeChild(paletteItem);
+
+          if (nextSibling)
+            toolbar.insertBefore(toolbarItem, nextSibling);
+          else
+            toolbar.appendChild(toolbarItem);
+        }
+      }
+    }
   }
 }
+
 
 /**
  * Creates a wrapper that can be used to contain a toolbaritem and prevent
@@ -258,6 +295,13 @@ function createWrapper(aId)
  */
 function wrapPaletteItem(aPaletteItem, aCurrentRow, aSpacer)
 {
+  if (!aPaletteItem.getAttribute("label"))
+  {
+    aPaletteItem.setAttribute("label",
+      aPaletteItem.getAttribute("tooltiptext"));
+    aPaletteItem.setAttribute("class", "toolbarbutton-1");
+  }
+
   var wrapper = createWrapper(aPaletteItem.id);
 
   wrapper.setAttribute("flex", 1);
@@ -481,6 +525,12 @@ function cleanupItemForToolbar(aItem, aWrapper)
     aItem.removeAttribute("command");
   }
 
+  if (aItem.hasAttribute("observes"))
+  {
+    aWrapper.setAttribute("itemobserves", aItem.getAttribute("observes"));
+    aItem.removeAttribute("observes");
+  }
+
   if (aItem.disabled) {
     aWrapper.setAttribute("itemdisabled", "true");
     aItem.disabled = false;
@@ -503,11 +553,10 @@ function setWrapperType(aItem, aWrapper)
 function setDragActive(aItem, aValue)
 {
   var node = aItem;
-  var direction = window.getComputedStyle(aItem, null).direction;
-  var value = direction == "ltr"? "left" : "right";
+  var value = "left";
   if (aItem.localName == "toolbar") {
     node = aItem.lastChild;
-    value = direction == "ltr"? "right" : "left";
+    value = "right";
   }
   
   if (!node)
@@ -521,52 +570,6 @@ function setDragActive(aItem, aValue)
   }
 }
 
-function addNewToolbar()
-{
-  var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                                .getService(Components.interfaces.nsIPromptService);
-
-  var stringBundle = document.getElementById("stringBundle");
-  var message = stringBundle.getString("enterToolbarName");
-  var title = stringBundle.getString("enterToolbarTitle");
-
-  var name = {};
-
-  while (true) {
-
-    if (!promptService.prompt(window, title, message, name, null, {}))
-      return;
-    
-    if (!name.value) {
-      message = stringBundle.getFormattedString("enterToolbarBlank", [name.value]);
-      continue;
-    }
-
-    var dupeFound = false;
-
-     // Check for an existing toolbar with the same display name
-    for (i = 0; i < gToolbox.childNodes.length; ++i) {
-      var toolbar = gToolbox.childNodes[i];
-      var toolbarName = toolbar.getAttribute("toolbarname");
-
-      if (toolbarName == name.value &&
-          toolbar.getAttribute("type") != "menubar" &&
-          toolbar.nodeName == 'toolbar') {
-        dupeFound = true;
-        break;
-      }
-    }
-
-    if (!dupeFound)
-      break;
-
-    message = stringBundle.getFormattedString("enterToolbarDup", [name.value]);
-  }
-    
-  gToolbox.appendCustomToolbar(name.value, "");
-  
-  gToolboxChanged = true;
-}
 
 /**
  * Restore the default set of buttons to fixed toolbars,
@@ -574,10 +577,6 @@ function addNewToolbar()
  */
 function restoreDefaultSet()
 {
-  // Save disabled/command states, because we're
-  // going to recreate the wrappers and lose this
-  var savedAttributes = saveItemAttributes(["itemdisabled", "itemcommand"]);
-
   // Restore the defaultset for fixed toolbars.
   var toolbar = gToolbox.firstChild;
   while (toolbar) {
@@ -585,18 +584,14 @@ function restoreDefaultSet()
       if (!toolbar.hasAttribute("customindex")) {
         var defaultSet = toolbar.getAttribute("defaultset");
         if (defaultSet)
+        {
           toolbar.currentSet = defaultSet;
+        }
       }
     }
     toolbar = toolbar.nextSibling;
   }
 
-  // Restore the default icon size (large) and mode (icons only).
-  updateIconSize(false);
-  document.getElementById("smallicons").checked = false;
-  updateToolbarMode("icons");
-  document.getElementById("modelist").value = "icons";
-  
   // Remove all of the customized toolbars.
   var child = gToolbox.lastChild;
   while (child) {
@@ -615,63 +610,26 @@ function restoreDefaultSet()
   // Now re-wrap the items on the toolbar.
   wrapToolbarItems();
 
-  // Restore the disabled and command states
-  restoreItemAttributes(["itemdisabled", "itemcommand"], savedAttributes);
-
+  repositionDialog();
   gToolboxChanged = true;
-}
-
-function saveItemAttributes(aAttributeList)
-{
-  var items = [];
-  var paletteItems = gToolbox.getElementsByTagName("toolbarpaletteitem");
-  for (var i = 0; i < paletteItems.length; i++) {
-    var paletteItem = paletteItems.item(i);
-    for (var j = 0; j < aAttributeList.length; j++) {
-      var attr = aAttributeList[j];
-      if (paletteItem.hasAttribute(attr)) {
-        items.push([paletteItem.id, attr, paletteItem.getAttribute(attr)]);
-      }
-    }
-  }
-  return items;
-}
-
-function restoreItemAttributes(aAttributeList, aSavedAttrList)
-{
-  var paletteItems = gToolbox.getElementsByTagName("toolbarpaletteitem");
-
-  for (var i = 0; i < paletteItems.length; i++) {
-    var paletteItem = paletteItems.item(i);
-
-    // if the item is supposed to have this, it'll get
-    // restored from the saved list
-    for (var j = 0; j < aAttributeList.length; j++)
-      paletteItem.removeAttribute(aAttributeList[j]);
-
-    for (var j = 0; j < aSavedAttrList.length; j++) {
-      var savedAttr = aSavedAttrList[j];
-      if (paletteItem.id == savedAttr[0]) {
-        paletteItem.setAttribute(savedAttr[1], savedAttr[2]);
-      }
-    }
-  }
 }
 
 function updateIconSize(aUseSmallIcons)
 {
-  gToolboxIconSize = aUseSmallIcons ? "small" : "large";
+  var val = aUseSmallIcons ? "small" : null;
   
-  setAttribute(gToolbox, "iconsize", gToolboxIconSize);
+  setAttribute(gToolbox, "iconsize", val);
   gToolboxDocument.persist(gToolbox.id, "iconsize");
   
   for (var i = 0; i < gToolbox.childNodes.length; ++i) {
     var toolbar = getToolbarAt(i);
     if (isCustomizableToolbar(toolbar)) {
-      setAttribute(toolbar, "iconsize", gToolboxIconSize);
+      setAttribute(toolbar, "iconsize", val);
       gToolboxDocument.persist(toolbar.id, "iconsize");
     }
   }
+
+  repositionDialog();
 }
 
 function updateToolbarMode(aModeValue)
@@ -688,7 +646,19 @@ function updateToolbarMode(aModeValue)
   }
 
   var iconSizeCheckbox = document.getElementById("smallicons");
-  iconSizeCheckbox.disabled = aModeValue == "text";
+  if (iconSizeCheckbox)
+  {
+    if (aModeValue == "text") {
+      iconSizeCheckbox.disabled = true;
+      iconSizeCheckbox.checked = false;
+      updateIconSize(false);
+    }
+    else {
+      iconSizeCheckbox.disabled = false;
+    }
+  }
+
+  repositionDialog();
 }
 
 
@@ -761,7 +731,6 @@ var dragStartObserver =
     var data = new TransferData();
     data.addDataForFlavour("text/toolbarwrapper-id/"+documentId, item.firstChild.id);
     aXferData.data.push(data);
-    aDragAction.action = Components.interfaces.nsIDragService.DRAGDROP_ACTION_MOVE;
   }
 }
 
@@ -787,16 +756,11 @@ var toolbarDNDObserver =
     if (dropTarget.localName == "toolbar") {
       gCurrentDragOverItem = dropTarget;
     } else {
-      gCurrentDragOverItem = null;
+      var dropTargetWidth = dropTarget.boxObject.width;
+      var dropTargetX = dropTarget.boxObject.x;
 
-      var direction = window.getComputedStyle(dropTarget.parentNode, null).direction;
-      var dropTargetCenter = dropTarget.boxObject.x + (dropTarget.boxObject.width / 2);
-      if (direction == "ltr")
-        dragAfter = aEvent.clientX > dropTargetCenter;
-      else
-        dragAfter = aEvent.clientX < dropTargetCenter;
-        
-      if (dragAfter) {
+      gCurrentDragOverItem = null;
+      if (aEvent.clientX > (dropTargetX + (dropTargetWidth / 2))) {
         gCurrentDragOverItem = dropTarget.nextSibling;
         if (!gCurrentDragOverItem)
           gCurrentDragOverItem = toolbar;
@@ -920,6 +884,7 @@ var toolbarDNDObserver =
     
     gCurrentDragOverItem = null;
 
+    repositionDialog();
     gToolboxChanged = true;
   },
   
@@ -976,6 +941,7 @@ var paletteDNDObserver =
       }
     }
     
+    repositionDialog();
     gToolboxChanged = true;
   },
   
@@ -992,3 +958,34 @@ var paletteDNDObserver =
   }
 }
 
+function addNewToolbar()
+{
+  var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
+                                .getService(Components.interfaces.nsIPromptService);
+
+  var stringBundle = document.getElementById("stringBundle");
+  var message = stringBundle.getString("enterToolbarName");
+  var title = stringBundle.getString("enterToolbarTitle");
+
+  var name = {};
+  while (1) {
+    if (!promptService.prompt(window, title, message, name, null, {})) {
+      return;
+    } else {
+      // Check for an existing toolbar with the same name and prompt again
+      // if a conflict is found
+      var nameToId = "__customToolbar_" + name.value.replace(" ", "");
+      var existingToolbar = gToolboxDocument.getElementById(nameToId);
+      if (existingToolbar) {
+        message = stringBundle.getFormattedString("enterToolbarDup", [name.value]);
+      } else {
+        break;
+      }
+    }
+  }
+
+  gToolbox.appendCustomToolbar(name.value, "");
+
+  repositionDialog();
+  gToolboxChanged = true;
+}

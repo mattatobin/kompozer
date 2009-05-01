@@ -1,12 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set cindent ts=2 sts=2 sw=2 et: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,7 +15,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,19 +25,19 @@
  *   Christian M Hoffman <chrmhoffmann@web.de>
  *   Makoto hamanaka <VYA04230@nifty.com>
  *   Paul Ashford <arougthopher@lizardland.net>
- *   Sergei Dolgov <sergei_d@fi.tartu.ee>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -50,6 +50,7 @@
 #include "nsIPrefBranch.h"
 #include "nsCOMPtr.h" 
 #include "nspr.h" 
+#include "nsHashtable.h" 
 #include "nsReadableUtils.h"
  
 #include <UnicodeBlockObjects.h>
@@ -61,11 +62,17 @@
 #undef REALLY_NOISY_FONTS
 
 nsFontMetricsBeOS::nsFontMetricsBeOS()
+  :mEmulateBold(PR_FALSE)
 {
 }
 
 nsFontMetricsBeOS::~nsFontMetricsBeOS()
 {
+  if (nsnull != mFont) 
+  {
+    delete mFont;
+    mFont = nsnull;
+  }
   if (mDeviceContext) 
   {
     // Notify our device context that owns us so that it can update its font cache
@@ -110,9 +117,16 @@ NS_IMETHODIMP nsFontMetricsBeOS::Init(const nsFont& aFont, nsIAtom* aLangGroup,
  
   PRInt16  face = 0;
 
-  mFont = aFont;
+  mFont = new nsFont(aFont);
+  if (!mFont)
+    return NS_ERROR_OUT_OF_MEMORY;
 
-  float app2twip = aContext->DevUnitsToTwips();
+  float       app2dev, app2twip;
+  app2dev = aContext->AppUnitsToDevUnits();
+  app2twip = aContext->DevUnitsToTwips();
+
+  app2twip *= app2dev;
+  float rounded = ((float)NSIntPointsToTwips(NSTwipsToFloorIntPoints(nscoord(mFont->size * app2twip)))) / app2twip;
 
   // process specified fonts from first item of the array.
   // stop processing next when a real font found;
@@ -167,9 +181,9 @@ NS_IMETHODIMP nsFontMetricsBeOS::Init(const nsFont& aFont, nsIAtom* aLangGroup,
       } 
       // not successful. use system font.
       if (isfixed)
-        mFontHandle = BFont(be_fixed_font);
+        mFontHandle = be_fixed_font;
       else
-        mFontHandle = BFont(be_plain_font);
+        mFontHandle = be_plain_font;
       fontfound = PR_TRUE;
       break;
     }
@@ -179,21 +193,16 @@ NS_IMETHODIMP nsFontMetricsBeOS::Init(const nsFont& aFont, nsIAtom* aLangGroup,
   if (!fontfound)
   {
     if (isfixed)
-      mFontHandle = BFont(be_fixed_font);
+      mFontHandle = be_fixed_font;
     else
-      mFontHandle = BFont(be_plain_font);
+      mFontHandle = be_plain_font;
   } 
  
   if (aFont.style == NS_FONT_STYLE_ITALIC)
     face |= B_ITALIC_FACE;
 
   if ( aFont.weight > NS_FONT_WEIGHT_NORMAL )
-  {
-    mIsBold = PR_TRUE;
   	face |= B_BOLD_FACE;
-  }
-  else
-    mIsBold = PR_FALSE;
         
   // I don't think B_UNDERSCORE_FACE and B_STRIKEOUT_FACE really works...
   // instead, nsTextFrame do them for us. ( my guess... Makoto Hamanaka )
@@ -202,25 +211,24 @@ NS_IMETHODIMP nsFontMetricsBeOS::Init(const nsFont& aFont, nsIAtom* aLangGroup,
   	
   if ( aFont.decorations & NS_FONT_DECORATION_LINE_THROUGH )
   	face |= B_STRIKEOUT_FACE;
-
+  	
   mFontHandle.SetFace( face );
-  // emulate italic the selected family has no such style
+  // emulate italic and bold if the selected family has no such style
   if (aFont.style == NS_FONT_STYLE_ITALIC
     && !(mFontHandle.Face() & B_ITALIC_FACE)) 
     mFontHandle.SetShear(105.0);
+  if ( aFont.weight > NS_FONT_WEIGHT_NORMAL
+    && !(mFontHandle.Face() & B_BOLD_FACE)) 
+    mEmulateBold = PR_TRUE;
 
-  mFontHandle.SetSize(mFont.size/app2twip);
-  mFontHandle.SetSpacing(B_FIXED_SPACING);
-
+  mFontHandle.SetSize( rounded * app2dev );
+  fflush(stdout);
 #ifdef NOISY_FONTS
 #ifdef DEBUG
   fprintf(stderr, "looking for font %s (%d)", wildstring, aFont.size / app2twip);
 #endif
 #endif
-  //UTF8 charspace in BeOS is 0xFFFF, 256 is by "pighole rule" sqrt(0xFFFF), 
-  // actually rare font contains more glyphs
-  mFontWidthCache.Init(256);
-  
+
   RealizeFont(aContext);
 
   return NS_OK;
@@ -283,6 +291,7 @@ void nsFontMetricsBeOS::RealizeFont(nsIDeviceContext* aContext)
   /* need better way to calculate this */ 
   mStrikeoutOffset = NSToCoordRound(mXHeight / 2.0); 
   mStrikeoutSize = mUnderlineSize; 
+ 
 }
 
 NS_IMETHODIMP  nsFontMetricsBeOS::GetXHeight(nscoord& aResult)
@@ -393,6 +402,12 @@ NS_IMETHODIMP  nsFontMetricsBeOS::GetSpaceWidth(nscoord &aSpaceWidth)
   return NS_OK; 
 } 
 
+NS_IMETHODIMP  nsFontMetricsBeOS::GetFont(const nsFont*& aFont)
+{
+  aFont = mFont;
+  return NS_OK;
+}
+
 NS_IMETHODIMP  nsFontMetricsBeOS::GetLangGroup(nsIAtom** aLangGroup)
 {
   if (!aLangGroup)
@@ -413,57 +428,38 @@ NS_IMETHODIMP  nsFontMetricsBeOS::GetFontHandle(nsFontHandle &aHandle)
 nsresult 
 nsFontMetricsBeOS::FamilyExists(const nsString& aName) 
 { 
-  NS_ConvertUTF16toUTF8 family(aName);
-  printf("exists? %s", (font_family)family.get()); 
-  return  (count_font_styles((font_family)family.get()) > 0) ? NS_OK : NS_ERROR_FAILURE;
+  //Do we really need it here? BeOS supports UTF-8 overall natively,
+  //including UTF-8 fonts names with non-ascii chars inside
+  if (!IsASCII(aName)) 
+    return NS_ERROR_FAILURE; 
+ 
+  nsCAutoString name; 
+  name.AssignWithConversion(aName.get()); 
+  ToLowerCase(name); 
+  PRBool  isthere = PR_FALSE; 
+ 
+  int32 numFamilies = count_font_families(); 
+  for (int32 i = 0; i < numFamilies; i++) 
+  { 
+    font_family family; 
+    uint32 flags; 
+    if (get_font_family(i, &family, &flags) == B_OK) 
+    { 
+      if (name.Equals(family) == 0) 
+      {
+        isthere = PR_TRUE; 
+        break; 
+      } 
+    } 
+  } 
+ 
+  //printf("%s there? %s\n", name.get(), isthere?"Yes":"No" ); 
+ 
+  if (PR_TRUE == isthere) 
+    return NS_OK; 
+  else 
+    return NS_ERROR_FAILURE; 
 } 
-
-// useful UTF-8 utility
-inline uint32 utf8_char_len(uchar byte) 
-{
-	return (((0xE5000000 >> ((byte >> 3) & 0x1E)) & 3) + 1);
-}
-
-// nsHashKeys has trouble with char* substring conversion
-// it likes 0-terminated, plus conversion to nsACString overhead.
-// So KISS
-inline PRUint32 utf8_to_index(char *utf8char)
-{
-	PRUint32 ch = 0;
-	switch (utf8_char_len(*utf8char) - 1) 
-	{
-		case 3: ch += *utf8char++; ch <<= 6;
-		case 2: ch += *utf8char++; ch <<= 6;
-		case 1: ch += *utf8char++; ch <<= 6;
-		case 0: ch += *utf8char++;
-	}
-	return ch;
-}
-// Using cached widths
-float  nsFontMetricsBeOS::GetStringWidth(char *utf8str, uint32 bytelen)
-{
-	float retwidth = 0;
-	uint32 charlen = 1;
-	// Traversing utf8string - get, cache and sum widths for all utf8 chars
-	for (uint32 i =0; i < bytelen && *utf8str  != '\0'; i += charlen)
-	{
-		float width = 0;
-		// Calculating utf8 char bytelength
-		charlen = ((0xE5000000 >> ((*utf8str >> 3) & 0x1E)) & 3) + 1;
-		// Converting multibyte sequence to index
-		PRUint32 index = utf8_to_index(utf8str);
-		if (!mFontWidthCache.Get(index, &width))
-		{
-			width = mFontHandle.StringWidth(utf8str, charlen);
-			mFontWidthCache.Put(index, width);
-		}
-		retwidth +=  width;
-		utf8str += charlen;
-	}
-	if (mIsBold && !(mFontHandle.Face() & B_BOLD_FACE))
-		retwidth += 1.0;
-	return retwidth;
-}
  
 // The Font Enumerator 
  
@@ -601,11 +597,14 @@ static int MatchesLangGroup(font_family family,  const char* aLangGroup)
 
 static nsresult EnumFonts(const char * aLangGroup, const char* aGeneric, PRUint32* aCount, PRUnichar*** aResult) 
 { 
+  nsString font_name; 
+    
   int32 numFamilies = count_font_families(); 
  
-  PRUnichar** array = (PRUnichar**) nsMemory::Alloc(numFamilies * sizeof(PRUnichar*)); 
-  NS_ENSURE_TRUE(array, NS_ERROR_OUT_OF_MEMORY);
-
+  PRUnichar** array = 
+    (PRUnichar**) nsMemory::Alloc(numFamilies * sizeof(PRUnichar*)); 
+  if (!array) 
+    return NS_ERROR_OUT_OF_MEMORY; 
   int j = 0;
   for(int32 i = 0; i < numFamilies; i++) 
   {
@@ -617,30 +616,22 @@ static nsresult EnumFonts(const char * aLangGroup, const char* aGeneric, PRUint3
       {
         if(FontMatchesGenericType(family, flags, aGeneric, aLangGroup))
         {
-          if (!(array[j] = UTF8ToNewUnicode(nsDependentCString(family))))
+          font_name.AssignWithConversion(family); 
+          if (!(array[j] = ToNewUnicode(font_name)))
             break; 
           ++j;
         }
       }
     }
   } 
+ 
+  NS_QuickSort(array, j, sizeof(PRUnichar*), CompareFontNames, nsnull); 
+ 
   *aCount = j; 
-
   if (*aCount)
-  {
     *aResult = array; 
-    // Resizing array for real number of matching families after check for language and generic type
-    if (*aCount < numFamilies)
-    {
-      array = (PRUnichar**) nsMemory::Realloc(array, *aCount * sizeof(PRUnichar*));
-      NS_ENSURE_TRUE(array, NS_ERROR_OUT_OF_MEMORY);
-    }
-    NS_QuickSort(array, j, sizeof(PRUnichar*), CompareFontNames, nsnull);
-  }
   else 
-  {
     nsMemory::Free(array); 
-  }
 
   return NS_OK; 
 } 
@@ -682,24 +673,8 @@ nsFontEnumeratorBeOS::HaveFontFor(const char* aLangGroup, PRBool* aResult)
 {
   NS_ENSURE_ARG_POINTER(aLangGroup); 
   NS_ENSURE_ARG_POINTER(aResult); 
-  *aResult = PR_FALSE;
-
-  int32 numFamilies = count_font_families(); 
-
-  for(int32 i = 0; i < numFamilies; i++) 
-  {
-    font_family family; 
-    uint32 flags; 
-    if (get_font_family(i, &family, &flags) == B_OK) 
-    {
-      if (family && (!aLangGroup || MatchesLangGroup(family,  aLangGroup)))
-      {
-         *aResult = PR_TRUE;
-         return NS_OK;
-         
-      }
-    }
-  }
+  *aResult = PR_TRUE; 
+  // XXX stub
   return NS_OK;
 }
 

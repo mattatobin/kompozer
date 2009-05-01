@@ -14,7 +14,7 @@
  * The Original Code is editor atom table.
  *
  * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
+ * Netscape communications Corp.
  * Portions created by the Initial Developer are Copyright (C) 2003
  * the Initial Developer. All Rights Reserved.
  *
@@ -53,9 +53,6 @@
 
  ******/
 
-#ifdef WINCE
-#undef small
-#endif
 
 EDITOR_ATOM(b, "b")       
 EDITOR_ATOM(big, "big")   
@@ -138,7 +135,9 @@ EDITOR_ATOM(legend, "legend")
 EDITOR_ATOM(color, "color")
 EDITOR_ATOM(face, "face")
 EDITOR_ATOM(size, "size")
-  
+
+EDITOR_ATOM(anyElement, "mozAnyElement")
+
 EDITOR_ATOM(cssBackgroundColor, "background-color")
 EDITOR_ATOM(cssBackgroundImage, "background-image")
 EDITOR_ATOM(cssBorder, "border")

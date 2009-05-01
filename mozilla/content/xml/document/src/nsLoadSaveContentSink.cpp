@@ -15,7 +15,7 @@
  * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
+ * Netscape Communiactions Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
@@ -121,10 +121,10 @@ nsLoadSaveContentSink::SetParser(nsIParser* aParser)
   return mBaseSink->SetParser(aParser);
 }
 
-void
-nsLoadSaveContentSink::FlushPendingNotifications(mozFlushType aType)
+NS_IMETHODIMP
+nsLoadSaveContentSink::FlushPendingNotifications(void)
 {
-  mBaseSink->FlushPendingNotifications(aType);
+  return mBaseSink->FlushPendingNotifications();
 }
 
 NS_IMETHODIMP
@@ -191,11 +191,10 @@ nsLoadSaveContentSink::HandleProcessingInstruction(const PRUnichar *aTarget,
 }
 
 NS_IMETHODIMP
-nsLoadSaveContentSink::HandleXMLDeclaration(const PRUnichar *aVersion,
-                                            const PRUnichar *aEncoding,
-                                            PRInt32 aStandalone)
+nsLoadSaveContentSink::HandleXMLDeclaration(const PRUnichar* aData,
+                                            PRUint32 aLength)
 {
-  return mExpatSink->HandleXMLDeclaration(aVersion, aEncoding, aStandalone);
+  return mExpatSink->HandleXMLDeclaration(aData, aLength);
 }
 
 NS_IMETHODIMP

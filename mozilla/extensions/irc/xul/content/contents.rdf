@@ -9,13 +9,13 @@
 
   <!-- package information -->
   <RDF:Description about="urn:mozilla:package:chatzilla"
-        chrome:displayName="ChatZilla 0.9.75"
+        chrome:displayName="ChatZilla 0.9.61"
         chrome:author="mozilla.org"
         chrome:authorURL="http://www.mozilla.org/projects/rt-messaging/chatzilla/"
         chrome:description="A simple, straightforward Internet Relay Chat (IRC) client."
 #expand         chrome:localeVersion="__MOZILLA_LOCALE_VERSION__"
         chrome:extension="true"
-        chrome:settingsURL="chrome://chatzilla/content/config.xul"
+        chrome:settingsURL=""
         chrome:name="chatzilla">
   </RDF:Description>
 
@@ -24,7 +24,6 @@
     <RDF:li resource="chrome://editor/content/editorTasksOverlay.xul"/>
     <RDF:li resource="chrome://browser/content/browser.xul"/>
     <RDF:li resource="chrome://communicator/content/pref/preftree.xul"/>
-    <RDF:li resource="chrome://communicator/content/pref/pref-appearance.xul"/>
   </RDF:Seq>
 
   <RDF:Seq about="chrome://browser/content/browser.xul">
@@ -36,10 +35,6 @@
   </RDF:Seq>
 
   <RDF:Seq about="chrome://communicator/content/pref/preftree.xul">
-    <RDF:li>chrome://chatzilla/content/prefsOverlay.xul</RDF:li>
-  </RDF:Seq>
-
-  <RDF:Seq about="chrome://communicator/content/pref/pref-appearance.xul">
     <RDF:li>chrome://chatzilla/content/prefsOverlay.xul</RDF:li>
   </RDF:Seq>
 

@@ -60,7 +60,6 @@ use Getopt::Std;
 # TOPSRCDIR - Holds the path to the root mozilla dir
 # SRCDIR - Holds module.ver and source
 # BINARY - Holds the name of the binary file
-# DISPNAME - Holds the display name of the built application
 # BITS - 16 or 32 bit
 # RCINCLUDE - Holds the name of the RC File to include or ""
 # QUIET - Turns off output
@@ -99,7 +98,6 @@ GetOptions( "QUIET" => \$quiet,
 		"MSTONE=s" => \$milestone,
 		"MODNAME=s" => \$module,
 		"BINARY=s" => \$binary,
-		"DISPNAME=s" => \$displayname,
 		"SRCDIR=s" => \$srcdir,
 		"TOPSRCDIR=s" => \$topsrcdir,
 		"DEPTH=s" => \$depth,
@@ -112,7 +110,6 @@ if (!defined($official)) {$official="";}
 if (!defined($milestone)) {$milestone="";}
 if (!defined($module)) {$module="";}
 if (!defined($binary)) {$binary="";}
-if (!defined($displayname)) {$displayname="Mozilla";}
 if (!defined($depth)) {$depth=".";}
 if (!defined($rcinclude)) {$rcinclude="";}
 if (!defined($objdir)) {$objdir=".";}
@@ -152,8 +149,6 @@ my $BUILDID_FILE = "$depth/config/build_number";
 #WIN32_MODULE_TRADEMARKS
 #WIN32_MODULE_ORIGINAL_FILENAME
 #WIN32_MODULE_PRODUCTNAME
-#WIN32_MODULE_PRODUCTVERSION
-#WIN32_MODULE_PRODUCTVERSION_STRING
 
 #Override values obtained from the .ver file
 my $override_comment;
@@ -166,8 +161,6 @@ my $override_copyright;
 my $override_trademarks;
 my $override_filename;
 my $override_productname;
-my $override_productversion;
-my $override_mpversion;
 if (open(VERFILE, "<$srcdir/module.ver")) 
 {
 
@@ -184,8 +177,6 @@ if (open(VERFILE, "<$srcdir/module.ver"))
 		if ($a eq "WIN32_MODULE_TRADEMARKS") { $override_trademarks = $b; }
 		if ($a eq "WIN32_MODULE_ORIGINAL_FILENAME") { $override_filename = $b; }
 		if ($a eq "WIN32_MODULE_PRODUCTNAME") { $override_productname = $b; }
-		if ($a eq "WIN32_MODULE_PRODUCTVERSION") { $override_productversion = $b; }
-		if ($a eq "WIN32_MODULE_PRODUCTVERSION_STRING") { $override_mpversion = $b; }
 		($a,$b) = getNextEntry();
 	}
 	close(VERFILE)
@@ -204,7 +195,6 @@ $module =~ s/^\s*(.*)\s*$/$1/;
 $depth =~ s/^\s*(.*)\s*$/$1/;
 $privateinfo =~ s/^\s*(.*)\s*$/$1/;
 $binary =~ s/^\s*(.*)\s*$/$1/;
-$displayname =~ s/^\s*(.*)\s*$/$1/;
 
 if ($debug eq "1")
 {
@@ -259,21 +249,19 @@ if ($official eq "1") {
 my $copyright = "License: MPL 1.1/GPL 2.0/LGPL 2.1";
 my $company = "Mozilla Foundation";
 my $trademarks = "Mozilla";
-my $productname = $displayname;
+my $productname = "Mozilla";
 
 
-if (defined($override_comment)){$override_comment =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $comment=$override_comment;}
-if (defined($override_description)){$override_description =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $description=$override_description;}
+if (defined($override_comment)){$comment=$override_comment;}
+if (defined($override_description)){$description=$override_description;}
 if (defined($override_fileversion)){$fileversion=$override_fileversion;}
 if (defined($override_mfversion)){$mfversion=$override_mfversion;}
 if (defined($override_company)){$company=$override_company;}
-if (defined($override_module)){$override_module =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $module=$override_module;}
-if (defined($override_copyright)){$override_copyright =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $copyright=$override_company;}
-if (defined($override_trademarks)){$override_trademarks =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $trademarks=$override_trademarks;}
+if (defined($override_module)){$module=$override_module;}
+if (defined($override_copyright)){$copyright=$override_company;}
+if (defined($override_trademarks)){$trademarks=$override_trademarks;}
 if (defined($override_filename)){$binary=$override_filename;}
-if (defined($override_productname)){$override_productname =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g; $productname=$override_productname;}
-if (defined($override_productversion)){$productversion=$override_productversion;}
-if (defined($override_mpversion)){$mpversion=$override_mpversion;}
+if (defined($override_productname)){$productname=$override_productname;}
 
 
 #Override section
@@ -333,8 +321,7 @@ if (open(RCINCLUDE, "<$rcinclude"))
 #	my $mstring="";
 	while (<RCINCLUDE>) 
 	{
-		$_ =~ s/\@MOZ_APP_DISPLAYNAME\@/$displayname/g;
-		print RCFILE $_;
+                print RCFILE $_;
 #		my $instr=$_;
 #		chomp($instr);
 #		$mstring .= "$instr\;";

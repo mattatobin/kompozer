@@ -1,42 +1,27 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code, 
+ * released March 31, 1998. 
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications 
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Samir Gehani <sgehani@netscape.com>
- *   Syd Logan syd@netscape.com
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *     Samir Gehani <sgehani@netscape.com>
+ *     Syd Logan syd@netscape.com
+ */
 
 #include "nsFTPConn.h"
 #include "nsHTTPConn.h"
@@ -45,7 +30,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#define CORE_LIB_COUNT 13
+#define CORE_LIB_COUNT 11
 
 const char kHTTPProto[] = "http://";
 const char kFTPProto[] = "ftp://";
@@ -53,6 +38,7 @@ const char kDLMarkerPath[] = "./xpi/.current_download";
 
 nsXIEngine::nsXIEngine() :
     mTmp(NULL),
+    mTotalComps(0),
     mOriginalDir(NULL)
 {
 }
@@ -100,7 +86,8 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
         return E_PARAM;
 
     int err = OK;
-    nsComponent *currComp = NULL, *markedComp = NULL;
+    nsComponent *currComp = aComps->GetHead(), *markedComp = NULL;
+    nsComponent *currCompSave;
     char *currURL = NULL;
     char *currHost = NULL;
     char *currPath = NULL;
@@ -113,15 +100,25 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
     struct stat stbuf;
     int resPos = 0;
     int fileSize = 0;
-    int currCompNum = 1;
+    int currCompNum = 1, markedCompNum = 0;
     int numToDL = 0; // num xpis to download
+    int passCount;
     CONN myConn;
     
-    err = GetDLMarkedComp(aComps, &markedComp);
+    err = GetDLMarkedComp(aComps, aCustom, &markedComp, &markedCompNum);
     if (err == OK && markedComp)
     {
-        sprintf(localPath, "%s/%s", XPI_DIR, markedComp->GetArchive());
-        markedComp->SetResumePos(GetFileSize(localPath));
+        currComp = markedComp;
+        currCompNum = markedCompNum;
+        sprintf(localPath, "%s/%s", XPI_DIR, currComp->GetArchive());
+        currComp->SetResumePos(GetFileSize(localPath));
+    }
+    else
+    {
+        // if all .xpis exist in the ./xpi dir (blob/CD) 
+        // we don't need to download
+        if (ExistAllXPIs(aCustom, aComps, &mTotalComps))
+            return OK; 
     }
 
     // check if ./xpi dir exists else create it
@@ -133,14 +130,14 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
 
     numToDL = TotalToDownload(aCustom, aComps);
 
-    currComp = aComps->GetHead();
-
     myConn.URL = (char *) NULL;
     myConn.type = TYPE_UNDEF;
 
     crcPass = 0;
+    currCompSave = currComp;
     bDone = 0;
     while ( bDone == 0 && crcPass < MAXCRC ) {
+      passCount = 0;
       while (currComp)
       {
         if ( (aCustom == TRUE && currComp->IsSelected()) || (aCustom == FALSE) )
@@ -148,7 +145,7 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
             // in case we are resuming inter- or intra-installer session
             if (currComp->IsDownloaded())
             {
-                currComp = aComps->GetNext();
+                currComp = currComp->GetNext();
                 continue;
             }
 
@@ -315,6 +312,7 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
                         else
                           err = conn->Get(srvPath, localPath, nsFTPConn::BINARY, 
                               resPos, 1, nsInstallDlg::DownloadCB);
+                        passCount++;
                     }
 
                     XI_IF_FREE(currHost);
@@ -372,22 +370,28 @@ nsXIEngine::Download(int aCustom, nsComponentList *aComps)
             }
         }
         
-        currComp = aComps->GetNext();
+        currComp = currComp->GetNext();
       }
    
       CheckConn( "", TYPE_UNDEF, &myConn, true );
  
       bDone = CRCCheckDownloadedArchives(XPI_DIR, strlen(XPI_DIR), 
-                aComps, aCustom);
+                currCompSave, passCount, aCustom);
       crcPass++;
       if ( bDone == 0 && crcPass < MAXCRC ) {
         // reset ourselves
-        numToDL = TotalToDownload(aCustom, aComps);
-        currComp = aComps->GetHead();
-        currCompNum = 1;
+        if (markedComp) {
+          currComp = markedComp;
+          currCompNum = markedCompNum;
+        } else {
+          currComp = aComps->GetHead();
+          currCompNum = 1;
+        }
+        currCompSave = currComp;
         if (gCtx->opt->mMode != nsXIOptions::MODE_SILENT)
           gCtx->idlg->ReInitUI(); 
         gCtx->idlg->ShowCRCDlg(); 
+        numToDL = TotalToDownload(aCustom, aComps);
       }
     }
     gCtx->idlg->DestroyCRCDlg(); // destroy the CRC dialog if showing
@@ -496,13 +500,10 @@ nsXIEngine::Install(int aCustom, nsComponentList *aComps, char *aDestination)
     char new_LD_LIBRARY_PATH[MAXPATHLEN];
     int i;
     int compNum = 1;
-    int numComps;
     nsComponent *currComp = NULL;
 
     if (!aComps || !aDestination)
         return E_PARAM;
-
-    numComps = aCustom ? aComps->GetLengthSelected() : aComps->GetLength();
 
     // handle LD_LIBRARY_PATH settings
 #if defined (SOLARIS) || defined (IRIX)
@@ -537,7 +538,7 @@ nsXIEngine::Install(int aCustom, nsComponentList *aComps, char *aDestination)
                 {
                     if (gCtx->opt->mMode != nsXIOptions::MODE_SILENT)
                         nsInstallDlg::MajorProgressCB(currComp->GetDescShort(),
-                            compNum, numComps, nsInstallDlg::ACT_INSTALL);
+                            compNum, mTotalComps, nsInstallDlg::ACT_INSTALL);
                     err = InstallXPI(currComp, &stub);
                     if (err != OK)
                     if (err == E_INSTALL)
@@ -548,7 +549,7 @@ nsXIEngine::Install(int aCustom, nsComponentList *aComps, char *aDestination)
                 }
             }
 
-            currComp = aComps->GetNext();
+            currComp = currComp->GetNext();
         }
         UnloadXPIStub(&stub);
     }
@@ -595,6 +596,45 @@ nsXIEngine::MakeUniqueTmpDir()
 }
 
 int
+nsXIEngine::ParseURL(char *aURL, char **aHost, char **aDir)
+{
+    int err = OK;
+    char *host = NULL;
+    char *hostTerminator = NULL;
+    char *dirTerminator = NULL;
+
+    if (!aURL || !aHost || !aDir)
+        return E_PARAM;
+
+    if (0 != strncmp(aURL, "ftp://", 6)) return E_BAD_FTP_URL;
+
+    host = aURL + 6;
+    if (!host) return E_BAD_FTP_URL;
+    hostTerminator = strchr(host, '/'); 
+    if (!hostTerminator) return E_BAD_FTP_URL;
+    
+    *aHost = (char *) calloc(hostTerminator - host + 1, 1);
+    strncpy(*aHost, host, hostTerminator - host);
+
+    dirTerminator = strrchr(hostTerminator + 1, '/');
+    if (!dirTerminator)
+    {
+        // no dir == root dir
+        *aDir = (char *) malloc(2);
+        sprintf(*aDir, "/");
+    }
+    else
+    {
+        *aDir = (char *) malloc(sizeof(char) * 
+                         (dirTerminator - hostTerminator + 2));
+        memset(*aDir, 0, (dirTerminator - hostTerminator + 2));
+        strncpy(*aDir, hostTerminator, dirTerminator - hostTerminator + 1);
+    }
+    
+    return err;
+}
+
+int
 nsXIEngine::LoadXPIStub(xpistub_t *aStub, char *aDestination)
 {
     int err = OK;
@@ -618,7 +658,7 @@ nsXIEngine::LoadXPIStub(xpistub_t *aStub, char *aDestination)
     sprintf(libloc, "%s/bin", mTmp);
     chdir(libloc);
     
-    /* open the library */
+	/* open the library */
     getcwd(libpath, MAXPATHLEN);
     sprintf(libpath, "%s/%s", libpath, XPISTUB);
 
@@ -626,28 +666,27 @@ nsXIEngine::LoadXPIStub(xpistub_t *aStub, char *aDestination)
 printf("DEBUG: libpath = >>%s<<\n", libpath);
 #endif
 
-    aStub->handle = NULL;
-    aStub->handle = dlopen(libpath, RTLD_LAZY);
-    if (!aStub->handle)
-    {
-        dlerr = dlerror();
-        DUMP(dlerr);
-        ErrorHandler(E_LIB_OPEN, dlerr);
-        return E_LIB_OPEN;
-    }
-    DUMP("xpistub opened");
-
-    /* read and store symbol addresses */
-    aStub->fn_init    = (pfnXPI_Init) dlsym(aStub->handle, FN_INIT);
-    aStub->fn_install = (pfnXPI_Install) dlsym(aStub->handle, FN_INSTALL);
-    aStub->fn_exit    = (pfnXPI_Exit) dlsym(aStub->handle, FN_EXIT);
-    if (!aStub->fn_init || !aStub->fn_install || !aStub->fn_exit)
-    {
-        dlerr = dlerror();
-        DUMP(dlerr);
-        err = E_LIB_SYM;
+	aStub->handle = NULL;
+	aStub->handle = dlopen(libpath, RTLD_LAZY);
+	if (!aStub->handle)
+	{
+		dlerr = dlerror();
+		DUMP(dlerr);
+		return E_LIB_OPEN;
+	}
+	DUMP("xpistub opened");
+	
+	/* read and store symbol addresses */
+	aStub->fn_init    = (pfnXPI_Init) dlsym(aStub->handle, FN_INIT);
+	aStub->fn_install = (pfnXPI_Install) dlsym(aStub->handle, FN_INSTALL);
+	aStub->fn_exit    = (pfnXPI_Exit) dlsym(aStub->handle, FN_EXIT);
+	if (!aStub->fn_init || !aStub->fn_install || !aStub->fn_exit)
+	{
+		dlerr = dlerror();
+		DUMP(dlerr);
+		err = E_LIB_SYM;
         goto BAIL;
-    }
+	}
     DUMP("xpistub symbols loaded");
 
     rv = aStub->fn_init(aDestination, NULL, ProgressCallback);
@@ -745,10 +784,12 @@ nsXIEngine::ProgressCallback(const char* aMsg, PRInt32 aVal, PRInt32 aMax)
 }
 
 int 
-nsXIEngine::ExistAllXPIs(int aCustom, nsComponentList *aComps)
+nsXIEngine::ExistAllXPIs(int aCustom, nsComponentList *aComps, int *aTotal)
 {
-    DUMP("ExistAllXPIs");
-
+    // param check
+    if (!aComps || !aTotal)
+        return E_PARAM;
+    
     int bAllExist = TRUE;
     nsComponent *currComp = aComps->GetHead();
     char currArchivePath[256];
@@ -761,14 +802,15 @@ nsXIEngine::ExistAllXPIs(int aCustom, nsComponentList *aComps)
             sprintf(currArchivePath, "%s/%s", XPI_DIR, currComp->GetArchive());
             DUMP(currArchivePath);
             
-            if (0 != stat(currArchivePath, &dummy)
-                  || VerifyArchive(currArchivePath) != ZIP_OK)
+            if (0 != stat(currArchivePath, &dummy))
                 bAllExist = FALSE;
             else
                 currComp->SetDownloaded(TRUE);
+
+            (*aTotal)++;
         }
         
-        currComp = aComps->GetNext();
+        currComp = currComp->GetNext();
     }
 
     return bAllExist;
@@ -800,7 +842,7 @@ nsXIEngine::DeleteXPIs(int aCustom, nsComponentList *aComps)
 #endif
         }
 
-        currComp = aComps->GetNext();
+        currComp = currComp->GetNext();
     }
 
     // all xpi should be deleted so delete the ./xpi dir
@@ -867,15 +909,17 @@ nsXIEngine::SetDLMarker(char *aCompName)
 }
 
 int
-nsXIEngine::GetDLMarkedComp(nsComponentList *aComps, nsComponent **aOutComp)
+nsXIEngine::GetDLMarkedComp(nsComponentList *aComps, int aCustom, 
+                            nsComponent **aOutComp, int *aOutCompNum)
 {
     int rv = OK;
     FILE *dlMarkerFD = NULL;
     struct stat stbuf;
     char *compNameInFile = NULL;
+    int compNum = 1;
     nsComponent *currComp = NULL;
 
-    if (!aComps || !aOutComp)
+    if (!aComps || !aOutComp || !aOutCompNum)
         return E_PARAM;
 
     *aOutComp = NULL;
@@ -920,15 +964,23 @@ nsXIEngine::GetDLMarkedComp(nsComponentList *aComps, nsComponent **aOutComp)
         // compare the comp name read in with all those in the components list
         while (currComp)
         {
-            if (strcmp(currComp->GetArchive(), compNameInFile) == 0)
+            if ( (aCustom == TRUE && currComp->IsSelected()) || 
+                 (aCustom == FALSE) )
             {
-                *aOutComp = currComp;
-                break;
-            }
+                if (strcmp(currComp->GetArchive(), compNameInFile) == 0)
+                {
+                    *aOutComp = currComp;
+                    break;
+                }
 
-            currComp = aComps->GetNext();
+                compNum++;
+            }
+            
+            currComp = currComp->GetNext();
         }
     }
+
+    *aOutCompNum = compNum;
 
 BAIL:
     if (dlMarkerFD)
@@ -962,7 +1014,7 @@ nsXIEngine::TotalToDownload(int aCustom, nsComponentList *aComps)
             if (!currComp->IsDownloaded())
                 total++;
         }
-        currComp = aComps->GetNext();
+        currComp = currComp->GetNext();
     }
 
     return total;
@@ -989,13 +1041,11 @@ nsXIEngine::TotalToDownload(int aCustom, nsComponentList *aComps)
 
 PRBool 
 nsXIEngine::CRCCheckDownloadedArchives(char *dlPath, short dlPathlen, 
-  nsComponentList *aComps, int aCustom)
+  nsComponent *currComp, int count, int aCustom)
 {
   int i;
   PRBool isClean;
   char buf[ 1024 ];
-  nsComponent *currComp = aComps->GetHead();
-  int numComps = aCustom ? aComps->GetLengthSelected() : aComps->GetLength();
 
   isClean = PR_TRUE;
 
@@ -1004,17 +1054,15 @@ nsXIEngine::CRCCheckDownloadedArchives(char *dlPath, short dlPathlen,
     buf[ dlPathlen ] = '\0';
     strcat( buf, "/" );
     strcat( buf, currComp->GetArchive() );
-    if (gCtx->opt->mMode != nsXIOptions::MODE_SILENT) {
-       nsInstallDlg::MajorProgressCB(buf, i, numComps, 
-             nsInstallDlg::ACT_INSTALL);
-    }
+    if (gCtx->opt->mMode != nsXIOptions::MODE_SILENT)
+        nsInstallDlg::MajorProgressCB(buf, i, count, nsInstallDlg::ACT_INSTALL);
     if (((aCustom == TRUE && currComp->IsSelected()) || 
-        (aCustom == FALSE)) && IsArchiveFile(buf) == TRUE && 
+        (aCustom == FALSE)) && IsArchiveFile(buf) == PR_TRUE && 
         VerifyArchive( buf ) != ZIP_OK) {
       currComp->SetDownloaded(FALSE); // VerifyArchive has unlinked it
-      isClean = PR_FALSE;
+      isClean = false;
     }
-    currComp = aComps->GetNext();
+    currComp = currComp->GetNext();
   }
   return isClean;
 }

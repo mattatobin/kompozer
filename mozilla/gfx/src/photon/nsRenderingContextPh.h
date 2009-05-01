@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -21,17 +21,18 @@
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #ifndef nsRenderingContextPh_h___
@@ -75,7 +76,7 @@ public:
    NS_IMETHOD Init(nsIDeviceContext* aContext, nsIWidget *aWindow);
 
 	 inline
-   NS_IMETHODIMP Init(nsIDeviceContext* aContext, nsIDrawingSurface* aSurface)
+   NS_IMETHODIMP Init(nsIDeviceContext* aContext, nsDrawingSurface aSurface)
 		{
 		mContext = aContext;
 		NS_IF_ADDREF(mContext);
@@ -111,20 +112,21 @@ public:
 
 	 inline
    NS_IMETHODIMP UnlockDrawingSurface(void)
-		{	PopState();
+		{ PRBool  clipstate;
+			PopState( clipstate );
 			mSurface->Unlock();
 			return NS_OK;
 		}
    
 	 inline
-   NS_IMETHODIMP SelectOffScreenDrawingSurface(nsIDrawingSurface* aSurface)
+   NS_IMETHODIMP SelectOffScreenDrawingSurface(nsDrawingSurface aSurface)
 		{ mSurface = ( nsnull==aSurface ) ? mOffscreenSurface : (nsDrawingSurfacePh *) aSurface;
 			mSurfaceDC = mSurface->Select( );
 			return NS_OK;
 		}
 
 	 inline
-   NS_IMETHODIMP GetDrawingSurface(nsIDrawingSurface* *aSurface) { *aSurface = mSurface; return NS_OK; }
+   NS_IMETHODIMP GetDrawingSurface(nsDrawingSurface *aSurface) { *aSurface = (void *) mSurface; return NS_OK; }
 
 	 inline
    NS_IMETHODIMP GetHints(PRUint32& aResult)
@@ -135,7 +137,7 @@ public:
 		}
    
    NS_IMETHOD PushState(void);
-   NS_IMETHOD PopState(void);
+   NS_IMETHOD PopState(PRBool &aClipState);
    
 	 inline
    NS_IMETHODIMP IsVisibleRect( const nsRect& aRect, PRBool &aVisible )
@@ -143,9 +145,9 @@ public:
 			return NS_OK;
 		}
    
-   NS_IMETHOD SetClipRect(const nsRect& aRect, nsClipCombine aCombine);
+   NS_IMETHOD SetClipRect(const nsRect& aRect, nsClipCombine aCombine, PRBool &aCilpState);
    NS_IMETHOD GetClipRect(nsRect &aRect, PRBool &aClipState);
-   NS_IMETHOD SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine);
+   NS_IMETHOD SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine, PRBool &aClipState);
 
 	 inline
    NS_IMETHODIMP CopyClipRegion(nsIRegion &aRegion)
@@ -203,16 +205,17 @@ public:
    NS_IMETHODIMP GetCurrentTransform(nsTransform2D *&aTransform) { aTransform = mTranMatrix; return NS_OK; }
 
    
-   NS_IMETHOD CreateDrawingSurface(const nsRect &aBounds, PRUint32 aSurfFlags, nsIDrawingSurface* &aSurface);
+   NS_IMETHOD CreateDrawingSurface(const nsRect &aBounds, PRUint32 aSurfFlags, nsDrawingSurface &aSurface);
 
 	 inline
-   NS_IMETHODIMP DestroyDrawingSurface(nsIDrawingSurface* aDS)
+   NS_IMETHODIMP DestroyDrawingSurface(nsDrawingSurface aDS)
 		{ nsDrawingSurfacePh *surf = (nsDrawingSurfacePh *) aDS;
 			NS_IF_RELEASE(surf);
 			return NS_OK;
 		}
    
    NS_IMETHOD DrawLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1);
+   NS_IMETHOD DrawStdLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1);
 
 	 inline
    NS_IMETHODIMP DrawPolyline(const nsPoint aPoints[], PRInt32 aNumPoints) { return DrawPolygon( aPoints, aNumPoints ); }
@@ -345,11 +348,11 @@ public:
 
    NS_IMETHOD DrawImage(nsIImage *aImage, const nsRect& aSRect, const nsRect& aDRect);
    
-   NS_IMETHOD CopyOffScreenBits(nsIDrawingSurface* aSrcSurf, PRInt32 aSrcX, PRInt32 aSrcY,
+   NS_IMETHOD CopyOffScreenBits(nsDrawingSurface aSrcSurf, PRInt32 aSrcX, PRInt32 aSrcY,
 								const nsRect &aDestBounds, PRUint32 aCopyFlags);
 
 	 inline
-   NS_IMETHODIMP RetrieveCurrentNativeGraphicData(void **ngd)
+   NS_IMETHODIMP RetrieveCurrentNativeGraphicData(PRUint32 * ngd)
 		{
 		if( ngd != nsnull ) *ngd = nsnull;
 		return NS_OK;

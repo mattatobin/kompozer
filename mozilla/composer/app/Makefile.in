@@ -19,10 +19,9 @@
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
-#  Brian Ryner     <bryner@brianryner.com>
+#  Brian Ryner <bryner@brianryner.com>
 #  Jonathan Wilson <jonwil@tpgi.com.au>
-#  Dan Mosedale    <dmose@mozilla.org>
-#  Fabien Cazenave <kaze@kompozer.net>
+#  Dan Mosedale <dmose@mozilla.org>
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -38,19 +37,19 @@
 #
 # ***** END LICENSE BLOCK *****
 
-DEPTH     = ../..
-topsrcdir = @top_srcdir@
-srcdir    = @srcdir@
-VPATH     = @srcdir@
+DEPTH		= ../..
+topsrcdir	= @top_srcdir@
+srcdir		= @srcdir@
+VPATH		= @srcdir@
 
 include $(DEPTH)/config/autoconf.mk
 
-DIRS      = profile
+DIRS		= profile
 
-PREF_JS_EXPORTS = \
-	$(srcdir)/profile/all.js    \
-	$(srcdir)/profile/editor.js \
-	$(NULL)
+PREF_JS_EXPORTS =  \
+    $(srcdir)/profile/all.js \
+    $(srcdir)/profile/editor.js \
+    $(NULL)
 
 ifeq ($(USE_SHORT_LIBNAME), 1)
 PROGRAM = kompozer$(BIN_SUFFIX)
@@ -58,26 +57,15 @@ else
 PROGRAM = kompozer-bin$(BIN_SUFFIX)
 endif
 
-# Kaze: removed nvuhelpers
-#REQUIRES = \
-	#appshell \
-	#string \
-	#xpcom \
-	#nvuhelpers \
-	#xulapp \
-	#$(NULL)
 REQUIRES = \
 	appshell \
-	string   \
-	xpcom    \
-	xulapp   \
+	string \
+	xpcom \
+	nvuhelpers \
+	xulapp \
 	$(NULL)
 
-# Kaze: required to build on Mozilla 1.8 and later
-MOZILLA_INTERNAL_API = 1
-LOCAL_INCLUDES = -I$(topsrcdir)/toolkit/xre
-
-CPPSRCS = nsComposerApp.cpp
+CPPSRCS = nsNvuApp.cpp
 
 ifdef BUILD_STATIC_LIBS
 STATIC_COMPONENTS_LINKER_PATH = -L$(DIST)/lib/components
@@ -89,21 +77,22 @@ endif
 
 LIBS = \
 	$(STATIC_COMPONENTS_LINKER_PATH) \
+	$(EXTRA_DSO_LIBS) \
 	$(DIST)/lib/$(LIB_PREFIX)xulapp_s.$(LIB_SUFFIX) \
 	$(MOZ_JS_LIBS) \
-	$(EXTRA_DSO_LIBS) \
 	$(XPCOM_LIBS) \
 	$(NSPR_LIBS) \
 	$(TK_LIBS) \
 	$(NULL)
 
+ifdef SITE_MANAGER_KDE_ICON_STYLE
+LOCAL_INCLUDES += -I/usr/include/kde -I/usr/lib/qt-3.3/include
+LIBS += -L/usr/lib -L/usr/lib/qt-3.3/lib -lkdecore -lkio -lqt-mt
+endif
+
 # Add explicit X11 dependency when building against X11 toolkits
-# Kaze: note the -lgthread for GTK2
 ifneq (,$(filter gtk gtk2 xlib,$(MOZ_WIDGET_TOOLKIT)))
 LIBS += $(XLDFLAGS) $(XLIBS)
-ifeq (gtk2,$(MOZ_WIDGET_TOOLKIT))
-LIBS += -lgthread-2.0
-endif
 endif
 
 ifdef MOZ_JPROF
@@ -130,14 +119,14 @@ endif
 else
 include $(topsrcdir)/config/static-config.mk
 
-EXTRA_DEPS     += \
+EXTRA_DEPS	+= \
 	$(STATIC_EXTRA_DEPS) \
 	$(NULL)
-DEFINES        += $(STATIC_DEFINES)
-CPPSRCS        += $(STATIC_CPPSRCS)
-EXTRA_DSO_LIBS += $(STATIC_EXTRA_DSO_LIBS)
-REQUIRES       += $(STATIC_REQUIRES)
-EXTRA_LIBS     += $(STATIC_EXTRA_LIBS)
+DEFINES		+= $(STATIC_DEFINES)
+CPPSRCS		+= $(STATIC_CPPSRCS)
+EXTRA_DSO_LIBS	+= $(STATIC_EXTRA_DSO_LIBS)
+REQUIRES	+= $(STATIC_REQUIRES)
+EXTRA_LIBS	+= $(STATIC_EXTRA_LIBS)
 endif
 
 ifeq ($(OS_ARCH),WINNT)
@@ -176,16 +165,14 @@ include $(topsrcdir)/config/static-rules.mk
 endif
 
 APP_VERSION = $(shell cat $(srcdir)/../config/version.txt)
-# Kaze: XXX the quotes should not appear in the application
-# DEFINES += -DAPP_VERSION=\"$(APP_VERSION)\"
-DEFINES   += -DAPP_VERSION=$(APP_VERSION)
+DEFINES += -DAPP_VERSION=\"$(APP_VERSION)\"
 
-BUILD_ID   = $(shell cat $(DEPTH)/config/build_number)
-DEFINES   += -DBUILD_ID=\"$(BUILD_ID)\"
+BUILD_ID = $(shell cat $(DEPTH)/config/build_number)
+DEFINES += -DBUILD_ID=\"$(BUILD_ID)\"
 
 ifneq (,$(filter mac cocoa,$(MOZ_WIDGET_TOOLKIT)))
 ifdef BUILD_STATIC_LIBS
-LIBS      += -framework QuickTime -framework IOKit
+LIBS	+= -framework QuickTime -framework IOKit
 ifdef USE_PREBINDING
 BIN_FLAGS += -Wl,-headerpad -Wl,5a0c
 endif
@@ -214,12 +201,15 @@ endif
 
 $(PROGRAM): $(DIST)/lib/$(LIB_PREFIX)xulapp_s.$(LIB_SUFFIX)
 
+# Kaze: on Ubuntu, the icon looks much better when editorWindow16.xpm isn't linked ;-)
 DESKTOP_ICONS := \
 	mozicon256.png \
-	mozicon50.xpm \
+  mozicon50.xpm \
 	mozicon16.xpm \
 	default.xpm \
 	$(NULL)
+	#~ editorWindow.xpm \
+	#~ editorWindow16.xpm \
 
 libs:: $(DESKTOP_ICONS)
 	$(INSTALL) $^ $(DIST)/bin/chrome/icons/default
@@ -259,10 +249,10 @@ endif
 ifneq (,$(filter gtk gtk2,$(MOZ_WIDGET_TOOLKIT)))
 
 ICON_FILES	= \
-	$(srcdir)/mozicon256.png \
-	$(srcdir)/mozicon50.xpm \
-	$(srcdir)/mozicon16.xpm \
-	$(NULL)
+		$(srcdir)/mozicon256.png \
+		$(srcdir)/mozicon50.xpm \
+		$(srcdir)/mozicon16.xpm \
+		$(NULL)
 
 libs:: $(ICON_FILES)
 	$(INSTALL) $^ $(DIST)/bin/icons
@@ -308,7 +298,7 @@ libs repackage:: $(PROGRAM)
 	rm -f $(DIST)/$(APP_NAME).app/Contents/MacOS/$(PROGRAM) $(DIST)/$(APP_NAME).app/Contents/MacOS/mangle $(DIST)/$(APP_NAME).app/Contents/MacOS/shlibsign
 	rsync -aL $(PROGRAM) $(DIST)/$(APP_NAME).app/Contents/MacOS
 	mkdir -p $(DIST)/$(APP_NAME).app/Contents/Plug-Ins
-	cp -RL $(DIST)/package/PrintPDE.plugin $(DIST)/$(APP_NAME).app/Contents/Plug-Ins/
+	cp -R $(DIST)/package/PrintPDE.plugin $(DIST)/$(APP_NAME).app/Contents/Plug-Ins/
 	-cp -L $(DIST)/bin/mangle $(DIST)/bin/shlibsign $(DIST)/$(APP_NAME).app/Contents/MacOS
 	cp -RL $(srcdir)/macbuild/mozilla.icns $(DIST)/$(APP_NAME).app/Contents/Resources/mozilla.icns
 	echo -n APPLMOZB > $(DIST)/$(APP_NAME).app/Contents/PkgInfo

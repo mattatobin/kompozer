@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,41 +14,34 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   IBM Corp.
- *   Fredrik Holmqvist <thesuckiestemail@yahoo.se>
+ *     IBM Corp.
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsCOMPtr.h"
-#include "nsAutoPtr.h"
 #include "nsDirectoryService.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsLocalFile.h"
 #include "nsDebug.h"
 #include "nsStaticAtom.h"
-#include "nsEnumeratorUtils.h"
-
-#include "nsICategoryManager.h"
-#include "nsISimpleEnumerator.h"
-#include "nsIStringEnumerator.h"
 
 #if defined(XP_MAC)
 #include <Folders.h>
@@ -57,7 +50,6 @@
 #include <Processes.h>
 #include <Gestalt.h>
 #elif defined(XP_WIN)
-#include "nsWinAPIs.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <stdlib.h>
@@ -126,7 +118,7 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
     *aFile = nsnull;
     
    //  Set the component registry location:
-    if (!gService)
+    if (!mService)
         return NS_ERROR_FAILURE;
 
     nsresult rv; 
@@ -157,15 +149,14 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
 
 
 #ifdef XP_WIN
-    PRUnichar buf[MAX_PATH];
-    if ( nsWinAPIs::mGetModuleFileName(0, buf, sizeof(buf)) )
-    {
-        // chop off the executable name by finding the rightmost backslash
-        PRUnichar* lastSlash = wcsrchr(buf, L'\\');
+    char buf[MAX_PATH];
+    if ( ::GetModuleFileName(0, buf, sizeof(buf)) ) {
+        // chop of the executable name by finding the rightmost backslash
+        char* lastSlash = PL_strrchr(buf, '\\');
         if (lastSlash)
-            *(lastSlash + 1) = L'\0';
-
-        localFile->InitWithPath(nsDependentString(buf));
+            *(lastSlash + 1) = '\0';
+        
+        localFile->InitWithNativePath(nsDependentCString(buf));
         *aFile = localFile;
         return NS_OK;
     }
@@ -297,24 +288,35 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
     return NS_OK;
 
 #elif defined(XP_BEOS)
-    char buf[MAXPATHLEN];
-    int32 cookie = 0;
-    image_info info;
-    char *p;
-    *buf = 0;
-    if(get_next_image_info(0, &cookie, &info) == B_OK)
+
+    char *moz5 = getenv("MOZILLA_FIVE_HOME");
+    if (moz5)
     {
+        localFile->InitWithNativePath(nsDependentCString(moz5));
+        localFile->Normalize();
+        *aFile = localFile;
+        return NS_OK;
+    }
+    else
+    {
+      static char buf[MAXPATHLEN];
+      int32 cookie = 0;
+      image_info info;
+      char *p;
+      *buf = 0;
+      if(get_next_image_info(0, &cookie, &info) == B_OK)
+      {
         strcpy(buf, info.name);
         if((p = strrchr(buf, '/')) != 0)
         {
-            if( (p-2 >= buf) && *(p-2)=='/' && *(p-1)=='.')
-                p -=2; 
-            *p = 0;
-            localFile->InitWithNativePath(nsDependentCString(buf));
-            *aFile = localFile;
-            return NS_OK;
+          *p = 0;
+          localFile->InitWithNativePath(nsDependentCString(buf));
+          *aFile = localFile;
+          return NS_OK;
         }
+      }
     }
+
 #endif
     
     NS_RELEASE(localFile);
@@ -334,10 +336,9 @@ nsIAtom*  nsDirectoryService::sOS_DriveDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sOS_TemporaryDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sOS_CurrentProcessDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sOS_CurrentWorkingDirectory = nsnull;
-nsIAtom*  nsDirectoryService::sOS_DesktopDirectory = nsnull;
-nsIAtom*  nsDirectoryService::sOS_HomeDirectory = nsnull;
 #if defined (XP_MACOSX)
 nsIAtom*  nsDirectoryService::sDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sDesktopDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sTrashDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sStartupDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sShutdownDirectory = nsnull;
@@ -349,6 +350,7 @@ nsIAtom*  nsDirectoryService::sPreferencesDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sDocumentsDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sInternetSearchDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sUserLibDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sHomeDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sDefaultDownloadDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sUserDesktopDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sLocalDesktopDirectory = nsnull;
@@ -369,7 +371,7 @@ nsIAtom*  nsDirectoryService::sInternetSitesDirectory = nsnull;
 #elif defined (XP_WIN) 
 nsIAtom*  nsDirectoryService::sSystemDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sWindowsDirectory = nsnull;
-nsIAtom*  nsDirectoryService::sWindowsProgramFiles = nsnull;
+nsIAtom*  nsDirectoryService::sHomeDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sDesktop = nsnull;
 nsIAtom*  nsDirectoryService::sPrograms = nsnull;
 nsIAtom*  nsDirectoryService::sControls = nsnull;
@@ -392,22 +394,26 @@ nsIAtom*  nsDirectoryService::sCommon_Programs = nsnull;
 nsIAtom*  nsDirectoryService::sCommon_Startup = nsnull;
 nsIAtom*  nsDirectoryService::sCommon_Desktopdirectory = nsnull;
 nsIAtom*  nsDirectoryService::sAppdata = nsnull;
-nsIAtom*  nsDirectoryService::sLocalAppdata = nsnull;
 nsIAtom*  nsDirectoryService::sPrinthood = nsnull;
 nsIAtom*  nsDirectoryService::sWinCookiesDirectory = nsnull;
 #elif defined (XP_UNIX)
 nsIAtom*  nsDirectoryService::sLocalDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sLibDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sHomeDirectory = nsnull;
 #elif defined (XP_OS2)
 nsIAtom*  nsDirectoryService::sSystemDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sOS2Directory = nsnull;
+nsIAtom*  nsDirectoryService::sHomeDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sDesktopDirectory = nsnull;
 #elif defined (XP_BEOS)
 nsIAtom*  nsDirectoryService::sSettingsDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sHomeDirectory = nsnull;
+nsIAtom*  nsDirectoryService::sDesktopDirectory = nsnull;
 nsIAtom*  nsDirectoryService::sSystemDirectory = nsnull;
 #endif
 
 
-nsDirectoryService* nsDirectoryService::gService = nsnull;
+nsDirectoryService* nsDirectoryService::mService = nsnull;
 
 nsDirectoryService::nsDirectoryService() :
     mHashtable(256, PR_TRUE)
@@ -418,14 +424,13 @@ NS_METHOD
 nsDirectoryService::Create(nsISupports *outer, REFNSIID aIID, void **aResult)
 {
     NS_ENSURE_ARG_POINTER(aResult);
-    NS_ENSURE_NO_AGGREGATION(outer);
-
-    if (!gService)
+    if (!mService)
     {
-        return NS_ERROR_NOT_INITIALIZED;
+        mService = new nsDirectoryService();
+        if (!mService)
+            return NS_ERROR_OUT_OF_MEMORY;
     }
-
-    return gService->QueryInterface(aIID, aResult);
+    return mService->QueryInterface(aIID, aResult);
 }
 
 static const nsStaticAtom directory_atoms[] = {
@@ -439,11 +444,10 @@ static const nsStaticAtom directory_atoms[] = {
     { NS_OS_TEMP_DIR,              &nsDirectoryService::sOS_TemporaryDirectory },
     { NS_OS_CURRENT_PROCESS_DIR,   &nsDirectoryService::sOS_CurrentProcessDirectory },
     { NS_OS_CURRENT_WORKING_DIR,   &nsDirectoryService::sOS_CurrentWorkingDirectory },
-    { NS_OS_HOME_DIR,              &nsDirectoryService::sOS_HomeDirectory },
-    { NS_OS_DESKTOP_DIR,           &nsDirectoryService::sOS_DesktopDirectory },
     { NS_XPCOM_INIT_CURRENT_PROCESS_DIR, nsnull },
 #if defined (XP_MACOSX)
     { NS_OS_SYSTEM_DIR,                   &nsDirectoryService::sDirectory },
+    { NS_MAC_DESKTOP_DIR,                 &nsDirectoryService::sDesktopDirectory },
     { NS_MAC_TRASH_DIR,                   &nsDirectoryService::sTrashDirectory },
     { NS_MAC_STARTUP_DIR,                 &nsDirectoryService::sStartupDirectory },
     { NS_MAC_SHUTDOWN_DIR,                &nsDirectoryService::sShutdownDirectory },
@@ -455,6 +459,7 @@ static const nsStaticAtom directory_atoms[] = {
     { NS_MAC_DOCUMENTS_DIR,               &nsDirectoryService::sDocumentsDirectory },
     { NS_MAC_INTERNET_SEARCH_DIR,         &nsDirectoryService::sInternetSearchDirectory },
     { NS_MAC_USER_LIB_DIR,                &nsDirectoryService::sUserLibDirectory },
+    { NS_OSX_HOME_DIR,                    &nsDirectoryService::sHomeDirectory },
     { NS_OSX_DEFAULT_DOWNLOAD_DIR,        &nsDirectoryService::sDefaultDownloadDirectory },
     { NS_OSX_USER_DESKTOP_DIR,            &nsDirectoryService::sUserDesktopDirectory },
     { NS_OSX_LOCAL_DESKTOP_DIR,           &nsDirectoryService::sLocalDesktopDirectory },
@@ -475,7 +480,7 @@ static const nsStaticAtom directory_atoms[] = {
 #elif defined (XP_WIN) 
     { NS_OS_SYSTEM_DIR,            &nsDirectoryService::sSystemDirectory },
     { NS_WIN_WINDOWS_DIR,          &nsDirectoryService::sWindowsDirectory },
-    { NS_WIN_PROGRAM_FILES_DIR,    &nsDirectoryService::sWindowsProgramFiles },
+    { NS_WIN_HOME_DIR,             &nsDirectoryService::sHomeDirectory },
     { NS_WIN_DESKTOP_DIR,          &nsDirectoryService::sDesktop },
     { NS_WIN_PROGRAMS_DIR,         &nsDirectoryService::sPrograms },
     { NS_WIN_CONTROLS_DIR,         &nsDirectoryService::sControls },
@@ -498,42 +503,32 @@ static const nsStaticAtom directory_atoms[] = {
     { NS_WIN_COMMON_STARTUP_DIR,   &nsDirectoryService::sCommon_Startup },
     { NS_WIN_COMMON_DESKTOP_DIRECTORY, &nsDirectoryService::sCommon_Desktopdirectory },
     { NS_WIN_APPDATA_DIR,          &nsDirectoryService::sAppdata },
-    { NS_WIN_LOCAL_APPDATA_DIR,    &nsDirectoryService::sLocalAppdata },
     { NS_WIN_PRINTHOOD,            &nsDirectoryService::sPrinthood },
     { NS_WIN_COOKIES_DIR,          &nsDirectoryService::sWinCookiesDirectory },
 #elif defined (XP_UNIX)
     { NS_UNIX_LOCAL_DIR,           &nsDirectoryService::sLocalDirectory },
     { NS_UNIX_LIB_DIR,             &nsDirectoryService::sLibDirectory },
+    { NS_UNIX_HOME_DIR,            &nsDirectoryService::sHomeDirectory },
 #elif defined (XP_OS2)
     { NS_OS_SYSTEM_DIR,            &nsDirectoryService::sSystemDirectory },
     { NS_OS2_DIR,                  &nsDirectoryService::sOS2Directory },
+    { NS_OS2_HOME_DIR,             &nsDirectoryService::sHomeDirectory },
+    { NS_OS2_DESKTOP_DIR,          &nsDirectoryService::sDesktopDirectory },
 #elif defined (XP_BEOS)
     { NS_OS_SYSTEM_DIR,            &nsDirectoryService::sSystemDirectory },
     { NS_BEOS_SETTINGS_DIR,        &nsDirectoryService::sSettingsDirectory },
+    { NS_BEOS_HOME_DIR,            &nsDirectoryService::sHomeDirectory },
+    { NS_BEOS_DESKTOP_DIR,         &nsDirectoryService::sDesktopDirectory },
 #endif
 };    
 
-NS_IMETHODIMP
+nsresult
 nsDirectoryService::Init()
 {
-    NS_NOTREACHED("Don't call me, I was for internal use only!");
-    return NS_OK;
-}
-
-nsresult
-nsDirectoryService::RealInit()
-{
-    NS_ASSERTION(!gService, "Mustn't initialize twice!");
-
     nsresult rv;
-
-    nsRefPtr<nsDirectoryService> self = new nsDirectoryService();
-    if (!self)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-    rv = NS_NewISupportsArray(getter_AddRefs(((nsDirectoryService*) self)->mProviders));
-    if (NS_FAILED(rv))
-        return rv;
+      
+    rv = NS_NewISupportsArray(getter_AddRefs(mProviders));
+    if (NS_FAILED(rv)) return rv;
 
     NS_RegisterStaticAtoms(directory_atoms, NS_ARRAY_LENGTH(directory_atoms));
     
@@ -542,12 +537,9 @@ nsDirectoryService::RealInit()
     if (!defaultProvider)
         return NS_ERROR_OUT_OF_MEMORY;
     // AppendElement returns PR_TRUE for success.
-    rv = ((nsDirectoryService*) self)->mProviders->AppendElement(defaultProvider) ? NS_OK : NS_ERROR_FAILURE;
-    if (NS_FAILED(rv))
-        return rv;
+    rv = mProviders->AppendElement(defaultProvider) ? NS_OK : NS_ERROR_FAILURE;
 
-    self.swap(gService);
-    return NS_OK;
+    return rv;
 }
 
 PRBool
@@ -560,6 +552,9 @@ nsDirectoryService::ReleaseValues(nsHashKey* key, void* data, void* closure)
 
 nsDirectoryService::~nsDirectoryService()
 {
+     // clear the global
+     mService = nsnull;
+
 }
 
 NS_IMPL_THREADSAFE_ISUPPORTS4(nsDirectoryService, nsIProperties, nsIDirectoryService, nsIDirectoryServiceProvider, nsIDirectoryServiceProvider2)
@@ -607,37 +602,21 @@ static PRBool FindProviderFile(nsISupports* aElement, void *aData)
       nsCOMPtr<nsIDirectoryServiceProvider2> prov2 = do_QueryInterface(aElement);
       if (prov2)
       {
-          nsCOMPtr<nsISimpleEnumerator> newFiles;
-          rv = prov2->GetFiles(fileData->property, getter_AddRefs(newFiles));
-          if (NS_SUCCEEDED(rv) && newFiles) {
-              if (fileData->data) {
-                  nsCOMPtr<nsISimpleEnumerator> unionFiles;
-
-                  NS_NewUnionEnumerator(getter_AddRefs(unionFiles),
-                                        (nsISimpleEnumerator*) fileData->data, newFiles);
-
-                  if (unionFiles)
-                      unionFiles.swap(* (nsISimpleEnumerator**) &fileData->data);
-              }
-              else
-              {
-                  NS_ADDREF(fileData->data = newFiles);
-              }
-                  
-              fileData->persistent = PR_FALSE; // Enumerators can never be persistent
-              return rv == NS_SUCCESS_AGGREGATE_RESULT;
+          rv = prov2->GetFiles(fileData->property, (nsISimpleEnumerator **)&fileData->data);
+          if (NS_SUCCEEDED(rv) && fileData->data) {
+          	  fileData->persistent = PR_FALSE; // Enumerators can never be peristent
+              return PR_FALSE;
           }
       }
   }
   else
   {
       nsCOMPtr<nsIDirectoryServiceProvider> prov = do_QueryInterface(aElement);
-      if (prov)
-      {
-          rv = prov->GetFile(fileData->property, &fileData->persistent, (nsIFile **)&fileData->data);
-          if (NS_SUCCEEDED(rv) && fileData->data)
-              return PR_FALSE;
-      }
+      if (!prov)
+          return PR_FALSE;
+      rv = prov->GetFile(fileData->property, &fileData->persistent, (nsIFile **)&fileData->data);
+      if (NS_SUCCEEDED(rv) && fileData->data)
+          return PR_FALSE;
   }
 
   return PR_TRUE;
@@ -717,8 +696,8 @@ nsDirectoryService::Has(const char *prop, PRBool *_retval)
     *_retval = PR_FALSE;
     nsCOMPtr<nsIFile> value;
     nsresult rv = Get(prop, NS_GET_IID(nsIFile), getter_AddRefs(value));
-    if (NS_FAILED(rv))
-        return NS_OK;
+    if (NS_FAILED(rv)) 
+        return rv;
     
     if (value)
     {
@@ -742,38 +721,6 @@ nsDirectoryService::RegisterProvider(nsIDirectoryServiceProvider *prov)
 
     // AppendElement returns PR_TRUE for success.
     return mProviders->AppendElement(supports) ? NS_OK : NS_ERROR_FAILURE;
-}
-
-void
-nsDirectoryService::RegisterCategoryProviders()
-{
-    nsCOMPtr<nsICategoryManager> catman
-        (do_GetService(NS_CATEGORYMANAGER_CONTRACTID));
-    if (!catman)
-        return;
-
-    nsCOMPtr<nsISimpleEnumerator> entries;
-    catman->EnumerateCategory(XPCOM_DIRECTORY_PROVIDER_CATEGORY,
-                              getter_AddRefs(entries));
-
-    nsCOMPtr<nsIUTF8StringEnumerator> strings(do_QueryInterface(entries));
-    if (!strings)
-        return;
-
-    PRBool more;
-    while (NS_SUCCEEDED(strings->HasMore(&more)) && more) {
-        nsCAutoString entry;
-        strings->GetNext(entry);
-
-        nsXPIDLCString contractID;
-        catman->GetCategoryEntry(XPCOM_DIRECTORY_PROVIDER_CATEGORY, entry.get(), getter_Copies(contractID));
-
-        if (contractID) {
-            nsCOMPtr<nsIDirectoryServiceProvider> provider = do_GetService(contractID.get());
-            if (provider)
-                RegisterProvider(provider);
-        }
-    }
 }
 
 NS_IMETHODIMP
@@ -877,6 +824,10 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetOSXFolderType(kClassicDomain, kSystemFolderType, getter_AddRefs(localFile));
     }
+    else if (inAtom == nsDirectoryService::sDesktopDirectory)
+    {
+        rv = GetOSXFolderType(kClassicDomain, kDesktopFolderType, getter_AddRefs(localFile));
+    }
     else if (inAtom == nsDirectoryService::sTrashDirectory)
     {
         rv = GetOSXFolderType(kClassicDomain, kTrashFolderType, getter_AddRefs(localFile));
@@ -921,13 +872,13 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetOSXFolderType(kUserDomain, kDomainLibraryFolderType, getter_AddRefs(localFile));
     }
-    else if (inAtom == nsDirectoryService::sOS_HomeDirectory)
+    else if (inAtom == nsDirectoryService::sHomeDirectory)
     {
         rv = GetOSXFolderType(kUserDomain, kDomainTopLevelFolderType, getter_AddRefs(localFile));
     }
     else if (inAtom == nsDirectoryService::sDefaultDownloadDirectory)
     {
-        NS_NewLocalFile(EmptyString(), PR_TRUE, getter_AddRefs(localFile));
+        NS_NewLocalFile(nsString(), PR_TRUE, getter_AddRefs(localFile));
         nsCOMPtr<nsILocalFileMac> localMacFile(do_QueryInterface(localFile));
 
         if (localMacFile)
@@ -938,31 +889,13 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
             err = ::ICStart(&icInstance, 'XPCM');
             if (err == noErr)
             {
-                // ICGetPref() crashes when getting the download directory if the download
-                // directory has never been specified (e.g. a new user account), bug 265903.
-                // To work around this we enumerate through the IC prefs to see if the
-                // download directory has been specified before trying to obtain it.
-                long numPrefs = 0;
-                err = ::ICCountPref(icInstance, &numPrefs);
-                if (err == noErr)
+                ICAttr attrs;
+                ICFileSpec icFileSpec;
+                long size = kICFileSpecHeaderSize;
+                err = ::ICGetPref(icInstance, kICDownloadFolder, &attrs, &icFileSpec, &size);
+                if (err == noErr || (err == icTruncatedErr && size >= kICFileSpecHeaderSize))
                 {
-                    for ( long i = 0; i < numPrefs; ++i )
-                    {
-                        Str255 key;
-                        err = ::ICGetIndPref(icInstance, i, key);
-                        if ( err == noErr && ( PLstrcmp( key, kICDownloadFolder ) == 0 ) )
-                        {
-                            ICAttr attrs;
-                            ICFileSpec icFileSpec;
-            	            long size = kICFileSpecHeaderSize;
-                            err = ::ICGetPref(icInstance, kICDownloadFolder, &attrs, &icFileSpec, &size);
-                            if (err == noErr || (err == icTruncatedErr && size >= kICFileSpecHeaderSize))
-                            {
-                                rv = localMacFile->InitWithFSSpec(&icFileSpec.fss);
-                            }
-                            break;
-                        }
-                    }
+                    rv = localMacFile->InitWithFSSpec(&icFileSpec.fss);
                 }
                 ::ICStop(icInstance);
             }
@@ -978,8 +911,7 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
         // Negligible perf hit as this directory is only requested for downloads
         *persistent = PR_FALSE;
     }
-    else if (inAtom == nsDirectoryService::sUserDesktopDirectory ||
-             inAtom == nsDirectoryService::sOS_DesktopDirectory)
+    else if (inAtom == nsDirectoryService::sUserDesktopDirectory)
     {
         rv = GetOSXFolderType(kUserDomain, kDesktopFolderType, getter_AddRefs(localFile));
     }
@@ -1052,11 +984,7 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(Win_WindowsDirectory, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sWindowsProgramFiles)
-    {
-        rv = GetSpecialSystemDirectory(Win_ProgramFiles, getter_AddRefs(localFile));
-    }
-    else if (inAtom == nsDirectoryService::sOS_HomeDirectory)
+    else if (inAtom == nsDirectoryService::sHomeDirectory)
     {
         rv = GetSpecialSystemDirectory(Win_HomeDirectory, getter_AddRefs(localFile)); 
     }
@@ -1104,8 +1032,7 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(Win_Startmenu, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sDesktopdirectory ||
-             inAtom == nsDirectoryService::sOS_DesktopDirectory)
+    else if (inAtom == nsDirectoryService::sDesktopdirectory)
     {
         rv = GetSpecialSystemDirectory(Win_Desktopdirectory, getter_AddRefs(localFile)); 
     }
@@ -1149,10 +1076,6 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(Win_Appdata, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sLocalAppdata)
-    {
-        rv = GetSpecialSystemDirectory(Win_LocalAppdata, getter_AddRefs(localFile)); 
-    }
     else if (inAtom == nsDirectoryService::sPrinthood)
     {
         rv = GetSpecialSystemDirectory(Win_Printhood, getter_AddRefs(localFile)); 
@@ -1171,13 +1094,9 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(Unix_LibDirectory, getter_AddRefs(localFile));
     }
-    else if (inAtom == nsDirectoryService::sOS_HomeDirectory)
+    else if (inAtom == nsDirectoryService::sHomeDirectory)
     {
         rv = GetSpecialSystemDirectory(Unix_HomeDirectory, getter_AddRefs(localFile)); 
-    }
-    else if (inAtom == nsDirectoryService::sOS_DesktopDirectory)
-    {
-        rv = GetSpecialSystemDirectory(Unix_DesktopDirectory, getter_AddRefs(localFile)); 
     }
 #elif defined (XP_OS2)
     else if (inAtom == nsDirectoryService::sSystemDirectory)
@@ -1188,11 +1107,11 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(OS2_OS2Directory, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sOS_HomeDirectory)
+    else if (inAtom == nsDirectoryService::sHomeDirectory)
     {
         rv = GetSpecialSystemDirectory(OS2_HomeDirectory, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sOS_DesktopDirectory)
+    else if (inAtom == nsDirectoryService::sDesktopDirectory)
     {
         rv = GetSpecialSystemDirectory(OS2_DesktopDirectory, getter_AddRefs(localFile)); 
     }
@@ -1201,11 +1120,11 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(BeOS_SettingsDirectory, getter_AddRefs(localFile)); 
     }
-    else if (inAtom == nsDirectoryService::sOS_HomeDirectory)
+    else if (inAtom == nsDirectoryService::sHomeDirectory)
     {
         rv = GetSpecialSystemDirectory(BeOS_HomeDirectory, getter_AddRefs(localFile));
     }
-    else if (inAtom == nsDirectoryService::sOS_DesktopDirectory)
+    else if (inAtom == nsDirectoryService::sDesktopDirectory)
     {
         rv = GetSpecialSystemDirectory(BeOS_DesktopDirectory, getter_AddRefs(localFile)); 
     }

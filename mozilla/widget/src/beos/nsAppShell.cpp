@@ -1,11 +1,11 @@
 /* -*- Mode: c++; tab-width: 2; indent-tabs-mode: nil; -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,19 +23,18 @@
  *   Duncan Wilcox <duncan@be.com>
  *   Yannick Koehler <ykoehler@mythrium.com>
  *   Makoto Hamanaka <VYA04230@nifty.com>
- *   Fredrik Holmqvist <thesuckiestemail@yahoo.se>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,6 +43,7 @@
 #include "nsIServiceManager.h"
 #include "nsIWidget.h"
 #include "nsIAppShell.h"
+#include "nsWindow.h"
 #include "nsSwitchToUIThread.h"
 #include "plevent.h"
 #include "prprf.h"
@@ -56,8 +56,8 @@ static int gBAppCount = 0;
 
 struct ThreadInterfaceData
 {
-  void	*data;
-  thread_id waitingThread;
+  void  *data;
+  int32  sync;
 };
 
 struct EventItem
@@ -122,38 +122,18 @@ NS_IMETHODIMP nsAppShell::Create(int* argc, char ** argv)
               (long unsigned) PR_GetCurrentThread());
   PR_snprintf(semname, sizeof(semname), "sync%lx", 
               (long unsigned) PR_GetCurrentThread());
-              
-#ifdef DEBUG              
-  printf("nsAppShell::Create portname: %s, semname: %s\n", portname, semname);
-#endif
-  /* 
-   * Set up the port for communicating. As restarts thru execv may occur
-   * and ports survive those (with faulty events as result). Combined with the fact
-   * that plevent.c can setup the port ahead of us we need to take extra
-   * care that the port is created for this launch, otherwise we need to reopen it
-   * so that faulty messages gets lost.
-   *
-   * We do this by checking if the sem has been created. If it is we can reuse the port (if it exists).
-   * Otherwise we need to create the sem and the port, deleting any open ports before.
-   * TODO: The semaphore is no longer needed for syncing, so it's only use is for detecting if the
-   * port needs to be reopened. This should be replaced, but I'm not sure how -tqh
-   */
-  syncsem = my_find_sem(semname);
-  eventport = find_port(portname);
-  if(B_ERROR != syncsem) 
+
+  if((eventport = find_port(portname)) < 0)
   {
-    if(eventport < 0)
-    {
-      eventport = create_port(200, portname);
-    }
-    return NS_OK;
-  } 
-  if(eventport >= 0)
-  {
-    delete_port(eventport);
+    // we're here first
+    eventport = create_port(100, portname);
+    syncsem = create_sem(0, semname);
   }
-  eventport = create_port(200, portname);
-  syncsem = create_sem(0, semname);
+  else
+  {
+    // the PLEventQueue stuff (in plevent.c) created the queue before we started
+    syncsem = my_find_sem(semname);
+  }
 
   return NS_OK;
 }
@@ -170,8 +150,6 @@ NS_IMETHODIMP nsAppShell::Run()
   ThreadInterfaceData id;
 
   NS_ADDREF_THIS();
-
-  set_thread_priority( find_thread(NULL), B_DISPLAY_PRIORITY);
 
   if (!mEventQueue)
     Spinup();
@@ -197,11 +175,10 @@ NS_IMETHODIMP nsAppShell::Run()
         {
           MethodInfo *mInfo = (MethodInfo *)id.data;
           mInfo->Invoke();
-          if(id.waitingThread != 0)
+          if(! id.sync)
           {
-            resume_thread(id.waitingThread);
+            delete mInfo;
           }
-          delete mInfo;
         }
         break;
 
@@ -216,6 +193,9 @@ NS_IMETHODIMP nsAppShell::Run()
 #endif
         break;
       }
+
+      if(id.sync)
+        release_sem(syncsem);
 
       delete newitem;
       newitem = nsnull;
@@ -358,7 +338,7 @@ NS_IMETHODIMP nsAppShell::DispatchNativeEvent(PRBool aRealEvent, void *aEvent)
   int32 code;
   ThreadInterfaceData id;
   id.data = 0;
-  id.waitingThread = 0;
+  id.sync = 0;
   bool gotMessage = false;
 
   do 
@@ -378,11 +358,10 @@ NS_IMETHODIMP nsAppShell::DispatchNativeEvent(PRBool aRealEvent, void *aEvent)
           {
             MethodInfo *mInfo = (MethodInfo *)id.data;
             mInfo->Invoke();
-            if(id.waitingThread != 0)
+            if(! id.sync)
             {
-              resume_thread(id.waitingThread);
+              delete mInfo;
             }
-            delete mInfo;
             gotMessage = PR_TRUE;
           }
           break;
@@ -402,6 +381,10 @@ NS_IMETHODIMP nsAppShell::DispatchNativeEvent(PRBool aRealEvent, void *aEvent)
           break;
       }
 
+      if(id.sync)
+      {
+        release_sem(syncsem);
+      }
       delete newitem;
       newitem = nsnull;
 
@@ -453,7 +436,7 @@ void nsAppShell::RetrieveAllEvents(bool blockable)
 
     newitem->code = 0;
     newitem->ifdata.data = nsnull;
-    newitem->ifdata.waitingThread = 0;
+    newitem->ifdata.sync = 0;
 
     // only block on read_port when 
     //   blockable == true
@@ -471,24 +454,25 @@ void nsAppShell::RetrieveAllEvents(bool blockable)
       return;
     }
     // synchronous events should be processed quickly (?)
-    if (newitem->ifdata.waitingThread != 0) {
+	if (newitem->ifdata.sync) {
       events[PRIORITY_TOP].AddItem(newitem);
-    } else {
+	}
+	else {
       switch(newitem->code)
       {
       case WM_CALLMETHOD :
         {
           MethodInfo *mInfo = (MethodInfo *)newitem->ifdata.data;
           switch( mInfo->methodId ) {
-          case nsSwitchToUIThread::ONKEY :
+          case nsWindow::ONKEY :
             events[PRIORITY_SECOND].AddItem(newitem);
             break;
-          case nsSwitchToUIThread::ONMOUSE:
+          case nsWindow::ONMOUSE:
             ConsumeRedundantMouseMoveEvent(mInfo);
             events[PRIORITY_THIRD].AddItem(newitem);
             break;
-          case nsSwitchToUIThread::ONWHEEL :
-          case nsSwitchToUIThread::BTNCLICK :
+          case nsWindow::ONWHEEL :
+          case nsWindow::BTNCLICK :
             events[PRIORITY_THIRD].AddItem(newitem);
             break;
           default:
@@ -499,7 +483,7 @@ void nsAppShell::RetrieveAllEvents(bool blockable)
         break;
             
       case 'natv' :	// native queue PLEvent
-        events[PRIORITY_LOW].AddItem(newitem);
+        events[PRIORITY_NORMAL].AddItem(newitem);
         break;
       }
     }
@@ -532,9 +516,6 @@ void nsAppShell::ConsumeRedundantMouseMoveEvent(MethodInfo *pNewEventMInfo)
       // sequential mouse move found!
       events[PRIORITY_THIRD].RemoveItem(previtem);
       delete mInfoPrev;
-      //if it's a synchronized call also wake up thread.
-      if(previtem->ifdata.waitingThread != 0)
-        resume_thread(previtem->ifdata.waitingThread);
       delete previtem;
       break;
     }

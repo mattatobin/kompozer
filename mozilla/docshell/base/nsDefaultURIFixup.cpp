@@ -1,42 +1,24 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Adam Lock <adamlock@netscape.com>
- *   Jeff Walden <jwalden+code@mit.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsString.h"
 #include "nsReadableUtils.h"
@@ -45,7 +27,6 @@
 #include "nsCRT.h"
 
 #include "nsIPrefService.h"
-#include "nsIPrefLocalizedString.h"
 #include "nsIPlatformCharset.h"
 #include "nsILocalFile.h"
 
@@ -53,7 +34,7 @@
 #include "nsDefaultURIFixup.h"
 
 /* Implementation file */
-NS_IMPL_ISUPPORTS2(nsDefaultURIFixup, nsIURIFixup, nsIURIFixup_MOZILLA_1_8_BRANCH)
+NS_IMPL_ISUPPORTS1(nsDefaultURIFixup, nsIURIFixup)
 
 nsDefaultURIFixup::nsDefaultURIFixup()
 {
@@ -73,9 +54,6 @@ nsDefaultURIFixup::~nsDefaultURIFixup()
 NS_IMETHODIMP
 nsDefaultURIFixup::CreateExposableURI(nsIURI *aURI, nsIURI **aReturn)
 {
-    // NOTE: Make sure that this function DOES NOT change which
-    // principal ought to correspond to aURI.
-    
     NS_ENSURE_ARG_POINTER(aURI);
     NS_ENSURE_ARG_POINTER(aReturn);
 
@@ -174,7 +152,7 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
     // after it. The easiest way to do that is to call this method again with the
     // "view-source:" lopped off and then prepend it again afterwards.
 
-    if (scheme.LowerCaseEqualsLiteral("view-source"))
+    if (scheme.EqualsIgnoreCase("view-source"))
     {
         nsCOMPtr<nsIURI> uri;
         PRUint32 newFixupFlags = aFixupFlags & ~FIXUP_FLAG_ALLOW_KEYWORD_LOOKUP;
@@ -211,9 +189,9 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
         //   http:\\broken.com#odd\ref (stops at hash)
         //  
         if (scheme.IsEmpty() ||
-            scheme.LowerCaseEqualsLiteral("http") ||
-            scheme.LowerCaseEqualsLiteral("https") ||
-            scheme.LowerCaseEqualsLiteral("ftp"))
+            scheme.EqualsIgnoreCase("http") ||
+            scheme.EqualsIgnoreCase("https") ||
+            scheme.EqualsIgnoreCase("ftp"))
         {
             // Walk the string replacing backslashes with forward slashes until
             // the end is reached, or a question mark, or a hash, or a forward
@@ -241,10 +219,10 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
     PRBool bUseNonDefaultCharsetForURI =
                         !bAsciiURI &&
                         (scheme.IsEmpty() ||
-                         scheme.LowerCaseEqualsLiteral("http") ||
-                         scheme.LowerCaseEqualsLiteral("https") ||
-                         scheme.LowerCaseEqualsLiteral("ftp") ||
-                         scheme.LowerCaseEqualsLiteral("file"));
+                         scheme.EqualsIgnoreCase("http") ||
+                         scheme.EqualsIgnoreCase("https") ||
+                         scheme.EqualsIgnoreCase("ftp") ||
+                         scheme.EqualsIgnoreCase("file"));
 
     // Now we need to check whether "scheme" is something we don't
     // really know about.
@@ -257,10 +235,6 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
         // Just try to create an URL out of it
         rv = NS_NewURI(aURI, uriString,
                        bUseNonDefaultCharsetForURI ? GetCharsetForUrlBar() : nsnull);
-
-        if (!*aURI && rv != NS_ERROR_MALFORMED_URI) {
-            return rv;
-        }
     }
     
     if (*aURI) {
@@ -271,8 +245,8 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
 
     // See if it is a keyword
     // Test whether keywords need to be fixed up
-    PRBool fixupKeywords = PR_FALSE;
     if (aFixupFlags & FIXUP_FLAG_ALLOW_KEYWORD_LOOKUP) {
+        PRBool fixupKeywords = PR_FALSE;
         if (mPrefBranch)
         {
             NS_ENSURE_SUCCESS(mPrefBranch->GetBoolPref("keyword.enabled", &fixupKeywords), NS_ERROR_FAILURE);
@@ -290,13 +264,17 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
     //   ://totallybroken.url.com
     //   //shorthand.url.com
     //
-    if (StringBeginsWith(uriString, NS_LITERAL_CSTRING("://")))
+    if (uriString.EqualsIgnoreCase("://", 3))
     {
-        uriString = StringTail(uriString, uriString.Length() - 3);
+        nsCAutoString newUriString;
+        uriString.Mid(newUriString, 3, uriString.Length() - 3);
+        uriString = newUriString;
     }
-    else if (StringBeginsWith(uriString, NS_LITERAL_CSTRING("//")))
+    else if (uriString.EqualsIgnoreCase("//", 2))
     {
-        uriString = StringTail(uriString, uriString.Length() - 2);
+        nsCAutoString newUriString;
+        uriString.Mid(newUriString, 2, uriString.Length() - 2);
+        uriString = newUriString;
     }
 
     // Add ftp:// or http:// to front of url if it has no spec
@@ -341,67 +319,9 @@ nsDefaultURIFixup::CreateFixupURI(const nsACString& aStringURI, PRUint32 aFixupF
         MakeAlternateURI(*aURI);
     }
 
-    // If we still haven't been able to construct a valid URI, try to force a
-    // keyword match.  This catches search strings with '.' or ':' in them.
-    if (!*aURI && fixupKeywords)
-    {
-        KeywordToURI(aStringURI, aURI);
-        if(*aURI)
-            return NS_OK;
-    }
-
     return rv;
 }
 
-static nsresult MangleKeywordIntoURI(const char *aKeyword, const char *aURL,
-                                     nsCString& query)
-{
-    query = (*aKeyword == '?') ? (aKeyword + 1) : aKeyword;
-    query.Trim(" "); // pull leading/trailing spaces.
-
-    // encode
-    char * encQuery = nsEscape(query.get(), url_XPAlphas);
-    if (!encQuery) return NS_ERROR_OUT_OF_MEMORY;
-    query.Adopt(encQuery);
-
-    // prepend the query with the keyword url
-    // XXX this url should come from somewhere else
-    query.Insert(aURL, 0);
-    return NS_OK;
-}
-
-NS_IMETHODIMP nsDefaultURIFixup::KeywordToURI(const nsACString& aKeyword,
-                                              nsIURI **aURI)
-{
-    *aURI = nsnull;
-    NS_ENSURE_STATE(mPrefBranch);
-
-    nsXPIDLCString url;
-    nsCOMPtr<nsIPrefLocalizedString> keywordURL;
-    mPrefBranch->GetComplexValue("keyword.URL", 
-                                 NS_GET_IID(nsIPrefLocalizedString),
-                                 getter_AddRefs(keywordURL));
-
-    if (keywordURL) {
-        nsXPIDLString wurl;
-        keywordURL->GetData(getter_Copies(wurl));
-        CopyUTF16toUTF8(wurl, url);
-    } else {
-        // Fall back to a non-localized pref, for backwards compat
-        mPrefBranch->GetCharPref("keyword.URL", getter_Copies(url));
-    }
-
-    // if we can't find a keyword.URL keywords won't work.
-    if (url.IsEmpty())
-        return NS_ERROR_NOT_AVAILABLE;
-
-    nsCAutoString spec;
-    nsresult rv = MangleKeywordIntoURI(PromiseFlatCString(aKeyword).get(),
-                                       url.get(), spec);
-    if (NS_FAILED(rv)) return rv;
-
-    return NS_NewURI(aURI, spec);
-}
 
 PRBool nsDefaultURIFixup::MakeAlternateURI(nsIURI *aURI)
 {
@@ -533,7 +453,7 @@ nsresult nsDefaultURIFixup::ConvertFileToStringURI(const nsACString& aIn,
     {
         attemptFixup = PR_TRUE;
     }
-#elif defined(XP_UNIX) || defined(XP_BEOS)
+#elif XP_UNIX
     // Check if it starts with / (UNIX)
     if(aIn.First() == '/')
     {
@@ -732,7 +652,7 @@ const char * nsDefaultURIFixup::GetFileSystemCharset()
       rv = plat->GetCharset(kPlatformCharsetSel_FileName, charset);
 
     if (charset.IsEmpty())
-      mFsCharset.AssignLiteral("ISO-8859-1");
+      mFsCharset.Assign(NS_LITERAL_CSTRING("ISO-8859-1"));
     else
       mFsCharset.Assign(charset);
   }
@@ -762,31 +682,44 @@ nsresult nsDefaultURIFixup::KeywordURIFixup(const nsACString & aURIString,
     // These are keyword formatted strings
     // "what is mozilla"
     // "what is mozilla?"
-    // "docshell site:mozilla.org" - has no dot/colon in the first space-separated substring
-    // "?mozilla" - anything that begins with a question mark
-    // "?site:mozilla.org docshell"
+    // "?mozilla"
+    // "?What is mozilla"
 
     // These are not keyword formatted strings
-    // "www.blah.com" - first space-separated substring contains a dot, doesn't start with "?"
-    // "www.blah.com stuff"
-    // "nonQualifiedHost:80" - first space-separated substring contains a colon, doesn't start with "?"
-    // "nonQualifiedHost:80 args"
+    // "www.blah.com" - anything with a dot in it 
+    // "nonQualifiedHost:80" - anything with a colon in it
     // "nonQualifiedHost?"
     // "nonQualifiedHost?args"
     // "nonQualifiedHost?some args"
 
-    PRInt32 dotLoc   = aURIString.FindChar('.');
-    PRInt32 colonLoc = aURIString.FindChar(':');
-    PRInt32 spaceLoc = aURIString.FindChar(' ');
-    PRInt32 qMarkLoc = aURIString.FindChar('?');
-
-    if ((dotLoc == kNotFound || (spaceLoc > 0 && spaceLoc < dotLoc)) &&
-        (colonLoc == kNotFound || (spaceLoc > 0 && spaceLoc < colonLoc)) &&
-        (spaceLoc > 0 && (qMarkLoc == kNotFound || spaceLoc < qMarkLoc)) ||
-        qMarkLoc == 0)
+    if(aURIString.FindChar('.') == -1 && aURIString.FindChar(':') == -1)
     {
-        KeywordToURI(aURIString, aURI);
-    }
+        PRInt32 qMarkLoc = aURIString.FindChar('?');
+        PRInt32 spaceLoc = aURIString.FindChar(' ');
+
+        PRBool keyword = PR_FALSE;
+        if(qMarkLoc == 0)
+        keyword = PR_TRUE;
+        else if((spaceLoc > 0) && ((qMarkLoc == -1) || (spaceLoc < qMarkLoc)))
+        keyword = PR_TRUE;
+
+        if(keyword)
+        {
+            nsCAutoString keywordSpec("keyword:");
+            char *utf8Spec = ToNewCString(aURIString); // aURIString is UTF-8
+            if(utf8Spec)
+            {
+                char* escapedUTF8Spec = nsEscape(utf8Spec, url_Path);
+                if(escapedUTF8Spec) 
+                {
+                    keywordSpec.Append(escapedUTF8Spec);
+                    NS_NewURI(aURI, keywordSpec.get(), nsnull);
+                    nsMemory::Free(escapedUTF8Spec);
+                } // escapedUTF8Spec
+                nsMemory::Free(utf8Spec);
+            } // utf8Spec
+        } // keyword 
+    } // FindChar
 
     if(*aURI)
         return NS_OK;

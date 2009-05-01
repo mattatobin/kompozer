@@ -1,40 +1,25 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Bob Lord <lord@netscape.com>
- *   Terry Hayes <thayes@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *  Bob Lord <lord@netscape.com>
+ *  Terry Hayes <thayes@netscape.com>
+ */
 const nsPK11TokenDB = "@mozilla.org/security/pk11tokendb;1";
 const nsIPK11TokenDB = Components.interfaces.nsIPK11TokenDB;
 const nsIDialogParamBlock = Components.interfaces.nsIDialogParamBlock;
@@ -50,7 +35,6 @@ var pw1;
 
 function onLoad()
 {
-  document.documentElement.getButton("accept").disabled = true;
 
   pw1 = document.getElementById("pw1");
   try {
@@ -156,9 +140,8 @@ function process()
   checkPasswords();
 }
 
-function onP12Load(disableOkButton)
+function onP12Load()
 {
-  document.documentElement.getButton("accept").disabled = disableOkButton;
   pw1 = document.getElementById("pw1");
   params = window.arguments[0].QueryInterface(nsIDialogParamBlock);
   // Select first password field
@@ -231,12 +214,15 @@ function setPassword()
     success = true;
   }
 
-  if (success && params)
-    // Return value 1 means "successfully executed ok"
-    params.SetInt(1, 1);
-
   // Terminate dialog
-  return success;
+  if (success) {
+    if (params) {
+      // Return value 1 means "successfully executed ok"
+      params.SetInt(1, 1);
+    }
+
+    window.close();
+  }
 }
 
 function getPassword()
@@ -246,7 +232,7 @@ function getPassword()
   // Return value
   params.SetInt(1, 1);
   // Terminate dialog
-  return true;
+  window.close();
 }
 
 function setP12Password()
@@ -256,7 +242,7 @@ function setP12Password()
   // Return value
   params.SetInt(1, 1);
   // Terminate dialog
-  return true;
+  window.close();
 }
 
 function setPasswordStrength()
@@ -317,6 +303,8 @@ function checkPasswords()
   var pw1=document.getElementById('pw1').value;
   var pw2=document.getElementById('pw2').value;
 
+  var ok=document.getElementById('ok-button');
+
   var oldpwbox = document.getElementById("oldpw");
   if (oldpwbox) {
     var initpw = oldpwbox.getAttribute("inited");
@@ -326,10 +314,16 @@ function checkPasswords()
       // was called with the intention to change the password.
       // The token currently uses an empty password.
       // We will not allow changing the password from empty to empty.
-      document.documentElement.getButton("accept").disabled = true;
+      ok.setAttribute("disabled","true");
       return;
     }
   }
 
-  document.documentElement.getButton("accept").disabled = (pw1 != pw2);
+  if (pw1 == pw2){
+    ok.setAttribute("disabled","false");
+  } else
+  {
+    ok.setAttribute("disabled","true");
+  }
+
 }

@@ -25,8 +25,8 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Contributor(s):
- *   Chak Nanga <chak@netscape.com>
- *   Conrad Carlen <ccarlen@netscape.com>
+ *   Chak Nanga <chak@netscape.com> 
+ *   Conrad Carlen <ccarlen@netscape.com> 
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -47,12 +47,8 @@
 // Local Includes
 #include "stdafx.h"
 #include "MfcEmbed.h"
-#include "nsXPCOM.h"
 #include "nsXPCOMGlue.h"
-#include "nsMemory.h"
 #include "nsIComponentRegistrar.h"
-#include "nsIFactory.h"
-#include "nsServiceManagerUtils.h"
 #include "BrowserFrm.h"
 #include "EditorFrm.h"
 #include "winEmbedFileLocProvider.h"
@@ -131,7 +127,7 @@ public:
                 szParam++;
 
             // previous argument was a flag too, so process that first
-            if (mLastFlag.Length() != 0)
+            if (!mLastFlag.IsEmpty())
                 HandleFlag(mLastFlag);
             
             mLastFlag = szParam;
@@ -141,10 +137,10 @@ public:
                 HandleFlag(mLastFlag);
             
         } else {
-            if (mLastFlag.Length() != 0)
+            if (!mLastFlag.IsEmpty())
                 HandleFlag(mLastFlag, szParam);
                 
-            mLastFlag.Cut(0, PR_UINT32_MAX);
+            mLastFlag.Truncate();
         }
     }
 
@@ -155,12 +151,12 @@ public:
     void HandleFlag(const nsACString& flag, const TCHAR * param = nsnull)
 #endif
     {
-        if (_tcscmp(flag.BeginReading(), _T("console")) == 0)
+        if (flag.Equals(_T("console")))
             DoConsole();
-        else if (_tcscmp(flag.BeginReading(), _T("chrome")) == 0)
+        else if (flag.Equals(_T("chrome")))
             DoChrome();
 #ifdef NS_TRACE_MALLOC
-        else if (_tcscmp(flag.BeginReading(), _T("trace-malloc")) == 0)
+        else if (flag.Equals(_T("trace-malloc")))
         {
             USES_CONVERSION;
             DoTraceMalloc(flag, T2CA(param));
@@ -201,9 +197,9 @@ public:
 private:
     // autostring is fine, this is a stack based object anyway
 #ifdef _UNICODE
-    nsEmbedString mLastFlag;
+    nsAutoString mLastFlag;
 #else
-    nsEmbedCString mLastFlag;
+    nsCAutoString mLastFlag;
 #endif
 
     CMfcEmbedApp& mApp;
@@ -387,17 +383,17 @@ BOOL CMfcEmbedApp::InitInstance()
     NSGetStaticModuleInfo = app_getModuleInfo;
 #endif
 
+    CMfcEmbedCommandLine cmdLine(*this);
+    ParseCommandLine(cmdLine);
+    
+    Enable3dControls();
+
 #ifdef XPCOM_GLUE
     if (NS_FAILED(XPCOMGlueStartup(GRE_GetXPCOMPath()))) {
         MessageBox(NULL, "Could not initialize XPCOM. Perhaps the GRE\nis not installed or could not be found?", "MFCEmbed", MB_OK | MB_ICONERROR);
         return FALSE;
     }
 #endif
-
-    CMfcEmbedCommandLine cmdLine(*this);
-    ParseCommandLine(cmdLine);
-    
-    Enable3dControls();
 
     //
     // 1. Determine the name of the dir from which the GRE based app is being run
@@ -420,7 +416,7 @@ BOOL CMfcEmbedApp::InitInstance()
     USES_CONVERSION;
     nsresult rv;
     nsCOMPtr<nsILocalFile> mreAppDir;
-    rv = NS_NewNativeLocalFile(nsEmbedCString(T2A(path)), TRUE, getter_AddRefs(mreAppDir));
+    rv = NS_NewNativeLocalFile(nsDependentCString(T2A(path)), TRUE, getter_AddRefs(mreAppDir));
     NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create mreAppDir localfile");
 
     // Take a look at 
@@ -429,7 +425,7 @@ BOOL CMfcEmbedApp::InitInstance()
 
     CString strRes;
     strRes.LoadString(IDS_PROFILES_FOLDER_NAME);
-    winEmbedFileLocProvider *provider = new winEmbedFileLocProvider(nsEmbedCString(strRes));
+    winEmbedFileLocProvider *provider = new winEmbedFileLocProvider(nsDependentCString(strRes));
     if(!provider)
     {
         ASSERT(FALSE);
@@ -669,7 +665,7 @@ BOOL CMfcEmbedApp::InitializeProfiles()
         USES_CONVERSION;
         CString strRes;
         strRes.LoadString(IDS_PROFILES_NONSHARED_NAME);
-        nsEmbedString nonSharedName(T2W(strRes));
+        nsDependentString nonSharedName(T2W(strRes));
         sharingSetup->EnableSharing(nonSharedName);
     }
 #endif
@@ -764,18 +760,17 @@ nsresult CMfcEmbedApp::InitializePrefs()
 
             prefs->GetIntPref("browser.startup.page", &m_iStartupPage);
 
-            char* str = nsnull;
-            prefs->GetCharPref("browser.startup.homepage", &str);
-            if (str)
+            nsXPIDLCString str;
+            prefs->GetCharPref("browser.startup.homepage", getter_Copies(str));
+            if (!str.IsEmpty())
             {
                 USES_CONVERSION;
-                m_strHomePage = A2CT(str);
+                m_strHomePage = A2CT(str.get());
             }
             else
             {
                 m_strHomePage.Empty();
             }
-            nsMemory::Free(str);
         }       
     }
     else
@@ -809,7 +804,7 @@ nsresult CMfcEmbedApp::InitializeWindowCreator()
 //  CMfcEmbedApp : nsISupports
 // ---------------------------------------------------------------------------
 
-NS_IMPL_ISUPPORTS3(CMfcEmbedApp, nsIObserver, nsIWindowCreator, nsISupportsWeakReference)
+NS_IMPL_THREADSAFE_ISUPPORTS3(CMfcEmbedApp, nsIObserver, nsIWindowCreator, nsISupportsWeakReference)
 
 // ---------------------------------------------------------------------------
 //  CMfcEmbedApp : nsIObserver
@@ -861,7 +856,7 @@ NS_IMETHODIMP CMfcEmbedApp::Observe(nsISupports *aSubject, const char *aTopic, c
         
         // Only make a new browser window on a switch. This also gets
         // called at start up and we already make a window then.
-        if (!wcscmp(someData, L"switch"))      
+        if (!wcscmp(someData, NS_LITERAL_STRING("switch").get()))      
             OnNewBrowser();
     }
     return rv;

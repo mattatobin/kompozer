@@ -46,18 +46,6 @@
 #include "nsAutodialWin.h"
 #include "prlog.h"
 
-#ifdef WINCE
-#include <objbase.h>
-#include <initguid.h>
-#include <connmgr.h>
-#endif
-
-#ifdef WINCE
-#define AUTODIAL_DEFAULT AUTODIAL_ALWAYS
-#else
-#define AUTODIAL_DEFAULT AUTODIAL_NEVER
-#endif
-
 //
 // Log module for autodial logging...
 //
@@ -83,7 +71,7 @@ PRIntervalTime nsRASAutodial::mDontRetryUntil = 0;
 
 
 tRASPHONEBOOKDLG nsRASAutodial::mpRasPhonebookDlg = nsnull;
-tRASENUMCONNECTIONS nsRASAutodial::mpRasEnumConnections = nsnull;
+tRASENUMCONNECTIONS	nsRASAutodial::mpRasEnumConnections = nsnull;
 tRASENUMENTRIES nsRASAutodial::mpRasEnumEntries = nsnull;
 tRASDIALDLG nsRASAutodial::mpRasDialDlg = nsnull;
 tRASSETAUTODIALADDRESS nsRASAutodial::mpRasSetAutodialAddress = nsnull;
@@ -96,20 +84,18 @@ HINSTANCE nsRASAutodial::mhRASapi32 = nsnull;
 
 // ctor. 
 nsRASAutodial::nsRASAutodial()
-:   mAutodialBehavior(AUTODIAL_DEFAULT),
+:   mAutodialBehavior(AUTODIAL_NEVER),
     mNumRASConnectionEntries(0),
     mAutodialServiceDialingLocation(-1)
 {
     mOSVerInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
     GetVersionEx(&mOSVerInfo);
 
-#ifndef WINCE
     // We only need to dial on nt based systems. For all other platforms, 
     // mAutodialBehavior will remain AUTODIAL_NEVER, and we can skip
     // these initializations.
     if ((mOSVerInfo.dwPlatformId == VER_PLATFORM_WIN32_NT) 
      && (mOSVerInfo.dwMajorVersion >= 4))
-#endif
     {
         // Initializations that can be made again since RAS OS settings can 
         // change.
@@ -160,7 +146,6 @@ nsresult nsRASAutodial::Init()
 // force it to dial in that case by adding the network address to its db.)
 PRBool nsRASAutodial::ShouldDialOnNetworkError()
 {
-#ifndef WINCE
     // Don't try to dial again within a few seconds of when user pressed cancel.
     if (mDontRetryUntil) 
     {
@@ -176,9 +161,6 @@ PRBool nsRASAutodial::ShouldDialOnNetworkError()
     return ((mAutodialBehavior == AUTODIAL_ALWAYS) 
              || (mAutodialBehavior == AUTODIAL_ON_NETWORKERROR)
              || (mAutodialBehavior == AUTODIAL_USE_SERVICE));
-#else
-    return PR_TRUE;
-#endif
 }
 
 
@@ -188,7 +170,6 @@ PRBool nsRASAutodial::ShouldDialOnNetworkError()
 // when there is no network found.
 int nsRASAutodial::QueryAutodialBehavior()
 {
-#ifndef WINCE
     if (IsAutodialServiceRunning())
     {
         if (!LoadRASapi32DLL())
@@ -265,58 +246,7 @@ int nsRASAutodial::QueryAutodialBehavior()
             return AUTODIAL_ALWAYS;
         }
     }
-#else
-    return AUTODIAL_DEFAULT;
-#endif
 }
-
-
-#ifdef WINCE
-static nsresult DoPPCConnection()
-{
-    static HANDLE    gConnectionHandle = NULL;
-
-    // Make the connection to the new network
-    CONNMGR_CONNECTIONINFO conn_info;
-    memset(&conn_info, 0, sizeof(CONNMGR_CONNECTIONINFO));
-
-    conn_info.cbSize      = sizeof(CONNMGR_CONNECTIONINFO);
-    conn_info.dwParams    = CONNMGR_PARAM_GUIDDESTNET;
-    conn_info.dwPriority  = CONNMGR_PRIORITY_USERINTERACTIVE;
-    conn_info.guidDestNet = IID_DestNetInternet;
-    conn_info.bExclusive  = FALSE;
-    conn_info.bDisabled   = FALSE;
-
-    HANDLE tempConnectionHandle;
-    DWORD status;
-    HRESULT result = ConnMgrEstablishConnectionSync(&conn_info, 
-                                                    &tempConnectionHandle, 
-                                                    60000,
-                                                    &status);
-
-    if (result != S_OK)
-    {
-      return NS_ERROR_FAILURE;
-    }
-
-    if (status != CONNMGR_STATUS_CONNECTED)
-    {
-      // could not connect to this network.  release the
-      // temp connection.
-      ConnMgrReleaseConnection(tempConnectionHandle, 0);
-      return NS_ERROR_FAILURE;
-    }
-
-    // At this point, we have a new connection, so release
-    // the old connection
-    if (gConnectionHandle)
-      ConnMgrReleaseConnection(gConnectionHandle, 0);
-      
-    gConnectionHandle = tempConnectionHandle;
-    return NS_OK;
-}
-
-#endif
 
 // If the RAS autodial service is running, use it. Otherwise, dial
 // the default RAS connection. There are two possible RAS dialogs:
@@ -332,7 +262,6 @@ static nsresult DoPPCConnection()
 //  all other values indicate that the caller should not retry
 nsresult nsRASAutodial::DialDefault(const char* hostName)
 {
-#ifndef WINCE
     mDontRetryUntil = 0;
 
     if (mAutodialBehavior == AUTODIAL_NEVER)
@@ -441,11 +370,7 @@ nsresult nsRASAutodial::DialDefault(const char* hostName)
     // Retry because we just established a dialup connection.
     return NS_OK;
 
-#else
-    return  DoPPCConnection();
-#endif
 }
-
 
 // Check to see if RAS is already connected.
 PRBool nsRASAutodial::IsRASConnected()
@@ -488,9 +413,7 @@ nsresult nsRASAutodial::GetFirstEntryName(char* entryName, int bufferSize)
     // ERROR_BUFFER_TOO_SMALL is OK because we only need one struct.
     if (result == ERROR_SUCCESS || result == ERROR_BUFFER_TOO_SMALL)
     {
-#ifndef WINCE
         strncpy(entryName, rasEntryName.szEntryName, bufferSize);
-#endif
         return NS_OK;
     }
 
@@ -627,7 +550,6 @@ nsresult nsRASAutodial::GetDefaultEntryName(char* entryName, int bufferSize)
 // Determine if the autodial service is running on this PC.
 PRBool nsRASAutodial::IsAutodialServiceRunning()
 {
-#ifndef WINCE
     SC_HANDLE hSCManager = 
       OpenSCManager(nsnull, SERVICES_ACTIVE_DATABASE, SERVICE_QUERY_STATUS);
 
@@ -658,9 +580,6 @@ PRBool nsRASAutodial::IsAutodialServiceRunning()
     }
 
     return (status.dwCurrentState == SERVICE_RUNNING);
-#else
-    return PR_TRUE;
-#endif
 }
 
 // Add the specified address to the autodial directory.

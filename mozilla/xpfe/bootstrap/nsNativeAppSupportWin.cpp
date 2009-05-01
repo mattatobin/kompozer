@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -20,36 +20,33 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Bill Law <law@netscape.com>
- *   Masayuki Nakano <masayuki@d-toybox.com>
+ *   Bill Law       law@netscape.com
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
-
-#include "nsStringSupport.h"
 
 // For server mode systray icon.
 #include "nsIStringBundle.h"
 
 #include "nsNativeAppSupportBase.h"
 #include "nsNativeAppSupportWin.h"
+#include "nsString.h"
 #include "nsICmdLineService.h"
 #include "nsCOMPtr.h"
+#include "nsXPIDLString.h"
 #include "nsIComponentManager.h"
-#include "nsComponentManagerUtils.h"
 #include "nsIServiceManager.h"
-#include "nsServiceManagerUtils.h"
 #include "nsICmdLineHandler.h"
 #include "nsIDOMWindow.h"
 #include "nsXPCOM.h"
@@ -57,32 +54,21 @@
 #include "nsISupportsArray.h"
 #include "nsIWindowWatcher.h"
 #include "nsIDOMWindowInternal.h"
-#include "nsIDOMChromeWindow.h"
-#include "nsIBrowserDOMWindow.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIDocShell.h"
 #include "nsIBaseWindow.h"
 #include "nsIWidget.h"
-#include "nsIAppStartup.h"
+#include "nsIAppShellService.h"
 #include "nsIProfileInternal.h"
 #include "nsIXULWindow.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIInterfaceRequestorUtils.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
+#include "nsIPref.h"
 #include "nsIWindowsHooks.h"
 #include "nsIPromptService.h"
 #include "nsNetCID.h"
-#include "nsIIOService.h"
-#include "nsIURI.h"
 #include "nsIObserverService.h"
 #include "nsXPCOM.h"
-#include "nsXPFEComponentsCID.h"
-#include "nsEmbedCID.h"
-#include "nsIURIFixup.h"
-#include "nsCDefaultURIFixup.h"
-
-struct JSContext;
 
 // These are needed to load a URL in a browser window.
 #include "nsIDOMLocation.h"
@@ -96,7 +82,6 @@ struct JSContext;
 #include <stdio.h>
 #include <io.h>
 #include <fcntl.h>
-#include <ctype.h>
 
 #define TURBO_NAVIGATOR 1
 #define TURBO_MAIL 2
@@ -106,20 +91,6 @@ struct JSContext;
 #define TURBO_EXIT 6
 
 #define MAPI_STARTUP_ARG       "/MAPIStartUp"
-
-#ifndef LWA_ALPHA
-#define LWA_ALPHA 2
-#endif
-
-#ifndef WS_EX_LAYERED
-#define WS_EX_LAYERED 0x80000
-#endif
-
-#ifndef SM_REMOTESESSION
-#define SM_REMOTESESSION 0x1000
-#endif
-
-#define REG_SUCCEEDED(val) (val == ERROR_SUCCESS)
 
 static HWND hwndForDOMWindow( nsISupports * );
 
@@ -143,8 +114,9 @@ static char* GetACPString(const nsString& aStr)
     char * acp = new char[ acplen ];
     if( acp ) {
         int outlen = ::WideCharToMultiByte( CP_ACP, 0, aStr.get(), aStr.Length(),
-                                            acp, acplen-1, NULL, NULL );
-        acp[ outlen ] = '\0';  // null terminate
+                                            acp, acplen, NULL, NULL );
+        if ( outlen >= 0)
+            acp[ outlen ] = '\0';  // null terminate
     }
     return acp;
 }
@@ -172,8 +144,6 @@ activateWindow( nsIDOMWindowInternal *win ) {
 #undef MOZ_DEBUG_DDE
 #define MOZ_DEBUG_DDE 1
 #endif
-
-typedef BOOL (WINAPI *MOZ_SetLayeredWindowAttributesProc)(HWND, COLORREF, BYTE, DWORD);
 
 class nsSplashScreenWin : public nsISplashScreen {
 public:
@@ -223,15 +193,10 @@ public:
 
     static BOOL CALLBACK DialogProc( HWND dlg, UINT msg, WPARAM wp, LPARAM lp );
     static DWORD WINAPI ThreadProc( LPVOID );
-    static VOID CALLBACK TimerProc(HWND hwnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 
     HWND mDlg;
     HBITMAP mBitmap;
     nsrefcnt mRefCnt;
-
-    static int mOpacity;
-    static MOZ_SetLayeredWindowAttributesProc mSetLayeredWindowAttributesProc;
-
 }; // class nsSplashScreenWin
 
 // Simple Win32 mutex wrapper.
@@ -290,33 +255,31 @@ private:
 /* DDE Notes
  *
  * This section describes the Win32 DDE service implementation for
- * SeaMonkey.  DDE is used on Win32 platforms to communicate between
- * separate instances of seamonkey.exe (or other Mozilla-based
- * executables), or, between the Win32 desktop shell and SeaMonkey.
+ * Mozilla.  DDE is used on Win32 platforms to communicate between
+ * separate instances of mozilla.exe (or other Mozilla-based
+ * executables), or, between the Win32 desktop shell and Mozilla.
  *
- * The first instance of SeaMonkey will become the "server" and
+ * The first instance of Mozilla will become the "server" and
  * subsequent executables (and the shell) will use DDE to send
  * requests to that process.  The requests are DDE "execute" requests
  * that pass the command line arguments.
  *
- * SeaMonkey registers the DDE application "SeaMonkey" and currently
+ * Mozilla registers the DDE application "Mozilla" and currently
  * supports only the "WWW_OpenURL" topic.  This should be reasonably
  * compatible with applications that interfaced with Netscape
  * Communicator (and its predecessors?).  Note that even that topic
  * may not be supported in a compatible fashion as the command-line
- * options for SeaMonkey are different than for Communiator.
+ * options for Mozilla are different than for Communiator.
  *
- * Note: The DDE application name is set via splash.rc
- *
- * It is imperative that at most one instance of SeaMonkey execute in
- * "server mode" at any one time.  The "native app support" in SeaMonkey
+ * It is imperative that at most one instance of Mozilla execute in
+ * "server mode" at any one time.  The "native app support" in Mozilla
  * on Win32 ensures that only the server process performs XPCOM
  * initialization (that is not required for subsequent client processes
  * to communicate with the server process).
  *
  * To guarantee that only one server starts up, a Win32 "mutex" is used
  * to ensure only one process executes the server-detection code.  That
- * code consists of initializing DDE and doing a DdeConnect to SeaMonkey's
+ * code consists of initializing DDE and doing a DdeConnect to Mozilla's
  * application/topic.  If that connection succeeds, then a server process
  * must be running already.
  *
@@ -329,7 +292,7 @@ private:
  * 1. It is imperative that DdeInitialize be called only after the mutex
  *    lock has been obtained.  The reason is that at shutdown, DDE
  *    notifications go out to all initialized DDE processes.  Thus, if
- *    the mutex is owned by a terminating intance of SeaMonkey, then
+ *    the mutex is owned by a terminating intance of Mozilla, then
  *    calling DdeInitialize and then WaitForSingleObject will cause the
  *    DdeUninitialize from the terminating process to "hang" until the
  *    process waiting for the mutex times out (and can then service the
@@ -340,12 +303,12 @@ private:
  *    are designed to "fail safe" (i.e., a timeout is treated as failure).
  *
  * 3. An attempt has been made to minimize the degree to which the main
- *    SeaMonkey application logic needs to be aware of the DDE mechanisms
+ *    Mozilla application logic needs to be aware of the DDE mechanisms
  *    implemented herein.  As a result, this module surfaces a very
  *    large-grained interface, consisting of simple start/stop methods.
  *    As a consequence, details of certain scenarios can be "lost."
  *    Particularly, incoming DDE requests can arrive after this module
- *    initiates the DDE server, but before SeaMonkey is initialized to the
+ *    initiates the DDE server, but before Mozilla is initialized to the
  *    point where those requests can be serviced (e.g., open a browser
  *    window to a particular URL).  Since the client process sends the
  *    request early on, it may not be prepared to respond to that error.
@@ -356,18 +319,18 @@ private:
 
 /* Update 2001 March
  *
- * A significant DDE bug in Windows is causing SeaMonkey to get wedged at
+ * A significant DDE bug in Windows is causing Mozilla to get wedged at
  * startup.  This is detailed in Bugzill bug 53952
  * (http://bugzilla.mozilla.org/show_bug.cgi?id=53952).
  *
  * To resolve this, we are using a new strategy:
- *   o Use a "message window" to detect that SeaMonkey is already running and
+ *   o Use a "message window" to detect that Mozilla is already running and
  *     to pass requests from a second instance back to the first;
  *   o Run only as a "DDE server" (not as DDE client); this avoids the
  *     problematic call to DDEConnect().
  *
  * We still use the mutex semaphore to protect the code that detects
- * whether SeaMonkey is already running.
+ * whether Mozilla is already running.
  */
 
 class nsNativeAppSupportWin : public nsNativeAppSupportBase {
@@ -398,7 +361,7 @@ private:
                                                     HDDEDATA hdata,
                                                     ULONG    dwData1,
                                                     ULONG    dwData2 );
-    static nsresult HandleRequest( LPBYTE request, PRBool newWindow, nsIDOMWindow **aResult );
+    static void HandleRequest( LPBYTE request, PRBool newWindow = PR_TRUE );
     static void ParseDDEArg( HSZ args, int index, nsCString& string);
     static void ParseDDEArg( const char* args, int index, nsCString& aString);
     static void ActivateLastWindow();
@@ -407,12 +370,8 @@ private:
     static PRBool   InitTopicStrings();
     static int      FindTopic( HSZ topic );
     static nsresult GetCmdLineArgs( LPBYTE request, nsICmdLineService **aResult );
-    static nsresult OpenWindow( const char *urlstr,
-                                const nsAString& aArgs,
-                                nsIDOMWindow **aResult );
-    static nsresult OpenBrowserWindow( const nsAString& aArgs,
-                                       PRBool newWindow,
-                                       nsIDOMWindow **aResult );
+    static nsresult OpenWindow( const char *urlstr, const char *args );
+    static nsresult OpenBrowserWindow( const char *args, PRBool newWindow = PR_TRUE );
     static nsresult ReParent( nsISupports *window, HWND newParent );
     static nsresult GetStartupURL(nsICmdLineService *args, nsCString& taskURL);
     static void     SetupSysTrayIcon();
@@ -453,7 +412,6 @@ nsSplashScreenWin::~nsSplashScreenWin() {
 #if MOZ_DEBUG_DDE
     printf( "splash screen dtor called\n" );
 #endif
-    KillTimer(mDlg, 0);
     // Make sure dialog is gone.
     Hide();
 }
@@ -530,20 +488,6 @@ nsSplashScreenWin::LoadBitmap() {
     }
 }
 
-int nsSplashScreenWin::mOpacity = 55;
-MOZ_SetLayeredWindowAttributesProc nsSplashScreenWin::mSetLayeredWindowAttributesProc = 0;
-
-VOID CALLBACK
-nsSplashScreenWin::TimerProc(HWND hwnd, UINT uMsg, UINT idEvent, DWORD dwTime) {
-    mOpacity += 20;
-    if (mOpacity >= 255) { // >= because we still want to kill the timer for 255
-        mOpacity = 255;
-        KillTimer(hwnd, 0);
-    }
-    // no need to null check - this code can't be reached if SetLayeredWindowAttributes isn't available
-    mSetLayeredWindowAttributesProc(hwnd, 0, mOpacity, LWA_ALPHA);
-}
-
 BOOL CALLBACK
 nsSplashScreenWin::DialogProc( HWND dlg, UINT msg, WPARAM wp, LPARAM lp ) {
     if ( msg == WM_INITDIALOG ) {
@@ -551,18 +495,6 @@ nsSplashScreenWin::DialogProc( HWND dlg, UINT msg, WPARAM wp, LPARAM lp ) {
         nsSplashScreenWin *splashScreen = (nsSplashScreenWin*)lp;
         if ( lp ) {
             splashScreen->SetDialog( dlg );
-
-            HMODULE user32lib = GetModuleHandle("user32.dll");
-            mSetLayeredWindowAttributesProc = (MOZ_SetLayeredWindowAttributesProc) GetProcAddress(user32lib, "SetLayeredWindowAttributes");
-
-            // only do fade if it's supported and the user isn't using remote desktop
-            if (mSetLayeredWindowAttributesProc && !GetSystemMetrics(SM_REMOTESESSION)) {
-                SetWindowLong(dlg, GWL_EXSTYLE,
-                                 GetWindowLong(dlg, GWL_EXSTYLE) | WS_EX_LAYERED);
-                mSetLayeredWindowAttributesProc(dlg, 0,
-                                                  mOpacity, LWA_ALPHA);
-                SetTimer(dlg, 0, 10, TimerProc);
-            }
 
             // Try to load customized bitmap.
             splashScreen->LoadBitmap();
@@ -654,9 +586,7 @@ nsNativeAppSupportWin::CheckConsole() {
                     FILE *hf = ::_fdopen( hCrt, "w" );
                     if ( hf ) {
                         *stdout = *hf;
-#ifdef DEBUG
                         ::fprintf( stdout, "stdout directed to dynamic console\n" );
-#endif
                     }
                 }
 
@@ -667,9 +597,7 @@ nsNativeAppSupportWin::CheckConsole() {
                     FILE *hf = ::_fdopen( hCrt, "w" );
                     if ( hf ) {
                         *stderr = *hf;
-#ifdef DEBUG
                         ::fprintf( stderr, "stderr directed to dynamic console\n" );
-#endif
                     }
                 }
 
@@ -735,8 +663,7 @@ nsNativeAppSupportWin::CheckConsole() {
               int rv = ::GetModuleFileName( NULL, fileName, sizeof fileName );
               nsCAutoString regvalueholder;
               regvalueholder.Assign((char *) regvalue);
-              if ((FindInString(regvalueholder, fileName, PR_TRUE) != kNotFound) &&
-                  (FindInString(regvalueholder, "-turbo", PR_TRUE) != kNotFound) ) {
+              if ((regvalueholder.Find(fileName, PR_TRUE) != kNotFound) && (regvalueholder.Find("-turbo", PR_TRUE) != kNotFound) ) {
                   mServerMode = PR_TRUE;
                   mShouldShowUI = PR_TRUE;
               }
@@ -795,6 +722,7 @@ NS_CreateSplashScreen( nsISplashScreen **aResult ) {
 }
 
 // Constants
+#define MOZ_DDE_APPLICATION    "Mozilla"
 #define MOZ_STARTUP_MUTEX_NAME "StartupMutex"
 #define MOZ_DDE_START_TIMEOUT 30000
 #define MOZ_DDE_STOP_TIMEOUT  15000
@@ -914,10 +842,10 @@ struct MessageWindow {
     // SendRequest: Pass string via WM_COPYDATA to message window.
     NS_IMETHOD SendRequest( const char *cmd ) {
         COPYDATASTRUCT cds = { 0, ::strlen( cmd ) + 1, (void*)cmd };
-        // Bring the already running Mozilla process to the foreground.
-        // nsWindow will restore the window (if minimized) and raise it.
-        ::SetForegroundWindow( mHandle );
-        ::SendMessage( mHandle, WM_COPYDATA, 0, (LPARAM)&cds );
+        HWND newWin = (HWND)::SendMessage( mHandle, WM_COPYDATA, 0, (LPARAM)&cds );
+        if ( newWin ) {
+            ::SetForegroundWindow( newWin );
+        }
         return NS_OK;
     }
 
@@ -929,9 +857,11 @@ struct MessageWindow {
 #if MOZ_DEBUG_DDE
             printf( "Incoming request: %s\n", (const char*)cds->lpData );
 #endif
+            (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)cds->lpData );
+
             // Get current window and return its window handle.
-            nsCOMPtr<nsIDOMWindow> win;
-            (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)cds->lpData, PR_FALSE, getter_AddRefs( win ) );
+            nsCOMPtr<nsIDOMWindowInternal> win;
+            GetMostRecentWindow( 0, getter_AddRefs( win ) );
             return win ? (long)hwndForDOMWindow( win ) : 0;
 #ifndef MOZ_PHOENIX
  } else if ( msg == WM_USER ) {
@@ -953,22 +883,21 @@ struct MessageWindow {
                                               msgWindow,
                                               0 );
 
-         nsCOMPtr<nsIDOMWindow> newWin;
          switch (selectedItem) {
          case TURBO_NAVIGATOR:
-             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)(NS_STRINGIFY(MOZ_APP_NAME) " -browser"), PR_TRUE, getter_AddRefs( newWin ) );
+             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla -browser" );
              break;
          case TURBO_MAIL:
-             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)(NS_STRINGIFY(MOZ_APP_NAME) " -mail"), PR_TRUE, getter_AddRefs( newWin ) );
+             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla -mail" );
               break;
          case TURBO_EDITOR:
-             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)(NS_STRINGIFY(MOZ_APP_NAME) " -editor"), PR_TRUE, getter_AddRefs( newWin ) );
+             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla -editor" );
              break;
          case TURBO_ADDRESSBOOK:
-             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)(NS_STRINGIFY(MOZ_APP_NAME) " -addressbook"), PR_TRUE, getter_AddRefs( newWin ) );
+             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla -addressbook" );
              break;
          case TURBO_EXIT:
-             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)(NS_STRINGIFY(MOZ_APP_NAME) " -kill"), PR_TRUE, getter_AddRefs( newWin ) );
+             (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla -kill" );
              break;
          case TURBO_DISABLE:
              nsresult rv;
@@ -976,7 +905,7 @@ struct MessageWindow {
              nsCOMPtr<nsIStringBundle> turboMenuBundle;
              nsCOMPtr<nsIStringBundle> brandBundle;
              if ( stringBundleService ) {
-                 stringBundleService->CreateBundle( "chrome://branding/locale/brand.properties", getter_AddRefs( brandBundle ) );
+                 stringBundleService->CreateBundle( "chrome://global/locale/brand.properties", getter_AddRefs( brandBundle ) );
                  stringBundleService->CreateBundle( "chrome://navigator/locale/turboMenu.properties",
                                                     getter_AddRefs( turboMenuBundle ) );
              }
@@ -993,8 +922,8 @@ struct MessageWindow {
                                                         1, getter_Copies( dialogTitle ) );
 
              }
-             if ( !dialogMsg.IsEmpty() && !dialogTitle.IsEmpty() && !brandName.IsEmpty() ) {
-                 nsCOMPtr<nsIPromptService> dialog( do_GetService( NS_PROMPTSERVICE_CONTRACTID ) );
+             if ( dialogMsg.get() && dialogTitle.get() && brandName.get() ) {
+                 nsCOMPtr<nsIPromptService> dialog( do_GetService( "@mozilla.org/embedcomp/prompt-service;1" ) );
                  if ( dialog ) {
                      PRBool reallyDisable;
                      nsNativeAppSupportWin::mLastWindowIsConfirmation = PR_TRUE;
@@ -1009,15 +938,14 @@ struct MessageWindow {
              if ( NS_SUCCEEDED( rv ) )
                  winHooksService->StartupRemoveOption("-turbo");
 
-             nsCOMPtr<nsIAppStartup> appStartup
-                 (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
+             nsCOMPtr<nsIAppShellService> appShell = do_GetService( "@mozilla.org/appshell/appShellService;1", &rv );
              if ( NS_SUCCEEDED( rv ) ) {
                  nsCOMPtr<nsINativeAppSupport> native;
-                 rv = appStartup->GetNativeAppSupport( getter_AddRefs( native ) );
+                 rv = appShell->GetNativeAppSupport( getter_AddRefs( native ) );
                  if ( NS_SUCCEEDED( rv ) )
                      native->SetIsServerMode( PR_FALSE );
                  if ( !win )
-                     appStartup->Quit(nsIAppStartup::eAttemptQuit);
+                     appShell->Quit(nsIAppShellService::eAttemptQuit);
              }
              break;
          }
@@ -1026,8 +954,7 @@ struct MessageWindow {
          // Dbl-click will open nav/mailnews/composer based on prefs
          // (if no windows are open), or, open nav (if some windows are
          // already open).  That's done in HandleRequest.
-         nsCOMPtr<nsIDOMWindow> win;
-         (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)NS_STRINGIFY(MOZ_APP_NAME), PR_TRUE, getter_AddRefs( win ) );
+         (void)nsNativeAppSupportWin::HandleRequest( (LPBYTE)"mozilla" );
      }
      return TRUE;
 #endif
@@ -1069,12 +996,12 @@ static char nameBuffer[128] = { 0 };
 char *nsNativeAppSupportWin::mAppName = nameBuffer;
 
 /* Start: Tries to find the "message window" to determine if it
- *        exists.  If so, then SeaMonkey is already running.  In that
+ *        exists.  If so, then Mozilla is already running.  In that
  *        case, we use the handle to the "message" window and send
  *        a request corresponding to this process's command line
  *        options.
  *
- *        If not, then this is the first instance of SeaMonkey.  In
+ *        If not, then this is the first instance of Mozilla.  In
  *        that case, we create and set up the message window.
  *
  *        The checking for existance of the message window must
@@ -1251,7 +1178,7 @@ static DWORD deleteKey( HKEY baseKey, const char *keyName ) {
 // Start DDE server.
 //
 // This used to be the Start() method when we were using DDE as the
-// primary IPC mechanism between secondary SeaMonkey processes and the
+// primary IPC mechanism between secondary Mozilla processes and the
 // initial "server" process.
 //
 // Now, it simply initializes the DDE server.  The caller must check
@@ -1418,11 +1345,11 @@ static nsCString hszValue( DWORD, HSZ ) {
 
 
 // Utility function to escape double-quotes within a string.
-static void escapeQuotes( nsString &aString ) {
+static void escapeQuotes( nsAString &aString ) {
     PRInt32 offset = -1;
     while( 1 ) {
        // Find next '"'.
-       offset = FindCharInString(aString, '"', ++offset );
+       offset = aString.FindChar( '"', ++offset );
        if ( offset == kNotFound ) {
            // No more quotes, exit.
            break;
@@ -1489,18 +1416,17 @@ nsNativeAppSupportWin::HandleDDENotification( UINT uType,       // transaction t
                     nsCAutoString windowID;
                     ParseDDEArg(hsz2, 2, windowID);
                     // "0" means to open the URL in a new window.
-                    if ( strcmp(windowID.get(), "0" ) == 0 ) {
+                    if ( windowID.Equals( "0" ) ) {
                         new_window = PR_TRUE;
                     }
 
                     // Make it look like command line args.
-                    url.Insert( NS_STRINGIFY(MOZ_APP_NAME) " -url ", 0 );
+                    url.Insert( "mozilla -url ", 0 );
 #if MOZ_DEBUG_DDE
                     printf( "Handling dde XTYP_REQUEST request: [%s]...\n", url.get() );
 #endif
                     // Now handle it.
-                    nsCOMPtr<nsIDOMWindow> win;
-                    HandleRequest( LPBYTE( url.get() ), new_window, getter_AddRefs( win ) );
+                    HandleRequest( LPBYTE( url.get() ), new_window );
                     // Return pseudo window ID.
                     result = CreateDDEData( 1 );
                     break;
@@ -1574,15 +1500,12 @@ nsNativeAppSupportWin::HandleDDENotification( UINT uType,       // transaction t
                         nsCAutoString   outpt( NS_LITERAL_CSTRING("\"") );
                         // Now copy the URL converting the Unicode string
                         // to a single-byte ASCII string
-                        nsCAutoString tmpNativeStr;
-                        NS_CopyUnicodeToNative( url, tmpNativeStr );
-                        outpt.Append( tmpNativeStr );
+                        outpt.Append( NS_LossyConvertUCS2toASCII( url ) );
                         // Add the "," used to separate the URL and the page
                         // title
                         outpt.Append( NS_LITERAL_CSTRING("\",\"") );
                         // Now copy the current page title to the return string
-                        NS_CopyUnicodeToNative( title, tmpNativeStr );
-                        outpt.Append( tmpNativeStr );
+                        outpt.Append( NS_LossyConvertUCS2toASCII( title.get() ));
                         // Fill out the return string with the remainin ",""
                         outpt.Append( NS_LITERAL_CSTRING( "\",\"\"" ));
 
@@ -1604,9 +1527,8 @@ nsNativeAppSupportWin::HandleDDENotification( UINT uType,       // transaction t
                     ParseDDEArg(hsz2, 0, windowID);
                     // 4294967295 is decimal for 0xFFFFFFFF which is also a
                     //   correct value to do that Activate last window stuff
-                    const char *wid = windowID.get();
-                    if ( strcmp(wid, "-1" ) == 0 ||
-                         strcmp(wid, "4294967295" ) == 0 ) {
+                    if ( windowID.Equals( "-1" ) ||
+                         windowID.Equals( "4294967295" ) ) {
                         // We only support activating the most recent window (or a new one).
                         ActivateLastWindow();
                         // Return pseudo window ID.
@@ -1664,18 +1586,17 @@ nsNativeAppSupportWin::HandleDDENotification( UINT uType,       // transaction t
             ParseDDEArg((const char*) request, 2, windowID);
 
             // "0" means to open the URL in a new window.
-            if ( strcmp(windowID.get(), "0" ) == 0 ) {
+            if ( windowID.Equals( "0" ) ) {
                 new_window = PR_TRUE;
             }
 
             // Make it look like command line args.
-            url.Insert( NS_STRINGIFY(MOZ_APP_NAME) " -url ", 0 );
+            url.Insert( "mozilla -url ", 0 );
 #if MOZ_DEBUG_DDE
             printf( "Handling dde XTYP_REQUEST request: [%s]...\n", url.get() );
 #endif
             // Now handle it.
-            nsCOMPtr<nsIDOMWindow> win;
-            HandleRequest( LPBYTE( url.get() ), new_window, getter_AddRefs( win ) );
+            HandleRequest( LPBYTE( url.get() ), new_window );
 
             // Release the data.
             DdeUnaccessData( hdata );
@@ -1724,7 +1645,7 @@ void nsNativeAppSupportWin::ParseDDEArg( const char* args, int index, nsCString&
             // If this arg is quoted, then go to closing quote.
             offset = advanceToEndOfQuotedArg( args, offset, argLen);
             // Find next comma.
-            offset = FindCharInString(temp, ',', offset );
+            offset = temp.FindChar( ',', offset );
             if ( offset == kNotFound ) {
                 // No more commas, give up.
                 aString = args;
@@ -1741,7 +1662,7 @@ void nsNativeAppSupportWin::ParseDDEArg( const char* args, int index, nsCString&
         // the argument we want.
         PRInt32 end = advanceToEndOfQuotedArg( args, offset++, argLen );
         // Find next comma (or end of string).
-        end = FindCharInString(temp, ',', end );
+        end = temp.FindChar( ',', end );
         if ( end == kNotFound ) {
             // Arg is the rest of the string.
             end = argLen;
@@ -1757,14 +1678,14 @@ void nsNativeAppSupportWin::ParseDDEArg( HSZ args, int index, nsCString& aString
     DWORD argLen = DdeQueryString( mInstance, args, NULL, NULL, CP_WINANSI );
     // there wasn't any string, so return empty string
     if ( !argLen ) return;
+    nsCAutoString temp;
     // Ensure result's buffer is sufficiently big.
-    char *temp = (char *) malloc(argLen + 1);
-    if ( !temp ) return;
+    temp.SetLength( argLen );
     // Now get the string contents.
-    DdeQueryString( mInstance, args, temp, argLen + 1, CP_WINANSI );
+    DdeQueryString( mInstance, args, temp.BeginWriting(), argLen + 1, CP_WINANSI );
     // Parse out the given arg.
-    ParseDDEArg(temp, index, aString);
-    free(temp);
+    ParseDDEArg(temp.get(), index, aString);
+    return;
 }
 
 void nsNativeAppSupportWin::ActivateLastWindow() {
@@ -1775,9 +1696,7 @@ void nsNativeAppSupportWin::ActivateLastWindow() {
         activateWindow( navWin );
     } else {
         // Need to create a Navigator window, then.
-        nsCOMPtr<nsIDOMWindow> newWin;
-        OpenBrowserWindow( NS_LITERAL_STRING( "about:blank" ),
-                           PR_TRUE, getter_AddRefs( newWin ) );
+        OpenBrowserWindow( "about:blank" );
     }
 }
 
@@ -1796,20 +1715,19 @@ HDDEDATA nsNativeAppSupportWin::CreateDDEData( LPBYTE value, DWORD len ) {
     return result;
 }
 
-// Handle external request.  The first argument is the command line
-// received from the external client.  We convert that string to an
-// nsICmdLineService object via GetCmdLineArgs.  Then, we look for certain
-// well-known arguments.  This replicates code elsewhere, to some extent,
-// unfortunately (if you can fix that, please do).  The second argument may
-// be set to PR_TRUE to override the user's external link preference.
-nsresult
-nsNativeAppSupportWin::HandleRequest( LPBYTE request, PRBool newWindow, nsIDOMWindow **aResult ) {
+// Handle DDE request.  The argument is the command line received by the
+// DDE client process.  We convert that string to an nsICmdLineService
+// object via GetCmdLineArgs.  Then, we look for certain well-known cmd
+// arguments.  This replicates code elsewhere, to some extent,
+// unfortunately (if you can fix that, please do).
+void
+nsNativeAppSupportWin::HandleRequest( LPBYTE request, PRBool newWindow ) {
 
     // if initial hidden window is still being displayed, we need to ignore requests
     // because such requests might not function properly.  See bug 147223 for details
 
     if (mInitialWindowActive) {
-      return NS_ERROR_FAILURE;
+      return;
     }
 
     // Parse command line.
@@ -1818,53 +1736,46 @@ nsNativeAppSupportWin::HandleRequest( LPBYTE request, PRBool newWindow, nsIDOMWi
     nsresult rv;
 
     rv = GetCmdLineArgs( request, getter_AddRefs( args ) );
-    if (NS_FAILED(rv)) return rv;
+    if (NS_FAILED(rv)) return;
 
-    nsCOMPtr<nsIAppStartup> appStartup (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
-    if (NS_FAILED(rv)) return rv;
+    nsCOMPtr<nsIAppShellService> appShell(do_GetService("@mozilla.org/appshell/appShellService;1", &rv));
+    if (NS_FAILED(rv)) return;
 
     nsCOMPtr<nsINativeAppSupport> nativeApp;
-    rv = appStartup->GetNativeAppSupport(getter_AddRefs( nativeApp ));
-    if (NS_FAILED(rv)) return rv;
+    rv = appShell->GetNativeAppSupport(getter_AddRefs( nativeApp ));
+    if (NS_FAILED(rv)) return;
 
     // first see if there is a url
     nsXPIDLCString arg;
     rv = args->GetURLToLoad(getter_Copies(arg));
-    if (NS_FAILED(rv)) return rv;
-
-    if (!arg.IsEmpty() ) {
+    if (NS_SUCCEEDED(rv) && (const char*)arg ) {
       // Launch browser.
 #if MOZ_DEBUG_DDE
-      printf( "Launching browser on url [%s]...\n", arg.get() );
+      printf( "Launching browser on url [%s]...\n", (const char*)arg );
 #endif
-      rv = nativeApp->EnsureProfile(args);
-      if (NS_SUCCEEDED(rv)) {
-        nsAutoString tmpArg;
-        NS_CopyNativeToUnicode( arg, tmpArg );
-        rv = OpenBrowserWindow( tmpArg, newWindow, aResult );
-      }
-      return rv;
+      if (NS_SUCCEEDED(nativeApp->EnsureProfile(args)))
+        (void)OpenBrowserWindow( arg, newWindow );
+      return;
     }
 
 
     // ok, let's try the -chrome argument
     rv = args->GetCmdLineValue("-chrome", getter_Copies(arg));
-    if (NS_SUCCEEDED(rv) && !arg.IsEmpty() ) {
+    if (NS_SUCCEEDED(rv) && (const char*)arg ) {
       // Launch chrome.
 #if MOZ_DEBUG_DDE
-      printf( "Launching chrome url [%s]...\n", arg.get() );
+      printf( "Launching chrome url [%s]...\n", (const char*)arg );
 #endif
-      rv = nativeApp->EnsureProfile(args);
-      if (NS_SUCCEEDED(rv))
-        rv = OpenWindow( arg.get(), EmptyString(), aResult );
-      return rv;
+      if (NS_SUCCEEDED(nativeApp->EnsureProfile(args)))
+        (void)OpenWindow( arg, "" );
+      return;
     }
 
     // try for the "-profilemanager" argument, in which case we want the
     // profile manager to appear, but only if there are no windows open
 
     rv = args->GetCmdLineValue( "-profilemanager", getter_Copies(arg));
-    if ( NS_SUCCEEDED(rv) && !arg.IsEmpty() ) { // -profilemanager on command line
+    if ( NS_SUCCEEDED(rv) && (const char*)arg ) { // -profilemanager on command line
       nsCOMPtr<nsIDOMWindowInternal> window;
       GetMostRecentWindow(0, getter_AddRefs(window));
       if (!window) { // there are no open windows
@@ -1874,47 +1785,72 @@ nsNativeAppSupportWin::HandleRequest( LPBYTE request, PRBool newWindow, nsIDOMWi
 
     // try for the "-kill" argument, to shut down the server
     rv = args->GetCmdLineValue( "-kill", getter_Copies(arg));
-    if ( NS_SUCCEEDED(rv) && !arg.IsEmpty() ) {
+    if ( NS_SUCCEEDED(rv) && (const char*)arg ) {
       // Turn off server mode.
-      nsCOMPtr<nsIAppStartup> appStartup
-        (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
-      if (NS_FAILED(rv)) return rv;
+      nsCOMPtr<nsIAppShellService> appShell =
+        do_GetService( "@mozilla.org/appshell/appShellService;1", &rv);
+      if (NS_FAILED(rv)) return;
 
       nsCOMPtr<nsINativeAppSupport> native;
-      rv = appStartup->GetNativeAppSupport( getter_AddRefs( native ));
+      rv = appShell->GetNativeAppSupport( getter_AddRefs( native ));
       if (NS_SUCCEEDED(rv)) {
         native->SetIsServerMode( PR_FALSE );
 
         // close app if there are no more top-level windows.
-        rv = appStartup->Quit(nsIAppStartup::eConsiderQuit);
+        appShell->Quit(nsIAppShellService::eConsiderQuit);
       }
 
-      return rv;
+      return;
     }
 
     // check wheather it is a MAPI request.  If yes, don't open any new
     // windows and just return.
     rv = args->GetCmdLineValue(MAPI_STARTUP_ARG, getter_Copies(arg));
-    if (NS_SUCCEEDED(rv) && !arg.IsEmpty()) {
-      return nativeApp->EnsureProfile(args);
+    if (NS_SUCCEEDED(rv) && (const char*)arg) {
+      nativeApp->EnsureProfile(args);
+      return;
     }
 
     // Try standard startup's command-line handling logic from nsAppRunner.cpp...
 
     // Need profile before opening windows.
     rv = nativeApp->EnsureProfile(args);
-    if (NS_FAILED(rv)) return rv;
+    if (NS_FAILED(rv)) return;
 
     // This will tell us whether the command line processing opened a window.
     PRBool windowOpened = PR_FALSE;
 
+    // If there are no command line arguments, then we want to open windows
+    // based on startup prefs (which say to open navigator and/or mailnews
+    // and/or composer), or, open just a Navigator window.  We do the former
+    // if there are no open windows (i.e., we're in turbo mode), the latter
+    // if there are open windows.  Note that we call DoCommandLines in the
+    // case where there are no command line args but there are windows open
+    // (i.e., with heedStartupPrefs==PR_FALSE) despite the fact that it may
+    // not actually do anything in that case.  That way we're covered if the
+    // logic in DoCommandLines changes.  Note that we cover this case below
+    // by opening a navigator window if DoCommandLines doesn't open one.  We
+    // have to cover that case anyway, because DoCommandLines won't open a
+    // window when given "mozilla -foobar" or the like.
+    PRBool heedStartupPrefs = PR_FALSE;
+    PRInt32 argc = 0;
+    args->GetArgc( &argc );
+    if ( argc <= 1 ) {
+        // Use startup prefs iff there are no windows currently open.
+        nsCOMPtr<nsIDOMWindowInternal> win;
+        GetMostRecentWindow( 0, getter_AddRefs( win ) );
+        if ( !win ) {
+            heedStartupPrefs = PR_TRUE;
+        }
+    }
+
     // Process command line options.
-    rv = DoCommandLines( args, &windowOpened );
+    rv = DoCommandLines( args, heedStartupPrefs, &windowOpened );
 
     // If a window was opened, then we're done.
     // Note that we keep on trying in the unlikely event of an error.
     if (rv == NS_ERROR_NOT_AVAILABLE || rv == NS_ERROR_ABORT || windowOpened) {
-      return NS_OK;
+      return;
     }
 
     // ok, no idea what the param is.
@@ -1925,17 +1861,19 @@ nsNativeAppSupportWin::HandleRequest( LPBYTE request, PRBool newWindow, nsIDOMWi
     const char * const contractID =
       "@mozilla.org/commandlinehandler/general-startup;1?type=browser";
     nsCOMPtr<nsICmdLineHandler> handler = do_GetService(contractID, &rv);
-    if (NS_FAILED(rv)) return rv;
+    if (NS_FAILED(rv)) return;
 
     nsXPIDLString defaultArgs;
     rv = handler->GetDefaultArgs(getter_Copies(defaultArgs));
-    if (NS_FAILED(rv) || defaultArgs.IsEmpty()) return rv;
+    if (NS_FAILED(rv) || !defaultArgs) return;
 
-    // force a new window for a home page group
-    if (FindCharInString(defaultArgs, '\n') != kNotFound)
-        newWindow = PR_TRUE;
-
-    return OpenBrowserWindow(defaultArgs, newWindow, aResult);
+    if (defaultArgs) {
+      nsCAutoString url;
+      url.AssignWithConversion( defaultArgs );
+      OpenBrowserWindow(url.get());
+    } else {
+      OpenBrowserWindow("about:blank");
+    }
 }
 
 // Parse command line args according to MS spec
@@ -2000,10 +1938,6 @@ nsNativeAppSupportWin::GetCmdLineArgs( LPBYTE request, nsICmdLineService **aResu
                 // End current arg.
                 if ( !justCounting ) {
                     argv[argc] = new char[ arg.Length() + 1 ];
-                    if (!argv[argc]) {
-                        rv = NS_ERROR_OUT_OF_MEMORY;
-                        break;
-                    }
                     strcpy( argv[argc], arg.get() );
                 }
                 argc++;
@@ -2066,10 +2000,7 @@ nsNativeAppSupportWin::GetCmdLineArgs( LPBYTE request, nsICmdLineService **aResu
             if ( justCounting ) {
                 // Allocate argv array.
                 argv = new char*[ argc ];
-                if (!argv) {
-                    rv = NS_ERROR_OUT_OF_MEMORY;
-                    break;
-                }
+
                 // Start second pass
                 justCounting = 0;
                 init = 1;
@@ -2080,13 +2011,15 @@ nsNativeAppSupportWin::GetCmdLineArgs( LPBYTE request, nsICmdLineService **aResu
         }
     }
 
+    // OK, now create nsICmdLineService object from argc/argv.
+    static NS_DEFINE_CID( kCmdLineServiceCID,    NS_COMMANDLINE_SERVICE_CID );
+
     nsCOMPtr<nsIComponentManager> compMgr;
     NS_GetComponentManager(getter_AddRefs(compMgr));
-    
-    rv = compMgr->CreateInstanceByContractID(
-                    NS_COMMANDLINESERVICE_CONTRACTID,
-                    nsnull, NS_GET_IID(nsICmdLineService),
-                    (void**) aResult);
+    rv = compMgr->CreateInstance( kCmdLineServiceCID,
+                                  0,
+                                  NS_GET_IID( nsICmdLineService ),
+                                  (void**)aResult );
 
     if ( NS_FAILED( rv ) || NS_FAILED( ( rv = (*aResult)->Initialize( argc, argv ) ) ) ) {
 #if MOZ_DEBUG_DDE
@@ -2114,7 +2047,7 @@ nsNativeAppSupportWin::EnsureProfile(nsICmdLineService* args)
   if ( firstTime ) {
     firstTime = PR_FALSE;
     // Check pref for whether to set ddeexec subkey entries.
-    nsCOMPtr<nsIPrefBranch> prefService( do_GetService( NS_PREFSERVICE_CONTRACTID ) );
+    nsCOMPtr<nsIPref> prefService( do_GetService( NS_PREF_CONTRACTID ) );
     PRBool supportDDEExec = PR_FALSE;
     if ( prefService ) {
         prefService->GetBoolPref( "advanced.system.supportDDEExec", &supportDDEExec );
@@ -2123,45 +2056,27 @@ nsNativeAppSupportWin::EnsureProfile(nsICmdLineService* args)
 #if MOZ_DEBUG_DDE
 printf( "Setting ddexec subkey entries\n" );
 #endif
-
-      DWORD dwDisp;
-      HKEY hKey;
-      DWORD rc;
-
-      rc = ::RegCreateKeyEx( HKEY_CLASSES_ROOT,
-                             "http\\shell\\open\\ddeexec", 0,
-                             NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL,
-                             &hKey, &dwDisp );
-
-      if ( REG_SUCCEEDED( rc ) ) {
-        // Set ddeexec default value.
-        const BYTE ddeexec[] = "\"%1\",,-1,0,,,,";
-        ::RegSetValueEx( hKey, "", 0, REG_SZ, ddeexec, sizeof ddeexec );
-        ::RegCloseKey( hKey );
-      }
+      // Set ddeexec default value.
+      const char ddeexec[] = "\"%1\",,-1,0,,,,";
+      ::RegSetValue( HKEY_CLASSES_ROOT,
+                     "http\\shell\\open\\ddeexec",
+                     REG_SZ,
+                     ddeexec,
+                     sizeof ddeexec );
 
       // Set application/topic (while we're running), reset at exit.
-      rc = ::RegCreateKeyEx( HKEY_CLASSES_ROOT,
-                             "http\\shell\\open\\ddeexec\\application", 0,
-                             NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL,
-                             &hKey, &dwDisp );
+      ::RegSetValue( HKEY_CLASSES_ROOT,
+                     "http\\shell\\open\\ddeexec\\application",
+                     REG_SZ,
+                     mAppName,
+                     ::strlen( mAppName ) );
 
-      if ( REG_SUCCEEDED( rc ) ) {
-        ::RegSetValueEx( hKey, "", 0, REG_SZ, (BYTE *) mAppName,
-                         ::strlen( mAppName ) + 1 );
-        ::RegCloseKey( hKey );
-      }
-
-      rc = ::RegCreateKeyEx( HKEY_CLASSES_ROOT,
-                             "http\\shell\\open\\ddeexec\\topic", 0,
-                             NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL,
-                             &hKey, &dwDisp );
-
-      if ( REG_SUCCEEDED( rc ) ) {
-        const BYTE topic[] = "WWW_OpenURL";
-        ::RegSetValueEx( hKey, "", 0, REG_SZ, topic, sizeof topic );
-        ::RegCloseKey( hKey );
-      }
+      const char topic[] = "WWW_OpenURL";
+      ::RegSetValue( HKEY_CLASSES_ROOT,
+                     "http\\shell\\open\\ddeexec\\topic",
+                     REG_SZ,
+                     topic,
+                     sizeof topic );
 
       // Remember we need to undo this.
       mSupportingDDEExec = PR_TRUE;
@@ -2172,7 +2087,7 @@ printf( "Setting ddexec subkey entries\n" );
 
   nsCOMPtr<nsIProfileInternal> profileMgr(do_GetService(NS_PROFILE_CONTRACTID, &rv));
   if (NS_FAILED(rv)) return rv;
-  nsCOMPtr<nsIAppStartup> appStartup (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
+  nsCOMPtr<nsIAppShellService> appShell(do_GetService("@mozilla.org/appshell/appShellService;1", &rv));
   if (NS_FAILED(rv)) return rv;
 
   // If we have a profile, everything is fine -
@@ -2194,11 +2109,11 @@ printf( "Setting ddexec subkey entries\n" );
   PRBool canInteract = PR_TRUE;
   nsXPIDLCString arg;
   if (NS_SUCCEEDED(args->GetCmdLineValue("-silent", getter_Copies(arg)))) {
-    if (!arg.IsEmpty()) {
+    if ((const char*)arg) {
       canInteract = PR_FALSE;
     }
   }
-  rv = appStartup->DoProfileStartup(args, canInteract);
+  rv = appShell->DoProfileStartup(args, canInteract);
 
   mForceProfileStartup = PR_FALSE;
 
@@ -2206,22 +2121,19 @@ printf( "Setting ddexec subkey entries\n" );
 }
 
 nsresult
-nsNativeAppSupportWin::OpenWindow( const char *urlstr,
-                                   const nsAString& aArgs,
-                                   nsIDOMWindow **aResult )
-{
+nsNativeAppSupportWin::OpenWindow( const char*urlstr, const char *args ) {
 
   nsresult rv = NS_ERROR_FAILURE;
 
   nsCOMPtr<nsIWindowWatcher> wwatch(do_GetService(NS_WINDOWWATCHER_CONTRACTID));
-  nsCOMPtr<nsISupportsString>
-    sarg(do_CreateInstance(NS_SUPPORTS_STRING_CONTRACTID));
+  nsCOMPtr<nsISupportsCString> sarg(do_CreateInstance(NS_SUPPORTS_CSTRING_CONTRACTID));
   if (sarg)
-    sarg->SetData(aArgs);
+    sarg->SetData(nsDependentCString(args));
 
   if (wwatch && sarg) {
+    nsCOMPtr<nsIDOMWindow> newWindow;
     rv = wwatch->OpenWindow(0, urlstr, "_blank", "chrome,dialog=no,all",
-                   sarg, aResult);
+                   sarg, getter_AddRefs(newWindow));
 #if MOZ_DEBUG_DDE
   } else {
       printf("Get WindowWatcher (or create string) failed\n");
@@ -2235,10 +2147,10 @@ static char procPropertyName[] = "MozillaProcProperty";
 // Subclass procedure used to filter out WM_SETFOCUS messages while reparenting.
 static LRESULT CALLBACK focusFilterProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam ) {
     if ( uMsg == WM_SETFOCUS ) {
-        // Don't let SeaMonkey's window procedure see this.
+        // Don't let Mozilla's window procedure see this.
         return 0;
     } else {
-        // Pass on all other messages to SeaMonkey's window proc.
+        // Pass on all other messages to Mozilla's window proc.
         HANDLE oldProc = ::GetProp( hwnd, procPropertyName );
         if ( oldProc ) {
             return ::CallWindowProc( (WNDPROC)oldProc, hwnd, uMsg, wParam, lParam );
@@ -2332,17 +2244,18 @@ SafeJSContext::~SafeJSContext() {
 }
 
 nsresult SafeJSContext::Push() {
+  nsresult rv;
+
   if (mContext) // only once
     return NS_ERROR_FAILURE;
 
   mService = do_GetService(sJSStackContractID);
   if(mService) {
-    JSContext *cx;
-    if (NS_SUCCEEDED(mService->GetSafeJSContext(&cx)) &&
-        cx &&
-        NS_SUCCEEDED(mService->Push(cx))) {
-      // Save cx in mContext to indicate need to pop.
-      mContext = cx;
+    rv = mService->GetSafeJSContext(&mContext);
+    if (NS_SUCCEEDED(rv) && mContext) {
+      rv = mService->Push(mContext);
+      if (NS_FAILED(rv))
+        mContext = 0;
     }
   }
   return mContext ? NS_OK : NS_ERROR_FAILURE;
@@ -2350,13 +2263,10 @@ nsresult SafeJSContext::Push() {
 
 
 nsresult
-nsNativeAppSupportWin::OpenBrowserWindow( const nsAString& aArgs,
-                                          PRBool newWindow,
-                                          nsIDOMWindow **aResult )
-{
+nsNativeAppSupportWin::OpenBrowserWindow( const char *args, PRBool newWindow ) {
     nsresult rv = NS_OK;
-    // Open the argument URL according to the external link preference.
-    // If there is no Nav window, or newWindow is PR_TRUE, open a new one.
+    // Open the argument URL in the most recently used Navigator window.
+    // If there is no Nav window, open a new one.
 
     // Get most recently used Nav window.
     nsCOMPtr<nsIDOMWindowInternal> navWin;
@@ -2373,27 +2283,35 @@ nsNativeAppSupportWin::OpenBrowserWindow( const nsAString& aArgs,
             // Have to open a new one.
             break;
         }
-        nsCOMPtr<nsIDOMChromeWindow> chromeWin( do_QueryInterface( navWin ) );
-        if ( !chromeWin ) {
+        // Get content window.
+        nsCOMPtr<nsIDOMWindow> content;
+        navWin->GetContent( getter_AddRefs( content ) );
+        if ( !content ) {
             break;
         }
-        nsCOMPtr<nsIBrowserDOMWindow> bwin;
-        chromeWin->GetBrowserDOMWindow( getter_AddRefs( bwin ) );
-        if ( !bwin ) {
+        // Convert that to internal interface.
+        nsCOMPtr<nsIDOMWindowInternal> internalContent( do_QueryInterface( content ) );
+        if ( !internalContent ) {
             break;
         }
-        nsCOMPtr<nsIURIFixup> fixup( do_GetService( NS_URIFIXUP_CONTRACTID ) );
-        if ( !fixup ) {
+        // Get location.
+        nsCOMPtr<nsIDOMLocation> location;
+        internalContent->GetLocation( getter_AddRefs( location ) );
+        if ( !location ) {
             break;
         }
-        nsCOMPtr<nsIURI> uri;
-        rv = fixup->CreateFixupURI( NS_ConvertUTF16toUTF8( aArgs ),
-                                    nsIURIFixup::FIXUP_FLAG_NONE,
-                                    getter_AddRefs( uri ) );
-        if ( NS_FAILED(rv) || !uri ) {
+        // Set up environment.
+        SafeJSContext context;
+        if ( NS_FAILED( context.Push() ) ) {
             break;
         }
-        return bwin->OpenURI( uri, nsnull, nsIBrowserDOMWindow::OPEN_DEFAULTWINDOW, nsIBrowserDOMWindow::OPEN_EXTERNAL, aResult );
+        // Set href.
+        nsAutoString url; url.AssignWithConversion( args );
+        if ( NS_FAILED( location->SetHref( url ) ) ) {
+            break;
+        }
+        // Finally, if we get here, we're done.
+        return NS_OK;
     } while ( PR_FALSE );
 
     nsCOMPtr<nsICmdLineHandler> handler(do_GetService("@mozilla.org/commandlinehandler/general-startup;1?type=browser", &rv));
@@ -2404,7 +2322,7 @@ nsNativeAppSupportWin::OpenBrowserWindow( const nsAString& aArgs,
     if (NS_FAILED(rv)) return rv;
 
     // Last resort is to open a brand new window.
-    return OpenWindow( chromeUrlForTask.get(), aArgs, aResult );
+    return OpenWindow( chromeUrlForTask, args );
 }
 
 void AppendMenuItem( HMENU& menu, PRInt32 aIdentifier, const nsString& aText ) {
@@ -2436,12 +2354,12 @@ nsNativeAppSupportWin::SetupSysTrayIcon() {
     if ( svc ) {
         nsCOMPtr<nsIStringBundle> brandBundle;
         nsXPIDLString tooltip;
-        svc->CreateBundle( "chrome://branding/locale/brand.properties", getter_AddRefs( brandBundle ) );
+        svc->CreateBundle( "chrome://global/locale/brand.properties", getter_AddRefs( brandBundle ) );
         if ( brandBundle ) {
             brandBundle->GetStringFromName( NS_LITERAL_STRING( "brandShortName" ).get(),
                                             getter_Copies( tooltip ) );
             ::strncpy( mIconData.szTip,
-                       NS_LossyConvertUTF16toASCII(tooltip).get(),
+                       NS_LossyConvertUCS2toASCII(tooltip).get(),
                        sizeof mIconData.szTip - 1 );
         }
         // Build menu.
@@ -2464,46 +2382,44 @@ nsNativeAppSupportWin::SetupSysTrayIcon() {
                 const PRUnichar* formatStrings[] = { tooltip.get() };
                 turboBundle->FormatStringFromName( NS_LITERAL_STRING( "Exit" ).get(), formatStrings, 1,
                                                    getter_Copies( text ) );
-                exitText = text;
+                exitText = (const PRUnichar*)text;
             }
             turboBundle->GetStringFromName( NS_LITERAL_STRING( "Disable" ).get(),
                                             getter_Copies( text ) );
-            disableText = text;
+            disableText = (const PRUnichar*)text;
             turboBundle->GetStringFromName( NS_LITERAL_STRING( "Navigator" ).get(),
                                             getter_Copies( text ) );
-            navigatorText = text;
+            navigatorText = (const PRUnichar*)text;
             turboBundle->GetStringFromName( NS_LITERAL_STRING( "Editor" ).get(),
                                             getter_Copies( text ) );
-            editorText = text;
+            editorText = (const PRUnichar*)text;
         }
         if (isMail) {
             mailBundle->GetStringFromName( NS_LITERAL_STRING( "MailNews" ).get(),
                                            getter_Copies( text ) );
-            mailText = text;
+            mailText = (const PRUnichar*)text;
             mailBundle->GetStringFromName( NS_LITERAL_STRING( "Addressbook" ).get(),
                                            getter_Copies( text ) );
-            addressbookText = text;
+            addressbookText = (const PRUnichar*)text;
         }
 
-        if ( exitText.IsEmpty() ) {
-            exitText.Assign( NS_LITERAL_STRING( "E&xit " ) );
-            exitText.Append( NS_LITERAL_STRING( NS_STRINGIFY(MOZ_APP_DISPLAYNAME) ) );
-        }
+        if ( exitText.IsEmpty() )
+            exitText = NS_LITERAL_STRING( "E&xit Mozilla" );
 
         if ( disableText.IsEmpty() )
-            disableText.Assign( NS_LITERAL_STRING("&Disable Quick Launch") );
+            disableText = NS_LITERAL_STRING( "&Disable Quick Launch" );
 
         if ( navigatorText.IsEmpty() )
-            navigatorText.Assign( NS_LITERAL_STRING("&Navigator") );
+            navigatorText = NS_LITERAL_STRING( "&Navigator" );
 
         if ( editorText.IsEmpty() )
-            editorText.Assign( NS_LITERAL_STRING("&Composer") );
+            editorText = NS_LITERAL_STRING( "&Composer" );
 
         if ( isMail ) {
             if ( mailText.IsEmpty() )
-              mailText.Assign( NS_LITERAL_STRING("&Mail && Newsgroups") );
+              mailText = NS_LITERAL_STRING( "&Mail && Newsgroups" );
             if ( addressbookText.IsEmpty() )
-              addressbookText.Assign( NS_LITERAL_STRING("&Address Book") );
+              addressbookText = NS_LITERAL_STRING( "&Address Book" );
         }
         // Create menu and add item.
         mTrayIconMenu = ::CreatePopupMenu();
@@ -2570,7 +2486,7 @@ nsNativeAppSupportWin::StartServerMode() {
         return NS_OK;
     } else {
         // Sometimes a window will have been opened even though mShouldShowUI is false
-        // (e.g., seamonkey -mail -turbo).  Detect that by testing whether there's a
+        // (e.g., mozilla -mail -turbo).  Detect that by testing whether there's a
         // window already open.
         nsCOMPtr<nsIDOMWindowInternal> win;
         GetMostRecentWindow( 0, getter_AddRefs( win ) );
@@ -2650,7 +2566,6 @@ nsNativeAppSupportWin::OnLastWindowClosing() {
     // in StartServerMode(), don't do anything.
     if ( mInitialWindowActive ) {
         mInitialWindowActive = PR_FALSE;
-        mShouldShowUI = PR_TRUE;
         return NS_OK;
     }
 
@@ -2668,7 +2583,7 @@ nsNativeAppSupportWin::OnLastWindowClosing() {
     // check for multi-profile situation and turn off turbo mode
     // if there are multiple profiles.
     PRBool singleProfileOnly = PR_FALSE;
-    nsCOMPtr<nsIPrefBranch> prefService( do_GetService( NS_PREFSERVICE_CONTRACTID, &rv ) );
+    nsCOMPtr<nsIPref> prefService( do_GetService( NS_PREF_CONTRACTID, &rv ) );
     if ( NS_SUCCEEDED( rv ) ) {
         prefService->GetBoolPref( "browser.turbo.singleProfileOnly", &singleProfileOnly );
     }
@@ -2680,10 +2595,10 @@ nsNativeAppSupportWin::OnLastWindowClosing() {
                  profileCount > 1 ) {
                 // Turn off turbo mode and quit the application.
                 SetIsServerMode( PR_FALSE );
-                nsCOMPtr<nsIAppStartup> appStartup
-                    (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
+                nsCOMPtr<nsIAppShellService> appShell =
+                    do_GetService( "@mozilla.org/appshell/appShellService;1", &rv);
                 if ( NS_SUCCEEDED( rv ) ) {
-                    appStartup->Quit(nsIAppStartup::eAttemptQuit);
+                    appShell->Quit(nsIAppShellService::eAttemptQuit);
                 }
                 return NS_OK;
             }
@@ -2712,8 +2627,8 @@ nsNativeAppSupportWin::OnLastWindowClosing() {
         }
     }
 
-    nsCOMPtr<nsIAppStartup> appStartup
-        (do_GetService(NS_APPSTARTUP_CONTRACTID, &rv));
+    nsCOMPtr<nsIAppShellService> appShell =
+        do_GetService( "@mozilla.org/appshell/appShellService;1", &rv);
     if ( NS_SUCCEEDED( rv ) ) {
         // Instead of staying alive, launch a new instance of the application and then
         // terminate for real.  We take steps to ensure that the new instance will run
@@ -2755,7 +2670,7 @@ nsNativeAppSupportWin::OnLastWindowClosing() {
 
         // Turn off turbo mode and quit the application.
         SetIsServerMode( PR_FALSE );
-        appStartup->Quit(nsIAppStartup::eAttemptQuit);
+        appShell->Quit(nsIAppShellService::eAttemptQuit);
 
         // Done.  This app will now commence shutdown.
     }

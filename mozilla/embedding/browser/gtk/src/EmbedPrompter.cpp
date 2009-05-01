@@ -16,7 +16,7 @@
  * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
+ * Netscape Communications Coporation.
  * Portions created by the Initial Developer are Copyright (C) 2003
  * the Initial Developer. All Rights Reserved.
  *
@@ -101,14 +101,8 @@ nsresult
 EmbedPrompter::Create(PromptType aType, GtkWindow* aParentWindow)
 {
     mWindow = gtk_dialog_new_with_buttons(mTitle.get(), aParentWindow,
-                                          (GtkDialogFlags)0,
+                                          GTK_DIALOG_DESTROY_WITH_PARENT,
                                           NULL);
-
-    // only add the dialog to the window group if the parent already has a window group,
-    // so as not to break app's expectations about modal dialogs.
-    if (aParentWindow && aParentWindow->group) {
-        gtk_window_group_add_window (aParentWindow->group, GTK_WINDOW (mWindow));
-    }
 
     // gtk will resize this for us as necessary
     gtk_window_set_default_size(GTK_WINDOW(mWindow), 100, 50);
@@ -210,8 +204,6 @@ EmbedPrompter::Create(PromptType aType, GtkWindow* aParentWindow)
 
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(mCheckBox),
                                      mCheckValue);
-        gtk_label_set_line_wrap(GTK_LABEL(gtk_bin_get_child(GTK_BIN(mCheckBox))),
-				TRUE);
 
         gtk_box_pack_start(GTK_BOX(contentsVBox), mCheckBox, FALSE, FALSE, 0);
     }
@@ -263,37 +255,37 @@ EmbedPrompter::Create(PromptType aType, GtkWindow* aParentWindow)
 void
 EmbedPrompter::SetTitle(const PRUnichar *aTitle)
 {
-    CopyUTF16toUTF8(aTitle, mTitle);
+    mTitle = NS_ConvertUCS2toUTF8(aTitle);
 }
 
 void
 EmbedPrompter::SetTextValue(const PRUnichar *aTextValue)
 {
-    CopyUTF16toUTF8(aTextValue, mTextValue);
+    mTextValue = NS_ConvertUCS2toUTF8(aTextValue);
 }
 
 void
 EmbedPrompter::SetCheckMessage(const PRUnichar *aMessage)
 {
-    CopyUTF16toUTF8(aMessage, mCheckMessage);
+    mCheckMessage = NS_ConvertUCS2toUTF8(aMessage);
 }
 
 void
 EmbedPrompter::SetMessageText(const PRUnichar *aMessageText)
 {
-    CopyUTF16toUTF8(aMessageText, mMessageText);
+    mMessageText = NS_ConvertUCS2toUTF8(aMessageText);
 }
 
 void
 EmbedPrompter::SetUser(const PRUnichar *aUser)
 {
-    CopyUTF16toUTF8(aUser, mUser);
+    mUser = NS_ConvertUCS2toUTF8(aUser);
 }
 
 void
 EmbedPrompter::SetPassword(const PRUnichar *aPass)
 {
-    CopyUTF16toUTF8(aPass, mPass);
+    mPass = NS_ConvertUCS2toUTF8(aPass);
 }
 
 void
@@ -311,7 +303,7 @@ EmbedPrompter::SetItems(const PRUnichar** aItemArray, PRUint32 aCount)
     mItemCount = aCount;
     mItemList = new nsCString[aCount];
     for (PRUint32 i = 0; i < aCount; ++i)
-        CopyUTF16toUTF8(aItemArray[i], mItemList[i]);
+        mItemList[i] = NS_ConvertUCS2toUTF8(aItemArray[i]);
 }
 
 void
@@ -319,9 +311,9 @@ EmbedPrompter::SetButtons(const PRUnichar* aButton0Label,
                           const PRUnichar* aButton1Label,
                           const PRUnichar* aButton2Label)
 {
-    CopyUTF16toUTF8(aButton0Label, mButtonLabels[0]);
-    CopyUTF16toUTF8(aButton1Label, mButtonLabels[1]);
-    CopyUTF16toUTF8(aButton2Label, mButtonLabels[2]);
+    mButtonLabels[0] = NS_ConvertUCS2toUTF8(aButton0Label);
+    mButtonLabels[1] = NS_ConvertUCS2toUTF8(aButton1Label);
+    mButtonLabels[2] = NS_ConvertUCS2toUTF8(aButton2Label);
 }
 
 void
@@ -339,19 +331,19 @@ EmbedPrompter::GetConfirmValue(PRBool *aConfirmValue)
 void
 EmbedPrompter::GetTextValue(PRUnichar **aTextValue)
 {
-    *aTextValue = UTF8ToNewUnicode(mTextValue);
+    *aTextValue = ToNewUnicode(mTextValue);
 }
 
 void
 EmbedPrompter::GetUser(PRUnichar **aUser)
 {
-    *aUser = UTF8ToNewUnicode(mUser);
+    *aUser = ToNewUnicode(mUser);
 }
 
 void
 EmbedPrompter::GetPassword(PRUnichar **aPass)
 {
-    *aPass = UTF8ToNewUnicode(mPass);
+    *aPass = ToNewUnicode(mPass);
 }
 
 void

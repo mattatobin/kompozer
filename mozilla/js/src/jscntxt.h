@@ -1,5 +1,4 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=8 sw=4 et tw=78:
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
@@ -55,101 +54,10 @@
 #include "jsprvtd.h"
 #include "jspubtd.h"
 #include "jsregexp.h"
-#include "jsutil.h"
 
 JS_BEGIN_EXTERN_C
 
-/*
- * js_GetSrcNote cache to avoid O(n^2) growth in finding a source note for a
- * given pc in a script.
- */
-typedef struct JSGSNCache {
-    JSScript        *script;
-    JSDHashTable    table;
-#ifdef JS_GSNMETER
-    uint32          hits;
-    uint32          misses;
-    uint32          fills;
-    uint32          clears;
-# define GSN_CACHE_METER(cache,cnt) (++(cache)->cnt)
-#else
-# define GSN_CACHE_METER(cache,cnt) /* nothing */
-#endif
-} JSGSNCache;
-
-#define GSN_CACHE_CLEAR(cache)                                                \
-    JS_BEGIN_MACRO                                                            \
-        (cache)->script = NULL;                                               \
-        if ((cache)->table.ops) {                                             \
-            JS_DHashTableFinish(&(cache)->table);                             \
-            (cache)->table.ops = NULL;                                        \
-        }                                                                     \
-        GSN_CACHE_METER(cache, clears);                                       \
-    JS_END_MACRO
-
-/* These helper macros take a cx as parameter and operate on its GSN cache. */
-#define JS_CLEAR_GSN_CACHE(cx)      GSN_CACHE_CLEAR(&JS_GSN_CACHE(cx))
-#define JS_METER_GSN_CACHE(cx,cnt)  GSN_CACHE_METER(&JS_GSN_CACHE(cx), cnt)
-
-#ifdef JS_THREADSAFE
-
-/*
- * Structure uniquely representing a thread.  It holds thread-private data
- * that can be accessed without a global lock.
- */
-struct JSThread {
-    /* Linked list of all contexts active on this thread. */
-    JSCList             contextList;
-
-    /* Opaque thread-id, from NSPR's PR_GetCurrentThread(). */
-    jsword              id;
-
-    /* Thread-local gc free lists array. */
-    JSGCThing           *gcFreeLists[GC_NUM_FREELISTS];
-
-    /*
-     * Thread-local version of JSRuntime.gcMallocBytes to avoid taking
-     * locks on each JS_malloc.
-     */
-    uint32              gcMallocBytes;
-
-#if JS_HAS_GENERATORS
-    /* Flag indicating that the current thread is executing close hooks. */
-    JSBool              gcRunningCloseHooks;
-#endif
-
-    /*
-     * Store the GSN cache in struct JSThread, not struct JSContext, both to
-     * save space and to simplify cleanup in js_GC.  Any embedding (Firefox
-     * or another Gecko application) that uses many contexts per thread is
-     * unlikely to interleave js_GetSrcNote-intensive loops in the decompiler
-     * among two or more contexts running script in one thread.
-     */
-    JSGSNCache          gsnCache;
-};
-
-#define JS_GSN_CACHE(cx) ((cx)->thread->gsnCache)
-
-extern void JS_DLL_CALLBACK
-js_ThreadDestructorCB(void *ptr);
-
-extern JSBool
-js_SetContextThread(JSContext *cx);
-
-extern void
-js_ClearContextThread(JSContext *cx);
-
-extern JSThread *
-js_GetCurrentThread(JSRuntime *rt);
-
-#endif /* JS_THREADSAFE */
-
-typedef enum JSDestroyContextMode {
-    JSDCM_NO_GC,
-    JSDCM_MAYBE_GC,
-    JSDCM_FORCE_GC,
-    JSDCM_NEW_FAILED
-} JSDestroyContextMode;
+typedef enum JSGCMode { JS_NO_GC, JS_MAYBE_GC, JS_FORCE_GC } JSGCMode;
 
 typedef enum JSRuntimeState {
     JSRTS_DOWN,
@@ -163,75 +71,25 @@ typedef struct JSPropertyTreeEntry {
     JSScopeProperty     *child;
 } JSPropertyTreeEntry;
 
-/*
- * Forward declaration for opaque JSRuntime.nativeIteratorStates.
- */
-typedef struct JSNativeIteratorState JSNativeIteratorState;
-
 struct JSRuntime {
     /* Runtime state, synchronized by the stateChange/gcLock condvar/lock. */
     JSRuntimeState      state;
 
-    /* Context create/destroy callback. */
-    JSContextCallback   cxCallback;
-
     /* Garbage collector state, used by jsgc.c. */
-    JSGCArenaList       gcArenaList[GC_NUM_FREELISTS];
+    JSArenaPool         gcArenaPool;
     JSDHashTable        gcRootsHash;
     JSDHashTable        *gcLocksHash;
+    JSGCThing           *gcFreeList;
     jsrefcount          gcKeepAtoms;
     uint32              gcBytes;
     uint32              gcLastBytes;
     uint32              gcMaxBytes;
-    uint32              gcMaxMallocBytes;
     uint32              gcLevel;
     uint32              gcNumber;
-
-    /*
-     * NB: do not pack another flag here by claiming gcPadding unless the new
-     * flag is written only by the GC thread.  Atomic updates to packed bytes
-     * are not guaranteed, so stores issued by one thread may be lost due to
-     * unsynchronized read-modify-write cycles on other threads.
-     */
     JSPackedBool        gcPoke;
     JSPackedBool        gcRunning;
-    uint16              gcPadding;
-#ifdef JS_GC_ZEAL
-    jsrefcount          gcZeal;
-#endif
-
-
     JSGCCallback        gcCallback;
     uint32              gcMallocBytes;
-    JSGCArena           *gcUnscannedArenaStackTop;
-#ifdef DEBUG
-    size_t              gcUnscannedBagSize;
-#endif
-
-    /*
-     * API compatibility requires keeping GCX_PRIVATE bytes separate from the
-     * original GC types' byte tally.  Otherwise embeddings that configure a
-     * good limit for pre-GCX_PRIVATE versions of the engine will see memory
-     * over-pressure too often, possibly leading to failed last-ditch GCs.
-     *
-     * The new XML GC-thing types do add to gcBytes, and they're larger than
-     * the original GC-thing type size (8 bytes on most architectures).  So a
-     * user who enables E4X may want to increase the maxbytes value passed to
-     * JS_NewRuntime.  TODO: Note this in the API docs.
-     */
-    uint32              gcPrivateBytes;
-
-    /*
-     * Table for tracking iterators to ensure that we close iterator's state
-     * before finalizing the iterable object.
-     */
-    JSPtrTable          gcIteratorTable;
-
-#if JS_HAS_GENERATORS
-    /* Runtime state to support close hooks. */
-    JSGCCloseState      gcCloseState;
-#endif
-
 #ifdef JS_GCMETER
     JSGCStats           gcStats;
 #endif
@@ -251,14 +109,6 @@ struct JSRuntime {
     jsdouble            *jsNaN;
     jsdouble            *jsNegativeInfinity;
     jsdouble            *jsPositiveInfinity;
-
-#ifdef JS_THREADSAFE
-    JSLock              *deflatedStringCacheLock;
-#endif
-    JSHashTable         *deflatedStringCache;
-#ifdef DEBUG
-    uint32              deflatedStringCacheBytes;
-#endif
 
     /* Empty string held for use by this runtime's contexts. */
     JSString            *emptyString;
@@ -305,7 +155,7 @@ struct JSRuntime {
     PRCondVar           *gcDone;
     PRCondVar           *requestDone;
     uint32              requestCount;
-    JSThread            *gcThread;
+    jsword              gcThread;
 
     /* Lock and owning thread pointer for JS_LOCK_RUNTIME. */
     PRLock              *rtLock;
@@ -343,13 +193,6 @@ struct JSRuntime {
  * value.
  */
 #define NO_SCOPE_SHARING_TODO   ((JSScope *) 0xfeedbeef)
-
-    /*
-     * The index for JSThread info, returned by PR_NewThreadPrivateIndex.
-     * The value is visible and shared by all threads, but the data is
-     * private to each thread.
-     */
-    PRUintn             threadTPIndex;
 #endif /* JS_THREADSAFE */
 
     /*
@@ -361,58 +204,15 @@ struct JSRuntime {
     /* Security principals serialization support. */
     JSPrincipalsTranscoder principalsTranscoder;
 
-    /* Optional hook to find principals for an object in this runtime. */
-    JSObjectPrincipalsFinder findObjectPrincipals;
-
-    /*
-     * Shared scope property tree, and arena-pool for allocating its nodes.
-     * The propertyRemovals counter is incremented for every js_ClearScope,
-     * and for each js_RemoveScopeProperty that frees a slot in an object.
-     * See js_NativeGet and js_NativeSet in jsobj.c.
-     */
+    /* Shared scope property tree, and allocator for its nodes. */
     JSDHashTable        propertyTreeHash;
     JSScopeProperty     *propertyFreeList;
     JSArenaPool         propertyArenaPool;
-    int32               propertyRemovals;
 
     /* Script filename table. */
     struct JSHashTable  *scriptFilenameTable;
-    JSCList             scriptFilenamePrefixes;
 #ifdef JS_THREADSAFE
     PRLock              *scriptFilenameTableLock;
-#endif
-
-    /* Number localization, used by jsnum.c */
-    const char          *thousandsSeparator;
-    const char          *decimalSeparator;
-    const char          *numGrouping;
-
-    /*
-     * Weak references to lazily-created, well-known XML singletons.
-     *
-     * NB: Singleton objects must be carefully disconnected from the rest of
-     * the object graph usually associated with a JSContext's global object,
-     * including the set of standard class objects.  See jsxml.c for details.
-     */
-    JSObject            *anynameObject;
-    JSObject            *functionNamespaceObject;
-
-    /*
-     * A helper list for the GC, so it can mark native iterator states. See
-     * js_MarkNativeIteratorStates for details.
-     */
-    JSNativeIteratorState *nativeIteratorStates;
-
-#ifndef JS_THREADSAFE
-    /*
-     * For thread-unsafe embeddings, the GSN cache lives in the runtime and
-     * not each context, since we expect it to be filled once when decompiling
-     * a longer script, then hit repeatedly as js_GetSrcNote is called during
-     * the decompiler activation that filled it.
-     */
-    JSGSNCache          gsnCache;
-
-#define JS_GSN_CACHE(cx) ((cx)->runtime->gsnCache)
 #endif
 
 #ifdef DEBUG
@@ -503,117 +303,7 @@ typedef struct JSResolvingEntry {
 #define JSRESFLAG_LOOKUP        0x1     /* resolving id from lookup */
 #define JSRESFLAG_WATCH         0x2     /* resolving id from watch */
 
-typedef struct JSLocalRootChunk JSLocalRootChunk;
-
-#define JSLRS_CHUNK_SHIFT       8
-#define JSLRS_CHUNK_SIZE        JS_BIT(JSLRS_CHUNK_SHIFT)
-#define JSLRS_CHUNK_MASK        JS_BITMASK(JSLRS_CHUNK_SHIFT)
-
-struct JSLocalRootChunk {
-    jsval               roots[JSLRS_CHUNK_SIZE];
-    JSLocalRootChunk    *down;
-};
-
-typedef struct JSLocalRootStack {
-    uint32              scopeMark;
-    uint32              rootCount;
-    JSLocalRootChunk    *topChunk;
-    JSLocalRootChunk    firstChunk;
-} JSLocalRootStack;
-
-#define JSLRS_NULL_MARK ((uint32) -1)
-
-/*
- * Macros to push/pop JSTempValueRooter instances to context-linked stack of
- * temporary GC roots. If you need to protect a result value that flows out of
- * a C function across several layers of other functions, use the
- * js_LeaveLocalRootScopeWithResult internal API (see further below) instead.
- *
- * The macros also provide a simple way to get a single rooted pointer via
- * JS_PUSH_TEMP_ROOT_<KIND>(cx, NULL, &tvr). Then &tvr.u.<kind> gives the
- * necessary pointer.
- *
- * JSTempValueRooter.count defines the type of the rooted value referenced by
- * JSTempValueRooter.u union of type JSTempValueUnion. When count is positive
- * or zero, u.array points to a vector of jsvals. Otherwise it must be one of
- * the following constants:
- */
-#define JSTVU_SINGLE        (-1)    /* u.value or u.<gcthing> is single jsval
-                                       or GC-thing */
-#define JSTVU_MARKER        (-2)    /* u.marker is a hook to mark a custom
-                                     * structure */
-#define JSTVU_SPROP         (-3)    /* u.sprop roots property tree node */
-#define JSTVU_WEAK_ROOTS    (-4)    /* u.weakRoots points to saved weak roots */
-#define JSTVU_SCRIPT        (-5)    /* u.script roots JSScript* */
-
-/*
- * Here single JSTVU_SINGLE covers both jsval and pointers to any GC-thing via
- * reinterpreting the thing as JSVAL_OBJECT. It works because the GC-thing is
- * aligned on a 0 mod 8 boundary, and object has the 0 jsval tag. So any
- * GC-thing may be tagged as if it were an object and untagged, if it's then
- * used only as an opaque pointer until discriminated by other means than tag
- * bits. This is how, for example, js_GetGCThingTraceKind uses its |thing|
- * parameter -- it consults GC-thing flags stored separately from the thing to
- * decide the kind of thing.
- *
- * The following checks that this type-punning is possible.
- */
-JS_STATIC_ASSERT(sizeof(JSTempValueUnion) == sizeof(jsval));
-JS_STATIC_ASSERT(sizeof(JSTempValueUnion) == sizeof(void *));
-
-#define JS_PUSH_TEMP_ROOT_COMMON(cx,x,tvr,cnt,kind)                           \
-    JS_BEGIN_MACRO                                                            \
-        JS_ASSERT((cx)->tempValueRooters != (tvr));                           \
-        (tvr)->count = (cnt);                                                 \
-        (tvr)->u.kind = (x);                                                  \
-        (tvr)->down = (cx)->tempValueRooters;                                 \
-        (cx)->tempValueRooters = (tvr);                                       \
-    JS_END_MACRO
-
-#define JS_POP_TEMP_ROOT(cx,tvr)                                              \
-    JS_BEGIN_MACRO                                                            \
-        JS_ASSERT((cx)->tempValueRooters == (tvr));                           \
-        (cx)->tempValueRooters = (tvr)->down;                                 \
-    JS_END_MACRO
-
-#define JS_PUSH_TEMP_ROOT(cx,cnt,arr,tvr)                                     \
-    JS_BEGIN_MACRO                                                            \
-        JS_ASSERT((ptrdiff_t)(cnt) >= 0);                                     \
-        JS_PUSH_TEMP_ROOT_COMMON(cx, arr, tvr, (ptrdiff_t) (cnt), array);     \
-    JS_END_MACRO
-
-#define JS_PUSH_SINGLE_TEMP_ROOT(cx,val,tvr)                                  \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, val, tvr, JSTVU_SINGLE, value)
-
-#define JS_PUSH_TEMP_ROOT_OBJECT(cx,obj,tvr)                                  \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, obj, tvr, JSTVU_SINGLE, object)
-
-#define JS_PUSH_TEMP_ROOT_STRING(cx,str,tvr)                                  \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, str, tvr, JSTVU_SINGLE, string)
-
-#define JS_PUSH_TEMP_ROOT_QNAME(cx,qn,tvr)                                    \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, qn, tvr, JSTVU_SINGLE, qname)
-
-#define JS_PUSH_TEMP_ROOT_NAMESPACE(cx,ns,tvr)                                \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, ns, tvr, JSTVU_SINGLE, nspace)
-
-#define JS_PUSH_TEMP_ROOT_XML(cx,xml_,tvr)                                    \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, xml_, tvr, JSTVU_SINGLE, xml)
-
-#define JS_PUSH_TEMP_ROOT_MARKER(cx,marker_,tvr)                              \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, marker_, tvr, JSTVU_MARKER, marker)
-
-#define JS_PUSH_TEMP_ROOT_SPROP(cx,sprop_,tvr)                                \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, sprop_, tvr, JSTVU_SPROP, sprop)
-
-#define JS_PUSH_TEMP_ROOT_WEAK_COPY(cx,weakRoots_,tvr)                        \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, weakRoots_, tvr, JSTVU_WEAK_ROOTS, weakRoots)
-
-#define JS_PUSH_TEMP_ROOT_SCRIPT(cx,script_,tvr)                              \
-    JS_PUSH_TEMP_ROOT_COMMON(cx, script_, tvr, JSTVU_SCRIPT, script)
-
 struct JSContext {
-    /* JSRuntime contextList linkage. */
     JSCList             links;
 
     /* Interpreter activation count. */
@@ -623,7 +313,7 @@ struct JSContext {
     jsuword             stackLimit;
 
     /* Runtime version control identifier and equality operators. */
-    uint16              version;
+    JSVersion           version;
     jsbytecode          jsop_eq;
     jsbytecode          jsop_ne;
 
@@ -640,8 +330,11 @@ struct JSContext {
     /* Top-level object and pointer to top stack frame's scope chain. */
     JSObject            *globalObject;
 
-    /* Storage to root recently allocated GC things and script result. */
-    JSWeakRoots         weakRoots;
+    /* Most recently created things by type, members of the GC's root set. */
+    JSGCThing           *newborn[GCX_NTYPES];
+
+    /* Atom root for the last-looked-up atom on this context. */
+    JSAtom              *lastAtom;
 
     /* Regular expression class statics (XXX not shared globally). */
     JSRegExpStatics     regExpStatics;
@@ -668,15 +361,11 @@ struct JSContext {
     /* GC and thread-safe state. */
     JSStackFrame        *dormantFrameChain; /* dormant stack frame to scan */
 #ifdef JS_THREADSAFE
-    JSThread            *thread;
+    jsword              thread;
     jsrefcount          requestDepth;
     JSScope             *scopeToShare;      /* weak reference, see jslock.c */
     JSScope             *lockedSealedScope; /* weak ref, for low-cost sealed
                                                scope locking */
-    JSCList             threadLinks;        /* JSThread contextList linkage */
-
-#define CX_FROM_THREAD_LINKS(tl) \
-    ((JSContext *)((char *)(tl) - offsetof(JSContext, threadLinks)))
 #endif
 
 #if JS_HAS_LVALUE_RETURN
@@ -690,20 +379,10 @@ struct JSContext {
     JSPackedBool        rval2set;
 #endif
 
-#if JS_HAS_XML_SUPPORT
-    /*
-     * Bit-set formed from binary exponentials of the XML_* tiny-ids defined
-     * for boolean settings in jsxml.c, plus an XSF_CACHE_VALID bit.  Together
-     * these act as a cache of the boolean XML.ignore* and XML.prettyPrinting
-     * property values associated with this context's global object.
-     */
-    uint8               xmlSettingFlags;
-#endif
-
     /*
      * True if creating an exception object, to prevent runaway recursion.
-     * NB: creatingException packs with rval2set, #if JS_HAS_LVALUE_RETURN;
-     * with xmlSettingFlags, #if JS_HAS_XML_SUPPORT; and with throwing below.
+     * NB: creatingException packs with rval2set, #if JS_HAS_LVALUE_RETURN,
+     * and with throwing, below.
      */
     JSPackedBool        creatingException;
 
@@ -713,8 +392,6 @@ struct JSContext {
      */
     JSPackedBool        throwing;           /* is there a pending exception? */
     jsval               exception;          /* most-recently-thrown exception */
-    /* Flag to indicate that we run inside gcCallback(cx, JSGC_MARK_END). */
-    JSPackedBool        insideGCMarkCallback;
 
     /* Per-context options. */
     uint32              options;            /* see jsapi.h for JSOPTION_* */
@@ -733,121 +410,20 @@ struct JSContext {
     /* PDL of stack headers describing stack slots not rooted by argv, etc. */
     JSStackHeader       *stackHeaders;
 
-    /* Optional stack of heap-allocated scoped local GC roots. */
-    JSLocalRootStack    *localRootStack;
-
-    /* Stack of thread-stack-allocated temporary GC roots. */
-    JSTempValueRooter   *tempValueRooters;
-
-#ifdef GC_MARK_DEBUG
-    /* Top of the GC mark stack. */
-    void                *gcCurrentMarkNode;
-#endif
+    /* Optional hook to find principals for an object being accessed on cx. */
+    JSObjectPrincipalsFinder findObjectPrincipals;
 };
 
-#ifdef JS_THREADSAFE
-# define JS_THREAD_ID(cx)       ((cx)->thread ? (cx)->thread->id : 0)
-#endif
+/* Slightly more readable macros, also to hide bitset implementation detail. */
+#define JS_HAS_STRICT_OPTION(cx)        ((cx)->options & JSOPTION_STRICT)
+#define JS_HAS_WERROR_OPTION(cx)        ((cx)->options & JSOPTION_WERROR)
+#define JS_HAS_COMPILE_N_GO_OPTION(cx)  ((cx)->options & JSOPTION_COMPILE_N_GO)
 
-#ifdef __cplusplus
-/* FIXME(bug 332648): Move this into a public header. */
-class JSAutoTempValueRooter
-{
-  public:
-    JSAutoTempValueRooter(JSContext *cx, size_t len, jsval *vec)
-        : mContext(cx) {
-        JS_PUSH_TEMP_ROOT(mContext, len, vec, &mTvr);
-    }
-    JSAutoTempValueRooter(JSContext *cx, jsval v)
-        : mContext(cx) {
-        JS_PUSH_SINGLE_TEMP_ROOT(mContext, v, &mTvr);
-    }
-
-    ~JSAutoTempValueRooter() {
-        JS_POP_TEMP_ROOT(mContext, &mTvr);
-    }
-
-  private:
-    static void *operator new(size_t);
-    static void operator delete(void *, size_t);
-
-    JSContext *mContext;
-    JSTempValueRooter mTvr;
-};
-#endif
-
-/*
- * Slightly more readable macros for testing per-context option settings (also
- * to hide bitset implementation detail).
- *
- * JSOPTION_XML must be handled specially in order to propagate from compile-
- * to run-time (from cx->options to script->version/cx->version).  To do that,
- * we copy JSOPTION_XML from cx->options into cx->version as JSVERSION_HAS_XML
- * whenever options are set, and preserve this XML flag across version number
- * changes done via the JS_SetVersion API.
- *
- * But when executing a script or scripted function, the interpreter changes
- * cx->version, including the XML flag, to script->version.  Thus JSOPTION_XML
- * is a compile-time option that causes a run-time version change during each
- * activation of the compiled script.  That version change has the effect of
- * changing JS_HAS_XML_OPTION, so that any compiling done via eval enables XML
- * support.  If an XML-enabled script or function calls a non-XML function,
- * the flag bit will be cleared during the callee's activation.
- *
- * Note that JS_SetVersion API calls never pass JSVERSION_HAS_XML or'd into
- * that API's version parameter.
- *
- * Note also that script->version must contain this XML option flag in order
- * for XDR'ed scripts to serialize and deserialize with that option preserved
- * for detection at run-time.  We can't copy other compile-time options into
- * script->version because that would break backward compatibility (certain
- * other options, e.g. JSOPTION_VAROBJFIX, are analogous to JSOPTION_XML).
- */
-#define JS_HAS_OPTION(cx,option)        (((cx)->options & (option)) != 0)
-#define JS_HAS_STRICT_OPTION(cx)        JS_HAS_OPTION(cx, JSOPTION_STRICT)
-#define JS_HAS_WERROR_OPTION(cx)        JS_HAS_OPTION(cx, JSOPTION_WERROR)
-#define JS_HAS_COMPILE_N_GO_OPTION(cx)  JS_HAS_OPTION(cx, JSOPTION_COMPILE_N_GO)
-#define JS_HAS_ATLINE_OPTION(cx)        JS_HAS_OPTION(cx, JSOPTION_ATLINE)
-
-#define JSVERSION_MASK                  0x0FFF  /* see JSVersion in jspubtd.h */
-#define JSVERSION_HAS_XML               0x1000  /* flag induced by XML option */
-
-#define JSVERSION_NUMBER(cx)            ((cx)->version & JSVERSION_MASK)
-#define JS_HAS_XML_OPTION(cx)           ((cx)->version & JSVERSION_HAS_XML || \
-                                         JSVERSION_NUMBER(cx) >= JSVERSION_1_6)
-
-#define JS_HAS_NATIVE_BRANCH_CALLBACK_OPTION(cx)                              \
-    JS_HAS_OPTION(cx, JSOPTION_NATIVE_BRANCH_CALLBACK)
-
-/*
- * Wrappers for the JSVERSION_IS_* macros from jspubtd.h taking JSContext *cx
- * and masking off the XML flag and any other high order bits.
- */
-#define JS_VERSION_IS_ECMA(cx)          JSVERSION_IS_ECMA(JSVERSION_NUMBER(cx))
-
-/*
- * Common subroutine of JS_SetVersion and js_SetVersion, to update per-context
- * data that depends on version.
- */
-extern void
-js_OnVersionChange(JSContext *cx);
-
-/*
- * Unlike the JS_SetVersion API, this function stores JSVERSION_HAS_XML and
- * any future non-version-number flags induced by compiler options.
- */
-extern void
-js_SetVersion(JSContext *cx, JSVersion version);
-
-/*
- * Create and destroy functions for JSContext, which is manually allocated
- * and exclusively owned.
- */
 extern JSContext *
 js_NewContext(JSRuntime *rt, size_t stackChunkSize);
 
 extern void
-js_DestroyContext(JSContext *cx, JSDestroyContextMode mode);
+js_DestroyContext(JSContext *cx, JSGCMode gcmode);
 
 /*
  * Return true if cx points to a context in rt->contextList, else return false.
@@ -862,43 +438,6 @@ js_ValidContextPointer(JSRuntime *rt, JSContext *cx);
  */
 extern JSContext *
 js_ContextIterator(JSRuntime *rt, JSBool unlocked, JSContext **iterp);
-
-/*
- * JSClass.resolve and watchpoint recursion damping machinery.
- */
-extern JSBool
-js_StartResolving(JSContext *cx, JSResolvingKey *key, uint32 flag,
-                  JSResolvingEntry **entryp);
-
-extern void
-js_StopResolving(JSContext *cx, JSResolvingKey *key, uint32 flag,
-                 JSResolvingEntry *entry, uint32 generation);
-
-/*
- * Local root set management.
- *
- * NB: the jsval parameters below may be properly tagged jsvals, or GC-thing
- * pointers cast to (jsval).  This relies on JSObject's tag being zero, but
- * on the up side it lets us push int-jsval-encoded scopeMark values on the
- * local root stack.
- */
-extern JSBool
-js_EnterLocalRootScope(JSContext *cx);
-
-#define js_LeaveLocalRootScope(cx) \
-    js_LeaveLocalRootScopeWithResult(cx, JSVAL_NULL)
-
-extern void
-js_LeaveLocalRootScopeWithResult(JSContext *cx, jsval rval);
-
-extern void
-js_ForgetLocalRoot(JSContext *cx, jsval v);
-
-extern int
-js_PushLocalRoot(JSContext *cx, JSLocalRootStack *lrs, jsval v);
-
-extern void
-js_MarkLocalRoots(JSContext *cx, JSLocalRootStack *lrs);
 
 /*
  * Report an exception, which is currently realized as a printf-style format
@@ -932,7 +471,7 @@ js_ExpandErrorArguments(JSContext *cx, JSErrorCallback callback,
 #endif
 
 extern void
-js_ReportOutOfMemory(JSContext *cx);
+js_ReportOutOfMemory(JSContext *cx, JSErrorCallback errorCallback);
 
 /*
  * Report an exception using a previously composed JSErrorReport.

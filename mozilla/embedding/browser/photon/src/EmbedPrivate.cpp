@@ -1,40 +1,24 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Christopher Blizzard. Portions created by Christopher Blizzard are Copyright (C) Christopher Blizzard.  All Rights Reserved.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Christopher Blizzard.
+ * Portions created by Christopher Blizzard are Copyright (C)
+ * Christopher Blizzard.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Christopher Blizzard <blizzard@mozilla.org>
  *   Brian Edmond <briane@qnx.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include <nsIDocShell.h>
 #include <nsIURI.h>
@@ -74,10 +58,6 @@
 #include "nsIWebBrowserPrint.h"
 #include "nsIClipboardCommands.h"
 
-// for the clipboard input group setting
-#include "nsClipboard.h"
-#include "nsWidgetsCID.h"
-
 // for the focus hacking we need to do
 #include <nsIFocusController.h>
 
@@ -100,12 +80,10 @@
 extern char *g_Print_Left_Header_String, *g_Print_Right_Header_String, *g_Print_Left_Footer_String, *g_Print_Right_Footer_String;
 
 static const char sWatcherContractID[] = "@mozilla.org/embedcomp/window-watcher;1";
-static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
 nsIAppShell *EmbedPrivate::sAppShell    = nsnull;
 nsIPref     *EmbedPrivate::sPrefs       = nsnull;
 nsVoidArray *EmbedPrivate::sWindowList  = nsnull;
-nsClipboard *EmbedPrivate::sClipboard   = nsnull;
 
 EmbedPrivate::EmbedPrivate(void)
 {
@@ -125,13 +103,6 @@ EmbedPrivate::EmbedPrivate(void)
   		sWindowList = new nsVoidArray();
 	}
 	sWindowList->AppendElement(this);
-	if( !sClipboard ) {
-		nsresult rv;
-		nsCOMPtr<nsClipboard> s;
-		s = do_GetService( kCClipboardCID, &rv );
-		sClipboard = ( nsClipboard * ) s;
-		if( NS_FAILED( rv ) ) sClipboard = 0;
-	}
 }
 
 EmbedPrivate::~EmbedPrivate()
@@ -484,18 +455,6 @@ EmbedPrivate::ScrollRight(int amount)
 		rv = oDomWindow->ScrollBy(amount, 0);
 }
 
-void
-EmbedPrivate::ScrollTo(int x, int y)
-{
-  	nsCOMPtr<nsIWebBrowser> webBrowser;
-  	mWindow->GetWebBrowser(getter_AddRefs(webBrowser));
-
-	nsCOMPtr<nsIDOMWindow> oDomWindow;
-	nsresult rv = webBrowser->GetContentDOMWindow(getter_AddRefs(oDomWindow));
-
-	if (oDomWindow)
-		rv = oDomWindow->ScrollTo(x, y);
-}
 
 
 
@@ -524,50 +483,30 @@ EmbedPrivate::CanGoForward()
 }
 
 void
-EmbedPrivate::Cut(int ig)
+EmbedPrivate::Cut()
 {
 	nsCOMPtr<nsIClipboardCommands> clipboard(do_GetInterface(mWindow->mWebBrowser));
-	if (clipboard) {
-		//
-		// Pass Voyager input group to clipboard functions.
-		// Using Ctrl-C/V does not do this, only Edit->Copy/Paste.
-		//
-		if (sClipboard)
-			sClipboard->SetInputGroup(ig);
+	if (clipboard)
 	    clipboard->CutSelection();
-		}
 }
 
 void
-EmbedPrivate::Copy(int ig)
+EmbedPrivate::Copy()
 {
 	nsCOMPtr<nsIClipboardCommands> clipboard(do_GetInterface(mWindow->mWebBrowser));
-	if (clipboard) {
-		//
-		// Pass Voyager input group to clipboard functions.
-		// Using Ctrl-C/V does not do this, only Edit->Copy/Paste.
-		//
-		if (sClipboard)
-			sClipboard->SetInputGroup(ig);
+	if (clipboard)
 	    clipboard->CopySelection();
-		}
 }
 
 void
-EmbedPrivate::Paste(int ig)
+EmbedPrivate::Paste()
 {
 	nsCOMPtr<nsIClipboardCommands> clipboard(do_GetInterface(mWindow->mWebBrowser));
-	if (clipboard) {
-		//
-		// Pass Voyager input group to clipboard functions.
-		// Using Ctrl-C/V does not do this, only Edit->Copy/Paste.
-		//
-		if (sClipboard)
-			sClipboard->SetInputGroup(ig);
+	if (clipboard)
 	    clipboard->Paste();
-		}
 }
 
+#include <nsIWebShell.h>
 void
 EmbedPrivate::SelectAll()
 {
@@ -636,6 +575,7 @@ EmbedPrivate::Print(PpPrintContext_t *pc)
     {
     printSettings->SetPrintSilent(PR_TRUE);
 		printSettings->SetEndPageRange((PRInt32) pc);
+
 
 		nsAutoString format_left_footer;
 		PrintHeaderFooter_FormatSpecialCodes( g_Print_Left_Footer_String, format_left_footer );
@@ -788,7 +728,6 @@ EmbedPrivate::ContentFinishedLoading(void)
 }
 
 
-
 #if 0
 
 /*
@@ -796,7 +735,6 @@ EmbedPrivate::ContentFinishedLoading(void)
 	child_getting_focus/child_losing_focus methods
 	of the PtMozilla widget class
 */
-
 
 // handle focus in and focus out events
 void
@@ -808,7 +746,8 @@ EmbedPrivate::TopLevelFocusIn(void)
   if (!piWin)
     return;
 
-  nsIFocusController *focusController = piWin->GetRootFocusController();
+  nsCOMPtr<nsIFocusController> focusController;
+  piWin->GetRootFocusController(getter_AddRefs(focusController));
   if (focusController)
     focusController->SetActive(PR_TRUE);
 }
@@ -822,7 +761,8 @@ EmbedPrivate::TopLevelFocusOut(void)
   if (!piWin)
     return;
 
-  nsIFocusController *focusController = piWin->GetRootFocusController();
+  nsCOMPtr<nsIFocusController> focusController;
+  piWin->GetRootFocusController(getter_AddRefs(focusController));
   if (focusController)
     focusController->SetActive(PR_FALSE);
 }
@@ -852,14 +792,14 @@ EmbedPrivate::ChildFocusOut(void)
 
   // but the window is still active until the toplevel gets a focus
   // out
-  nsIFocusController *focusController = piWin->GetRootFocusController();
+  nsCOMPtr<nsIFocusController> focusController;
+  piWin->GetRootFocusController(getter_AddRefs(focusController));
   if (focusController)
     focusController->SetActive(PR_TRUE);
 
 }
 
 #endif
-
 
 // Get the event listener for the chrome event handler.
 
@@ -875,7 +815,10 @@ EmbedPrivate::GetListener(void)
   if (!piWin)
     return;
 
-  mEventReceiver = do_QueryInterface(piWin->GetChromeEventHandler());
+  nsCOMPtr<nsIChromeEventHandler> chromeHandler;
+  piWin->GetChromeEventHandler(getter_AddRefs(chromeHandler));
+
+  mEventReceiver = do_QueryInterface(chromeHandler);
 }
 
 // attach key and mouse event listeners
@@ -958,8 +901,14 @@ EmbedPrivate::GetPIDOMWindow(nsPIDOMWindow **aPIWin)
   // get the private DOM window
   nsCOMPtr<nsPIDOMWindow> domWindowPrivate = do_QueryInterface(domWindow);
   // and the root window for that DOM window
-	*aPIWin = domWindowPrivate->GetPrivateRoot();
+  nsCOMPtr<nsIDOMWindowInternal> rootWindow;
+  domWindowPrivate->GetPrivateRoot(getter_AddRefs(rootWindow));
   
+  nsCOMPtr<nsIChromeEventHandler> chromeHandler;
+  nsCOMPtr<nsPIDOMWindow> piWin(do_QueryInterface(rootWindow));
+
+  *aPIWin = piWin.get();
+
   if (*aPIWin) {
     NS_ADDREF(*aPIWin);
     return NS_OK;
@@ -1001,6 +950,7 @@ static void mozilla_set_default_pref( nsIPref *pref )
 //	pref->SetIntPref( "browser.cache.check_doc_frequency", 2 );
 	pref->SetBoolPref( "browser.cache.disk.enable", PR_TRUE );
 	pref->SetIntPref( "browser.cache.disk.capacity", 5000 );
+	pref->SetIntPref( "network.http.connect.timeout", 2400 );
 	pref->SetIntPref( "network.http.max-connections", 4 );
 	pref->SetIntPref( "network.proxy.http_port", 80 );
 	pref->SetIntPref( "network.proxy.ftp_port", 80 );

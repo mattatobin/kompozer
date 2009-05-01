@@ -1,10 +1,10 @@
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -13,28 +13,28 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alec Flett  <alecf@netscape.com>
- *   Ben Goodger <ben@netscape.com>
- *   Blake Ross  <blakeross@telocity.com>
- *   Joe Hewitt <hewitt@netscape.com>
+ *  Alec Flett  <alecf@netscape.com>
+ *  Ben Goodger <ben@netscape.com>
+ *  Blake Ross  <blakeross@telocity.com>
+ *  Joe Hewitt <hewitt@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -69,51 +69,37 @@ function showControls()
 
 function setLabelForNode(aNode, aLabel, aIsLabelFlag)
 {
-  // This is for labels which may contain embedded access keys.
-  // If we end in (&X) where X represents the access key, optionally preceded
-  // by spaces and/or followed by the ':' character, store the access key and
-  // remove the access key placeholder + leading spaces from the label.
-  // Otherwise a character preceded by one but not two &s is the access key.
-  // Store it and remove the &.
-
-  // Note that if you change the following code, see the comment of
-  // nsTextBoxFrame::UpdateAccessTitle.
-  var accessKey = null;
-  if (/ *\(\&([^&])\)(:)?$/.test(aLabel)) {
-    aLabel = RegExp.leftContext + RegExp.$2;
-    accessKey = RegExp.$1;
-  } else if (/^(.*[^&])?\&(([^&]).*$)/.test(aLabel)) {
-    aLabel = RegExp.$1 + RegExp.$2;
-    accessKey = RegExp.$3;
+  // This is for labels with possible accesskeys
+  var accessKeyIndex;
+  if (/^\&[^\&]/.test(aLabel)) { // access key is at the start
+   accessKeyIndex = 0;
+  } else {
+    accessKeyIndex = aLabel.search(/[^\&]\&[^\&]/) + 1;
+    if (accessKeyIndex == 0) {
+      accessKeyIndex = -1; // magic value for no accesskey
+    }
   }
 
-  // && is the magic sequence to embed an & in your label.
+  // If a character has an & before it, then it should become an accesskey
+  if (accessKeyIndex >= 0 && accessKeyIndex < aLabel.length - 1) {
+    // This will also cause the accesskey attribute to be set via xbl
+    aNode.accessKey = aLabel.charAt(accessKeyIndex + 1);
+    // Set the label to the string without the &
+    aLabel = aLabel.substr(0, accessKeyIndex) + 
+             aLabel.substr(accessKeyIndex + 1);
+  }
   aLabel = aLabel.replace(/\&\&/g, "&");
   if (aIsLabelFlag) {    // Set text for <label> element
     aNode.setAttribute("value", aLabel);
   } else {    // Set text for other xul elements
     aNode.label = aLabel;
   }
-
-  // XXXjag bug 325251
-  // Need to set this after aNode.setAttribute("value", aLabel);
-  if (accessKey)
-    aNode.accessKey = accessKey;
 }
 
 function commonDialogOnLoad()
 {
-  // Set the document title. On Mac, we only care about URI's.
-  if (/Mac/.test(navigator.platform)) {
-    var titleString = gCommonDialogParam.GetString(12);
-    if (/^\w+:\/\/\w/.test(titleString)) {
-      setElementText("info.title", titleString, true);
-      unHideElementById("info.title"); // Show URI inside dialog.
-    }
-  }
-  else {
-    document.title = gCommonDialogParam.GetString(12);
-  }
+  // set the window title
+  window.title = gCommonDialogParam.GetString(12);
 
   // set the number of command buttons
   var nButtons = gCommonDialogParam.GetInt(2);
@@ -177,13 +163,28 @@ function commonDialogOnLoad()
 
   if (gCommonDialogParam.GetInt(3) == 0) // If no text fields
   {
-    var dlgButtons = ['accept', 'cancel', 'extra1', 'extra2'];
-
-    // Set the default button
-    var dButton = dlgButtons[gCommonDialogParam.GetInt(5)];
-    document.documentElement.defaultButton = dButton;
-    if (!/Mac/.test(navigator.platform))
-      document.documentElement.getButton(dButton).focus();
+    var dButton;
+    var defaultButton = gCommonDialogParam.GetInt(5);
+    switch (defaultButton) {
+      case 3:
+        dButton = document.documentElement.getButton("extra2");
+        break;
+      case 2:
+        dButton = document.documentElement.getButton("extra1");
+        break;
+      case 1:
+        dButton = document.documentElement.getButton("cancel");
+        break;
+      default:
+      case 0:
+        dButton = document.documentElement.getButton("accept");
+        break;
+    }
+    // move the default attribute and focus from the accept button
+    // to the one specified in the dialog params
+    document.documentElement.getButton("accept").setAttribute("default",false);
+    dButton.setAttribute("default", true);
+    dButton.focus();
   }
 
   if (gCommonDialogParam.GetInt(6) != 0) // delay button enable
@@ -200,53 +201,16 @@ function commonDialogOnLoad()
     document.documentElement.getButton("extra2").disabled = true;
 
     setTimeout(commonDialogReenableButtons, delayInterval);
-
-    addEventListener("blur", commonDialogBlur, false);
-    addEventListener("focus", commonDialogFocus, false);
   }
 
   getAttention();
 }
 
-var gDelayExpired = false;
-var gBlurred = false;
-
-function commonDialogBlur(aEvent)
-{
-  if (aEvent.target != document)
-    return;
-
-  gBlurred = true;
-  document.documentElement.getButton("accept").disabled = true;
-  document.documentElement.getButton("extra1").disabled = true;
-  document.documentElement.getButton("extra2").disabled = true;
-}
-
-function commonDialogFocus(aEvent)
-{
-  if (aEvent.target != document)
-    return;
-
-  gBlurred = false;
-  // When refocusing the window, don't enable the buttons unless the countdown
-  // delay has expired.
-  if (gDelayExpired) {
-    var script = "document.documentElement.getButton('accept').disabled = false; ";
-    script += "document.documentElement.getButton('extra1').disabled = false; ";
-    script += "document.documentElement.getButton('extra2').disabled = false;";
-    setTimeout(script, 1000);
-  }
-}
-
 function commonDialogReenableButtons()
 {
-  // Don't automatically enable the buttons if we're not in the foreground
-  if (!gBlurred) {
     document.documentElement.getButton("accept").disabled = false;
     document.documentElement.getButton("extra1").disabled = false;
     document.documentElement.getButton("extra2").disabled = false;
-  }
-  gDelayExpired = true;
 }
 
 function initTextbox(aName, aLabelIndex, aValueIndex, aAlwaysLabel)

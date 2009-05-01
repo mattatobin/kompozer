@@ -1,39 +1,24 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla Navigator.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 1998-2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corp.  Portions created by Netscape Communications Corp. are
+ * Copyright (C) 1998, 1999, 2000, 2001 Netscape Communications Corp.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Sean Su <ssu@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include <windows.h>
 #include <string.h>
@@ -293,8 +278,12 @@ void SetStatusStatus(void)
 
   if(!gbShowDownloadRetryMsg)
   {
-    GetConfigIniProfileString("Strings", "Status Download", "",
-                            szStatusStatusLine, sizeof(szStatusStatusLine));
+    GetPrivateProfileString("Strings",
+                            "Status Download",
+                            "",
+                            szStatusStatusLine,
+                            sizeof(szStatusStatusLine),
+                            szFileIniConfig);
     if(*szStatusStatusLine != '\0')
       sprintf(szCurrentStatusInfo,
               szStatusStatusLine,
@@ -312,8 +301,12 @@ void SetStatusStatus(void)
   }
   else
   {
-    GetConfigIniProfileString("Strings", "Status Retry", "",
-			      szStatusStatusLine, sizeof(szStatusStatusLine));
+    GetPrivateProfileString("Strings",
+                            "Status Retry",
+                            "",
+                            szStatusStatusLine,
+                            sizeof(szStatusStatusLine),
+                            szFileIniConfig);
     if(*szStatusStatusLine != '\0')
       sprintf(szCurrentStatusInfo,
               szStatusStatusLine,
@@ -330,8 +323,12 @@ void SetStatusStatus(void)
               glTotalKb);
   }
 
-  GetConfigIniProfileString("Strings", "Status Percentage Completed", "",
-			    szPercentageCompleted, sizeof(szPercentageCompleted));
+  GetPrivateProfileString("Strings",
+                          "Status Percentage Completed",
+                          "",
+                          szPercentageCompleted,
+                          sizeof(szPercentageCompleted),
+                          szFileIniConfig);
   wsprintf(szPercentString, szPercentageCompleted, (int)GetPercentSoFar());
 
   /* Set the download dialog title */
@@ -389,7 +386,7 @@ void SetMinimizedDownloadTitle(DWORD dwPercentSoFar)
   char szDownloadTitle[MAX_BUF_MEDIUM];
   char gszCurrentDownloadInfo[MAX_BUF_MEDIUM];
 
-  GetConfigIniProfileString("Strings", "Dialog Download Title Minimized", "", szDownloadTitle, sizeof(szDownloadTitle));
+  GetPrivateProfileString("Strings", "Dialog Download Title Minimized", "", szDownloadTitle, sizeof(szDownloadTitle), szFileIniConfig);
 
   if(*szDownloadTitle != '\0')
     wsprintf(gszCurrentDownloadInfo, szDownloadTitle, dwPercentSoFar, gszCurrentDownloadFilename);
@@ -547,7 +544,7 @@ int DownloadViaProxyOpen(char *szUrl, char *szProxyServer, char *szProxyPort, ch
   {
     char szBuf[MAX_BUF_TINY];
 
-    GetConfigIniProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf));
+    GetPrivateProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf), szFileIniConfig);
     PrintError(szBuf, ERROR_CODE_HIDE);
 
     return(WIZ_OUT_OF_MEMORY);
@@ -602,7 +599,7 @@ int DownloadViaProxy(char *szUrl, char *szProxyServer, char *szProxyPort, char *
   {
     char szBuf[MAX_BUF_TINY];
 
-    GetConfigIniProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf));
+    GetPrivateProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf), szFileIniConfig);
     PrintError(szBuf, ERROR_CODE_HIDE);
 
     return(WIZ_OUT_OF_MEMORY);
@@ -705,7 +702,7 @@ int DownloadViaFTPOpen(char *szUrl)
   {
     char szBuf[MAX_BUF_TINY];
 
-    GetConfigIniProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf));
+    GetPrivateProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf), szFileIniConfig);
     PrintError(szBuf, ERROR_CODE_HIDE);
 
     return(WIZ_OUT_OF_MEMORY);
@@ -754,7 +751,7 @@ int DownloadViaFTP(char *szUrl)
   {
     char szBuf[MAX_BUF_TINY];
 
-    GetConfigIniProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf));
+    GetPrivateProfileString("Strings", "Error Out Of Memory", "", szBuf, sizeof(szBuf), szFileIniConfig);
     PrintError(szBuf, ERROR_CODE_HIDE);
 
     return(WIZ_OUT_OF_MEMORY);
@@ -1060,10 +1057,18 @@ int DownloadFiles(char *szInputIniFile,
           /* The connection unexepectedly dropped for some reason, so inform
            * the user that the download will be Paused, and then update the
            * Download dialog to show the Paused state. */
-          GetConfigIniProfileString("Messages", "MB_WARNING_STR", "",
-				    szTitle, sizeof(szTitle));
-          GetConfigIniProfileString("Strings", "Message Download Paused", "",
-				    szMsgDownloadPaused, sizeof(szMsgDownloadPaused));
+          GetPrivateProfileString("Messages",
+                                  "MB_WARNING_STR",
+                                  "",
+                                  szTitle,
+                                  sizeof(szTitle),
+                                  szFileIniInstall);
+          GetPrivateProfileString("Strings",
+                                  "Message Download Paused",
+                                  "",
+                                  szMsgDownloadPaused,
+                                  sizeof(szMsgDownloadPaused),
+                                  szFileIniConfig);
           MessageBox(dlgInfo.hWndDlg,
                      szMsgDownloadPaused,
                      szTitle,
@@ -1149,8 +1154,12 @@ int DownloadFiles(char *szInputIniFile,
       if(szFailedFile && ((DWORD)lstrlen(szCurrentFile) <= dwFailedFileSize))
         lstrcpy(szFailedFile, gszCurrentDownloadFileDescription);
 
-      GetConfigIniProfileString("Strings", "Error Too Many Network Errors", "",
-				szMsg, sizeof(szMsg));
+      GetPrivateProfileString("Strings",
+                              "Error Too Many Network Errors",
+                              "",
+                              szMsg,
+                              sizeof(szMsg),
+                              szFileIniConfig);
       if(*szMsg != '\0')
       {
         wsprintf(szBuf, szMsg, szCurrentFile);
@@ -1227,8 +1236,12 @@ DownloadDlgProc(HWND hWndDlg, UINT msg, WPARAM wParam, LPARAM lParam)
   switch (msg)
   {
     case WM_INITDIALOG:
-      GetConfigIniProfileString("Strings", "Status File Info", "",
-				gszFileInfo, sizeof(gszFileInfo));
+      GetPrivateProfileString("Strings",
+                              "Status File Info",
+                              "",
+                              gszFileInfo,
+                              sizeof(gszFileInfo),
+                              szFileIniConfig);
       if(gbShowDownloadRetryMsg)
         SetDlgItemText(hWndDlg, IDC_MESSAGE0, diDownload.szMessageRetry0);
       else
@@ -1381,7 +1394,7 @@ DrawGaugeBorder(HWND hWnd)
 	ReleaseDC(hWnd, hDC);
 }
 
-// Draws the progress bar
+// Draws the blue progress bar
 static void
 DrawProgressBar(HWND hWnd, int nBars)
 {
@@ -1402,7 +1415,7 @@ DrawProgressBar(HWND hWnd, int nBars)
   else
   {
   	// Draw the bars
-    hBrush = CreateSolidBrush(GetSysColor(COLOR_HIGHLIGHT));
+    hBrush = CreateSolidBrush(RGB(0, 0, 128));
 	  rect.left     = rect.top = BAR_LIBXPNET_MARGIN;
 	  rect.bottom  -= BAR_LIBXPNET_MARGIN;
 	  rect.right    = rect.left + BAR_LIBXPNET_WIDTH;

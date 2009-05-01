@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -56,7 +56,7 @@ txXSLTProcessor::init()
     TX_LG_CREATE;
 
 #ifdef TX_EXE
-    if (!txStandaloneNamespaceManager::init())
+    if (!txNamespaceManager::init())
         return MB_FALSE;
 
     if (NS_FAILED(txHTMLOutput::init())) {
@@ -80,7 +80,7 @@ void
 txXSLTProcessor::shutdown()
 {
 #ifdef TX_EXE
-    txStandaloneNamespaceManager::shutdown();
+    txNamespaceManager::shutdown();
     txHTMLOutput::shutdown();
 #endif
 

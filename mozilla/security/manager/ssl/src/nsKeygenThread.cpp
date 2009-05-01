@@ -1,46 +1,28 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
+ */
 
 #include "pk11func.h"
 #include "nsCOMPtr.h"
 #include "nsProxiedService.h"
 #include "nsKeygenThread.h"
-#include "nsIObserver.h"
+#include "nsIDOMWindowInternal.h"
 #include "nsNSSShutDown.h"
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsKeygenThread, nsIKeygenThread)
@@ -48,6 +30,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(nsKeygenThread, nsIKeygenThread)
 
 nsKeygenThread::nsKeygenThread()
 :mutex(nsnull),
+ statusDialogPtr(nsnull),
  iAmRunning(PR_FALSE),
  keygenReady(PR_FALSE),
  statusDialogClosed(PR_FALSE),
@@ -69,6 +52,10 @@ nsKeygenThread::~nsKeygenThread()
 {
   if (mutex) {
     PR_DestroyLock(mutex);
+  }
+  
+  if (statusDialogPtr) {
+    NS_RELEASE(statusDialogPtr);
   }
 }
 
@@ -141,24 +128,24 @@ static void PR_CALLBACK nsKeygenThreadRunner(void *arg)
   self->Run();
 }
 
-nsresult nsKeygenThread::StartKeyGeneration(nsIObserver* aObserver)
+nsresult nsKeygenThread::StartKeyGeneration(nsIDOMWindowInternal *statusDialog)
 {
   if (!mutex)
     return NS_OK;
 
-  if (!aObserver)
+  if (!statusDialog )
     return NS_OK;
 
   nsCOMPtr<nsIProxyObjectManager> proxyman(do_GetService(NS_XPCOMPROXY_CONTRACTID));
   if (!proxyman)
     return NS_OK;
 
-  nsCOMPtr<nsIObserver> obs;
+  nsCOMPtr<nsIDOMWindowInternal> wi;
   proxyman->GetProxyForObject( NS_UI_THREAD_EVENTQ,
-                               NS_GET_IID(nsIObserver),
-                               aObserver,
+                               nsIDOMWindowInternal::GetIID(),
+                               statusDialog,
                                PROXY_SYNC | PROXY_ALWAYS,
-                               getter_AddRefs(obs));
+                               getter_AddRefs(wi));
 
   PR_Lock(mutex);
 
@@ -167,7 +154,9 @@ nsresult nsKeygenThread::StartKeyGeneration(nsIObserver* aObserver)
       return NS_OK;
     }
 
-    observer.swap(obs);
+    statusDialogPtr = wi;
+    NS_ADDREF(statusDialogPtr);
+    wi = 0;
 
     iAmRunning = PR_TRUE;
 
@@ -185,10 +174,7 @@ nsresult nsKeygenThread::StartKeyGeneration(nsIObserver* aObserver)
 
 nsresult nsKeygenThread::UserCanceled(PRBool *threadAlreadyClosedDialog)
 {
-  if (!threadAlreadyClosedDialog)
-    return NS_OK;
-
-  *threadAlreadyClosedDialog = PR_FALSE;
+  threadAlreadyClosedDialog = PR_FALSE;
 
   if (!mutex)
     return NS_OK;
@@ -234,7 +220,8 @@ void nsKeygenThread::Run(void)
   // As long as key generation can't be canceled, we don't need 
   // to care for cleaning this up.
 
-  nsCOMPtr<nsIObserver> obs;
+  nsIDOMWindowInternal *windowToClose = 0;
+
   PR_Lock(mutex);
 
     keygenReady = PR_TRUE;
@@ -250,14 +237,15 @@ void nsKeygenThread::Run(void)
     wincx = 0;
 
     if (!statusDialogClosed)
-      obs = observer;
+      windowToClose = statusDialogPtr;
 
-    observer = nsnull;
+    statusDialogPtr = 0;
+    statusDialogClosed = PR_TRUE;
 
   PR_Unlock(mutex);
 
-  if (obs)
-    obs->Observe(nsnull, "keygen-finished", nsnull);
+  if (windowToClose)
+    windowToClose->Close();
 }
 
 void nsKeygenThread::Join()

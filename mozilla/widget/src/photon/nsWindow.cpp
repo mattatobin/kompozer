@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Jerry.Kirk@Nexwarecorp.com
- *   Dale.Stansberry@Nexwarecorop.com
+ *     Jerry.Kirk@Nexwarecorp.com
+ *	   Dale.Stansberry@Nexwarecorop.com
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -188,15 +188,14 @@ NS_IMETHODIMP nsWindow::CaptureRollupEvents( nsIRollupListener * aListener, PRBo
 		/* Different windows have different mLastMenu's */
 		if( mWindowType == eWindowType_popup && !( PtWidgetFlags( gMenuRegion ) & Pt_REALIZED ) ) {
 
-			PtWidget_t *pw = mParent ? ((nsWindow*)mParent)->mLastMenu : NULL;
+			PtWidget_t *pw = ((nsWindow*)mParent)->mLastMenu;
 
 			if( pw && ( PtWidgetFlags( pw ) & Pt_REALIZED ) && PtWidgetRid( pw ) > 0 )
 				PtSetResource( gMenuRegion, Pt_ARG_REGION_INFRONT, PtWidgetRid( pw ), 0 );
 			else {
 				if( !PtWidgetIsRealized( mWidget ) ) PtRealizeWidget( mWidget );
 				PtSetResource( gMenuRegion, Pt_ARG_REGION_INFRONT, PtWidgetRid( mWidget ), 0 );
-				if ( mParent )
-					((nsWindow*)mParent)->mLastMenu = mWidget;
+				((nsWindow*)mParent)->mLastMenu = mWidget;
 				}
 
 			PtRealizeWidget( gMenuRegion );
@@ -499,10 +498,9 @@ NS_METHOD nsWindow::Scroll( PRInt32 aDx, PRInt32 aDy, nsRect *aClipRect ) {
 	PhRect_t source = {{widget->area.pos.x, widget->area.pos.y},{widget->area.pos.x+ widget->area.size.w-1, widget->area.pos.y + widget->area.size.h-1}};
 	PhPoint_t point = { aDx, aDy };
 
-	if( !widget->damage_list ) {
-		static int count;
+	if( !widget->damage_list )
 		PtBlit( widget, &source, &point );
-	} else {
+	else {
 		/* first noticed as a scrolling problem in netscape email */
 		/* the scrolling should be clipped out by the rectangles given by Invalidate(). These are accumulated in widget->damage_list */
 		PhTile_t original = { source, NULL }, *clip;
@@ -548,7 +546,7 @@ NS_METHOD nsWindow::ScrollWidgets( PRInt32 aDx, PRInt32 aDy ) {
 	return NS_OK;    
 	}
 
-NS_METHOD nsWindow::SetTitle( const nsAString& aTitle ) {
+NS_METHOD nsWindow::SetTitle( const nsString& aTitle ) {
   if( mWidget ) {
   	char * title = ToNewUTF8String(aTitle);
     PtSetResource( mWidget, Pt_ARG_WINDOW_TITLE, title, 0 );
@@ -562,29 +560,6 @@ NS_IMETHODIMP nsWindow::Resize(PRInt32 aWidth, PRInt32 aHeight, PRBool aRepaint)
 {
 	PRBool nNeedToShow = PR_FALSE;
 	
-	if (mWidget) {
-		PtWidget_t *parent;
-		int n = 1;
-		for (parent = mWidget; parent && n <= 3; parent = parent->parent, n++) {
-			char *description = parent->class_rec->description;
-
-			if (description && strcmp(description, "PtMozilla") == 0) {
-				//
-				// For embedding, make sure the browser does not try to 
-				// resize itself bigger than the PtMozilla widget or else our
-				// scroll bars will be clipped. We don't go more than 3 levels
-				// deep or else we get into iframes, which we don't want to 
-				// cut off.
-				//
-				if (aWidth > parent->area.size.w)
-					aWidth = parent->area.size.w;
-				if (aHeight > parent->area.size.h)
-					aHeight = parent->area.size.h;
-				break; //for
-				}
-			}
-		}
-
 	if( aWidth == mBounds.width && aHeight == mBounds.height ) return NS_OK;
 	
 	mBounds.width  = aWidth;
@@ -619,13 +594,10 @@ NS_IMETHODIMP nsWindow::Resize(PRInt32 aWidth, PRInt32 aHeight, PRBool aRepaint)
 		if( aRepaint == PR_FALSE )  PtStartFlux(mWidget);
 		PtSetResource( mWidget, Pt_ARG_DIM, &dim, 0 );
 		if( aRepaint == PR_FALSE ) PtEndFlux(mWidget);
-
-		/* ATENTIE Remove when wojtek fixes PR:22930 in the photon library */
-		if( PtWidgetClass( mWidget ) == PtRegion ) PtSetResource( mWidget, Pt_ARG_REGION_OPAQUE, 0, Ph_EV_KEY );
 		}
 
 	if( mIsToplevel || mListenForResizes ) {
-		nsSizeEvent sevent(PR_TRUE, 0, nsnull);
+		nsSizeEvent sevent;
 		sevent.message = NS_SIZE;
 		sevent.widget = this;
 		
@@ -656,7 +628,7 @@ int nsWindow::WindowWMHandler( PtWidget_t *widget, void *data, PtCallbackInfo_t 
 			  NS_ADDREF(win);
 			  
 			  // dispatch an "onclose" event. to delete immediately, call win->Destroy()
-			  nsGUIEvent event(PR_TRUE, 0, nsnull);
+			  nsGUIEvent event;
 			  nsEventStatus status;
 			  
 			  event.message = NS_XUL_CLOSE;
@@ -696,7 +668,8 @@ void nsWindow::RawDrawFunc( PtWidget_t * pWidget, PhTile_t * damage )
   nsWindow  * pWin = (nsWindow*) GetInstance( pWidget );
   nsresult    result;
   PhTile_t  * dmg = NULL;
-  nsPaintEvent pev(PR_TRUE, 0, nsnull);
+  PRBool      aClipState;
+  nsPaintEvent pev;
   PhRect_t   extent;
 
   if( !pWin || !pWin->mContext ) return;
@@ -712,13 +685,7 @@ void nsWindow::RawDrawFunc( PtWidget_t * pWidget, PhTile_t * damage )
 		/* Build a List of Tiles that might be in front of me.... */
 		PhTile_t *new_damage, *clip_tiles, *intersect;
 		/* Intersect the Damage tile list w/ the clipped out list and see whats left! */
-#if 0
-		int count = 0;
-		for (new_damage = damage->next; new_damage; new_damage = new_damage->next)
-			count++;
-		printf("*** nsWindow::RawDrawFunc got %d damage tiles\n", count);
-#endif
-		new_damage = PhCopyTiles(damage->next);
+		new_damage = PhRectsToTiles(&damage->rect, 1);
 		PhDeTranslateTiles(new_damage, &offset);
 		clip_tiles = GetWindowClipping( pWidget );
 		if (clip_tiles) {
@@ -756,7 +723,7 @@ void nsWindow::RawDrawFunc( PtWidget_t * pWidget, PhTile_t * damage )
 			if( pev.renderingContext ) {
 				nsIRegion *ClipRegion = pWin->GetRegion( );
 				ClipRegion->SetTo( nsDmg.x, nsDmg.y, nsDmg.width, nsDmg.height );
-				pev.renderingContext->SetClipRegion( NS_STATIC_CAST(const nsIRegion &, *(ClipRegion)), nsClipCombine_kReplace );
+				pev.renderingContext->SetClipRegion( NS_STATIC_CAST(const nsIRegion &, *(ClipRegion)), nsClipCombine_kReplace, aClipState );
 
 				NS_RELEASE( ClipRegion );
 				
@@ -882,14 +849,30 @@ NS_METHOD nsWindow::Move( PRInt32 aX, PRInt32 aY ) {
 	switch( mWindowType ) {
 		case eWindowType_popup:
 			{
-			//
-			// Previously we looped through the disjoint parents to add up
-			// all the offsets, but now the menu offset gets passed in,
-			// so we just need to account for the worldview window.
-			//
-			QueryVisible( );
-			aX += gConsoleRect.ul.x;
-			aY += gConsoleRect.ul.y;
+			PhPoint_t offset, total_offset = { 0, 0 };
+    
+			PtWidget_t *parent, *disjoint = PtFindDisjoint( mWidget->parent );
+
+			while( disjoint ) {
+				PtGetAbsPosition( disjoint, &offset.x, &offset.y );
+				total_offset.x += offset.x;
+				total_offset.y += offset.y;
+				if( PtWidgetIsClass( disjoint, PtWindow ) || PtWidgetIsClass( disjoint, PtServer ) ) break; /* Stop at the first PtWindow */
+				parent = PtWidgetParent(disjoint);
+				if( parent ) disjoint = PtFindDisjoint( parent );
+				else {
+					disjoint = parent;
+					break;
+					}           
+				}
+
+			aX += total_offset.x;
+			aY += total_offset.y;
+
+			/* Add the Offset if the widget is offset from its parent.. */
+			PtWidgetOffset( mWidget->parent, &offset );
+			aX += offset.x;
+			aY += offset.y;
 			}
 			break;
 
@@ -906,9 +889,6 @@ NS_METHOD nsWindow::Move( PRInt32 aX, PRInt32 aY ) {
     if(( mWidget->area.pos.x != aX ) || ( mWidget->area.pos.y != aY )) {
       PhPoint_t pos = { aX, aY };
       PtSetResource( mWidget, Pt_ARG_POS, &pos, 0 );
-
-			/* ATENTIE Remove when wojtek fixes PR:22930 in the photon library */
-			if( PtWidgetClass( mWidget ) == PtRegion ) PtSetResource( mWidget, Pt_ARG_REGION_OPAQUE, 0, Ph_EV_KEY );
     	}
   	}
 
@@ -952,8 +932,8 @@ inline nsIRegion *nsWindow::GetRegion()
 
   static NS_DEFINE_CID(kRegionCID, NS_REGION_CID);
 
-  res = CallCreateInstance( kRegionCID, &region );
-  if (NS_SUCCEEDED(res)) region->Init();
+  res = nsComponentManager::CreateInstance( kRegionCID, nsnull, NS_GET_IID(nsIRegion), (void **)&region );
+  if (NS_OK == res) region->Init();
 
   NS_ASSERTION(NULL != region, "Null region context");
   
@@ -982,30 +962,14 @@ NS_IMETHODIMP nsWindow::SetFocus(PRBool aRaise)
 	if( PtIsFocused( mWidget ) == 2 ) return NS_OK;
 
 	if( mWidget ) {
-#if 0
 		PtWidget_t *disjoint;
 		disjoint = PtFindDisjoint( mWidget );
 		if( PtWidgetIsClass( disjoint, PtWindow ) ) {
-			printf("    disjoint is a PtWindow\n");
 			if( !( PtWindowGetState( disjoint ) & Ph_WM_STATE_ISFOCUS ) ) {
-				printf("    disjoint is not in focus, bringing it to front\n");
 				nsWindow *pWin = (nsWindow *) GetInstance( disjoint );
-				//
-				// The following line was causing TestPhEmbed (and therefore
-				// kwww) to crash. Mozserver was unaffected because the disjoint
-				// widget is a PtServer. So it seems like we don't need to bring
-				// the disjoint widget to front anyways. Standalone Firefox
-				// does have a disjoint widget that is a PtWindow, but we never
-				// seem to get in here because it's always in focus for some
-				// reason. So I am commenting out this whole section of 
-				// seemingly unnecessary code. This following call is through
-				// an overloaded "->" operator through a templated class.
-				//
 				pWin->GetAttention( -1 );
 				}
 			}
-		printf("    Giving container focus\n");
-#endif
 		PtContainerGiveFocus( mWidget, NULL );
 		}
 	return NS_OK;

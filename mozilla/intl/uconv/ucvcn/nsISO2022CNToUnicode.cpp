@@ -1,11 +1,11 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *   Ervin Yan <ervin.yan@sun.com>
+ * Contributor(s): Ervin Yan <ervin.yan@sun.com>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsISO2022CNToUnicode.h"
@@ -164,7 +164,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_29_A:  // ESC $ ) A
         if(SO == *src) {
            mState = eState_GB2312_1980;
-           mRunLength = 0;
         } else {
            if(dest+5 >= destEnd)
               goto error1;
@@ -181,12 +180,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_GB2312_1980:   // ESC $ ) A SO
         if(SI == *src) { // Shift-In (SI)
            mState = eState_ESC_24_29_A_SO_SI;
-           if (mRunLength == 0) {
-              if(dest+1 >= destEnd)
-                 goto error1;
-              *dest++ = 0xFFFD;
-           }
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC;
         } else {
@@ -211,7 +204,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
 
            aLen = destEnd - dest;
            rv = GB2312_To_Unicode(gb, gbLen, dest, &aLen);
-           ++mRunLength;
            if(rv == NS_OK_UDEC_MOREOUTPUT) {
               goto error1;
            } else if(NS_FAILED(rv)) {
@@ -231,7 +223,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_29_A_SO_SI:  // ESC $ ) A SO SI
         if(SO == *src) {
            mState = eState_GB2312_1980;
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC;
         } else {
@@ -246,7 +237,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_29_G:   // ESC $ ) G
         if(SO == *src) {
            mState = eState_CNS11643_1;
-           mRunLength = 0;
         } else {
            if(dest+5 >= destEnd)
               goto error1;
@@ -263,12 +253,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_CNS11643_1:   // ESC $ ) G SO
         if(SI == *src) { // Shift-In (SI)
            mState = eState_ESC_24_29_G_SO_SI;
-           if (mRunLength == 0) {
-              if(dest+1 >= destEnd)
-                 goto error1;
-              *dest++ = 0xFFFD;
-           }
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC;
         } else {
@@ -293,7 +277,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
 
            aLen = destEnd - dest;
            rv = EUCTW_To_Unicode(cns, cnsLen, dest, &aLen);
-           ++mRunLength;
            if(rv == NS_OK_UDEC_MOREOUTPUT) {
               goto error1;
            } else if(NS_FAILED(rv)) {
@@ -313,7 +296,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_29_G_SO_SI: // ESC $ ) G SO SI
         if(SO == *src) {
            mState = eState_CNS11643_1;
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC;
         } else {
@@ -359,7 +341,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_2A_H_ESC:  // ESC $ * H ESC
         if(SS2 == *src) {
            mState = eState_CNS11643_2;
-           mRunLength = 0;
         } else if('$' == *src) {
            mState = eState_ESC_24;
         } else {
@@ -379,12 +360,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_CNS11643_2:  // ESC $ * H ESC SS2
         if(SI == *src) { // Shift-In (SI)
            mState = eState_ESC_24_2A_H_ESC_SS2_SI;
-           if (mRunLength == 0) {
-              if(dest+1 >= destEnd)
-                 goto error1;
-              *dest++ = 0xFFFD;
-           }
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC_24_2A_H_ESC;
         } else {
@@ -411,7 +386,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
  
            aLen = destEnd - dest;
            rv = EUCTW_To_Unicode(cns, cnsLen, dest, &aLen);
-           ++mRunLength;
            if(rv == NS_OK_UDEC_MOREOUTPUT) {
               goto error1;
            } else if(NS_FAILED(rv)) {
@@ -443,7 +417,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_2A_H_ESC_SS2_SI_ESC:  // ESC $ * H ESC SS2 SI ESC
         if(SS2 == *src) {
            mState = eState_CNS11643_2;
-           mRunLength = 0;
         } else if('$' == *src) {
            mState = eState_ESC_24;
         } else {
@@ -490,7 +463,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_2B_I_ESC:  // ESC $ + I ESC
         if(SS3 == *src) {
            mState = eState_CNS11643_3;
-           mRunLength = 0;
         } else if('$' == *src) {
            mState = eState_ESC_24;
         } else {
@@ -510,12 +482,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_CNS11643_3:   // ESC $ + I ESC SS3
         if(SI == *src) { // Shift-In (SI)
            mState = eState_ESC_24_2B_I_ESC_SS3_SI;
-           if (mRunLength == 0) {
-              if(dest+1 >= destEnd)
-                 goto error1;
-              *dest++ = 0xFFFD;
-           }
-           mRunLength = 0;
         } else if(ESC == *src) {
            mState = eState_ESC_24_2B_I_ESC;
         } else {
@@ -543,7 +509,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
 
            aLen = destEnd - dest;
            rv = EUCTW_To_Unicode(cns, cnsLen, dest, &aLen);
-           ++mRunLength;
            if(rv == NS_OK_UDEC_MOREOUTPUT) {
               goto error1;
            } else if(NS_FAILED(rv)) {
@@ -575,7 +540,6 @@ NS_IMETHODIMP nsISO2022CNToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLen
       case eState_ESC_24_2B_I_ESC_SS3_SI_ESC:  // ESC $ + I ESC SS3 SI ESC
         if(SS3 == *src) {
            mState = eState_CNS11643_3;
-           mRunLength = 0;
         } else if('$' == *src) {
            mState = eState_ESC_24;
         } else {

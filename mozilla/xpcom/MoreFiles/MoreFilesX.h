@@ -1487,12 +1487,9 @@ FSGetVolMountInfo(
 /*****************************************************************************/
 
 #pragma mark FSVolumeMount
-/* Renamed from FSVolumeMount to MFX_FSVolumeMount to avoid a conflict with
- * the FSVolumeMount function present in the system library since Mac OS X
- * 10.5. */
 
 OSErr
-MFX_FSVolumeMount(
+FSVolumeMount(
 	const void *volMountInfo,
 	FSVolumeRefNum *volRefNum);
 

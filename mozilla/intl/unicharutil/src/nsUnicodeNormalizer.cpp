@@ -135,7 +135,7 @@ struct composition {
 };
 
 
-#include "normalization_data.h"
+#include "unicodedata_320.c"
 
 /*
  * Macro for multi-level index table.
@@ -625,25 +625,15 @@ workbuf_extend(workbuf_t *wb) {
 
 	if (wb->ucs == wb->ucs_buf) {
 		wb->ucs = (PRUint32*)nsMemory::Alloc(sizeof(wb->ucs[0]) * newsize);
-		if (!wb->ucs)
-			return NS_ERROR_OUT_OF_MEMORY;
 		wb->cclass = (PRInt32*)nsMemory::Alloc(sizeof(wb->cclass[0]) * newsize);
-		if (!wb->cclass) {
-			nsMemory::Free(wb->ucs);
-			wb->ucs = NULL;
-			return NS_ERROR_OUT_OF_MEMORY;
-		}
 	} else {
-		void* buf = nsMemory::Realloc(wb->ucs, sizeof(wb->ucs[0]) * newsize);
-		if (!buf)
-			return NS_ERROR_OUT_OF_MEMORY;
-		wb->ucs = (PRUint32*)buf;
-		buf = nsMemory::Realloc(wb->cclass, sizeof(wb->cclass[0]) * newsize);
-		if (!buf)
-			return NS_ERROR_OUT_OF_MEMORY;
-		wb->cclass = (PRInt32*)buf;
+		wb->ucs = (PRUint32*)nsMemory::Realloc(wb->ucs, sizeof(wb->ucs[0]) * newsize);
+		wb->cclass = (PRInt32*)nsMemory::Realloc(wb->cclass, sizeof(wb->cclass[0]) * newsize);
 	}
-	return (NS_OK);
+	if (wb->ucs == NULL || wb->cclass == NULL)
+		return (NS_ERROR_OUT_OF_MEMORY);
+	else
+		return (NS_OK);
 }
 
 static nsresult

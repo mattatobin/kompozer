@@ -3,44 +3,44 @@
  *
  *  Arbitrary precision integer arithmetic library
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is the MPI Arbitrary Precision Integer Arithmetic
+ * library.
  *
- * The Original Code is the MPI Arbitrary Precision Integer Arithmetic library.
+ * The Initial Developer of the Original Code is Michael J. Fromberger.
+ * Portions created by Michael J. Fromberger are 
+ * Copyright (C) 1998, 1999, 2000 Michael J. Fromberger. 
+ * All Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Michael J. Fromberger.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
+ * 
  * Contributor(s):
- *   Netscape Communications Corporation
- *   Douglas Stebila <douglas@stebila.ca> of Sun Laboratories.
+ *	Netscape Communications Corporation 
+ *      Douglas Stebila <douglas@stebila.ca> of Sun Laboratories.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable
+ * instead of those above.  If you wish to allow use of your
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the GPL.
  *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: mpi.c,v 1.43.2.1 2005/12/21 00:15:55 wtchang%redhat.com Exp $ */
+ *  $Id: mpi.c,v 1.40 2003/10/17 13:45:36 ian.mcgreer%sun.com Exp $
+ */
 
 #include "mpi-priv.h"
 #if defined(OSF1)
@@ -844,27 +844,6 @@ mp_err   mp_mul(const mp_int *a, const mp_int *b, mp_int * c)
   if((res = s_mp_pad(c, USED(a) + USED(b))) != MP_OKAY)
     goto CLEANUP;
 
-#ifdef NSS_USE_COMBA
-  if ((MP_USED(a) == MP_USED(b)) && IS_POWER_OF_2(MP_USED(b))) {
-      if (MP_USED(a) == 4) {
-          s_mp_mul_comba_4(a, b, c);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 8) {
-          s_mp_mul_comba_8(a, b, c);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 16) {
-          s_mp_mul_comba_16(a, b, c);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 32) {
-          s_mp_mul_comba_32(a, b, c);
-          goto CLEANUP;
-      } 
-  }
-#endif
-
   pb = MP_DIGITS(b);
   s_mpv_mul_d(MP_DIGITS(a), MP_USED(a), *pb++, MP_DIGITS(c));
 
@@ -934,27 +913,6 @@ mp_err   mp_sqr(const mp_int *a, mp_int *sqr)
   } 
   MP_USED(sqr) = ix;
   MP_DIGIT(sqr, 0) = 0;
-
-#ifdef NSS_USE_COMBA
-  if (IS_POWER_OF_2(MP_USED(a))) {
-      if (MP_USED(a) == 4) {
-          s_mp_sqr_comba_4(a, sqr);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 8) {
-          s_mp_sqr_comba_8(a, sqr);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 16) {
-          s_mp_sqr_comba_16(a, sqr);
-          goto CLEANUP;
-      }
-      if (MP_USED(a) == 32) {
-          s_mp_sqr_comba_32(a, sqr);
-          goto CLEANUP;
-      } 
-  }
-#endif
 
   pa = MP_DIGITS(a);
   count = MP_USED(a) - 1;
@@ -4759,8 +4717,6 @@ mp_to_unsigned_octets(const mp_int *mp, unsigned char *str, mp_size maxlen)
       str[pos++] = x;
     }
   }
-  if (!pos)
-    str[pos++] = 0;
   return pos;
 } /* end mp_to_unsigned_octets() */
 /* }}} */
@@ -4799,8 +4755,6 @@ mp_to_signed_octets(const mp_int *mp, unsigned char *str, mp_size maxlen)
       str[pos++] = x;
     }
   }
-  if (!pos)
-    str[pos++] = 0;
   return pos;
 } /* end mp_to_signed_octets() */
 /* }}} */
@@ -4836,8 +4790,6 @@ mp_to_fixlen_octets(const mp_int *mp, unsigned char *str, mp_size length)
       str[pos++] = x;
     }
   }
-  if (!pos)
-    str[pos++] = 0;
   return MP_OKAY;
 } /* end mp_to_fixlen_octets() */
 /* }}} */

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,16 +25,16 @@
  *   Mike Pinkerton (pinkerton@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -46,7 +46,7 @@
 #include "nsIListBoxObject.h"
 #include "nsIScrollbarMediator.h"
 #include "nsIReflowCallback.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsBoxLayoutState.h"
 
 class nsCSSFrameConstructor;
@@ -74,16 +74,17 @@ public:
                                          nsIBoxLayout* aLayoutManager);
   
   // nsIFrame
-  NS_IMETHOD Init(nsPresContext* aPresContext, nsIContent* aContent,
+  NS_IMETHOD Init(nsIPresContext* aPresContext, nsIContent* aContent,
                   nsIFrame* aParent, nsStyleContext* aContext, nsIFrame* aPrevInFlow);
-  NS_IMETHOD Destroy(nsPresContext* aPresContext);
-  NS_IMETHOD AttributeChanged(nsIContent* aChild, PRInt32 aNameSpaceID,
-                              nsIAtom* aAttribute, PRInt32 aModType);
+  NS_IMETHOD Destroy(nsIPresContext* aPresContext);
+  NS_IMETHOD AttributeChanged(nsIPresContext* aPresContext, nsIContent* aChild,
+                              PRInt32 aNameSpaceID, nsIAtom* aAttribute,
+                              PRInt32 aModType);
 
   // nsIScrollbarMediator
-  NS_IMETHOD PositionChanged(nsISupports* aScrollbar, PRInt32 aOldIndex, PRInt32& aNewIndex);
-  NS_IMETHOD ScrollbarButtonPressed(nsISupports* aScrollbar, PRInt32 aOldIndex, PRInt32 aNewIndex);
-  NS_IMETHOD VisibilityChanged(nsISupports* aScrollbar, PRBool aVisible);
+  NS_IMETHOD PositionChanged(PRInt32 aOldIndex, PRInt32& aNewIndex);
+  NS_IMETHOD ScrollbarButtonPressed(PRInt32 aOldIndex, PRInt32 aNewIndex);
+  NS_IMETHOD VisibilityChanged(PRBool aVisible);
 
   // nsIReflowCallback
   NS_IMETHOD ReflowFinished(nsIPresShell* aPresShell, PRBool* aFlushFlag);
@@ -91,9 +92,6 @@ public:
   // nsIBox
   NS_IMETHOD DoLayout(nsBoxLayoutState& aBoxLayoutState);
   NS_IMETHOD NeedsRecalc();
-
-  virtual nsSize GetMinSizeForScrollArea(nsBoxLayoutState& aBoxLayoutState);
-  NS_IMETHOD GetPrefSize(nsBoxLayoutState& aBoxLayoutState, nsSize& aSize);
 
   // size calculation 
   PRInt32 GetRowCount();
@@ -105,8 +103,9 @@ public:
   nscoord ComputeIntrinsicWidth(nsBoxLayoutState& aBoxLayoutState);
 
   // scrolling
+  NS_IMETHOD DoScrollToIndex(PRInt32 aRowIndex, PRBool aForceDestruct=PR_FALSE);
   NS_IMETHOD InternalPositionChangedCallback();
-  NS_IMETHOD InternalPositionChanged(PRBool aUp, PRInt32 aDelta);
+  NS_IMETHOD InternalPositionChanged(PRBool aUp, PRInt32 aDelta, PRBool aForceDestruct=PR_FALSE);
   nsListScrollSmoother* GetSmoother();
   void VerticalScroll(PRInt32 aDelta);
 
@@ -115,7 +114,7 @@ public:
   nsIFrame* GetLastFrame();
 
   // lazy row creation and destruction
-  void CreateRows();
+  void CreateRows(nsBoxLayoutState& aState);
   void DestroyRows(PRInt32& aRowsToLose);
   void ReverseDestroyRows(PRInt32& aRowsToLose);
   nsIBox* GetFirstItemBox(PRInt32 aOffset, PRBool* aCreated);
@@ -123,15 +122,15 @@ public:
   PRBool ContinueReflow(nscoord height);
   NS_IMETHOD ListBoxAppendFrames(nsIFrame* aFrameList);
   NS_IMETHOD ListBoxInsertFrames(nsIFrame* aPrevFrame, nsIFrame* aFrameList);
-  void OnContentInserted(nsPresContext* aPresContext, nsIContent* aContent);
-  void OnContentRemoved(nsPresContext* aPresContext,  nsIFrame* aChildFrame, PRInt32 aIndex);
+  void OnContentInserted(nsIPresContext* aPresContext, nsIContent* aContent);
+  void OnContentRemoved(nsIPresContext* aPresContext,  nsIFrame* aChildFrame, PRInt32 aIndex);
 
   void GetListItemContentAt(PRInt32 aIndex, nsIContent** aContent);
   void GetListItemNextSibling(nsIContent* aListItem, nsIContent** aContent, PRInt32& aSiblingIndex);
 
   void PostReflowCallback();
 
-  void InitGroup(nsCSSFrameConstructor* aFC, nsPresContext* aContext) 
+  void InitGroup(nsCSSFrameConstructor* aFC, nsIPresContext* aContext) 
   {
     mFrameConstructor = aFC;
     mPresContext = aContext;
@@ -139,11 +138,10 @@ public:
 
 protected:
   void ComputeTotalRowCount();
-  void RemoveChildFrame(nsBoxLayoutState &aState, nsIFrame *aChild);
 
   // We don't own this. (No addref/release allowed, punk.)
   nsCSSFrameConstructor* mFrameConstructor;
-  nsPresContext* mPresContext;
+  nsIPresContext* mPresContext;
 
   // row height
   PRInt32 mRowCount;
@@ -153,7 +151,7 @@ protected:
   nscoord mStringWidth;
 
   // frame markers
-  nsWeakFrame mTopFrame;
+  nsIFrame* mTopFrame;
   nsIFrame* mBottomFrame;
   nsIFrame* mLinkupFrame;
   PRInt32 mRowsToPrepend;

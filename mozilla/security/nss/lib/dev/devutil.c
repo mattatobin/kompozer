@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: devutil.c,v $ $Revision: 1.26.28.2 $ $Date: 2008/12/03 04:52:54 $";
+static const char CVS_ID[] = "@(#) $RCSfile: devutil.c,v $ $Revision: 1.23.22.1 $ $Date: 2004/10/15 21:13:53 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 #ifndef DEVM_H
@@ -158,6 +155,22 @@ nssSlotArray_Clone (
     return rvSlots;
 }
 
+#ifdef PURE_STAN_BUILD
+NSS_IMPLEMENT void
+nssModuleArray_Destroy (
+  NSSModule **modules
+)
+{
+    if (modules) {
+	NSSModule **mp;
+	for (mp = modules; *mp; mp++) {
+	    nssModule_Destroy(*mp);
+	}
+	nss_ZFreeIf(modules);
+    }
+}
+#endif
+
 NSS_IMPLEMENT void
 nssSlotArray_Destroy (
   NSSSlot **slots
@@ -215,6 +228,298 @@ nssCryptokiObjectArray_Destroy (
 	nss_ZFreeIf(objects);
     }
 }
+
+#ifdef PURE_STAN_BUILD
+/*
+ * Slot lists
+ */
+
+struct nssSlotListNodeStr
+{
+  PRCList link;
+  NSSSlot *slot;
+  PRUint32 order;
+};
+
+/* XXX separate slots with non-present tokens? */
+struct nssSlotListStr 
+{
+  NSSArena *arena;
+  PRBool i_allocated_arena;
+  PZLock *lock;
+  PRCList head;
+  PRUint32 count;
+};
+
+NSS_IMPLEMENT nssSlotList *
+nssSlotList_Create (
+  NSSArena *arenaOpt
+)
+{
+    nssSlotList *rvList;
+    NSSArena *arena;
+    nssArenaMark *mark;
+    if (arenaOpt) {
+	arena = arenaOpt;
+	mark = nssArena_Mark(arena);
+	if (!mark) {
+	    return (nssSlotList *)NULL;
+	}
+    } else {
+	arena = nssArena_Create();
+	if (!arena) {
+	    return (nssSlotList *)NULL;
+	}
+    }
+    rvList = nss_ZNEW(arena, nssSlotList);
+    if (!rvList) {
+	goto loser;
+    }
+    rvList->lock = PZ_NewLock(nssILockOther); /* XXX */
+    if (!rvList->lock) {
+	goto loser;
+    }
+    PR_INIT_CLIST(&rvList->head);
+    rvList->arena = arena;
+    rvList->i_allocated_arena = (arenaOpt == NULL);
+    nssArena_Unmark(arena, mark);
+    return rvList;
+loser:
+    if (arenaOpt) {
+	nssArena_Release(arena, mark);
+    } else {
+	nssArena_Destroy(arena);
+    }
+    return (nssSlotList *)NULL;
+}
+
+NSS_IMPLEMENT void
+nssSlotList_Destroy (
+  nssSlotList *slotList
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    if (slotList) {
+	link = PR_NEXT_LINK(&slotList->head);
+	while (link != &slotList->head) {
+	    node = (struct nssSlotListNodeStr *)link;
+	    nssSlot_Destroy(node->slot);
+	    link = PR_NEXT_LINK(link);
+	}
+	if (slotList->i_allocated_arena) {
+	    nssArena_Destroy(slotList->arena);
+	}
+    }
+}
+
+/* XXX should do allocs outside of lock */
+NSS_IMPLEMENT PRStatus
+nssSlotList_Add (
+  nssSlotList *slotList,
+  NSSSlot *slot,
+  PRUint32 order
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    PZ_Lock(slotList->lock);
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	node = (struct nssSlotListNodeStr *)link;
+	if (order < node->order) {
+	    break;
+	}
+	link = PR_NEXT_LINK(link);
+    }
+    node = nss_ZNEW(slotList->arena, struct nssSlotListNodeStr);
+    if (!node) {
+	return PR_FAILURE;
+    }
+    PR_INIT_CLIST(&node->link);
+    node->slot = nssSlot_AddRef(slot);
+    node->order = order;
+    PR_INSERT_AFTER(&node->link, link);
+    slotList->count++;
+    PZ_Unlock(slotList->lock);
+    return PR_SUCCESS;
+}
+
+NSS_IMPLEMENT PRStatus
+nssSlotList_AddModuleSlots (
+  nssSlotList *slotList,
+  NSSModule *module,
+  PRUint32 order
+)
+{
+    nssArenaMark *mark = NULL;
+    NSSSlot **sp, **slots = NULL;
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    PZ_Lock(slotList->lock);
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	node = (struct nssSlotListNodeStr *)link;
+	if (order < node->order) {
+	    break;
+	}
+	link = PR_NEXT_LINK(link);
+    }
+    slots = nssModule_GetSlots(module);
+    if (!slots) {
+	PZ_Unlock(slotList->lock);
+	return PR_SUCCESS;
+    }
+    mark = nssArena_Mark(slotList->arena);
+    if (!mark) {
+	goto loser;
+    }
+    for (sp = slots; *sp; sp++) {
+	node = nss_ZNEW(slotList->arena, struct nssSlotListNodeStr);
+	if (!node) {
+	    goto loser;
+	}
+	PR_INIT_CLIST(&node->link);
+	node->slot = *sp; /* have ref from nssModule_GetSlots */
+	node->order = order;
+	PR_INSERT_AFTER(&node->link, link);
+	slotList->count++;
+    }
+    PZ_Unlock(slotList->lock);
+    nssArena_Unmark(slotList->arena, mark);
+    return PR_SUCCESS;
+loser:
+    PZ_Unlock(slotList->lock);
+    if (mark) {
+	nssArena_Release(slotList->arena, mark);
+    }
+    if (slots) {
+	nssSlotArray_Destroy(slots);
+    }
+    return PR_FAILURE;
+}
+
+NSS_IMPLEMENT NSSSlot **
+nssSlotList_GetSlots (
+  nssSlotList *slotList
+)
+{
+    PRUint32 i;
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    NSSSlot **rvSlots = NULL;
+    PZ_Lock(slotList->lock);
+    rvSlots = nss_ZNEWARRAY(NULL, NSSSlot *, slotList->count + 1);
+    if (!rvSlots) {
+	PZ_Unlock(slotList->lock);
+	return (NSSSlot **)NULL;
+    }
+    i = 0;
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	node = (struct nssSlotListNodeStr *)link;
+	rvSlots[i] = nssSlot_AddRef(node->slot);
+	link = PR_NEXT_LINK(link);
+	i++;
+    }
+    PZ_Unlock(slotList->lock);
+    return rvSlots;
+}
+
+#if 0
+NSS_IMPLEMENT NSSSlot *
+nssSlotList_GetBestSlotForAlgorithmAndParameters (
+  nssSlotList *slotList,
+  NSSAlgorithmAndParameters *ap
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    NSSSlot *rvSlot = NULL;
+    PZ_Lock(slotList->lock);
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	node = (struct nssSlotListNodeStr *)link;
+	if (nssSlot_DoesAlgorithmAndParameters(ap)) {
+	    rvSlot = nssSlot_AddRef(node->slot); /* XXX check isPresent? */
+	}
+	link = PR_NEXT_LINK(link);
+    }
+    PZ_Unlock(slotList->lock);
+    return rvSlot;
+}
+#endif
+
+NSS_IMPLEMENT NSSSlot *
+nssSlotList_GetBestSlot (
+  nssSlotList *slotList
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    NSSSlot *rvSlot = NULL;
+    PZ_Lock(slotList->lock);
+    if (PR_CLIST_IS_EMPTY(&slotList->head)) {
+	PZ_Unlock(slotList->lock);
+	return (NSSSlot *)NULL;
+    }
+    link = PR_NEXT_LINK(&slotList->head);
+    node = (struct nssSlotListNodeStr *)link;
+    rvSlot = nssSlot_AddRef(node->slot); /* XXX check isPresent? */
+    PZ_Unlock(slotList->lock);
+    return rvSlot;
+}
+
+NSS_IMPLEMENT NSSSlot *
+nssSlotList_FindSlotByName (
+  nssSlotList *slotList,
+  NSSUTF8 *slotName
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    NSSSlot *rvSlot = NULL;
+    PZ_Lock(slotList->lock);
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	NSSUTF8 *sName;
+	node = (struct nssSlotListNodeStr *)link;
+	sName = nssSlot_GetName(node->slot);
+	if (nssUTF8_Equal(sName, slotName, NULL)) {
+	    rvSlot = nssSlot_AddRef(node->slot);
+	    break;
+	}
+	link = PR_NEXT_LINK(link);
+    }
+    PZ_Unlock(slotList->lock);
+    return rvSlot;
+}
+
+NSS_IMPLEMENT NSSToken *
+nssSlotList_FindTokenByName (
+  nssSlotList *slotList,
+  NSSUTF8 *tokenName
+)
+{
+    PRCList *link;
+    struct nssSlotListNodeStr *node;
+    NSSToken *rvToken = NULL;
+    PZ_Lock(slotList->lock);
+    link = PR_NEXT_LINK(&slotList->head);
+    while (link != &slotList->head) {
+	NSSUTF8 *tName;
+	node = (struct nssSlotListNodeStr *)link;
+	tName = nssSlot_GetTokenName(node->slot);
+	if (nssUTF8_Equal(tName, tokenName, NULL)) {
+	    rvToken = nssSlot_GetToken(node->slot);
+	    break;
+	}
+	link = PR_NEXT_LINK(link);
+    }
+    PZ_Unlock(slotList->lock);
+    return rvToken;
+}
+#endif /* PURE_STAN_BUILD */
 
 /* object cache for token */
 
@@ -382,15 +687,8 @@ create_object (
     nssCryptokiObjectAndAttributes *rvCachedObject = NULL;
 
     slot = nssToken_GetSlot(object->token);
-    if (!slot) {
-        nss_SetError(NSS_ERROR_INVALID_POINTER);
-        goto loser;
-    }
     session = nssToken_GetDefaultSession(object->token);
-    if (!session) {
-        nss_SetError(NSS_ERROR_INVALID_POINTER);
-        goto loser;
-    }
+
     arena = nssArena_Create();
     if (!arena) {
 	goto loser;
@@ -520,6 +818,60 @@ create_cert (
     return create_object(object, certAttr, numCertAttr, status);
 }
 
+static PRStatus
+get_token_certs_for_cache (
+  nssTokenObjectCache *cache
+)
+{
+    PRStatus status;
+    nssCryptokiObject **objects;
+    PRBool *doIt = &cache->doObjectType[cachedCerts];
+    PRUint32 i, numObjects;
+
+    if (!search_for_objects(cache) || 
+         cache->searchedObjectType[cachedCerts] || 
+        !cache->doObjectType[cachedCerts]) 
+    {
+	/* Either there was a state change that prevents a search
+	 * (token logged out), or the search was already done,
+	 * or certs are not being cached.
+	 */
+	return PR_SUCCESS;
+    }
+    objects = nssToken_FindCertificates(cache->token, NULL,
+                                        nssTokenSearchType_TokenForced,
+				        MAX_LOCAL_CACHE_OBJECTS, &status);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+    cache->objects[cachedCerts] = create_object_array(objects,
+                                                      doIt,
+                                                      &numObjects,
+                                                      &status);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+    for (i=0; i<numObjects; i++) {
+	cache->objects[cachedCerts][i] = create_cert(objects[i], &status);
+	if (status != PR_SUCCESS) {
+	    break;
+	}
+    }
+    if (status == PR_SUCCESS) {
+	nss_ZFreeIf(objects);
+    } else {
+	PRUint32 j;
+	for (j=0; j<i; j++) {
+	    /* sigh */
+	    nssToken_AddRef(cache->objects[cachedCerts][j]->object->token);
+	    nssArena_Destroy(cache->objects[cachedCerts][j]->arena);
+	}
+	nssCryptokiObjectArray_Destroy(objects);
+    }
+    cache->searchedObjectType[cachedCerts] = PR_TRUE;
+    return status;
+}
+
 static nssCryptokiObjectAndAttributes *
 create_trust (
   nssCryptokiObject *object,
@@ -543,6 +895,60 @@ create_trust (
     return create_object(object, trustAttr, numTrustAttr, status);
 }
 
+static PRStatus
+get_token_trust_for_cache (
+  nssTokenObjectCache *cache
+)
+{
+    PRStatus status;
+    nssCryptokiObject **objects;
+    PRBool *doIt = &cache->doObjectType[cachedTrust];
+    PRUint32 i, numObjects;
+
+    if (!search_for_objects(cache) || 
+         cache->searchedObjectType[cachedTrust] || 
+        !cache->doObjectType[cachedTrust]) 
+    {
+	/* Either there was a state change that prevents a search
+	 * (token logged out), or the search was already done,
+	 * or trust is not being cached.
+	 */
+	return PR_SUCCESS;
+    }
+    objects = nssToken_FindTrustObjects(cache->token, NULL,
+                                        nssTokenSearchType_TokenForced,
+				        MAX_LOCAL_CACHE_OBJECTS, &status);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+    cache->objects[cachedTrust] = create_object_array(objects,
+                                                      doIt,
+                                                      &numObjects,
+                                                      &status);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+    for (i=0; i<numObjects; i++) {
+	cache->objects[cachedTrust][i] = create_trust(objects[i], &status);
+	if (status != PR_SUCCESS) {
+	    break;
+	}
+    }
+    if (status == PR_SUCCESS) {
+	nss_ZFreeIf(objects);
+    } else {
+	PRUint32 j;
+	for (j=0; j<i; j++) {
+	    /* sigh */
+	    nssToken_AddRef(cache->objects[cachedTrust][j]->object->token);
+	    nssArena_Destroy(cache->objects[cachedTrust][j]->arena);
+	}
+	nssCryptokiObjectArray_Destroy(objects);
+    }
+    cache->searchedObjectType[cachedTrust] = PR_TRUE;
+    return status;
+}
+
 static nssCryptokiObjectAndAttributes *
 create_crl (
   nssCryptokiObject *object,
@@ -562,55 +968,33 @@ create_crl (
     return create_object(object, crlAttr, numCRLAttr, status);
 }
 
-/* Dispatch to the create function for the object type */
-static nssCryptokiObjectAndAttributes *
-create_object_of_type (
-  nssCryptokiObject *object,
-  PRUint32 objectType,
-  PRStatus *status
-)
-{
-    if (objectType == cachedCerts) {
-	return create_cert(object, status);
-    }
-    if (objectType == cachedTrust) {
-	return create_trust(object, status);
-    }
-    if (objectType == cachedCRLs) {
-	return create_crl(object, status);
-    }
-    return (nssCryptokiObjectAndAttributes *)NULL;
-}
-
 static PRStatus
-get_token_objects_for_cache (
-  nssTokenObjectCache *cache,
-  PRUint32 objectType,
-  CK_OBJECT_CLASS objclass
+get_token_crls_for_cache (
+  nssTokenObjectCache *cache
 )
 {
     PRStatus status;
     nssCryptokiObject **objects;
-    PRBool *doIt = &cache->doObjectType[objectType];
+    PRBool *doIt = &cache->doObjectType[cachedCRLs];
     PRUint32 i, numObjects;
 
     if (!search_for_objects(cache) || 
-         cache->searchedObjectType[objectType] ||
-        !cache->doObjectType[objectType])
+         cache->searchedObjectType[cachedCRLs] || 
+        !cache->doObjectType[cachedCRLs]) 
     {
 	/* Either there was a state change that prevents a search
 	 * (token logged out), or the search was already done,
-	 * or objects of this type are not being cached.
+	 * or CRLs are not being cached.
 	 */
 	return PR_SUCCESS;
     }
-    objects = nssToken_FindObjects(cache->token, NULL, objclass,
-                                   nssTokenSearchType_TokenForced,
-                                   MAX_LOCAL_CACHE_OBJECTS, &status);
+    objects = nssToken_FindCRLs(cache->token, NULL,
+                                nssTokenSearchType_TokenForced,
+				MAX_LOCAL_CACHE_OBJECTS, &status);
     if (status != PR_SUCCESS) {
 	return status;
     }
-    cache->objects[objectType] = create_object_array(objects,
+    cache->objects[cachedCRLs] = create_object_array(objects,
                                                      doIt,
                                                      &numObjects,
                                                      &status);
@@ -618,9 +1002,7 @@ get_token_objects_for_cache (
 	return status;
     }
     for (i=0; i<numObjects; i++) {
-	cache->objects[objectType][i] = create_object_of_type(objects[i],
-	                                                      objectType,
-	                                                      &status);
+	cache->objects[cachedCRLs][i] = create_crl(objects[i], &status);
 	if (status != PR_SUCCESS) {
 	    break;
 	}
@@ -631,12 +1013,12 @@ get_token_objects_for_cache (
 	PRUint32 j;
 	for (j=0; j<i; j++) {
 	    /* sigh */
-	    nssToken_AddRef(cache->objects[objectType][j]->object->token);
-	    nssArena_Destroy(cache->objects[objectType][j]->arena);
+	    nssToken_AddRef(cache->objects[cachedCRLs][j]->object->token);
+	    nssArena_Destroy(cache->objects[cachedCRLs][j]->arena);
 	}
 	nssCryptokiObjectArray_Destroy(objects);
     }
-    cache->searchedObjectType[objectType] = PR_TRUE;
+    cache->searchedObjectType[cachedCRLs] = PR_TRUE;
     return status;
 }
 
@@ -758,25 +1140,45 @@ nssTokenObjectCache_FindObjectsByTemplate (
 {
     PRStatus status = PR_FAILURE;
     nssCryptokiObject **rvObjects = NULL;
-    PRUint32 objectType;
     if (!token_is_present(cache)) {
 	status = PR_SUCCESS;
 	goto finish;
     }
-    switch (objclass) {
-    case CKO_CERTIFICATE:    objectType = cachedCerts; break;
-    case CKO_NETSCAPE_TRUST: objectType = cachedTrust; break;
-    case CKO_NETSCAPE_CRL:   objectType = cachedCRLs;  break;
-    default: goto finish;
-    }
     PZ_Lock(cache->lock);
-    if (cache->doObjectType[objectType]) {
-	status = get_token_objects_for_cache(cache, objectType, objclass);
-	if (status == PR_SUCCESS) {
-	    rvObjects = find_objects_in_array(cache->objects[objectType],
+    switch (objclass) {
+    case CKO_CERTIFICATE:
+	if (cache->doObjectType[cachedCerts]) {
+	    status = get_token_certs_for_cache(cache);
+	    if (status != PR_SUCCESS) {
+		goto unlock;
+	    }
+	    rvObjects = find_objects_in_array(cache->objects[cachedCerts], 
 	                                      otemplate, otlen, maximumOpt);
 	}
+	break;
+    case CKO_NETSCAPE_TRUST:
+	if (cache->doObjectType[cachedTrust]) {
+	    status = get_token_trust_for_cache(cache);
+	    if (status != PR_SUCCESS) {
+		goto unlock;
+	    }
+	    rvObjects = find_objects_in_array(cache->objects[cachedTrust], 
+	                                      otemplate, otlen, maximumOpt);
+	}
+	break;
+    case CKO_NETSCAPE_CRL:
+	if (cache->doObjectType[cachedCRLs]) {
+	    status = get_token_crls_for_cache(cache);
+	    if (status != PR_SUCCESS) {
+		goto unlock;
+	    }
+	    rvObjects = find_objects_in_array(cache->objects[cachedCRLs], 
+	                                      otemplate, otlen, maximumOpt);
+	}
+	break;
+    default: break;
     }
+unlock:
     PZ_Unlock(cache->lock);
 finish:
     if (statusOpt) {
@@ -955,8 +1357,13 @@ nssTokenObjectCache_ImportObject (
     }
     if (*otype) {
 	nssCryptokiObject *copyObject = nssCryptokiObject_Clone(object);
-	(*otype)[count] = create_object_of_type(copyObject, objectType,
-	                                        &status);
+	if (objectType == cachedCerts) {
+	    (*otype)[count] = create_cert(copyObject, &status);
+	} else if (objectType == cachedTrust) {
+	    (*otype)[count] = create_trust(copyObject, &status);
+	} else if (objectType == cachedCRLs) {
+	    (*otype)[count] = create_crl(copyObject, &status);
+	}
     } else {
 	status = PR_FAILURE;
     }

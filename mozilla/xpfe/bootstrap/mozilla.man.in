@@ -1,24 +1,24 @@
-.TH @MOZ_APP_NAME@ 1 "March 28, 2005" @MOZ_APP_NAME@ "Linux User's Manual"
+.TH MOZILLA 1 "August 07, 2001" mozilla "Linux User's Manual"
 .SH NAME
-@MOZ_APP_NAME@ \- an internet application suite (browser, mail, etc.)
+mozilla \- a Web browser for X11 derived from Netscape Communicator
 
 .SH SYNOPSIS
-.B @MOZ_APP_NAME@
+.B mozilla
 [\fIOPTIONS\fR] [\fIURL\fR]
 
-.B @MOZ_APP_NAME@-bin
+.B mozilla-bin
 [\fIOPTIONS\fR] [\fIURL\fR]
 
 .SH DESCRIPTION
-\fB@MOZ_APP_DISPLAYNAME@\fR is an open-source web browser, designed for standards compliance,
+\fBMozilla\fR is an open-source web browser, designed for standards compliance,
 performance and portability.
 
 .SH USAGE
-\fB@MOZ_APP_NAME@\fR is a simple shell script that will set up the environment for
-the actual executable, \fB@MOZ_APP_NAME@-bin\fR.
+\fBmozilla\fR is a simple shell script that will set up the environment for
+the actual executable, \fBmozilla-bin\fR.
 
 .SH OPTIONS
-A summary of the options supported by \fB@MOZ_APP_NAME@\fR is included below.
+A summary of the options supported by \fBmozilla\fR is included below.
 
 .SS "GTK options"
 \fB\-\-gdk-debug=\fR\fIFLAGS\fR
@@ -54,7 +54,7 @@ Don't use X shared memory extension
 .B \-\-g-fatal-warnings
 Make all warnings fatal
 
-.SS "@MOZ_APP_DISPLAYNAME@ options"
+.SS "Mozilla options"
 .TP
 \fB\-height\fR \fIvalue\fR
 Set height of startup window to \fIvalue\fR.
@@ -69,7 +69,7 @@ Start with 4.x migration window.
 Set width of startup window to \fIvalue\fR.
 .TP
 .B \-v, \-version
-Print \fB@MOZ_APP_NAME@-bin\fR version.
+Print \fB/usr/bin/mozilla-bin\fR version.
 .TP
 \fB\-CreateProfile\fR \fIprofile\fR
 Create \fIprofile\fR.
@@ -90,7 +90,7 @@ Start with profile selection dialog.
 Start with \fIlang-region\fR resources.
 .TP
 \fB\-remote\fR \fIcommand\fR
-Execute \fIcommand\fR in an already running @MOZ_APP_DISPLAYNAME@ process.  For more info,
+Execute \fIcommand\fR in an already running Mozilla process.  For more info,
 see: \fIhttp://www.mozilla.org/unix/remote.html\fR
 .TP
 .B \-splash
@@ -115,18 +115,18 @@ Load the specified chrome.
 Start with mail.
 .TP
 \fB\-compose\fR \fIurl\fR
-Start with mail compose.
+Start with messenger compose.
 
 .SH FILES
-\fI@bindir@/@MOZ_APP_NAME@\fR - shell script wrapping \fB@MOZ_APP_NAME@\fR
+\fI@bindir@/mozilla\fR - shell script wrapping \fBmozilla\fR
 .br
-\fI@mozappdir@/@MOZ_APP_NAME@-bin\fR - \fB@MOZ_APP_NAME@\fR executable
+\fI@libdir@/mozilla/mozilla-bin\fR - \fBmozilla\fR executable
 
 .SH VERSION
-@MOZ_APP_VERSION@
+@mozilla_version@
 
 .SH BUGS
-To report a bug, please visit \fIhttps://bugzilla.mozilla.org/\fR
+To report a bug, please visit \fIhttp://bugzilla.mozilla.org/\fR
 
 .SH "SEE ALSO"
 .BR galeon(1)

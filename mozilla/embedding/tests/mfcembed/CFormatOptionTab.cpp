@@ -244,8 +244,7 @@ void CFormatOptionTab::GetPaperSizeInfo(short& aUnit, double& aWidth, double& aH
 // Search for Sizes in Pape Size Data
 int CFormatOptionTab::GetPaperSizeIndexFromData(short aUnit, double aW, double aH) 
 {
-    int i;
-    for (i=0;i<gNumPaperSizes;i++) 
+    for (int i=0;i<gNumPaperSizes;i++) 
     {
         if (gPaperSize[i].mUnit == aUnit && 
             gPaperSize[i].mWidth == aW &&
@@ -256,7 +255,7 @@ int CFormatOptionTab::GetPaperSizeIndexFromData(short aUnit, double aW, double a
     }
 
     // find the first user defined
-    for (i=0;i<gNumPaperSizes;i++) 
+    for ( i=0;i<gNumPaperSizes;i++) 
     {
         if (gPaperSize[i].mIsUserDefined) 
         {

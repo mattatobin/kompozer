@@ -35,7 +35,6 @@
 			children = (
 				F5A7D3AB036E359F01A96660,
 				08EA7FFBFE8413EDC02AAC07,
-				F51A400C0299CD65012FC976,
 			);
 			isa = PBXGroup;
 			name = "External Frameworks and Libraries";
@@ -125,7 +124,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				08EA7FFCFE8413EDC02AAC07,
-				F51A400D0299CD65012FC976,
 				F5A7D695036E35A001A96660,
 			);
 			isa = PBXFrameworksBuildPhase;
@@ -286,18 +284,6 @@
 			isa = PBXBuildStyle;
 			name = DeploymentSymbols;
 		};
-		F51A400C0299CD65012FC976 = {
-			isa = PBXFileReference;
-			name = "libstdc++.a";
-			path = "/usr/lib/libstdc++.a";
-			refType = 0;
-		};
-		F51A400D0299CD65012FC976 = {
-			fileRef = F51A400C0299CD65012FC976;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F59D147102AC328B01000104 = {
 			buildArgumentsString = "$ACTION resources";
 			buildPhases = (
@@ -349,7 +335,7 @@
 		};
 		F5E0C34D036A12DF01A96660 = {
 			isa = PBXFileReference;
-			path = NullPlugin.rsrc;
+			path = _NullPlugin.rsrc;
 			refType = 2;
 		};
 		F5E0C34E036A12DF01A96660 = {

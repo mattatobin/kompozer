@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: certificate.c,v $ $Revision: 1.56.2.4 $ $Date: 2007/11/16 05:25:08 $";
+static const char CVS_ID[] = "@(#) $RCSfile: certificate.c,v $ $Revision: 1.49 $ $Date: 2003/11/15 00:09:51 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 #ifndef NSSPKI_H
@@ -56,9 +53,11 @@ static const char CVS_ID[] = "@(#) $RCSfile: certificate.c,v $ $Revision: 1.56.2
 
 #include "pkistore.h"
 
+#ifdef NSS_3_4_CODE
 #include "pki3hack.h"
 #include "pk11func.h"
 #include "hasht.h"
+#endif
 
 #ifndef BASE_H
 #include "base.h"
@@ -77,7 +76,6 @@ nssCertificate_Create (
     /* mark? */
     NSSArena *arena = object->arena;
     PR_ASSERT(object->instances != NULL && object->numInstances > 0);
-    PR_ASSERT(object->lockType == nssPKIMonitor);
     rvCert = nss_ZNEW(arena, NSSCertificate);
     if (!rvCert) {
 	return (NSSCertificate *)NULL;
@@ -119,10 +117,6 @@ nssCertificate_Destroy (
   NSSCertificate *c
 )
 {
-    nssCertificateStoreTrace lockTrace = {NULL, NULL, PR_FALSE, PR_FALSE};
-    nssCertificateStoreTrace unlockTrace = {NULL, NULL, PR_FALSE, PR_FALSE};
-    PRBool locked = PR_FALSE;
-
     if (c) {
 	PRUint32 i;
 	nssDecodedCert *dc = c->decoding;
@@ -133,8 +127,7 @@ nssCertificate_Destroy (
 
 	/* --- LOCK storage --- */
 	if (cc) {
-	    nssCertificateStore_Lock(cc->certStore, &lockTrace);
-            locked = PR_TRUE;
+	    nssCertificateStore_Lock(cc->certStore);
 	} else {
 	    nssTrustDomain_LockCertCache(td);
 	}
@@ -142,10 +135,7 @@ nssCertificate_Destroy (
 	    /* --- remove cert and UNLOCK storage --- */
 	    if (cc) {
 		nssCertificateStore_RemoveCertLOCKED(cc->certStore, c);
-		nssCertificateStore_Unlock(cc->certStore, &lockTrace,
-                                           &unlockTrace);
-                nssCertificateStore_Check(&lockTrace, &unlockTrace);
-
+		nssCertificateStore_Unlock(cc->certStore);
 	    } else {
 		nssTrustDomain_RemoveCertFromCacheLOCKED(td, c);
 		nssTrustDomain_UnlockCertCache(td);
@@ -154,23 +144,17 @@ nssCertificate_Destroy (
 	    for (i=0; i<c->object.numInstances; i++) {
 		nssCryptokiObject_Destroy(c->object.instances[i]);
 	    }
-	    nssPKIObject_DestroyLock(&c->object);
+	    PZ_DestroyLock(c->object.lock);
 	    nssArena_Destroy(c->object.arena);
 	    nssDecodedCert_Destroy(dc);
 	} else {
 	    /* --- UNLOCK storage --- */
 	    if (cc) {
-		nssCertificateStore_Unlock(cc->certStore,
-					   &lockTrace,
-					   &unlockTrace);
-		nssCertificateStore_Check(&lockTrace, &unlockTrace);
+		nssCertificateStore_Unlock(cc->certStore);
 	    } else {
 		nssTrustDomain_UnlockCertCache(td);
 	    }
 	}
-    }
-    if (locked) {
-        nssCertificateStore_Check(&lockTrace, &unlockTrace);
     }
     return PR_SUCCESS;
 }
@@ -317,17 +301,25 @@ nssCertificate_GetDecoding (
   NSSCertificate *c
 )
 {
-    nssDecodedCert* deco = NULL;
-    nssPKIObject_Lock(&c->object);
+    /* There is a race in assigning c->decoding.  
+    ** This is a workaround.  Bugzilla bug 225525.
+    */
     if (!c->decoding) {
-	deco = nssDecodedCert_Create(NULL, &c->encoding, c->type);
+	nssDecodedCert * deco =
+	    nssDecodedCert_Create(NULL, &c->encoding, c->type);
+	/* Once this race is fixed, an assertion should be put 
+	** here to detect any regressions. 
     	PORT_Assert(!c->decoding); 
-        c->decoding = deco;
-    } else {
-        deco = c->decoding;
+	*/
+	if (!c->decoding) {
+	    /* we won the race. Use our copy. */
+	    c->decoding = deco;
+        } else {
+	    /* we lost the race.  discard deco. */
+	    nssDecodedCert_Destroy(deco);
+	}
     }
-    nssPKIObject_Unlock(&c->object);
-    return deco;
+    return c->decoding;
 }
 
 static NSSCertificate **
@@ -409,9 +401,7 @@ find_cert_issuer (
   NSSCertificate *c,
   NSSTime *timeOpt,
   NSSUsage *usage,
-  NSSPolicies *policiesOpt,
-  NSSTrustDomain *td,
-  NSSCryptoContext *cc
+  NSSPolicies *policiesOpt
 )
 {
     NSSArena *arena;
@@ -419,11 +409,15 @@ find_cert_issuer (
     NSSCertificate **ccIssuers = NULL;
     NSSCertificate **tdIssuers = NULL;
     NSSCertificate *issuer = NULL;
-
-    if (!cc)
-	cc = c->object.cryptoContext;
-    if (!td)
-	td = NSSCertificate_GetTrustDomain(c);
+    NSSTrustDomain *td;
+    NSSCryptoContext *cc;
+    cc = c->object.cryptoContext; /* NSSCertificate_GetCryptoContext(c); */
+    td = NSSCertificate_GetTrustDomain(c);
+#ifdef NSS_3_4_CODE
+    if (!td) {
+	td = STAN_GetDefaultTrustDomain();
+    }
+#endif
     arena = nssArena_Create();
     if (!arena) {
 	return (NSSCertificate *)NULL;
@@ -435,8 +429,7 @@ find_cert_issuer (
 	                                                       0,
 	                                                       arena);
     }
-    if (td)
-	tdIssuers = nssTrustDomain_FindCertificatesBySubject(td,
+    tdIssuers = nssTrustDomain_FindCertificatesBySubject(td,
                                                          &c->issuer,
                                                          NULL,
                                                          0,
@@ -449,10 +442,6 @@ find_cert_issuer (
 	if (dc) {
 	    issuerID = dc->getIssuerIdentifier(dc);
 	}
-	/* XXX review based on CERT_FindCertIssuer
-	 * this function is not using the authCertIssuer field as a fallback
-	 * if authority key id does not exist
-	 */
 	if (issuerID) {
 	    certs = filter_subject_certs_for_id(certs, issuerID);
 	}
@@ -467,9 +456,10 @@ find_cert_issuer (
     return issuer;
 }
 
-/* This function returns the built chain, as far as it gets,
-** even if/when it fails to find an issuer, and returns PR_FAILURE
-*/
+/* XXX review based on CERT_FindCertIssuer
+ * this function is not using the authCertIssuer field as a fallback
+ * if authority key id does not exist
+ */
 NSS_IMPLEMENT NSSCertificate **
 nssCertificate_BuildChain (
   NSSCertificate *c,
@@ -479,67 +469,72 @@ nssCertificate_BuildChain (
   NSSCertificate **rvOpt,
   PRUint32 rvLimit,
   NSSArena *arenaOpt,
-  PRStatus *statusOpt,
-  NSSTrustDomain *td,
-  NSSCryptoContext *cc 
+  PRStatus *statusOpt
 )
 {
-    NSSCertificate **rvChain = NULL;
+    NSSCertificate **rvChain;
+#ifdef NSS_3_4_CODE
+    NSSCertificate *cp;
+    CERTCertificate *cCert;
+#endif
     NSSUsage issuerUsage = *usage;
-    nssPKIObjectCollection *collection = NULL;
-    PRUint32  rvCount = 0;
-    PRStatus  st;
-    PRStatus  ret = PR_SUCCESS;
+    NSSTrustDomain *td;
+    nssPKIObjectCollection *collection;
 
-    if (!td)
-	td = NSSCertificate_GetTrustDomain(c);
-    if (!td || !c || !cc) 
-	goto loser;
+    td = NSSCertificate_GetTrustDomain(c);
+#ifdef NSS_3_4_CODE
+    if (!td) {
+	td = STAN_GetDefaultTrustDomain();
+    }
     /* bump the usage up to CA level */
     issuerUsage.nss3lookingForCA = PR_TRUE;
+#endif
+    if (statusOpt) *statusOpt = PR_SUCCESS;
     collection = nssCertificateCollection_Create(td, NULL);
-    if (!collection)
-	goto loser;
-    st = nssPKIObjectCollection_AddObject(collection, (nssPKIObject *)c);
-    if (st != PR_SUCCESS)
-    	goto loser;
-    for (rvCount = 1; (!rvLimit || rvCount < rvLimit); ++rvCount) {
-	CERTCertificate *cCert = STAN_GetCERTCertificate(c);
+    if (!collection) {
+	if (statusOpt) *statusOpt = PR_FAILURE;
+	return (NSSCertificate **)NULL;
+    }
+    nssPKIObjectCollection_AddObject(collection, (nssPKIObject *)c);
+    if (rvLimit == 1) {
+	goto finish;
+    }
+    /* XXX This breaks code for which NSS_3_4_CODE is not defined (pure
+     *     4.0 builds).  That won't affect the tip.  But be careful
+     *     when merging 4.0!!!
+     */
+    while (c != (NSSCertificate *)NULL) {
+#ifdef NSS_3_4_CODE
+	cCert = STAN_GetCERTCertificate(c);
 	if (cCert->isRoot) {
 	    /* not including the issuer of the self-signed cert, which is,
 	     * of course, itself
 	     */
 	    break;
 	}
-	c = find_cert_issuer(c, timeOpt, &issuerUsage, policiesOpt, td, cc);
-	if (!c) {
-	    ret = PR_FAILURE;
+	cp = c;
+#endif
+	c = find_cert_issuer(c, timeOpt, &issuerUsage, policiesOpt);
+	if (c) {
+	    nssPKIObjectCollection_AddObject(collection, (nssPKIObject *)c);
+	    nssCertificate_Destroy(c); /* collection has it */
+	    if (rvLimit > 0 &&
+	        nssPKIObjectCollection_Count(collection) == rvLimit) 
+	    {
+		break;
+	    }
+	} else {
+	    nss_SetError(NSS_ERROR_CERTIFICATE_ISSUER_NOT_FOUND);
+	    if (statusOpt) *statusOpt = PR_FAILURE;
 	    break;
 	}
-	st = nssPKIObjectCollection_AddObject(collection, (nssPKIObject *)c);
-	nssCertificate_Destroy(c); /* collection has it */
-	if (st != PR_SUCCESS)
-	    goto loser;
     }
+finish:
     rvChain = nssPKIObjectCollection_GetCertificates(collection, 
                                                      rvOpt, 
                                                      rvLimit, 
                                                      arenaOpt);
-    if (rvChain) {
-	nssPKIObjectCollection_Destroy(collection);
-	if (statusOpt) 
-	    *statusOpt = ret;
-	if (ret != PR_SUCCESS)
-	    nss_SetError(NSS_ERROR_CERTIFICATE_ISSUER_NOT_FOUND);
-	return rvChain;
-    }
-
-loser:
-    if (collection)
-	nssPKIObjectCollection_Destroy(collection);
-    if (statusOpt) 
-	*statusOpt = PR_FAILURE;
-    nss_SetError(NSS_ERROR_CERTIFICATE_ISSUER_NOT_FOUND);
+    nssPKIObjectCollection_Destroy(collection);
     return rvChain;
 }
 
@@ -552,14 +547,11 @@ NSSCertificate_BuildChain (
   NSSCertificate **rvOpt,
   PRUint32 rvLimit, /* zero for no limit */
   NSSArena *arenaOpt,
-  PRStatus *statusOpt,
-  NSSTrustDomain *td,
-  NSSCryptoContext *cc 
+  PRStatus *statusOpt
 )
 {
     return nssCertificate_BuildChain(c, timeOpt, usage, policiesOpt,
-                                     rvOpt, rvLimit, arenaOpt, statusOpt,
-				     td, cc);
+                                     rvOpt, rvLimit, arenaOpt, statusOpt);
 }
 
 NSS_IMPLEMENT NSSCryptoContext *
@@ -764,26 +756,6 @@ NSSCertificate_IsPrivateKeyAvailable (
     return isUser;
 }
 
-/* sort the subject cert list from newest to oldest */
-PRIntn
-nssCertificate_SubjectListSort (
-  void *v1,
-  void *v2
-)
-{
-    NSSCertificate *c1 = (NSSCertificate *)v1;
-    NSSCertificate *c2 = (NSSCertificate *)v2;
-    nssDecodedCert *dc1 = nssCertificate_GetDecoding(c1);
-    nssDecodedCert *dc2 = nssCertificate_GetDecoding(c2);
-    if (!dc1) {
-	return dc2 ? 1 : 0;
-    } else if (!dc2) {
-	return -1;
-    } else {
-	return dc1->isNewerThan(dc1, dc2) ? -1 : 1;
-    }
-}
-
 NSS_IMPLEMENT PRBool
 NSSUserCertificate_IsStillPresent (
   NSSUserCertificate *uc,
@@ -877,6 +849,83 @@ NSSUserCertificate_DeriveSymmetricKey (
     return NULL;
 }
 
+NSS_IMPLEMENT void 
+nssBestCertificate_SetArgs (
+  nssBestCertificateCB *best,
+  NSSTime *timeOpt,
+  NSSUsage *usage,
+  NSSPolicies *policies
+)
+{
+    if (timeOpt) {
+	best->time = timeOpt;
+    } else {
+	NSSTime_Now(&best->sTime);
+	best->time = &best->sTime;
+    }
+    best->usage = usage;
+    best->policies = policies;
+    best->cert = NULL;
+}
+
+NSS_IMPLEMENT PRStatus 
+nssBestCertificate_Callback (
+  NSSCertificate *c, 
+  void *arg
+)
+{
+    nssBestCertificateCB *best = (nssBestCertificateCB *)arg;
+    nssDecodedCert *dc, *bestdc;
+    dc = nssCertificate_GetDecoding(c);
+    if (!best->cert) {
+	/* usage */
+	if (best->usage->anyUsage) {
+	    best->cert = nssCertificate_AddRef(c);
+	} else {
+#ifdef NSS_3_4_CODE
+	    /* For this to work in NSS 3.4, we have to go out and fill in
+	     * all of the CERTCertificate fields.  Why?  Because the
+	     * matchUsage function calls CERT_IsCACert, which needs to know
+	     * what the trust values are for the cert.
+	     * Ignore the returned pointer, the refcount is in c anyway.
+	     */
+	    if (STAN_GetCERTCertificate(c) == NULL) {
+		return PR_FAILURE;
+	    }
+#endif
+	    if (dc->matchUsage(dc, best->usage)) {
+		best->cert = nssCertificate_AddRef(c);
+	    }
+	}
+	return PR_SUCCESS;
+    }
+    bestdc = nssCertificate_GetDecoding(best->cert);
+    /* time */
+    if (bestdc->isValidAtTime(bestdc, best->time)) {
+	/* The current best cert is valid at time */
+	if (!dc->isValidAtTime(dc, best->time)) {
+	    /* If the new cert isn't valid at time, it's not better */
+	    return PR_SUCCESS;
+	}
+    } else {
+	/* The current best cert is not valid at time */
+	if (dc->isValidAtTime(dc, best->time)) {
+	    /* If the new cert is valid at time, it's better */
+	    NSSCertificate_Destroy(best->cert);
+	    best->cert = nssCertificate_AddRef(c);
+	    return PR_SUCCESS;
+	}
+    }
+    /* either they are both valid at time, or neither valid; take the newer */
+    /* XXX later -- defer to policies */
+    if (!bestdc->isNewerThan(bestdc, dc)) {
+	NSSCertificate_Destroy(best->cert);
+	best->cert = nssCertificate_AddRef(c);
+    }
+    /* policies */
+    return PR_SUCCESS;
+}
+
 NSS_IMPLEMENT nssSMIMEProfile *
 nssSMIMEProfile_Create (
   NSSCertificate *cert,
@@ -893,7 +942,7 @@ nssSMIMEProfile_Create (
     if (!arena) {
 	return NULL;
     }
-    object = nssPKIObject_Create(arena, NULL, td, cc, nssPKILock);
+    object = nssPKIObject_Create(arena, NULL, td, cc);
     if (!object) {
 	goto loser;
     }
@@ -913,8 +962,7 @@ nssSMIMEProfile_Create (
     }
     return rvProfile;
 loser:
-    if (object) nssPKIObject_Destroy(object);
-    else if (arena)  nssArena_Destroy(arena);
+    nssPKIObject_Destroy(object);
     return (nssSMIMEProfile *)NULL;
 }
 
@@ -971,8 +1019,6 @@ nssTrust_Create (
     nssCryptokiObject *instance;
     nssTrustLevel serverAuth, clientAuth, codeSigning, emailProtection;
     SECStatus rv; /* Should be stan flavor */
-    PRBool stepUp;
-
     lastTrustOrder = 1<<16; /* just make it big */
     PR_ASSERT(object->instances != NULL && object->numInstances > 0);
     rvt = nss_ZNEW(object->arena, NSSTrust);
@@ -989,7 +1035,7 @@ nssTrust_Create (
     sha1_hash.data = sha1_hashin;
     sha1_hash.size = sizeof (sha1_hashin);
     /* trust has to peek into the base object members */
-    nssPKIObject_Lock(object);
+    PZ_Lock(object->lock);
     for (i=0; i<object->numInstances; i++) {
 	instance = object->instances[i];
 	myTrustOrder = nssToken_GetTrustOrder(instance->token);
@@ -998,14 +1044,13 @@ nssTrust_Create (
 	                                        &serverAuth,
 	                                        &clientAuth,
 	                                        &codeSigning,
-	                                        &emailProtection,
-	                                        &stepUp);
+	                                        &emailProtection);
 	if (status != PR_SUCCESS) {
-	    nssPKIObject_Unlock(object);
+	    PZ_Unlock(object->lock);
 	    return (NSSTrust *)NULL;
 	}
 	if (PORT_Memcmp(sha1_hashin,sha1_hashcmp,SHA1_LENGTH) != 0) {
-	    nssPKIObject_Unlock(object);
+	    PZ_Unlock(object->lock);
 	    return (NSSTrust *)NULL;
 	}
 	if (rvt->serverAuth == nssTrustLevel_Unknown ||
@@ -1028,10 +1073,9 @@ nssTrust_Create (
 	{
 	    rvt->codeSigning = codeSigning;
 	}
-	rvt->stepUpApproved = stepUp;
 	lastTrustOrder = myTrustOrder;
     }
-    nssPKIObject_Unlock(object);
+    PZ_Unlock(object->lock);
     return rvt;
 }
 

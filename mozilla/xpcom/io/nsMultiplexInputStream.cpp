@@ -45,7 +45,6 @@
 #include "nsIMultiplexInputStream.h"
 #include "nsISeekableStream.h"
 #include "nsSupportsArray.h"
-#include "nsInt64.h"
 
 class nsMultiplexInputStream : public nsIMultiplexInputStream,
                                public nsISeekableStream
@@ -312,7 +311,7 @@ nsMultiplexInputStream::IsNonBlocking(PRBool *aNonBlocking)
 
 /* void seek (in PRInt32 whence, in PRInt32 offset); */
 NS_IMETHODIMP
-nsMultiplexInputStream::Seek(PRInt32 aWhence, PRInt64 aOffset)
+nsMultiplexInputStream::Seek(PRInt32 aWhence, PRInt32 aOffset)
 {
     nsresult rv;
 
@@ -339,23 +338,21 @@ nsMultiplexInputStream::Seek(PRInt32 aWhence, PRInt64 aOffset)
 
 /* PRUint32 tell (); */
 NS_IMETHODIMP
-nsMultiplexInputStream::Tell(PRInt64 *_retval)
+nsMultiplexInputStream::Tell(PRUint32 *_retval)
 {
     nsresult rv;
-    nsInt64 ret64 = 0;
+    *_retval = 0;
     PRUint32 i, last;
     last = mStartedReadingCurrent ? mCurrentStream+1 : mCurrentStream;
     for (i = 0; i < last; ++i) {
         nsCOMPtr<nsISeekableStream> stream(do_QueryElementAt(&mStreams, i));
         NS_ENSURE_TRUE(stream, NS_ERROR_NO_INTERFACE);
 
-        PRInt64 pos;
+        PRUint32 pos;
         rv = stream->Tell(&pos);
         NS_ENSURE_SUCCESS(rv, rv);
-        ret64 += pos;
+        *_retval += pos;
     }
-    *_retval =  ret64;
-
     return NS_OK;
 }
 

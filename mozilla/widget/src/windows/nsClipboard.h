@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,13 +40,12 @@
 
 #include "nsBaseClipboard.h"
 #include "nsIObserver.h"
-#include "nsIURI.h"
 #include <windows.h>
+#include <ole2.h>
 
 class nsITransferable;
 class nsIClipboardOwner;
 class nsIWidget;
-class nsILocalFile;
 struct IDataObject;
 
 /**
@@ -71,8 +70,7 @@ public:
 
   // Internal Native Routines
   static nsresult CreateNativeDataObject(nsITransferable * aTransferable, 
-                                         IDataObject ** aDataObj,
-                                         nsIURI       * uri);
+                                         IDataObject ** aDataObj);
   static nsresult SetupNativeDataObject(nsITransferable * aTransferable, 
                                         IDataObject * aDataObj);
   static nsresult GetDataFromDataObject(IDataObject     * aDataObject,
@@ -90,14 +88,27 @@ protected:
   NS_IMETHOD SetNativeClipboardData ( PRInt32 aWhichClipboard );
   NS_IMETHOD GetNativeClipboardData ( nsITransferable * aTransferable, PRInt32 aWhichClipboard );
   
-  static PRBool IsInternetShortcut ( const nsAString& inFileName ) ;
+  static PRBool IsInternetShortcut ( const char* inFileName ) ;
   static PRBool FindURLFromLocalFile ( IDataObject* inDataObject, UINT inIndex, void** outData, PRUint32* outDataLen ) ;
   static PRBool FindUnicodeFromPlainText ( IDataObject* inDataObject, UINT inIndex, void** outData, PRUint32* outDataLen ) ;
   static PRBool FindPlatformHTML ( IDataObject* inDataObject, UINT inIndex, void** outData, PRUint32* outDataLen );
-  static void ResolveShortcut ( nsILocalFile* inFileName, nsACString& outURL ) ;
+  static void ResolveShortcut ( const char* inFileName, char** outURL ) ;
 
   nsIWidget         * mWindow;
 
+};
+
+class nsClipboardImage : public nsIClipboardImage {
+public:
+  nsClipboardImage();
+  ~nsClipboardImage();
+
+  NS_DECL_ISUPPORTS
+
+  NS_DECL_NSICLIPBOARDIMAGE
+
+protected:
+  STGMEDIUM   mStgMedium;
 };
 
 #define SET_FORMATETC(fe, cf, td, asp, li, med)   \

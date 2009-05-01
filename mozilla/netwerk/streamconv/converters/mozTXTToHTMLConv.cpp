@@ -1,39 +1,37 @@
-/* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * 
+ * The "License" shall be the Mozilla Public License Version 1.1, except
+ * Sections 6.2 and 11, but with the addition of the below defined Section 14.
+ * You may obtain a copy of the Mozilla Public License Version 1.1 at
+ * <http://www.mozilla.org/MPL/>. The contents of this file are subject to the
+ * License; you may not use this file except in compliance with the License.
+ * 
+ * Section 14: MISCELLANEOUS.
+ * This License represents the complete agreement concerning subject matter
+ * hereof. If any provision of this License is held to be unenforceable, such
+ * provision shall be reformed only to the extent necessary to make it
+ * enforceable. This License shall be governed by German law provisions. Any
+ * litigation relating to this License shall be subject to German jurisdiction.
+ * 
+ * Once Covered Code has been published under a particular version of the
+ * License, You may always continue to use it under the terms of that version.
+ + The Initial Developer and no one else has the right to modify the terms
+ * applicable to Covered Code created under this License.
+ * (End of Section 14)
+ * 
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+ * License for the specific language governing rights and limitations
+ * under the License.
+ * 
  * The Original Code is the Mozilla Text to HTML converter code.
- *
- * The Initial Developer of the Original Code is
- * Ben Bucksch <http://www.bucksch.org>.
- * Portions created by the Initial Developer are Copyright (C) 1999, 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Ben Bucksch
+ * <http://www.bucksch.org>. Portions created by Ben Bucksch are Copyright
+ * (C) 1999, 2000 Ben Bucksch. All Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "mozTXTToHTMLConv.h"
 #include "nsIServiceManager.h"
@@ -69,13 +67,13 @@ mozTXTToHTMLConv::EscapeChar(const PRUnichar ch, nsString& aStringToAppendTo)
     switch (ch)
     {
     case '<':
-      aStringToAppendTo.AppendLiteral("&lt;");
+      aStringToAppendTo.Append(NS_LITERAL_STRING("&lt;"));
       break;
     case '>':
-      aStringToAppendTo.AppendLiteral("&gt;");
+      aStringToAppendTo.Append(NS_LITERAL_STRING("&gt;"));
       break;
     case '&':
-      aStringToAppendTo.AppendLiteral("&amp;");
+      aStringToAppendTo.Append(NS_LITERAL_STRING("&amp;"));
       break;
     default:
       aStringToAppendTo += ch;
@@ -175,7 +173,7 @@ mozTXTToHTMLConv::CompleteAbbreviatedURL(const PRUnichar * aInString, PRInt32 aI
     nsDependentString inString(aInString, aInLength);
     if (inString.FindChar('.', pos) != kNotFound) // if we have a '.' after the @ sign....
     {
-      aOutString.AssignLiteral("mailto:");
+      aOutString.Assign(NS_LITERAL_STRING("mailto:"));
       aOutString += aInString;
     }
   }
@@ -184,12 +182,12 @@ mozTXTToHTMLConv::CompleteAbbreviatedURL(const PRUnichar * aInString, PRInt32 aI
     if (ItMatchesDelimited(aInString, aInLength,
                            NS_LITERAL_STRING("www.").get(), 4, LT_IGNORE, LT_IGNORE))
     {
-      aOutString.AssignLiteral("http://");
+      aOutString.Assign(NS_LITERAL_STRING("http://"));
       aOutString += aInString;
     }
     else if (ItMatchesDelimited(aInString,aInLength, NS_LITERAL_STRING("ftp.").get(), 4, LT_IGNORE, LT_IGNORE))
     { 
-      aOutString.AssignLiteral("ftp://");
+      aOutString.Assign(NS_LITERAL_STRING("ftp://"));
       aOutString += aInString;
     }
   }
@@ -250,7 +248,6 @@ mozTXTToHTMLConv::FindURLStart(const PRUnichar * aInString, PRInt32 aInLength,
     // This disallows non-ascii-characters for email.
     // Currently correct, but revisit later after standards changed.
     PRBool isEmail = aInString[pos] == (PRUnichar)'@';
-    // These chars mark the start of the URL
     for (; i >= 0
              && aInString[PRUint32(i)] != '>' && aInString[PRUint32(i)] != '<'
              && aInString[PRUint32(i)] != '"' && aInString[PRUint32(i)] != '\''
@@ -308,34 +305,22 @@ mozTXTToHTMLConv::FindURLEnd(const PRUnichar * aInString, PRInt32 aInStringLengt
   case abbreviated:
   {
     PRUint32 i = pos + 1;
+    // This disallows non-ascii-characters for email.
+    // Currently correct, but revisit later after standards changed.
     PRBool isEmail = aInString[pos] == (PRUnichar)'@';
-    PRBool haveOpeningBracket = PR_FALSE;
-    for (; PRInt32(i) < aInStringLength; i++)
-    {
-      // These chars mark the end of the URL
-      if (aInString[i] == '>' || aInString[i] == '<' ||
-          aInString[i] == '"' || aInString[i] == '`' ||
-          aInString[i] == '}' || aInString[i] == ']' ||
-          aInString[i] == '{' || aInString[i] == '[' ||
-          aInString[i] == '|' ||
-          (aInString[i] == ')' && !haveOpeningBracket) ||
-          IsSpace(aInString[i])    )
-          break;
-      // Disallow non-ascii-characters for email.
-      // Currently correct, but revisit later after standards changed.
-      if (isEmail && (
-            aInString[i] == '(' || aInString[i] == '\'' ||
-            !nsCRT::IsAscii(aInString[i])       ))
-          break;
-      if (aInString[i] == '(')
-        haveOpeningBracket = PR_TRUE;
-    }
-    // These chars are allowed in the middle of the URL, but not at end.
-    // Technically they are, but are used in normal text after the URL.
+    for (; PRInt32(i) < aInStringLength
+             && aInString[i] != '>' && aInString[i] != '<'
+             && aInString[i] != '"' && aInString[i] != '\''
+             && aInString[i] != '`'
+             && aInString[i] != '}' && aInString[i] != ']'
+             && aInString[i] != ')' && aInString[i] != '|'
+             && !IsSpace(aInString[i])
+             && (!isEmail || nsCRT::IsAscii(aInString[i]))
+         ; i++)
+      ;
     while (--i > pos && (
              aInString[i] == '.' || aInString[i] == ',' || aInString[i] == ';' ||
-             aInString[i] == '!' || aInString[i] == '?' || aInString[i] == '-' ||
-             aInString[i] == '\''
+             aInString[i] == '!' || aInString[i] == '?' || aInString[i] == '-'
              ))
         ;
     if (i > pos)
@@ -448,28 +433,28 @@ mozTXTToHTMLConv::CheckURLAndCreateHTML(
   // Real work
   if (NS_SUCCEEDED(rv) && uri)
   {
-    outputHTML.AssignLiteral("<a class=\"moz-txt-link-");
+    outputHTML.Assign(NS_LITERAL_STRING("<a class=\"moz-txt-link-"));
     switch(mode)
     {
     case RFC1738:
-      outputHTML.AppendLiteral("rfc1738");
+      outputHTML.Append(NS_LITERAL_STRING("rfc1738"));
       break;
     case RFC2396E:
-      outputHTML.AppendLiteral("rfc2396E");
+      outputHTML.Append(NS_LITERAL_STRING("rfc2396E"));
       break;
     case freetext:
-      outputHTML.AppendLiteral("freetext");
+      outputHTML.Append(NS_LITERAL_STRING("freetext"));
       break;
     case abbreviated:
-      outputHTML.AppendLiteral("abbreviated");
+      outputHTML.Append(NS_LITERAL_STRING("abbreviated"));
       break;
     default: break;
     }
-    outputHTML.AppendLiteral("\" href=\"");
+    outputHTML.Append(NS_LITERAL_STRING("\" href=\""));
     outputHTML += txtURL;
-    outputHTML.AppendLiteral("\">");
+    outputHTML.Append(NS_LITERAL_STRING("\">"));
     outputHTML += desc;
-    outputHTML.AppendLiteral("</a>");
+    outputHTML.Append(NS_LITERAL_STRING("</a>"));
     return PR_TRUE;
   }
   else
@@ -480,10 +465,10 @@ NS_IMETHODIMP mozTXTToHTMLConv::FindURLInPlaintext(const PRUnichar * aInString, 
 {
   // call FindURL on the passed in string
   nsAutoString outputHTML; // we'll ignore the generated output HTML
-
+  
   *aStartPos = -1;
   *aEndPos = -1;
-
+  
   FindURL(aInString, aInLength, aPos, kURLs, outputHTML, *aStartPos, *aEndPos);
 
   return NS_OK;
@@ -647,7 +632,6 @@ mozTXTToHTMLConv::NumberOfMatches(const PRUnichar * aInString, PRInt32 aInString
 
 
 // NOTE: the converted html for the phrase is appended to aOutString
-// tagHTML and attributeHTML are plain ASCII (literal strings, in fact)
 PRBool
 mozTXTToHTMLConv::StructPhraseHit(const PRUnichar * aInString, PRInt32 aInStringLength, PRBool col0,
      const PRUnichar* tagTXT, PRInt32 aTagTXTLen, 
@@ -679,13 +663,13 @@ mozTXTToHTMLConv::StructPhraseHit(const PRUnichar * aInString, PRInt32 aInString
     )
   {
     openTags++;
-    aOutString.AppendLiteral("<");
-    aOutString.AppendASCII(tagHTML);
+    aOutString.Append(NS_LITERAL_STRING("<"));
+    aOutString.AppendWithConversion(tagHTML);
     aOutString.Append(PRUnichar(' '));
-    aOutString.AppendASCII(attributeHTML);
-    aOutString.AppendLiteral("><span class=\"moz-txt-tag\">");
+    aOutString.AppendWithConversion(attributeHTML);
+    aOutString.Append(NS_LITERAL_STRING("><span class=\"moz-txt-tag\">"));
     aOutString.Append(tagTXT);
-    aOutString.AppendLiteral("</span>");
+    aOutString.Append(NS_LITERAL_STRING("</span>"));
     return PR_TRUE;
   }
 
@@ -694,10 +678,10 @@ mozTXTToHTMLConv::StructPhraseHit(const PRUnichar * aInString, PRInt32 aInString
        && ItMatchesDelimited(aInString, aInStringLength, tagTXT, aTagTXTLen, LT_ALPHA, LT_DELIMITER))
   {
     openTags--;
-    aOutString.AppendLiteral("<span class=\"moz-txt-tag\">");
+    aOutString.Append(NS_LITERAL_STRING("<span class=\"moz-txt-tag\">"));
     aOutString.Append(tagTXT);
-    aOutString.AppendLiteral("</span></");
-    aOutString.AppendASCII(tagHTML);
+    aOutString.Append(NS_LITERAL_STRING("</span></"));
+    aOutString.AppendWithConversion(tagHTML);
     aOutString.Append(PRUnichar('>'));
     return PR_TRUE;
   }
@@ -749,11 +733,11 @@ mozTXTToHTMLConv::SmilyHit(const PRUnichar * aInString, PRInt32 aLength, PRBool 
       outputHTML.Append(PRUnichar(' '));
     }
 
-    outputHTML.AppendLiteral("<span class=\""); // <span class="
+    outputHTML += NS_LITERAL_STRING("<span class=\""); // <span class="
     AppendASCIItoUTF16(imageName, outputHTML);        // smiley-frown
-    outputHTML.AppendLiteral("\"><span> ");     // "> <span> 
+    outputHTML += NS_LITERAL_STRING("\"><span> ");     // "> <span> 
     AppendASCIItoUTF16(tagTXT, outputHTML);           // alt text
-    outputHTML.AppendLiteral(" </span></span>"); // </span></span>
+    outputHTML += NS_LITERAL_STRING(" </span></span>"); // </span></span>
     glyphTextLen = (col0 ? 0 : 1) + tagLen;
     return PR_TRUE;
   }
@@ -916,7 +900,7 @@ mozTXTToHTMLConv::GlyphHit(const PRUnichar * aInString, PRInt32 aInLength, PRBoo
   }
   if (text0 == '\f')
   {
-      aOutputString.AppendLiteral("<span class='moz-txt-formfeed'></span>");
+      aOutputString.Append(NS_LITERAL_STRING("<span class='moz-txt-formfeed'></span>"));
       glyphTextLen = 1;
       MOZ_TIMER_STOP(mGlyphHitTimer);
       return PR_TRUE;
@@ -927,7 +911,7 @@ mozTXTToHTMLConv::GlyphHit(const PRUnichar * aInString, PRInt32 aInLength, PRBoo
                            NS_LITERAL_STRING(" +/-").get(), 4,
                            LT_IGNORE, LT_IGNORE))
     {
-      aOutputString.AppendLiteral(" &plusmn;");
+      aOutputString.Append(NS_LITERAL_STRING(" &plusmn;"));
       glyphTextLen = 4;
       MOZ_TIMER_STOP(mGlyphHitTimer);
       return PR_TRUE;
@@ -936,43 +920,39 @@ mozTXTToHTMLConv::GlyphHit(const PRUnichar * aInString, PRInt32 aInLength, PRBoo
                                    NS_LITERAL_STRING("+/-").get(), 3,
                                    LT_IGNORE, LT_IGNORE))
     {
-      aOutputString.AppendLiteral("&plusmn;");
+      aOutputString.Append(NS_LITERAL_STRING("&plusmn;"));
       glyphTextLen = 3;
       MOZ_TIMER_STOP(mGlyphHitTimer);
       return PR_TRUE;
     }
   }
 
-  // x^2  =>  x<sup>2</sup>,   also handle powers x^-2,  x^0.5
-  // implement regular expression /[\dA-Za-z\)\]}]\^-?\d+(\.\d+)*[^\dA-Za-z]/
-  if    
+  if    // x^2 -> sup
     (
-      text1 == '^'
-      && 
-      (
-        nsCRT::IsAsciiDigit(text0) || nsCRT::IsAsciiAlpha(text0) || 
-        text0 == ')' || text0 == ']' || text0 == '}'
-      )
-      &&
-      (
-        2 < aInLength && nsCRT::IsAsciiDigit(aInString[2]) ||
-        3 < aInLength && aInString[2] == '-' && nsCRT::IsAsciiDigit(aInString[3])
-      )
+      text1 == '^' // Performance increase
+        &&
+        (
+          ItMatchesDelimited(aInString, aInLength,
+                             NS_LITERAL_STRING("^").get(), 1,
+                             LT_DIGIT, LT_DIGIT) ||
+          ItMatchesDelimited(aInString, aInLength,
+                             NS_LITERAL_STRING("^").get(), 1,
+                             LT_ALPHA, LT_DIGIT) ||
+          ItMatchesDelimited(&aInString[1], aInLength - 1,
+                             NS_LITERAL_STRING("^").get(), 1,
+                             LT_IGNORE, LT_DIGIT)
+            && text0 == ')'
+        )
     )
   {
     // Find first non-digit
-    PRInt32 delimPos = 3;  // skip "^" and first digit (or '-')
-    for (; delimPos < aInLength
-           &&
-           (
-             nsCRT::IsAsciiDigit(aInString[delimPos]) || 
-             aInString[delimPos] == '.' && delimPos + 1 < aInLength &&
-               nsCRT::IsAsciiDigit(aInString[delimPos + 1])
-           );
-         delimPos++)
+    PRInt32 delimPos = 3;  // 3 = Position after first digit after "^"
+    for (; delimPos < aInLength &&
+         nsCRT::IsAsciiDigit(aInString[PRUint32(delimPos)]); delimPos++)
       ;
+    // Note: (delimPos == text.Length()) could be true
 
-    if (delimPos < aInLength && nsCRT::IsAsciiAlpha(aInString[delimPos]))
+    if (nsCRT::IsAsciiAlpha(aInString[PRUint32(delimPos)]))
     {
       MOZ_TIMER_STOP(mGlyphHitTimer);
       return PR_FALSE;
@@ -980,11 +960,11 @@ mozTXTToHTMLConv::GlyphHit(const PRUnichar * aInString, PRInt32 aInLength, PRBoo
 
     outputHTML.Truncate();
     outputHTML += text0;
-    outputHTML.AppendLiteral("<sup class=\"moz-txt-sup\">");
+    outputHTML.Append(NS_LITERAL_STRING("<sup class=\"moz-txt-sup\">"));
 
     aOutputString.Append(outputHTML);
     aOutputString.Append(&aInString[2], delimPos - 2);
-    aOutputString.AppendLiteral("</sup>");
+    aOutputString.Append(NS_LITERAL_STRING("</sup>"));
 
     glyphTextLen = delimPos /* - 1 + 1 */ ;
     MOZ_TIMER_STOP(mGlyphHitTimer);
@@ -1304,24 +1284,24 @@ mozTXTToHTMLConv::ScanHTML(nsString& aInString, PRUint32 whattodo, nsString &aOu
 
 NS_IMETHODIMP
 mozTXTToHTMLConv::Convert(nsIInputStream *aFromStream,
-                          const char *aFromType,
-                          const char *aToType,
-                          nsISupports *aCtxt, nsIInputStream **_retval)
+                             const PRUnichar *aFromType,
+                             const PRUnichar *aToType,
+                             nsISupports *aCtxt, nsIInputStream **_retval)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-mozTXTToHTMLConv::AsyncConvertData(const char *aFromType,
-                                   const char *aToType,
-                                   nsIStreamListener *aListener, nsISupports *aCtxt) {
+mozTXTToHTMLConv::AsyncConvertData(const PRUnichar *aFromType,
+                                      const PRUnichar *aToType,
+                                      nsIStreamListener *aListener, nsISupports *aCtxt) {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
 mozTXTToHTMLConv::OnDataAvailable(nsIRequest* request, nsISupports *ctxt,
-                                 nsIInputStream *inStr, PRUint32 sourceOffset,
-                                 PRUint32 count)
+                                     nsIInputStream *inStr, PRUint32 sourceOffset,
+                                     PRUint32 count)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }

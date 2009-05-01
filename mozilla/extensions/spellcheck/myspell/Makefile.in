@@ -42,7 +42,7 @@ VPATH		= @srcdir@
 include $(DEPTH)/config/autoconf.mk
 
 MODULE		= myspell
-DIRS		= src
+DIRS		= src dictionaries
 
 include $(topsrcdir)/config/rules.mk
 

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,7 +41,6 @@
 #include "nsIAllocator.h"
 #include "plstr.h"
 #include "nsVoidArray.h"
-#include "prnetdb.h"
 
 #include "nsIURL.h"
 #include "nsNetUtil.h"
@@ -354,7 +353,7 @@ nsSound::GetSoundFromCache(nsIURI* inURI, nsISupports** outSound)
   if (NS_FAILED(rv)) return rv;
   
   nsCOMPtr<nsICacheEntryDescriptor> entry;
-  rv = cacheSession->OpenCacheEntry(uriSpec, nsICache::ACCESS_READ, nsICache::BLOCKING, getter_AddRefs(entry));
+  rv = cacheSession->OpenCacheEntry(uriSpec.get(), nsICache::ACCESS_READ, nsICache::BLOCKING, getter_AddRefs(entry));
 
 #ifdef SOUND_DEBUG
   printf("Got sound from cache with rv %ld\n", rv);
@@ -386,7 +385,7 @@ nsSound::PutSoundInCache(nsIChannel* inChannel, PRUint32 inDataSize, nsISupports
   if (NS_FAILED(rv)) return rv;
 
   nsCOMPtr<nsICacheEntryDescriptor> entry;
-  rv = cacheSession->OpenCacheEntry(uriSpec, nsICache::ACCESS_WRITE, nsICache::BLOCKING, getter_AddRefs(entry));
+  rv = cacheSession->OpenCacheEntry(uriSpec.get(), nsICache::ACCESS_WRITE, nsICache::BLOCKING, getter_AddRefs(entry));
 #ifdef SOUND_DEBUG
   printf("Put sound in cache with rv %ld\n", rv);
 #endif
@@ -741,8 +740,8 @@ NS_IMETHODIMP
 nsMovieSoundRequest::OnStreamComplete(nsIStreamLoader *aLoader,
                                         nsISupports *context,
                                         nsresult aStatus,
-                                        PRUint32 dataLen,
-                                        const PRUint8 *data)
+                                        PRUint32 stringLen,
+                                        const char *stringData)
 {
   NS_ENSURE_ARG(aLoader);
   
@@ -760,14 +759,14 @@ nsMovieSoundRequest::OnStreamComplete(nsIStreamLoader *aLoader,
   // we could use a Pointer data handler type, and avoid this
   // allocation/copy, in QuickTime 5 and above.
   OSErr     err;
-  mDataHandle = ::TempNewHandle(dataLen, &err);
+  mDataHandle = ::TempNewHandle(stringLen, &err);
   if (!mDataHandle) return NS_ERROR_OUT_OF_MEMORY;
 
-  ::BlockMoveData(data, *mDataHandle, dataLen);
+  ::BlockMoveData(stringData, *mDataHandle, stringLen);
 
   NS_ASSERTION(mMovie == nsnull, "nsMovieSoundRequest has a movie already");
   
-  err = ImportMovie(mDataHandle, dataLen, contentType);
+  err = ImportMovie(mDataHandle, stringLen, contentType);
   if (err != noErr) {
     Cleanup();
     return NS_ERROR_FAILURE;
@@ -779,7 +778,7 @@ nsMovieSoundRequest::OnStreamComplete(nsIStreamLoader *aLoader,
   // put it in the cache. Not vital that this succeeds.
   // for the data size we just use the string data, since the movie simply wraps this
   // (we have to keep the handle around until the movies are done playing)
-  nsresult rv = macSound->PutSoundInCache(channel, dataLen, NS_STATIC_CAST(nsITimerCallback*, this));
+  nsresult rv = macSound->PutSoundInCache(channel, stringLen, NS_STATIC_CAST(nsITimerCallback*, this));
   NS_ASSERTION(NS_SUCCEEDED(rv), "Failed to put sound in cache");
   
   return PlaySound();
@@ -791,47 +790,44 @@ nsMovieSoundRequest::GetFileFormat(const char* inData, long inDataSize, const ns
 {
   OSType    fileFormat = kQTFileTypeMovie;    // Default to just treating it like a movie.
                                               // Hopefully QuickTime will be able to import it.
-  
   if (inDataSize >= 16)
   {
-    OSType firstFourBytes = PR_ntohl(*(OSType *)inData);
-
     // look for WAVE
-    if (firstFourBytes == 'RIFF')
+    const char* dataPtr = inData;
+    if (*(OSType *)dataPtr == 'RIFF')
     {
-      const char* dataPtr = inData + 8; // skip RIFF and length bytes  
-
-      if (PR_ntohl(*(OSType *)dataPtr) == 'WAVE')
+      dataPtr += 4;     // skip RIFF
+      dataPtr += 4;     // skip length bytes
+      if (*(OSType *)dataPtr == 'WAVE')
         return kQTFileTypeWave;
     }
-
+    
     // look for AIFF
-    if (firstFourBytes == 'FORM')
+    dataPtr = inData;
+    if (*(OSType *)dataPtr == 'FORM')
     {
-      const char* dataPtr = inData + 8; // skip FORM and length bytes
-      OSType bytesEightThroughEleven = PR_ntohl(*(OSType *)dataPtr);
-
-      if (bytesEightThroughEleven == 'AIFF')
+      dataPtr += 4;     // skip FORM
+      dataPtr += 4;     // skip length bytes
+      if (*(OSType *)dataPtr == 'AIFF')
         return kQTFileTypeAIFF;
-
-      if (bytesEightThroughEleven == 'AIFC')
+       
+      if (*(OSType *)dataPtr == 'AIFC')
         return kQTFileTypeAIFC;
     }
   }
-
+  
   if (inDataSize >= 4)
   {
-    OSType firstFourBytes = PR_ntohl(*(OSType *)inData);
-
     // look for midi
-    if (firstFourBytes == 'MThd')
+    if (*(OSType *)inData == 'MThd')
       return kQTFileTypeMIDI;
-
+    
     // look for µLaw/Next-Sun file format (.au)
-    if (firstFourBytes == '.snd')
+    if (*(OSType *)inData == '.snd')
       return kQTFileTypeMuLaw;
+    
   }
-
+  
   // MP3 files have a complex format that is not easily sniffed. Just go by
   // MIME type.
   if (contentType.Equals("audio/mpeg")    ||
@@ -843,7 +839,7 @@ nsMovieSoundRequest::GetFileFormat(const char* inData, long inDataSize, const ns
   {
     fileFormat = 'MP3 ';      // not sure why there is no enum for this
   }
-
+    
   return fileFormat;
 }
 

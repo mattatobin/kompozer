@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,8 +49,9 @@
 #include "nsIContent.h"
 #include "nsIDOMText.h"
 #include "nsISupportsArray.h"
+#include "nsIFocusTracker.h"
 #include "nsCOMPtr.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIComponentManager.h"
 #include "nsContentCID.h"
 #include "nsLayoutCID.h"
@@ -185,9 +187,8 @@ ContentIsInTraversalRange(nsIContent *aContent,   PRBool aIsPreMode,
   if (!aIsPreMode)
     ++indx;
 
-  return (nsRange::ComparePoints(aStartNode, aStartOffset,
-                                 parentNode, indx) <= 0) &&
-         (nsRange::ComparePoints(aEndNode, aEndOffset, parentNode, indx) >= 0);
+  return (ComparePoints(aStartNode, aStartOffset, parentNode, indx) <= 0) &&
+         (ComparePoints(aEndNode,   aEndOffset,   parentNode, indx) >= 0);
 }
 
 
@@ -1116,10 +1117,7 @@ nsContentIterator::PositionAt(nsIContent* aCurNode)
   if (!oldParentStack.SizeTo(mIndexes.Count()+1))
     return NS_ERROR_FAILURE;
 
-  // We want to loop mIndexes.Count() + 1 times here, because we want to make
-  // sure we include mCommonParent in the oldParentStack, for use in the next
-  // for loop, and mIndexes only has entries for nodes from tempNode up through
-  // an ancestor of tempNode that's a child of mCommonParent.
+  // plus one for the node we're currently on.
   for (PRInt32 i = mIndexes.Count()+1; i > 0 && tempNode; i--)
   {
     // Insert at head since we're walking up
@@ -1134,7 +1132,7 @@ nsContentIterator::PositionAt(nsIContent* aCurNode)
     {
       // The position was moved to a parent of the current position. 
       // All we need to do is drop some indexes.  Shortcut here.
-      mIndexes.RemoveElementsAt(mIndexes.Count() - oldParentStack.Count(),
+      mIndexes.RemoveElementsAt(mIndexes.Count() - (oldParentStack.Count()+1),
                                 oldParentStack.Count());
       mIsDone = PR_FALSE;
       return NS_OK;
@@ -1162,12 +1160,11 @@ nsContentIterator::PositionAt(nsIContent* aCurNode)
       // ok, the parent IS on the old stack!  Rework things.
       // we want newIndexes to replace all nodes equal to or below the match
       // Note that index oldParentStack.Count()-1 is the last node, which is
-      // one BELOW the last index in the mIndexes stack.  In other words, we
-      // want to remove elements starting at index (indx+1).
+      // one BELOW the last index in the mIndexes stack.
       PRInt32 numToDrop = oldParentStack.Count()-(1+indx);
       if (numToDrop > 0)
         mIndexes.RemoveElementsAt(mIndexes.Count() - numToDrop,numToDrop);
-      mIndexes.AppendElements(newIndexes);
+      mIndexes.InsertElementsAt(newIndexes,mIndexes.Count());
 
       break;
     }
@@ -1330,13 +1327,6 @@ nsresult nsContentSubtreeIterator::Init(nsIDOMRange* aRange)
     return NS_ERROR_FAILURE;
   cEndP = do_QueryInterface(endParent);
   aRange->GetEndOffset(&endIndx);
-
-  if (!cStartP || !cEndP)
-  {
-    // XXX Hack to account for the fact that not everything QIs to nsIContent.
-    // See bug 302775
-    return NS_ERROR_FAILURE;
-  }
   
   // short circuit when start node == end node
   if (startParent == endParent)

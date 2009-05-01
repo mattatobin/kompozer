@@ -1,43 +1,28 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
+ * Author:
+ *   Adam Lock <adamlock@netscape.com>
  *
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsIServiceManager.h"
-#include "nsIComponentManager.h"
 #include "nsIComponentRegistrar.h"
 #include "nsIAppStartupNotifier.h"
 #include "nsIStringBundle.h"
@@ -45,8 +30,8 @@
 #include "nsIDirectoryService.h"
 #include "nsDirectoryServiceDefs.h"
 
-#include "nsXPCOM.h"
 #include "nsEmbedAPI.h"
+#include "nsLiteralString.h"
 
 static nsIServiceManager *sServiceManager = nsnull;
 static PRBool             sRegistryInitializedFlag = PR_FALSE;
@@ -82,11 +67,8 @@ static XPCOMCleanupHack sXPCOMCleanupHack;
 #endif
 
 
-NS_METHOD
-NS_InitEmbedding(nsILocalFile *mozBinDirectory,
-                 nsIDirectoryServiceProvider *appFileLocProvider,
-                 nsStaticModuleInfo const *aStaticComponents,
-                 PRUint32 aStaticComponentCount)
+nsresult NS_InitEmbedding(nsILocalFile *mozBinDirectory,
+                          nsIDirectoryServiceProvider *appFileLocProvider)
 {
     nsresult rv;
 
@@ -102,8 +84,7 @@ NS_InitEmbedding(nsILocalFile *mozBinDirectory,
 #endif
     {
         // Initialise XPCOM
-        rv = NS_InitXPCOM3(&sServiceManager, mozBinDirectory, appFileLocProvider,
-                           aStaticComponents, aStaticComponentCount);
+        rv = NS_InitXPCOM2(&sServiceManager, mozBinDirectory, appFileLocProvider);
         NS_ENSURE_SUCCESS(rv, rv);
                 
 #ifdef HACK_AROUND_NONREENTRANT_INITXPCOM
@@ -114,91 +95,68 @@ NS_InitEmbedding(nsILocalFile *mozBinDirectory,
     // Register components
     if (!sRegistryInitializedFlag)
     {
-#ifdef DEBUG
-        nsIComponentRegistrar *registrar;
-        rv = sServiceManager->QueryInterface(NS_GET_IID(nsIComponentRegistrar),
-                                             (void **) &registrar);
+        nsCOMPtr<nsIComponentRegistrar> registrar = do_QueryInterface(sServiceManager, &rv);
         if (NS_FAILED(rv))
         {
             NS_WARNING("Could not QI to registrar");
             return rv;
         }
+#ifdef DEBUG
         rv = registrar->AutoRegister(nsnull);
+
         if (NS_FAILED(rv))
         {
             NS_WARNING("Could not AutoRegister");
+            return rv;
         }
-        else
+
+        // If the application is using an GRE, then, 
+        // auto register components in the GRE directory as well.
+        //
+        // The application indicates that it's using an GRE by
+        // returning a valid nsIFile when queried (via appFileLocProvider)
+        // for the NS_GRE_DIR atom as shown below
+        //
+        if (appFileLocProvider)
         {
-            // If the application is using an GRE, then, auto register components
-            // in the GRE directory as well.
-            //
-            // The application indicates that it's using an GRE by returning a
-            // valid nsIFile when queried (via appFileLocProvider) for the
-            // NS_GRE_DIR atom as shown below
+            nsCOMPtr<nsIFile> greDir;
+            PRBool persistent = PR_TRUE;
 
-            if (appFileLocProvider)
+            appFileLocProvider->GetFile(NS_GRE_DIR, &persistent, getter_AddRefs(greDir));
+
+            if (greDir)
             {
-                nsIFile *greDir = nsnull;
-                PRBool persistent = PR_TRUE;
-
-                appFileLocProvider->GetFile(NS_GRE_DIR, &persistent,
-                                            &greDir);
-                if (greDir)
-                {
-                    rv = registrar->AutoRegister(greDir);
-                    if (NS_FAILED(rv))
-                        NS_WARNING("Could not AutoRegister GRE components");
-                    NS_RELEASE(greDir);
-                }
+                rv = registrar->AutoRegister(greDir);
+                NS_ASSERTION(NS_SUCCEEDED(rv), "Could not AutoRegister GRE components");
             }
         }
-        NS_RELEASE(registrar);
-        if (NS_FAILED(rv))
-            return rv;
 #endif
         sRegistryInitializedFlag = PR_TRUE;
     }
 
-    nsIComponentManager *compMgr;
-    rv = sServiceManager->QueryInterface(NS_GET_IID(nsIComponentManager),
-                                         (void **) &compMgr);
-    if (NS_FAILED(rv))
-        return rv;
-
-    nsIObserver *startupNotifier;
-    rv = compMgr->CreateInstanceByContractID(NS_APPSTARTUPNOTIFIER_CONTRACTID,
-                                             NULL,
-                                             NS_GET_IID(nsIObserver),
-                                             (void **) &startupNotifier);
-    NS_RELEASE(compMgr);
-    if (NS_FAILED(rv))
-        return rv;
-
-	  startupNotifier->Observe(nsnull, APPSTARTUP_TOPIC, nsnull);
-    NS_RELEASE(startupNotifier);
+	nsCOMPtr<nsIObserver> mStartupNotifier = do_CreateInstance(NS_APPSTARTUPNOTIFIER_CONTRACTID, &rv);
+	if(NS_FAILED(rv))
+		return rv;
+	mStartupNotifier->Observe(nsnull, APPSTARTUP_TOPIC, nsnull);
 
 #ifdef HACK_AROUND_THREADING_ISSUES
     // XXX force certain objects to be created on the main thread
-    nsIStringBundleService *bundleService;
-    rv = sServiceManager->GetServiceByContractID(NS_STRINGBUNDLE_CONTRACTID,
-                                                 NS_GET_IID(nsIStringBundleService),
-                                                 (void **) &bundleService);
+    nsCOMPtr<nsIStringBundleService> sBundleService;
+    sBundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
     if (NS_SUCCEEDED(rv))
     {
-        nsIStringBundle *stringBundle;
+        nsCOMPtr<nsIStringBundle> stringBundle;
         const char propertyURL[] = "chrome://necko/locale/necko.properties";
-        rv = bundleService->CreateBundle(propertyURL, &stringBundle);
-        NS_RELEASE(stringBundle);
-        NS_RELEASE(bundleService);
+        rv = sBundleService->CreateBundle(propertyURL,
+                                          getter_AddRefs(stringBundle));
     }
 #endif
 
     return NS_OK;
+
 }
 
-NS_METHOD
-NS_TermEmbedding()
+nsresult NS_TermEmbedding()
 {
     // Reentrant calls to this method do nothing except decrement a counter
     if (sInitCounter > 1)

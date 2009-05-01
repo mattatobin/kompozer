@@ -43,13 +43,9 @@
 #include "nsMai.h"
 #include "nsAppRootAccessible.h"
 #include "prlink.h"
-#include "nsIServiceManager.h"
 
 #include <gtk/gtk.h>
 #include <atk/atk.h>
-
-/* app root accessible */
-static nsAppRootAccessible *sAppRoot = nsnull;
 
 /* maiutil */
 
@@ -141,8 +137,8 @@ struct _MaiUtilClass
 /* supporting */
 PRLogModuleInfo *gMaiLog = NULL;
 
-#define MAI_VERSION MOZILLA_VERSION
-#define MAI_NAME "Gecko"
+#define MAI_VERSION "0.0.6"
+#define MAI_NAME "mozilla"
 
 struct _MaiUtilListenerInfo
 {
@@ -553,9 +549,11 @@ NS_IMETHODIMP nsAppRootAccessible::Init()
     return rv;
 }
 
-/* static */ void nsAppRootAccessible::Unload()
+NS_IMETHODIMP nsAppRootAccessible::Shutdown()
 {
-    NS_IF_RELEASE(sAppRoot);
+    nsAppRootAccessible *root = nsAppRootAccessible::Create();
+    if (root)
+        NS_IF_RELEASE(root);
     if (sAtkBridge.lib) {
         if (sAtkBridge.shutdown)
             (*sAtkBridge.shutdown)();
@@ -565,36 +563,18 @@ NS_IMETHODIMP nsAppRootAccessible::Init()
         sAtkBridge.init = NULL;
         sAtkBridge.shutdown = NULL;
     }
+    return NS_OK;
 }
 
 NS_IMETHODIMP nsAppRootAccessible::GetName(nsAString& _retval)
 {
-    nsCOMPtr<nsIStringBundleService> bundleService = 
-      do_GetService(NS_STRINGBUNDLE_CONTRACTID);
-
-    NS_ASSERTION(bundleService, "String bundle service must be present!");
-
-    nsCOMPtr<nsIStringBundle> bundle;
-    bundleService->CreateBundle("chrome://branding/locale/brand.properties",
-                                getter_AddRefs(bundle));
-    nsXPIDLString appName;
-
-    if (bundle) {
-      bundle->GetStringFromName(NS_LITERAL_STRING("brandShortName").get(),
-                                getter_Copies(appName));
-    } else {
-      NS_WARNING("brand.properties not present, using default app name");
-      appName.AssignLiteral("Mozilla");
-    }
-
-    _retval.Assign(appName);
+    _retval = NS_LITERAL_STRING("Mozilla");
     return NS_OK;
 }
 
 NS_IMETHODIMP nsAppRootAccessible::GetDescription(nsAString& aDescription)
 {
-    GetName(aDescription);
-    aDescription.AppendLiteral(" Root Accessible");
+    aDescription = NS_LITERAL_STRING("Mozilla Root Accessible");
     return NS_OK;
 }
 
@@ -602,11 +582,6 @@ NS_IMETHODIMP nsAppRootAccessible::GetRole(PRUint32 *aRole)
 {
     *aRole = ROLE_APPLICATION;
     return NS_OK;
-}
-
-NS_IMETHODIMP nsAppRootAccessible::GetFinalRole(PRUint32 *aFinalRole)
-{
-    return GetRole(aFinalRole);
 }
 
 NS_IMETHODIMP nsAppRootAccessible::GetParent(nsIAccessible **  aParent)
@@ -624,12 +599,8 @@ NS_IMETHODIMP nsAppRootAccessible::GetChildAt(PRInt32 aChildNum,
     if (mChildren)
         rv = mChildren->GetLength(&count);
     NS_ENSURE_SUCCESS(rv, rv);
-
-    if (aChildNum >= NS_STATIC_CAST(PRInt32, count) || count == 0)
+    if (aChildNum >= NS_STATIC_CAST(PRInt32, count))
         return NS_ERROR_INVALID_ARG;
-
-    if (aChildNum < 0)
-        aChildNum = count - 1;
 
     nsCOMPtr<nsIWeakReference> childWeakRef;
     rv = mChildren->QueryElementAt(aChildNum, NS_GET_IID(nsIWeakReference),
@@ -772,6 +743,7 @@ nsAppRootAccessible::RemoveRootAccessible(nsRootAccessibleWrap *aRootAccWrap)
 nsAppRootAccessible *
 nsAppRootAccessible::Create()
 {
+    static nsAppRootAccessible *sAppRoot = nsnull;
     if (!sAppRoot) {
         sAppRoot = new nsAppRootAccessible();
         NS_ASSERTION(sAppRoot, "OUT OF MEMORY");
@@ -799,8 +771,7 @@ LoadGtkModule(GnomeAccessibilityModule& aModule)
         //try to load the module with "gtk-2.0/modules" appended
         char *curLibPath = PR_GetLibraryPath();
         nsCAutoString libPath(curLibPath);
-        libPath.Append(":/usr/lib");
-        MAI_LOG_DEBUG(("Current Lib path=%s\n", libPath.get()));
+        MAI_LOG_DEBUG(("Current Lib path=%s\n", curLibPath));
         PR_FreeLibraryName(curLibPath);
 
         PRInt16 loc1 = 0, loc2 = 0;

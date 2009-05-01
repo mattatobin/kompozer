@@ -1,11 +1,11 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,12 +14,13 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -27,11 +28,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -55,12 +56,10 @@ class  nsIDocShellTreeOwner;
 class  nsIWebBrowserChrome;
 class  nsString;
 class  nsWatcherWindowEnumerator;
-class  nsIScriptContext;
 struct JSContext;
 struct JSObject;
 struct nsWatcherWindowEntry;
 struct PRLock;
-struct SizeSpec;
 
 class nsWindowWatcher :
       public nsIWindowWatcher,
@@ -86,38 +85,15 @@ private:
   nsWatcherWindowEntry *FindWindowEntry(nsIDOMWindow *aWindow);
   nsresult RemoveWindow(nsWatcherWindowEntry *inInfo);
 
-  // Get the caller tree item.  Look on the JS stack, then fall back
-  // to the parent if there's nothing there.
-  already_AddRefed<nsIDocShellTreeItem>
-    GetCallerTreeItem(nsIDocShellTreeItem* aParentItem);
-  
-  // Unlike GetWindowByName this will look for a caller on the JS
-  // stack, and then fall back on aCurrentWindow if it can't find one.
-  nsresult SafeGetWindowByName(const nsAString& aName,
-                               nsIDOMWindow* aCurrentWindow,
-                               nsIDOMWindow** aResult);
-
-  // Just like OpenWindowJS, but knows whether it got called via OpenWindowJS
-  // (which means called from script) or called via OpenWindow.
-  nsresult OpenWindowJSInternal(nsIDOMWindow *aParent,
-                                const char *aUrl,
-                                const char *aName,
-                                const char *aFeatures,
-                                PRBool aDialog,
-                                PRUint32 argc,
-                                jsval *argv,
-                                PRBool aCalledFromJS,
-                                nsIDOMWindow **_retval);
+  nsresult FindItemWithName(const PRUnichar *aName,
+                            nsIDocShellTreeItem **aFoundItem);
 
   static JSContext *GetJSContextFromWindow(nsIDOMWindow *aWindow);
   static JSContext *GetJSContextFromCallStack();
   static nsresult   URIfromURL(const char *aURL,
                                nsIDOMWindow *aParent,
                                nsIURI **aURI);
-#ifdef DEBUG
   static void       CheckWindowName(nsString& aName);
-#endif
-  
   static PRUint32   CalculateChromeFlags(const char *aFeatures,
                                          PRBool aFeaturesSpecified,
                                          PRBool aDialog,
@@ -125,23 +101,18 @@ private:
                                          PRBool aHasChromeParent);
   static PRInt32    WinHasOption(const char *aOptions, const char *aName,
                                  PRInt32 aDefault, PRBool *aPresenceFlag);
-  /* Compute the right SizeSpec based on aFeatures */
-  static void       CalcSizeSpec(const char* aFeatures, SizeSpec& aResult);
   static nsresult   ReadyOpenedDocShellItem(nsIDocShellTreeItem *aOpenedItem,
                                             nsIDOMWindow *aParent,
-                                            PRBool aWindowIsNew,
                                             nsIDOMWindow **aOpenedWindow);
   static void       SizeOpenedDocShellItem(nsIDocShellTreeItem *aDocShellItem,
                                            nsIDOMWindow *aParent,
-                                           const SizeSpec & aSizeSpec);
+                                           const char *aFeatures,
+                                           PRUint32 aChromeFlags);
   static nsresult   AttachArguments(nsIDOMWindow *aWindow,
                                     PRUint32 argc, jsval *argv);
   static nsresult   ConvertSupportsTojsvals(nsIDOMWindow *aWindow,
                                             nsISupports *aArgs,
-                                            PRUint32 *aArgc, jsval **aArgv,
-                                            JSContext **aUsedContext,
-                                            void **aMarkp,
-                                            nsIScriptContext **aScriptContext);
+                                            PRUint32 *aArgc, jsval **aArgv);
   static nsresult   AddSupportsTojsvals(nsISupports *aArg,
                                         JSContext *cx, jsval *aArgv);
   static nsresult   AddInterfaceTojsvals(nsISupports *aArg,
@@ -150,6 +121,7 @@ private:
                                       nsIDocShellTreeItem **outTreeItem);
   static void       GetWindowTreeOwner(nsIDOMWindow *inWindow,
                                        nsIDocShellTreeOwner **outTreeOwner);
+  static JSObject  *GetWindowScriptObject(nsIDOMWindow *inWindow);
 
   nsVoidArray           mEnumeratorList;
   nsWatcherWindowEntry *mOldestWindow;

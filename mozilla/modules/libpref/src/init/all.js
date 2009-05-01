@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Benjamin Smedberg <bsmedberg@covad.net>
+ * Benjamin Smedberg <bsmedberg@covad.net>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -54,8 +54,7 @@ pref("general.useragent.contentlocale", "chrome://navigator-region/locale/region
 
 pref("general.config.obscure_value", 13); // for MCD .cfg files
 
-// maximum number of dated backups to keep at any time
-pref("browser.bookmarks.max_backups",       5);
+pref("backups.number_of_prefs_copies", 1);
 
 pref("browser.cache.disk.enable",           true);
 pref("browser.cache.disk.capacity",         51200);
@@ -65,9 +64,6 @@ pref("browser.cache.memory.enable",         true);
 pref("browser.cache.disk_cache_ssl",        false);
 // 0 = once-per-session, 1 = each-time, 2 = never, 3 = when-appropriate/automatically
 pref("browser.cache.check_doc_frequency",   3);
-// Fastback caching - if this pref is negative, then we calculate the number
-// of content viewers to cache based on the amount of available memory.
-pref("browser.sessionhistory.max_total_viewers", -1);
 
 pref("browser.display.use_document_fonts",  1);  // 0 = never, 1 = quick, 2 = always
 pref("browser.display.use_document_colors", true);
@@ -101,27 +97,14 @@ pref("browser.helperApps.neverAsk.openFile", "");
 pref("browser.chrome.toolbar_tips",         true);
 // 0 = Pictures Only, 1 = Text Only, 2 = Pictures and Text
 pref("browser.chrome.toolbar_style",        2);
-// max image size for which it is placed in the tab icon for tabbrowser.
-// if 0, no images are used for tab icons for image documents.
-pref("browser.chrome.image_icons.max_size", 1024);
 
 
 pref("accessibility.browsewithcaret", false);
 pref("accessibility.warn_on_browsewithcaret", true);
-
-#ifndef XP_MACOSX
 // Tab focus model bit field:
 // 1 focuses text controls, 2 focuses other form elements, 4 adds links.
 // Most users will want 1, 3, or 7.
-// On OS X, we use Full Keyboard Access system preference,
-// unless accessibility.tabfocus is set by the user.
 pref("accessibility.tabfocus", 7);
-pref("accessibility.tabfocus_applies_to_xul", false);
-#else
-// Only on mac tabfocus is expected to handle UI widgets as well as web content
-pref("accessibility.tabfocus_applies_to_xul", true);
-#endif
-
 pref("accessibility.usetexttospeech", "");
 pref("accessibility.usebrailledisplay", "");
 pref("accessibility.accesskeycausesactivation", true);
@@ -129,16 +112,11 @@ pref("accessibility.accesskeycausesactivation", true);
 // Type Ahead Find
 pref("accessibility.typeaheadfind", true);
 pref("accessibility.typeaheadfind.autostart", true);
-// casesensitive: controls the find bar's case-sensitivity
-//     0 - "never"  (case-insensitive)
-//     1 - "always" (case-sensitive)
-// other - "auto"   (case-sensitive for mixed-case input, insensitive otherwise)
-pref("accessibility.typeaheadfind.casesensitive", 0);
 pref("accessibility.typeaheadfind.linksonly", true);
 pref("accessibility.typeaheadfind.startlinksonly", false);
 pref("accessibility.typeaheadfind.timeout", 4000);
 pref("accessibility.typeaheadfind.enabletimeout", true);
-pref("accessibility.typeaheadfind.soundURL", "beep");
+pref("accessibility.typeaheadfind.soundURL", "default");
 pref("accessibility.typeaheadfind.enablesound", true);
 
 pref("browser.history_expire_days", 9);
@@ -153,15 +131,14 @@ pref("browser.forms.submit.backwards_compatible", true);
 // Tab browser preferences.
 pref("browser.tabs.autoHide", true);
 pref("browser.tabs.forceHide", false);
+pref("browser.tabs.loadInBackground", false);
+pref("browser.tabs.opentabfor.middleclick", false);
+pref("browser.tabs.opentabfor.urlbar", false);
+pref("browser.tabs.opentabfor.windowopen", false);
+pref("browser.tabs.opentabfor.bookmarks", false);
 pref("browser.tabs.warnOnClose", true);
-pref("browser.tabs.warnOnCloseOther", true);
-pref("browser.tabs.warnOnOpen", true);
-pref("browser.tabs.maxOpenBeforeWarn", 15);
 // 0 = append, 1 = replace
 pref("browser.tabs.loadGroup", 1);
-
-pref("toolkit.scrollbox.scrollIncrement", 20);
-pref("toolkit.scrollbox.clickToScroll.scrollDelay", 150);
 
 // lets new tab/window load something different than first window
 // -1 - use navigator startup preference
@@ -170,6 +147,12 @@ pref("toolkit.scrollbox.clickToScroll.scrollDelay", 150);
 //  2 - loads last page visited
 pref("browser.tabs.loadOnNewTab", 0);
 pref("browser.windows.loadOnNewWindow", 1);
+
+// link handling in tabbed browsers. values from nsIBrowserDOMWindow.
+pref("browser.link.open_external", 1);
+pref("browser.link.open_newwindow", 2);
+pref("browser.link.open_newwindow.ui", 3); // prefs UI version
+pref("browser.link.open_newwindow.restriction", 0); // values from GlobalWindow
 
 // view source
 pref("view_source.syntax_highlight", true);
@@ -183,10 +166,6 @@ pref("nglayout.debug.enable_xbl_forms", false);
 
 // size of scrollbar snapping region
 pref("slider.snapMultiplier", 6);
-
-// Default to using the system filepicker if possible, but allow
-// toggling to use the XUL filepicker
-pref("ui.allow_platform_file_picker", true);
 
 // option to choose plug-in finder
 pref("application.use_ns_plugin_finder", false);
@@ -238,10 +217,6 @@ pref("print.print_edge_left", 0); // 1/100 of an inch
 pref("print.print_edge_right", 0); // 1/100 of an inch
 pref("print.print_edge_bottom", 0); // 1/100 of an inch
 
-// Pref used by the spellchecker extension to control the 
-// maximum number of misspelled words that will be underlined
-// in a document.
-pref("extensions.spellcheck.inline.max-misspellings", 500);
 
 // Prefs used by libeditor. Prefs specific to seamonkey composer
 // belong in mozilla/editor/ui/composer.js
@@ -277,10 +252,12 @@ pref("capability.policy.default.History.next", "UniversalBrowserRead");
 pref("capability.policy.default.History.previous", "UniversalBrowserRead");
 pref("capability.policy.default.History.toString", "UniversalBrowserRead");
 
+pref("capability.policy.default.HTMLDocument.close.get", "allAccess");
 pref("capability.policy.default.HTMLDocument.open.get", "allAccess");
 
 pref("capability.policy.default.Location.hash.set", "allAccess");
 pref("capability.policy.default.Location.href.set", "allAccess");
+pref("capability.policy.default.Location.reload.get", "allAccess");
 pref("capability.policy.default.Location.replace.get", "allAccess");
 
 pref("capability.policy.default.Navigator.preference", "allAccess");
@@ -289,22 +266,19 @@ pref("capability.policy.default.Navigator.preferenceinternal.set", "UniversalPre
 
 pref("capability.policy.default.Window.blur.get", "allAccess");
 pref("capability.policy.default.Window.close.get", "allAccess");
-pref("capability.policy.default.Window.closed.get", "allAccess");
+pref("capability.policy.default.Window.closed", "allAccess");
 pref("capability.policy.default.Window.Components", "allAccess");
-pref("capability.policy.default.Window.document.get", "allAccess");
+pref("capability.policy.default.Window.document", "allAccess");
 pref("capability.policy.default.Window.focus.get", "allAccess");
-pref("capability.policy.default.Window.frames.get", "allAccess");
-pref("capability.policy.default.Window.history.get", "allAccess");
-pref("capability.policy.default.Window.length.get", "allAccess");
+pref("capability.policy.default.Window.frames", "allAccess");
+pref("capability.policy.default.Window.history", "allAccess");
+pref("capability.policy.default.Window.length", "allAccess");
 pref("capability.policy.default.Window.location", "allAccess");
-pref("capability.policy.default.Window.opener.get", "allAccess");
-pref("capability.policy.default.Window.parent.get", "allAccess");
-pref("capability.policy.default.Window.self.get", "allAccess");
-pref("capability.policy.default.Window.top.get", "allAccess");
-pref("capability.policy.default.Window.window.get", "allAccess");
-
-pref("capability.policy.default.Selection.addSelectionListener", "UniversalXPConnect");
-pref("capability.policy.default.Selection.removeSelectionListener", "UniversalXPConnect");
+pref("capability.policy.default.Window.opener", "allAccess");
+pref("capability.policy.default.Window.parent", "allAccess");
+pref("capability.policy.default.Window.self", "allAccess");
+pref("capability.policy.default.Window.top", "allAccess");
+pref("capability.policy.default.Window.window", "allAccess");
 
 // Restrictions on the DOM for mail/news - see bugs 66938 and 84545
 pref("capability.policy.mailnews.sites", "mailbox: imap: news:");
@@ -313,10 +287,7 @@ pref("capability.policy.mailnews.*.attributes.get", "noAccess");
 pref("capability.policy.mailnews.*.baseURI.get", "noAccess");
 pref("capability.policy.mailnews.*.data.get", "noAccess");
 pref("capability.policy.mailnews.*.getAttribute", "noAccess");
-pref("capability.policy.mailnews.HTMLDivElement.getAttribute", "sameOrigin");
 pref("capability.policy.mailnews.*.getAttributeNS", "noAccess");
-pref("capability.policy.mailnews.*.getAttributeNode", "noAccess");
-pref("capability.policy.mailnews.*.getAttributeNodeNS", "noAccess");
 pref("capability.policy.mailnews.*.getNamedItem", "noAccess");
 pref("capability.policy.mailnews.*.getNamedItemNS", "noAccess");
 pref("capability.policy.mailnews.*.host.get", "noAccess");
@@ -330,13 +301,11 @@ pref("capability.policy.mailnews.*.protocol.get", "noAccess");
 pref("capability.policy.mailnews.*.src.get", "noAccess");
 pref("capability.policy.mailnews.*.substringData.get", "noAccess");
 pref("capability.policy.mailnews.*.text.get", "noAccess");
-pref("capability.policy.mailnews.*.textContent", "noAccess");
 pref("capability.policy.mailnews.*.title.get", "noAccess");
 pref("capability.policy.mailnews.DOMException.toString", "noAccess");
 pref("capability.policy.mailnews.HTMLAnchorElement.toString", "noAccess");
 pref("capability.policy.mailnews.HTMLDocument.domain", "noAccess");
 pref("capability.policy.mailnews.HTMLDocument.URL", "noAccess");
-pref("capability.policy.mailnews.*.documentURI", "noAccess");
 pref("capability.policy.mailnews.Location.toString", "noAccess");
 pref("capability.policy.mailnews.Range.toString", "noAccess");
 pref("capability.policy.mailnews.Window.blur", "noAccess");
@@ -355,7 +324,6 @@ pref("capability.policy.mailnews.Window.screenY.set", "noAccess");
 pref("capability.policy.mailnews.Window.sizeToContent", "noAccess");
 pref("capability.policy.mailnews.document.load", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.channel", "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.getInterface", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.responseXML", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.responseText", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.status", "noAccess");
@@ -373,8 +341,8 @@ pref("capability.policy.mailnews.XMLHttpRequest.onerror", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.onreadystatechange", "noAccess");
 pref("capability.policy.mailnews.XMLSerializer.serializeToString", "noAccess");
 pref("capability.policy.mailnews.XMLSerializer.serializeToStream", "noAccess");
-pref("capability.policy.mailnews.DOMParser.parseFromString", "noAccess");
-pref("capability.policy.mailnews.DOMParser.parseFromStream", "noAccess");
+pref("capability.policy.mailnews.DOMParser,parseFromString", "noAccess");
+pref("capability.policy.mailnews.DOMParser,parseFromStream", "noAccess");
 pref("capability.policy.mailnews.SOAPCall.transportURI", "noAccess");
 pref("capability.policy.mailnews.SOAPCall.verifySourceHeader", "noAccess");
 pref("capability.policy.mailnews.SOAPCall.invoke", "noAccess");
@@ -423,7 +391,6 @@ pref("capability.policy.mailnews.WebServiceProxyFactory.onError", "noAccess");
 
 // XMLExtras
 pref("capability.policy.default.XMLHttpRequest.channel", "noAccess");
-pref("capability.policy.default.XMLHttpRequest.getInterface", "noAccess");
 pref("capability.policy.default.DOMParser.parseFromStream", "noAccess");
 
 // Clipboard
@@ -446,7 +413,7 @@ pref("dom.disable_window_open_feature.menubar",     false);
 pref("dom.disable_window_open_feature.scrollbars",  false);
 pref("dom.disable_window_open_feature.resizable",   false);
 pref("dom.disable_window_open_feature.minimizable", false);
-pref("dom.disable_window_open_feature.status",      true);
+pref("dom.disable_window_open_feature.status",      false);
 
 pref("dom.allow_scripts_to_close_windows",          false);
 
@@ -455,14 +422,6 @@ pref("dom.popup_maximum",                           20);
 pref("dom.popup_allowed_events", "change click dblclick mouseup reset submit");
 pref("dom.disable_open_click_delay", 1000);
 
-pref("dom.storage.enabled", true);
-
-// Disable popups from plugins by default
-//   0 = openAllowed
-//   1 = openControlled
-//   2 = openAbused
-pref("privacy.popups.disable_from_plugins", 2);
-
 pref("dom.event.contextmenu.enabled",       true);
 
 pref("javascript.enabled",                  true);
@@ -470,6 +429,7 @@ pref("javascript.allow.mailnews",           false);
 pref("javascript.options.strict",           false);
 
 // advanced prefs
+pref("advanced.always_load_images",         true);
 pref("security.enable_java",                true);
 pref("advanced.mailftp",                    false);
 pref("image.animation_mode",                "normal");
@@ -494,9 +454,7 @@ pref("network.protocol-handler.external.data", false);
 pref("network.protocol-handler.external.ms-help", false);
 pref("network.protocol-handler.external.shell", false);
 pref("network.protocol-handler.external.vnd.ms.radio", false);
-#ifdef XP_MACOSX
 pref("network.protocol-handler.external.help", false);
-#endif
 pref("network.protocol-handler.external.disk", false);
 pref("network.protocol-handler.external.disks", false);
 pref("network.protocol-handler.external.afp", false);
@@ -564,6 +522,10 @@ pref("network.http.max-persistent-connections-per-proxy", 4);
 // max-connections or max-connections-per-server has also been reached.
 pref("network.http.request.max-start-delay", 10);
 
+// http specific network timeouts (XXX currently unused)
+pref("network.http.connect.timeout",  30);	// in seconds
+pref("network.http.request.timeout", 120);	// in seconds
+
 // Headers
 pref("network.http.accept.default", "text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5");
 pref("network.http.sendRefererHeader",      2); // 0=don't send any, 1=send only on clicks, 2=send on image requests as well
@@ -587,68 +549,9 @@ pref("network.http.pipelining.maxrequests" , 4);
 
 // </http>
 
-// If false, remote JAR files that are served with a content type other than
-// application/java-archive or application/x-jar will not be opened
-// by the jar channel.
-pref("network.jar.open-unsafe-types", false);
-
 // This preference controls whether or not internationalized domain names (IDN)
 // are handled.  IDN requires a nsIIDNService implementation.
 pref("network.enableIDN", true);
-
-// This preference, if true, causes all UTF-8 domain names to be normalized to
-// punycode.  The intention is to allow UTF-8 domain names as input, but never
-// generate them from punycode.
-pref("network.IDN_show_punycode", false);
-
-// TLDs with "network.IDN.whitelist.tld" explicitly set to true are treated as 
-// IDN-safe. Otherwise, they're treated as unsafe and punycode will be used
-// for displaying them in the UI (e.g. URL bar). Note that these preferences
-// are referred to ONLY when "network.IDN_show_punycode" is false. In other
-// words, all IDNs will be shown in punycode if "network.IDN_show_punycode"
-// is true.
-
-// ccTLDs
-pref("network.IDN.whitelist.ac", true);
-pref("network.IDN.whitelist.at", true);
-pref("network.IDN.whitelist.br", true);
-pref("network.IDN.whitelist.ch", true);
-pref("network.IDN.whitelist.cl", true);
-pref("network.IDN.whitelist.cn", true);
-pref("network.IDN.whitelist.de", true);
-pref("network.IDN.whitelist.dk", true);
-pref("network.IDN.whitelist.es", true);
-pref("network.IDN.whitelist.fi", true);
-pref("network.IDN.whitelist.gr", true);
-pref("network.IDN.whitelist.hu", true);
-pref("network.IDN.whitelist.io", true);
-pref("network.IDN.whitelist.ir", true);
-pref("network.IDN.whitelist.is", true);
-pref("network.IDN.whitelist.jp", true);
-pref("network.IDN.whitelist.kr", true);
-pref("network.IDN.whitelist.li", true);
-pref("network.IDN.whitelist.lt", true);
-pref("network.IDN.whitelist.no", true);
-pref("network.IDN.whitelist.pl", true);
-pref("network.IDN.whitelist.se", true);
-pref("network.IDN.whitelist.sh", true);
-pref("network.IDN.whitelist.th", true);
-pref("network.IDN.whitelist.tm", true);
-pref("network.IDN.whitelist.tw", true);
-pref("network.IDN.whitelist.vn", true);
-
-// non-ccTLDs
-pref("network.IDN.whitelist.biz", true);
-pref("network.IDN.whitelist.cat", true);
-pref("network.IDN.whitelist.info", true);
-pref("network.IDN.whitelist.museum", true);
-pref("network.IDN.whitelist.org", true);
-
-// If a domain includes any of the following characters, it may be a spoof 
-// attempt and so we always display the domain name as punycode. This would 
-// override the settings "network.IDN_show_punycode" and 
-// "network.IDN.whitelist.*".
-pref("network.IDN.blacklist_chars", "\u0020\u00A0\u00BC\u00BD\u00BE\u01C3\u02D0\u0337\u0338\u0589\u05C3\u05F4\u0609\u060A\u066A\u06D4\u0701\u0702\u0703\u0704\u115F\u1160\u1735\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u2024\u2027\u2028\u2029\u202F\u2039\u203A\u2041\u2044\u2052\u205F\u2153\u2154\u2155\u2156\u2157\u2158\u2159\u215A\u215B\u215C\u215D\u215E\u215F\u2215\u2236\u23AE\u2571\u29F6\u29F8\u2AFB\u2AFD\u2FF0\u2FF1\u2FF2\u2FF3\u2FF4\u2FF5\u2FF6\u2FF7\u2FF8\u2FF9\u2FFA\u2FFB\u3000\u3002\u3014\u3015\u3033\u3164\u321D\u321E\u33AE\u33AF\u33C6\u33DF\uA789\uFE14\uFE15\uFE3F\uFE5D\uFE5E\uFEFF\uFF0E\uFF0F\uFF61\uFFA0\uFFF9\uFFFA\uFFFB\uFFFC\uFFFD");
 
 // This preference specifies a list of domains for which DNS lookups will be
 // IPv4 only. Works around broken DNS servers which can't handle IPv6 lookups
@@ -669,10 +572,8 @@ pref("network.standard-url.encode-utf8", false);
 // Idle timeout for ftp control connections - 5 minute default
 pref("network.ftp.idleConnectionTimeout", 300);
 
-// directory listing format
-// 2: HTML
-// 3: XUL directory viewer
-// all other values are treated like 2
+// directory listing format - constants are defined in nsIDirectoryListing.idl
+// Do not set this to 0...
 pref("network.dir.format", 2);
 
 // enables the prefetch service (i.e., prefetching of <link rel="next"> URLs).
@@ -692,44 +593,23 @@ pref("network.negotiate-auth.trusted-uris", "");
 // This list controls which URIs can support delegation.
 pref("network.negotiate-auth.delegation-uris", "");
 
-// Allow SPNEGO by default when challenged by a proxy server.
-pref("network.negotiate-auth.allow-proxies", true);
-
-// Path to a specific gssapi library
-pref("network.negotiate-auth.gsslib", "");
-
-// Specify if the gss lib comes standard with the OS
-pref("network.negotiate-auth.using-native-gsslib", true);
-
-#ifdef XP_WIN
-
-// Default to using the SSPI intead of GSSAPI on windows 
-pref("network.auth.use-sspi", true);
-
-#endif
-
 // The following prefs are used to enable automatic use of the operating
 // system's NTLM implementation to silently authenticate the user with their
-// Window's domain logon.  The trusted-uris pref follows the format of the
-// trusted-uris pref for negotiate authentication.
+// Window's domain logon.  By default, this is enabled for proxy servers.
+// The trusted-uris pref follows the format of the trusted-uris pref for
+// negotiate authentication.
 pref("network.automatic-ntlm-auth.allow-proxies", true);
 pref("network.automatic-ntlm-auth.trusted-uris", "");
 
-// This preference controls whether or not the LM hash will be included in
-// response to a NTLM challenge.  By default, this is disabled since servers
-// should almost never need the LM hash, and the LM hash is what makes NTLM
-// authentication less secure.  See bug 250691 for further details.
-// NOTE: automatic-ntlm-auth which leverages the OS-provided NTLM
-//       implementation will not be affected by this preference.
-pref("network.ntlm.send-lm-response", false);
 
 // sspitzer:  change this back to "news" when we get to beta.
 // for now, set this to news.mozilla.org because you can only
 // post to the server specified by this pref.
 pref("network.hosts.nntp_server",           "news.mozilla.org");
 
-pref("permissions.default.image",           1); // 1-Accept, 2-Deny, 3-dontAcceptForeign
+pref("network.image.imageBehavior",         0); // 0-Accept, 1-dontAcceptForeign, 2-dontUse
 pref("network.image.warnAboutImages",       false);
+pref("network.proxy.autoconfig_url",        "");
 pref("network.proxy.type",                  0);
 pref("network.proxy.ftp",                   "");
 pref("network.proxy.ftp_port",              0);
@@ -742,27 +622,17 @@ pref("network.proxy.ssl_port",              0);
 pref("network.proxy.socks",                 "");
 pref("network.proxy.socks_port",            0);
 pref("network.proxy.socks_version",         5);
-pref("network.proxy.socks_remote_dns",      false);
 pref("network.proxy.no_proxies_on",         "localhost, 127.0.0.1");
-pref("network.proxy.failover_timeout",      1800); // 30 minutes
 pref("network.online",                      true); //online/offline
-pref("network.cookie.cookieBehavior",       0); // 0-Accept, 1-dontAcceptForeign, 2-dontUse, 3-p3p
+pref("network.cookie.cookieBehavior",       3); // 0-Accept, 1-dontAcceptForeign, 2-dontUse, 3-p3p
 pref("network.cookie.disableCookieForMailNews", true); // disable all cookies for mail
 pref("network.cookie.lifetimePolicy",       0); // accept normally, 1-askBeforeAccepting, 2-acceptForSession,3-acceptForNDays
 pref("network.cookie.alwaysAcceptSessionCookies", false);
 pref("network.cookie.prefsMigrated",        false);
 pref("network.cookie.lifetime.days",        90);
 
-// The PAC file to load.  Ignored unless network.proxy.type is 2.
-pref("network.proxy.autoconfig_url", "");
-
-// If we cannot load the PAC file, then try again (doubling from interval_min
-// until we reach interval_max or the PAC file is successfully loaded).
-pref("network.proxy.autoconfig_retry_interval_min", 5);    // 5 seconds
-pref("network.proxy.autoconfig_retry_interval_max", 300);  // 5 minutes
-
 // The following default value is for p3p medium mode.
-// See xpfe/components/permissions/content/cookieP3P.xul for the definitions of low/medium/hi
+// See extensions/cookie/resources/content/p3p.xul for the definitions of low/medium/hi
 pref("network.cookie.p3p",                  "ffffaaaa");
 pref("network.cookie.p3plevel",             1); // 0=low, 1=medium, 2=high, 3=custom
 
@@ -770,14 +640,10 @@ pref("network.enablePad",                   false); // Allow client to do proxy 
 pref("converter.html2txt.structs",          true); // Output structured phrases (strong, em, code, sub, sup, b, i, u)
 pref("converter.html2txt.header_strategy",  1); // 0 = no indention; 1 = indention, increased with header level; 2 = numbering and slight indention
 
-pref("ime.password.onFocus.dontCare",       false);
-pref("ime.password.onBlur.dontCare",        false);
-
 pref("intl.accept_languages",               "chrome://navigator/locale/navigator.properties");
 pref("intl.accept_charsets",                "iso-8859-1,*,utf-8");
 pref("intl.collationOption",                "chrome://navigator-platform/locale/navigator.properties");
 pref("intl.menuitems.alwaysappendaccesskeys","chrome://navigator/locale/navigator.properties");
-pref("intl.menuitems.insertseparatorbeforeaccesskeys","chrome://navigator/locale/navigator.properties");
 pref("intl.charsetmenu.browser.static",     "chrome://navigator/locale/navigator.properties");
 pref("intl.charsetmenu.browser.more1",      "chrome://navigator/locale/navigator.properties");
 pref("intl.charsetmenu.browser.more2",      "chrome://navigator/locale/navigator.properties");
@@ -813,14 +679,8 @@ pref("security.dialog_enable_delay", 2000);
 // menu access key = alt, accelerator key = control.
 // Use 17 for Ctrl, 18 for Alt, 224 for Meta, 0 for none. Mac settings in macprefs.js
 pref("ui.key.accelKey", 17);
+pref("ui.key.generalAccessKey", 18);
 pref("ui.key.menuAccessKey", 18);
-pref("ui.key.generalAccessKey", -1);
-
-// If generalAccessKey is -1, use the following two prefs instead.
-// Use 0 for disabled, 1 for Shift, 2 for Ctrl, 4 for Alt, 8 for Meta
-// (values can be combined, e.g. 5 for Alt+Shift)
-pref("ui.key.chromeAccess", 4);
-pref("ui.key.contentAccess", 5);
 
 pref("ui.key.menuAccessKeyFocuses", false); // overridden below
 pref("ui.key.saveLink.shift", true); // true = shift, false = meta
@@ -841,55 +701,12 @@ pref("mousewheel.withnokey.sysnumlines",true);
 pref("mousewheel.withcontrolkey.action",0);
 pref("mousewheel.withcontrolkey.numlines",1);
 pref("mousewheel.withcontrolkey.sysnumlines",true);
-// mousewheel.withshiftkey, see the Mac note below.
 pref("mousewheel.withshiftkey.action",0);
 pref("mousewheel.withshiftkey.numlines",1);
 pref("mousewheel.withshiftkey.sysnumlines",true);
 pref("mousewheel.withaltkey.action",2);
 pref("mousewheel.withaltkey.numlines",1);
 pref("mousewheel.withaltkey.sysnumlines",false);
-pref("mousewheel.withmetakey.action",0);
-pref("mousewheel.withmetakey.numlines",1);
-pref("mousewheel.withmetakey.sysnumlines",true);
-
-// on platforms where scroll messages differ between horizontal scroll
-// and back/forward button events we can activate them by default
-#ifdef XP_WIN
-#define HORIZSCROLL_AVAILABLE
-#endif
-#ifdef XP_MACOSX
-#define HORIZSCROLL_AVAILABLE
-// The Mac does interesting things with horizontal scrolling.  If a
-// scroll event comes from a pointing device with a scroll wheel for
-// the vertical axis, and the user is holding the shift key, the event
-// comes through as a horizontal scroll event with the shift key
-// (mousewheel.horizscroll.withshiftkey) and not mousewheel.withshiftkey.
-// These events should map to horizontal scroll to maintain platform
-// UI consistency.
-#endif
-#ifdef XP_OS2
-#define HORIZSCROLL_AVAILABLE
-#endif
-#ifdef HORIZSCROLL_AVAILABLE
-// activate horizontal scrolling by default
-pref("mousewheel.horizscroll.withnokey.action",0);
-pref("mousewheel.horizscroll.withnokey.numlines",1);
-pref("mousewheel.horizscroll.withnokey.sysnumlines",true);
-pref("mousewheel.horizscroll.withcontrolkey.action",0);
-pref("mousewheel.horizscroll.withcontrolkey.numlines",1);
-pref("mousewheel.horizscroll.withcontrolkey.sysnumlines",true);
-pref("mousewheel.horizscroll.withshiftkey.action",0);
-pref("mousewheel.horizscroll.withshiftkey.numlines",1);
-pref("mousewheel.horizscroll.withshiftkey.sysnumlines",true);
-pref("mousewheel.horizscroll.withaltkey.action",2);
-pref("mousewheel.horizscroll.withaltkey.numlines",-1);
-pref("mousewheel.horizscroll.withaltkey.sysnumlines",false);
-pref("mousewheel.horizscroll.withmetakey.action",0);
-pref("mousewheel.horizscroll.withmetakey.numlines",1);
-pref("mousewheel.horizscroll.withmetakey.sysnumlines",true);
-#endif
-#ifndef HORIZSCROLL_AVAILABLE
-// disable horizontal scrolling to be able to use back/forward buttons
 pref("mousewheel.horizscroll.withnokey.action",2);
 pref("mousewheel.horizscroll.withnokey.numlines",-1);
 pref("mousewheel.horizscroll.withnokey.sysnumlines",false);
@@ -902,10 +719,6 @@ pref("mousewheel.horizscroll.withshiftkey.sysnumlines",false);
 pref("mousewheel.horizscroll.withaltkey.action",2);
 pref("mousewheel.horizscroll.withaltkey.numlines",-1);
 pref("mousewheel.horizscroll.withaltkey.sysnumlines",false);
-pref("mousewheel.horizscroll.withmetakey.action",2);
-pref("mousewheel.horizscroll.withmetakey.numlines",-1);
-pref("mousewheel.horizscroll.withmetakey.sysnumlines",false);
-#endif
 
 pref("profile.confirm_automigration",true);
 // profile.migration_behavior determines how the profiles root is set
@@ -975,16 +788,11 @@ pref("bidi.support", 1);
 // 2 = defaultcharactersetBidi
 pref("bidi.characterset", 1);
 
+pref("bidi.browser.ui", false);
 
 // used for double-click word selection behavior. Win will override.
 pref("layout.word_select.eat_space_to_next_word", false);
 pref("layout.word_select.stop_at_punctuation", true);
-
-// controls caret style during text selection
-// 0 = use platform default
-// 1 = caret moves and blinks as when there is no selection
-// 2 = caret moves to selection edge and is not visible during selection
-pref("layout.selection.caret_style", 0);
 
 // pref to control whether or not to replace backslashes with Yen signs
 // in documents encoded in one of Japanese legacy encodings (EUC-JP, 
@@ -993,9 +801,6 @@ pref("layout.enable_japanese_specific_transform", false);
 
 // pref to force frames to be resizable
 pref("layout.frames.force_resizability", false);
-
-// pref to report CSS errors to the error console
-pref("layout.css.report_errors", true);
 
 // pref to permit users to make verified SOAP calls by default
 pref("capability.policy.default.SOAPCall.invokeVerifySourceHeader", "allAccess");
@@ -1043,10 +848,7 @@ pref("config.use_system_prefs.accessibility", false);
 pref("editor.resizing.preserve_ratio",       true);
 pref("editor.positioning.offset",            0);
 
-pref("dom.max_chrome_script_run_time", 20);
-pref("dom.max_script_run_time", 10);
-
-pref("svg.enabled", true);
+pref("dom.max_script_run_time", 5);
 
 #ifdef XP_WIN
 pref("font.name.serif.ar", "Times New Roman");
@@ -1062,10 +864,10 @@ pref("font.name.cursive.el", "Comic Sans MS");
 pref("font.name.serif.he", "Narkisim");
 pref("font.name.sans-serif.he", "Arial");
 pref("font.name.monospace.he", "Fixed Miriam Transparent");
-pref("font.name.cursive.he", "Guttman Yad");
+pref("font.name.cursive.he", "Gutmann Yad");
 pref("font.name-list.serif.he", "Narkisim, David");
 pref("font.name-list.monospace.he", "Fixed Miriam Transparent, Miriam Fixed, Rod, Courier New");
-pref("font.name-list.cursive.he", "Guttman Yad, Ktav, Arial");
+pref("font.name-list.cursive.he", "Gutmann Yad, Ktav, Arial");
 
 // For CJK fonts, we list a font twice in name-list, once in the native script and once in English
 // because the name of a CJK font returned by Win32 API is beyond our control and depends on
@@ -1161,166 +963,59 @@ pref("font.name.monospace.x-tamil", "Latha");
 pref("font.name-list.serif.x-tamil", "Latha, Code2000");
 pref("font.name-list.monospace.x-tamil", "Latha, Code2000");
 
-# http://www.alanwood.net/unicode/fonts.html
-
-pref("font.name.serif.x-armn", "Sylfaen");
-pref("font.name.sans-serif.x-armn", "Arial AMU");
-pref("font.name.monospace.x-armn", "Arial AMU");
-pref("font.name-list.serif.x-armn", "Sylfaen,Arial Unicode MS, Code2000");
-pref("font.name-list.monospace.x-armn", "Arial AMU, Arial Unicode MS, Code2000");
-
-pref("font.name.serif.x-beng", "Akaash");
-pref("font.name.sans-serif.x-beng", "Likhan");
-pref("font.name.monospace.x-beng", "Mitra Mono");
-pref("font.name-list.serif.x-beng", "Akaash, Ekushey Punarbhaba, Code2000, Arial Unicode MS"); 
-pref("font.name-list.monospace.x-beng", "Likhan, Mukti Narrow, Code 2000, Arial Unicode MS");
-
-pref("font.name.serif.x-cans", "Aboriginal Serif");
-pref("font.name.sans-serif.x-cans", "Aboriginal Sans");
-pref("font.name.monospace.x-cans", "Aboriginal Sans");
-pref("font.name-list.serif.x-cans", "Aboriginal Serif, BJCree Uni");
-pref("font.name-list.monospace.x-cans", "Aboriginal Sans, OskiDakelh, Pigiarniq, Uqammaq");
-
-pref("font.name.serif.x-ethi", "Visual Geez Unicode");
-pref("font.name.sans-serif.x-ethi", "GF Zemen Unicode");
-pref("font.name.cursive.x-ethi", "Visual Geez Unicode Title");
-pref("font.name.monospace.x-ethi", "Ethiopia Jiret");
-pref("font.name-list.serif.x-ethi", "Visual Geez Unicode, Visual Geez Unicode Agazian, Code2000");
-pref("font.name-list.monospace.x-ethi", "Ethiopia Jiret, Code2000");
-
-pref("font.name.serif.x-geor", "Sylfaen");
-pref("font.name.sans-serif.x-geor", "BPG Classic 99U");
-pref("font.name.monospace.x-geor", "Code2000");
-pref("font.name-list.serif.x-geor", "Sylfaen, BPG Paata Khutsuri U, TITUS Cyberbit Basic"); 
-pref("font.name-list.monospace.x-geor", "BPG Classic 99U, Code2000, Arial Unicode MS");
-
-pref("font.name.serif.x-gujr", "Shruti");
-pref("font.name.sans-serif.x-gujr", "Shruti");
-pref("font.name.monospace.x-gujr", "Code2000");
-pref("font.name-list.serif.x-gujr", "Shruti, Code2000, Arial Unicode MS"); 
-pref("font.name-list.monospace.x-gujr", "Code2000, Shruti, Arial Unicode MS");
-
-pref("font.name.serif.x-guru", "Raavi");
-pref("font.name.sans-serif.x-guru", "Code2000");
-pref("font.name.monospace.x-guru", "Code2000");
-pref("font.name-list.serif.x-guru", "Raavi, Saab, Code2000, Arial Unicode MS"); 
-pref("font.name-list.monospace.x-guru", "Code2000, Raavi, Saab, Arial Unicode MS");
-
-pref("font.name.serif.x-khmr", "PhnomPenh OT");
-pref("font.name.sans-serif.x-khmr", "Khmer OS");
-pref("font.name.monospace.x-khmr", "Code2000");
-pref("font.name-list.serif.x-khmr", "PhnomPenh OT,.Mondulkiri U GR 1.5, Khmer OS");
-pref("font.name-list.monospace.x-khmr", "Code2000, Khmer OS, Khmer OS System");
-
-pref("font.name.serif.x-mlym", "Kartika");
-pref("font.name.sans-serif.x-mlym", "Anjali-Beta");
-pref("font.name.monospace.x-mlym", "Code2000");
-pref("font.name-list.serif.x-mlym", "Kartika, ThoolikaUnicode, Code2000, Arial Unicode MS");
-pref("font.name-list.monospace.x-mlym", "Code2000, Anjali-Beta");
-
-pref("font.default.ar", "sans-serif");
+pref("font.default", "serif");
 pref("font.size.variable.ar", 16);
 pref("font.size.fixed.ar", 13);
 
-pref("font.default.el", "serif");
 pref("font.size.variable.el", 16);
 pref("font.size.fixed.el", 13);
 
-pref("font.default.he", "sans-serif");
 pref("font.size.variable.he", 16);
 pref("font.size.fixed.he", 13);
 
-pref("font.default.ja", "sans-serif");
 pref("font.size.variable.ja", 16);
 pref("font.size.fixed.ja", 16);
 
-pref("font.default.ko", "sans-serif");
 pref("font.size.variable.ko", 16);
 pref("font.size.fixed.ko", 16);
 
-pref("font.default.th", "serif");
 pref("font.size.variable.th", 16);
 pref("font.size.fixed.th", 13);
 
-pref("font.default.tr", "serif");
 pref("font.size.variable.tr", 16);
 pref("font.size.fixed.tr", 13);
 
-pref("font.default.x-baltic", "serif");
 pref("font.size.variable.x-baltic", 16);
 pref("font.size.fixed.x-baltic", 13);
 
-pref("font.default.x-central-euro", "serif");
 pref("font.size.variable.x-central-euro", 16);
 pref("font.size.fixed.x-central-euro", 13);
 
-pref("font.default.x-cyrillic", "serif");
 pref("font.size.variable.x-cyrillic", 16);
 pref("font.size.fixed.x-cyrillic", 13);
 
-pref("font.default.x-devanagari", "serif");
 pref("font.size.variable.x-devanagari", 16);
 pref("font.size.fixed.x-devanagari", 13);
 
-pref("font.default.x-tamil", "serif");
 pref("font.size.variable.x-tamil", 16);
 pref("font.size.fixed.x-tamil", 13);
 
-pref("font.default.x-armn", "serif");
-pref("font.size.variable.x-armn", 16);
-pref("font.size.fixed.x-armn", 13);
-
-pref("font.default.x-beng", "serif");
-pref("font.size.variable.x-beng", 16);
-pref("font.size.fixed.x-beng", 13);
-
-pref("font.default.x-cans", "serif");
-pref("font.size.variable.x-cans", 16);
-pref("font.size.fixed.x-cans", 13);
-
-pref("font.default.x-ethi", "serif");
-pref("font.size.variable.x-ethi", 16);
-pref("font.size.fixed.x-ethi", 13);
-
-pref("font.default.x-geor", "serif");
-pref("font.size.variable.x-geor", 16);
-pref("font.size.fixed.x-geor", 13);
-
-pref("font.default.x-gujr", "serif");
-pref("font.size.variable.x-gujr", 16);
-pref("font.size.fixed.x-gujr", 13);
-
-pref("font.default.x-guru", "serif");
-pref("font.size.variable.x-guru", 16);
-pref("font.size.fixed.x-guru", 13);
-
-pref("font.default.x-khmr", "serif");
-pref("font.size.variable.x-khmr", 16);
-pref("font.size.fixed.x-khmr", 13);
-
-pref("font.default.x-mlym", "serif");
-pref("font.size.variable.x-mlym", 16);
-pref("font.size.fixed.x-mlym", 13);
-
-pref("font.default.x-unicode", "serif");
 pref("font.size.variable.x-unicode", 16);
 pref("font.size.fixed.x-unicode", 13);
 
-pref("font.default.x-western", "serif");
 pref("font.size.variable.x-western", 16);
 pref("font.size.fixed.x-western", 13);
 
-pref("font.default.zh-CN", "sans-serif");
 pref("font.size.variable.zh-CN", 16);
 pref("font.size.fixed.zh-CN", 16);
 
-pref("font.default.zh-TW", "sans-serif");
 pref("font.size.variable.zh-TW", 16);
 pref("font.size.fixed.zh-TW", 16);
 
-pref("font.default.zh-HK", "sans-serif");
 pref("font.size.variable.zh-HK", 16);
 pref("font.size.fixed.zh-HK", 16);
+
+pref("font.size.nav4rounding", false);
 
 pref("ui.key.menuAccessKeyFocuses", true);
 
@@ -1333,9 +1028,6 @@ pref("print.print_extra_margin", 90); // twips (90 twips is an eigth of an inch)
 
 // This indicates whether it should use the native dialog or the XP Dialog
 pref("print.use_native_print_dialog", true);
-
-// Whether to extend the native dialog with information on printing frames.
-pref("print.extend_native_print_dialog", true);
 
 // Locate Java by scanning the Sun JRE installation directory with a minimum version
 // Note: Does not scan if security.enable_java is not true
@@ -1374,9 +1066,6 @@ pref("advanced.system.supportDDEExec", true);
 // Use CP932 compatible map for JIS X 0208
 pref("intl.jis0208.map", "CP932");
 
-// Switch the keyboard layout per window
-pref("intl.keyboard.per_window_layout", false);
-
 # WINNT
 #endif
 
@@ -1384,7 +1073,6 @@ pref("intl.keyboard.per_window_layout", false);
 // Mac specific preference defaults
 pref("browser.drag_out_of_frame_style", 1);
 pref("ui.key.saveLink.shift", false); // true = shift, false = meta
-pref("ui.click_hold_context_menus", false);
 
 // default font name (in UTF8)
 
@@ -1394,9 +1082,9 @@ pref("font.name.monospace.ar", "Monaco");
 pref("font.name.cursive.ar", "XXX.cursive");
 pref("font.name.fantasy.ar", "XXX.fantasy");
 
-pref("font.name.serif.el", "Lucida Grande");
-pref("font.name.sans-serif.el", "Lucida Grande");
-pref("font.name.monospace.el", "Monaco");
+pref("font.name.serif.el", "Times GR");
+pref("font.name.sans-serif.el", "Helvetica GR");
+pref("font.name.monospace.el", "Courier GR");
 pref("font.name.cursive.el", "XXX.cursive");
 pref("font.name.fantasy.el", "XXX.fantasy");
 
@@ -1418,47 +1106,47 @@ pref("font.name.monospace.ko", "AppleGothic");
 pref("font.name.cursive.ko", "XXX.cursive");
 pref("font.name.fantasy.ko", "XXX.fantasy");
 
-pref("font.name.serif.th", "Lucida Grande");
-pref("font.name.sans-serif.th", "Lucida Grande");
-pref("font.name.monospace.th", "Monaco");
+pref("font.name.serif.th", "Thonburi");
+pref("font.name.sans-serif.th", "Krungthep");
+pref("font.name.monospace.th", "Ayuthaya");
 pref("font.name.cursive.th", "XXX.cursive");
 pref("font.name.fantasy.th", "XXX.fantasy");
 
 pref("font.name.serif.tr", "Times");
-pref("font.name.sans-serif.tr", "Helvetica");
-pref("font.name.monospace.tr", "Courier");
-pref("font.name.cursive.tr", "Apple Chancery");
-pref("font.name.fantasy.tr", "Papyrus");
+pref("font.name.sans-serif.tr", "Arial");
+pref("font.name.monospace.tr", "CourierR");
+pref("font.name.cursive.tr", "XXX.cursive");
+pref("font.name.fantasy.tr", "XXX.fantasy");
 
-pref("font.name.serif.x-baltic", "Times");
-pref("font.name.sans-serif.x-baltic", "Helvetica");
-pref("font.name.monospace.x-baltic", "Courier");
-pref("font.name.cursive.x-baltic", "Apple Chancery");
-pref("font.name.fantasy.x-baltic", "Papyrus");
+pref("font.name.serif.x-baltic", "Times CE");
+pref("font.name.sans-serif.x-baltic", "Helvetica CE");
+pref("font.name.monospace.x-baltic", "Courier CE");
+pref("font.name.cursive.x-baltic", "XXX.cursive");
+pref("font.name.fantasy.x-baltic", "XXX.fantasy");
 
-pref("font.name.serif.x-central-euro", "Times");
-pref("font.name.sans-serif.x-central-euro", "Helvetica");
-pref("font.name.monospace.x-central-euro", "Courier");
-pref("font.name.cursive.x-central-euro", "Apple Chancery");
-pref("font.name.fantasy.x-central-euro", "Papyrus");
+pref("font.name.serif.x-central-euro", "Times CE");
+pref("font.name.sans-serif.x-central-euro", "Helvetica CE");
+pref("font.name.monospace.x-central-euro", "Courier CE");
+pref("font.name.cursive.x-central-euro", "XXX.cursive");
+pref("font.name.fantasy.x-central-euro", "XXX.fantasy");
 
-pref("font.name.serif.x-cyrillic", "Times CY");
-pref("font.name.sans-serif.x-cyrillic", "Helvetica CY");
-pref("font.name.monospace.x-cyrillic", "Monaco CY");
-pref("font.name.cursive.x-cyrillic", "Geneva CY");
-pref("font.name.fantasy.x-cyrillic", "Charcoal CY");
+pref("font.name.serif.x-cyrillic", "Latinski");
+pref("font.name.sans-serif.x-cyrillic", "Pryamoy Prop");
+pref("font.name.monospace.x-cyrillic", "APC Courier");
+pref("font.name.cursive.x-cyrillic", "XXX.cursive");
+pref("font.name.fantasy.x-cyrillic", "XXX.fantasy");
 
 pref("font.name.serif.x-unicode", "Times");
 pref("font.name.sans-serif.x-unicode", "Helvetica");
 pref("font.name.monospace.x-unicode", "Courier");
 pref("font.name.cursive.x-unicode", "Apple Chancery");
-pref("font.name.fantasy.x-unicode", "Papyrus");
+pref("font.name.fantasy.x-unicode", "Gadget");
 
 pref("font.name.serif.x-western", "Times");
 pref("font.name.sans-serif.x-western", "Helvetica");
 pref("font.name.monospace.x-western", "Courier");
 pref("font.name.cursive.x-western", "Apple Chancery");
-pref("font.name.fantasy.x-western", "Papyrus");
+pref("font.name.fantasy.x-western", "Gadget");
 
 pref("font.name.serif.zh-CN", "Song");
 pref("font.name.sans-serif.zh-CN", "Hei");
@@ -1472,73 +1160,69 @@ pref("font.name.monospace.zh-TW", "Apple LiGothic Medium");
 pref("font.name.cursive.zh-TW", "XXX.cursive");
 pref("font.name.fantasy.zh-TW", "XXX.fantasy");
 
-pref("font.name.serif.zh-HK", "儷宋 Pro");
-pref("font.name.sans-serif.zh-HK", "儷黑 Pro");
-pref("font.name.monospace.zh-HK", "儷黑 Pro");
+// ming_uni.ttf (HKSCS-2001) 
+// http://www.info.gov.hk/digital21/eng/hkscs/download/uime.exe
+// use Stuffit Expander to unzip it and install ming_uni.ttf
+pref("font.name.serif.zh-HK", "Ming(for ISO10646)");
+pref("font.name.sans-serif.zh-HK", "Apple LiGothic Medium");  
+pref("font.name.monospace.zh-HK", "Apple LiGothic Medium");  
 pref("font.name.cursive.zh-HK", "XXX.cursive");
 pref("font.name.fantasy.zh-HK", "XXX.fantasy");
 
-pref("font.default.ar", "sans-serif");
+pref("font.default", "serif");
+pref("font.default", "serif");
 pref("font.size.variable.ar", 15);
 pref("font.size.fixed.ar", 13);
 
-pref("font.default.el", "serif");
 pref("font.size.variable.el", 16);
 pref("font.size.fixed.el", 13);
 
-pref("font.default.he", "sans-serif");
 pref("font.size.variable.he", 15);
 pref("font.size.fixed.he", 13);
 
-pref("font.default.ja", "sans-serif");
 pref("font.size.variable.ja", 14);
 pref("font.size.fixed.ja", 14);
 
-pref("font.default.ko", "sans-serif");
 pref("font.size.variable.ko", 16);
 pref("font.size.fixed.ko", 16);
 
-pref("font.default.th", "serif");
 pref("font.size.variable.th", 16);
 pref("font.size.fixed.th", 13);
 
-pref("font.default.tr", "serif");
 pref("font.size.variable.tr", 16);
 pref("font.size.fixed.tr", 13);
 
-pref("font.default.x-baltic", "serif");
 pref("font.size.variable.x-baltic", 16);
 pref("font.size.fixed.x-baltic", 13);
 
-pref("font.default.x-central-euro", "serif");
 pref("font.size.variable.x-central-euro", 16);
 pref("font.size.fixed.x-central-euro", 13);
 
-pref("font.default.x-cyrillic", "serif");
 pref("font.size.variable.x-cyrillic", 16);
 pref("font.size.fixed.x-cyrillic", 13);
 
-pref("font.default.x-unicode", "serif");
 pref("font.size.variable.x-unicode", 16);
 pref("font.size.fixed.x-unicode", 13);
 
-pref("font.default.x-western", "serif");
 pref("font.size.variable.x-western", 16);
 pref("font.size.fixed.x-western", 13);
 
-pref("font.default.zh-CN", "sans-serif");
 pref("font.size.variable.zh-CN", 15);
 pref("font.size.fixed.zh-CN", 16);
 
-pref("font.default.zh-TW", "sans-serif");
 pref("font.size.variable.zh-TW", 15);
 pref("font.size.fixed.zh-TW", 16);
 
-pref("font.default.zh-HK", "sans-serif");
 pref("font.size.variable.zh-HK", 15);
 pref("font.size.fixed.zh-HK", 16);
 
 pref("browser.urlbar.clickAtEndSelects", false);
+
+// Tab focus model bit field:
+// 1 focuses text controls, 2 focuses other form elements, 4 adds links.
+pref("accessibility.tabfocus", 1);
+
+pref("accessibility.typeaheadfind.soundURL", "beep");
 
 // Override the Windows settings: no menu key, meta accelerator key. ctrl for general access key in HTML/XUL
 // Use 17 for Ctrl, 18 for Option, 224 for Cmd, 0 for none
@@ -1548,13 +1232,7 @@ pref("ui.key.accelKey", 224);
 // suggests to use command on mac, but this really sucks (imagine someone having a "q"
 // as an access key and not letting you quit the app!). As a result, we've made a 
 // command decision 1 day before tree lockdown to change it to the control key.
-pref("ui.key.generalAccessKey", -1);
-
-// If generalAccessKey is -1, use the following two prefs instead.
-// Use 0 for disabled, 1 for Shift, 2 for Ctrl, 4 for Alt, 8 for Cmd
-// (values can be combined, e.g. 3 for Ctrl+Shift)
-pref("ui.key.chromeAccess", 2);
-pref("ui.key.contentAccess", 2);
+pref("ui.key.generalAccessKey", 17);
 
 // print_extra_margin enables platforms to specify an extra gap or margin
 // around the content of the page for Print Preview only
@@ -1575,7 +1253,7 @@ pref("network.dns.disableIPv6", true);
 #if XP_OS2
 
 pref("ui.key.menuAccessKeyFocuses", true);
-pref("layout.css.dpi", -1); // max(96dpi, System setting)
+pref("browser.display.screen_resolution", 0); // System setting
 
 /* Fonts only needs lists if we have a default that might not be available. */
 /* Tms Rmn, Helv and Courier are ALWAYS available on OS/2 */
@@ -1655,74 +1333,52 @@ pref("font.name.sans-serif.zh-HK", "Helv");
 pref("font.name.monospace.zh-HK", "Courier");
 
 pref("font.default", "serif");
-
-pref("font.default.ar", "sans-serif");
 pref("font.size.variable.ar", 16);
 pref("font.size.fixed.ar", 13);
 
-pref("font.default.el", "serif");
 pref("font.size.variable.el", 16);
 pref("font.size.fixed.el", 13);
 
-pref("font.default.he", "sans-serif");
 pref("font.size.variable.he", 16);
 pref("font.size.fixed.he", 13);
 
-pref("font.default.ja", "sans-serif");
 pref("font.size.variable.ja", 16);
 pref("font.size.fixed.ja", 16);
 
-pref("font.default.ko", "sans-serif");
 pref("font.size.variable.ko", 16);
 pref("font.size.fixed.ko", 16);
 
-pref("font.default.th", "serif");
 pref("font.size.variable.th", 16);
 pref("font.size.fixed.th", 13);
 
-pref("font.default.tr", "serif");
 pref("font.size.variable.tr", 16);
 pref("font.size.fixed.tr", 13);
 
-pref("font.default.x-baltic", "serif");
 pref("font.size.variable.x-baltic", 16);
 pref("font.size.fixed.x-baltic", 13);
 
-pref("font.default.x-central-euro", "serif");
 pref("font.size.variable.x-central-euro", 16);
 pref("font.size.fixed.x-central-euro", 13);
 
-pref("font.default.x-cyrillic", "serif");
 pref("font.size.variable.x-cyrillic", 16);
 pref("font.size.fixed.x-cyrillic", 13);
 
-pref("font.default.x-devanagari", "serif");
-pref("font.size.variable.x-devanagari", 16);
-pref("font.size.fixed.x-devanagari", 13);
-
-pref("font.default.x-tamil", "serif");
-pref("font.size.variable.x-tamil", 16);
-pref("font.size.fixed.x-tamil", 13);
-
-pref("font.default.x-unicode", "serif");
 pref("font.size.variable.x-unicode", 16);
 pref("font.size.fixed.x-unicode", 13);
 
-pref("font.default.x-western", "serif");
 pref("font.size.variable.x-western", 16);
 pref("font.size.fixed.x-western", 13);
 
-pref("font.default.zh-CN", "sans-serif");
 pref("font.size.variable.zh-CN", 16);
 pref("font.size.fixed.zh-CN", 16);
 
-pref("font.default.zh-TW", "sans-serif");
 pref("font.size.variable.zh-TW", 16);
 pref("font.size.fixed.zh-TW", 16);
 
-pref("font.default.zh-HK", "sans-serif");
 pref("font.size.variable.zh-HK", 16);
 pref("font.size.fixed.zh-HK", 16);
+
+pref("font.size.nav4rounding", false);
 
 pref("netinst.profile.show_profile_wizard", true); 
 
@@ -1754,95 +1410,69 @@ pref("mail.compose.max_recycled_windows", 0);
 // Use IBM943 compatible map for JIS X 0208
 pref("intl.jis0208.map", "IBM943");
 
-// Disable IPv6 name lookups by default.
-// This is because OS/2 doesn't support IPv6
-pref("network.dns.disableIPv6", true);
-
 # OS2
 #endif
 
 #if XP_BEOS
 
-pref("layout.css.dpi", -1); // max(96dpi, System setting
-
 pref("intl.font_charset", "");
 pref("intl.font_spec_list", "");
 pref("mail.signature_date", 0);
 
-pref("font.default.ar", "sans-serif");
+pref("font.default", "serif");
 pref("font.size.variable.ar", 16);
 pref("font.size.fixed.ar", 13);
 
-pref("font.default.el", "serif");
 pref("font.size.variable.el", 16);
 pref("font.size.fixed.el", 13);
 
-pref("font.default.he", "sans-serif");
 pref("font.size.variable.he", 16);
 pref("font.size.fixed.he", 13);
 
-pref("font.default.ja", "sans-serif");
 pref("font.size.variable.ja", 16);
 pref("font.size.fixed.ja", 16);
 
-pref("font.default.ko", "sans-serif");
 pref("font.size.variable.ko", 16);
 pref("font.size.fixed.ko", 16);
 
-pref("font.default.th", "serif");
 pref("font.size.variable.th", 16);
 pref("font.size.fixed.th", 13);
 
-pref("font.default.tr", "serif");
 pref("font.size.variable.tr", 16);
 pref("font.size.fixed.tr", 13);
 
-pref("font.default.x-baltic", "serif");
 pref("font.size.variable.x-baltic", 16);
 pref("font.size.fixed.x-baltic", 13);
 
-pref("font.default.x-central-euro", "serif");
 pref("font.size.variable.x-central-euro", 16);
 pref("font.size.fixed.x-central-euro", 13);
 
-pref("font.default.x-cyrillic", "serif");
 pref("font.size.variable.x-cyrillic", 16);
 pref("font.size.fixed.x-cyrillic", 13);
 
-pref("font.default.x-unicode", "serif");
 pref("font.size.variable.x-unicode", 16);
 pref("font.size.fixed.x-unicode", 13);
 
-pref("font.default.x-western", "serif");
 pref("font.size.variable.x-western", 16);
 pref("font.size.fixed.x-western", 13);
 
-pref("font.default.zh-CN", "sans-serif");
 pref("font.size.variable.zh-CN", 16);
 pref("font.size.fixed.zh-CN", 16);
 
-pref("font.default.zh-TW", "sans-serif");
 pref("font.size.variable.zh-TW", 16);
 pref("font.size.fixed.zh-TW", 16);
 
-pref("font.default.zh-HK", "sans-serif");
 pref("font.size.variable.zh-HK", 16);
 pref("font.size.fixed.zh-HK", 16);
 
 /**
  * Set default accelKey to "Alt", which is the default under BeOS.
  * The generalAccessKey is used for shortcuts on web pages, set to
- * Ctrl+Shift. The menuAccessKey is now the "windows" key.
+ * Ctrl. The menuAccessKey is now the "windows" key.
  */
 pref("ui.key.accelKey", 18);
+pref("ui.key.generalAccessKey", 17);
 pref("ui.key.menuAccessKey", 17);
-pref("ui.key.generalAccessKey", -1);
-
-// If generalAccessKey is -1, use the following two prefs instead.
-// Use 0 for disabled, 1 for Shift, 2 for Ctrl, 4 for Alt, 8 for Meta
-// (values can be combined, e.g. 3 for Ctrl+Shift)
-pref("ui.key.chromeAccess", 2);
-pref("ui.key.contentAccess", 3);
 
 // xxx toolkit?
 pref("browser.download.dir", "/boot/home/Downloads");
@@ -1856,7 +1486,7 @@ pref("browser.download.dir", "/boot/home/Downloads");
 pref("network.hosts.smtp_server", "localhost");
 pref("network.hosts.pop_server", "pop");
 pref("network.protocol-handler.warn-external.file", false);
-pref("layout.css.dpi", -1); // max(96dpi, System setting)
+pref("browser.display.screen_resolution", 0); // System setting
 pref("browser.drag_out_of_frame_style", 1);
 pref("editor.singleLine.pasteNewlines", 0);
 
@@ -1875,6 +1505,9 @@ pref("browser.urlbar.clickSelectsAll", false);
 // 1 focuses text controls, 2 focuses other form elements, 4 adds links.
 // Leave this at the default, 7, to match mozilla1.0-era user expectations.
 // pref("accessibility.tabfocus", 1);
+
+// Beep instead of playing sound in Linux, at least until nsISound is fixed:
+pref("accessibility.typeaheadfind.soundURL", "beep");
 
 // override double-click word selection behavior.
 pref("layout.word_select.stop_at_punctuation", false);
@@ -1899,6 +1532,8 @@ pref("applications.telnet", "xterm -e telnet %h %p");
 pref("applications.tn3270", "xterm -e tn3270 %h");
 pref("applications.rlogin", "xterm -e rlogin %h");
 pref("applications.rlogin_with_user", "xterm -e rlogin %h -l %u");
+pref("applications.tmp_dir", "/tmp");
+// On Solaris/IRIX, this should be "lp"
 pref("print.print_command", "lpr ${MOZ_PRINTER_NAME:+'-P'}${MOZ_PRINTER_NAME}");
 pref("print.printer_list", ""); // list of printers, separated by spaces
 pref("print.print_reversed", false);
@@ -1924,67 +1559,6 @@ pref("font.allow_double_byte_special_chars", true);
 
 // ar
 
-#ifdef MOZ_ENABLE_XFT
-
-pref("font.name.serif.el", "serif");
-pref("font.name.sans-serif.el", "sans-serif");
-pref("font.name.monospace.el", "monospace");
-
-pref("font.name.serif.he", "serif");
-pref("font.name.sans-serif.he", "sans-serif");
-pref("font.name.monospace.he", "monospace");
-
-pref("font.name.serif.ja", "serif");
-pref("font.name.sans-serif.ja", "sans-serif");
-pref("font.name.monospace.ja", "monospace");
-
-pref("font.name.serif.ko", "serif");
-pref("font.name.sans-serif.ko", "sans-serif");
-pref("font.name.monospace.ko", "monospace");
-
-// th
-
-pref("font.name.serif.tr", "Times");
-pref("font.name.sans-serif.tr", "Helvetica");
-pref("font.name.monospace.tr", "Courier");
-
-pref("font.name.serif.x-baltic", "serif");
-pref("font.name.sans-serif.x-baltic", "sans-serif");
-pref("font.name.monospace.x-baltic", "monospace");
-
-pref("font.name.serif.x-central-euro", "Times");
-pref("font.name.sans-serif.x-central-euro", "Helvetica");
-pref("font.name.monospace.x-central-euro", "Courier");
-
-pref("font.name.serif.x-cyrillic", "serif");
-pref("font.name.sans-serif.x-cyrillic", "sans-serif");
-pref("font.name.monospace.x-cyrillic", "monospace");
-
-pref("font.name.serif.x-unicode", "Times");
-pref("font.name.sans-serif.x-unicode", "Helvetica");
-pref("font.name.monospace.x-unicode", "Courier");
-
-pref("font.name.serif.x-user-def", "Times");
-pref("font.name.sans-serif.x-user-def", "Helvetica");
-pref("font.name.monospace.x-user-def", "Courier");
-
-pref("font.name.serif.x-western", "Times");
-pref("font.name.sans-serif.x-western", "Helvetica");
-pref("font.name.monospace.x-western", "Courier");
-
-pref("font.name.serif.zh-CN", "serif");
-pref("font.name.sans-serif.zh-CN", "sans-serif");
-pref("font.name.monospace.zh-CN", "monospace");
-
-// ming_uni.ttf (HKSCS-2001) 
-// http://www.info.gov.hk/digital21/eng/hkscs/download/uime.exe
-pref("font.name.serif.zh-HK", "serif");
-pref("font.name.sans-serif.zh-HK", "sans-serif");
-pref("font.name.monospace.zh-HK", "monospace");
-
-// zh-TW
-# MOZ_ENABLE_XFT
-#else
 pref("font.name.serif.el", "misc-fixed-iso8859-7");
 pref("font.name.sans-serif.el", "misc-fixed-iso8859-7");
 pref("font.name.monospace.el", "misc-fixed-iso8859-7");
@@ -2042,66 +1616,50 @@ pref("font.name.sans-serif.zh-HK", "-arphic-Ming for ISO10646-big5hkscs-0");
 pref("font.name.monospace.zh-HK", "-arphic-Ming for ISO10646-big5hkscs-0");
 
 // zh-TW
-# MOZ_ENABLE_XFT
-#endif
 
-pref("font.default.ar", "sans-serif");
+pref("font.default", "serif");
 pref("font.size.variable.ar", 16);
 pref("font.size.fixed.ar", 12);
 
-pref("font.default.el", "serif");
 pref("font.size.variable.el", 16);
 pref("font.size.fixed.el", 12);
 
-pref("font.default.he", "sans-serif");
 pref("font.size.variable.he", 16);
 pref("font.size.fixed.he", 12);
 
-pref("font.default.ja", "sans-serif");
 pref("font.size.variable.ja", 16);
 pref("font.size.fixed.ja", 16);
 
-pref("font.default.ko", "sans-serif");
 pref("font.size.variable.ko", 16);
 pref("font.size.fixed.ko", 16);
 
-pref("font.default.th", "serif");
 pref("font.size.variable.th", 16);
 pref("font.size.fixed.th", 12);
 
-pref("font.default.tr", "serif");
 pref("font.size.variable.tr", 16);
 pref("font.size.fixed.tr", 12);
 
-pref("font.default.x-baltic", "serif");
 pref("font.size.variable.x-baltic", 16);
 pref("font.size.fixed.x-baltic", 12);
 
-pref("font.default.x-central-euro", "serif");
 pref("font.size.variable.x-central-euro", 16);
 pref("font.size.fixed.x-central-euro", 12);
 
-pref("font.default.x-cyrillic", "serif");
 pref("font.size.variable.x-cyrillic", 16);
 pref("font.size.fixed.x-cyrillic", 12);
 
-pref("font.default.x-unicode", "serif");
 pref("font.size.variable.x-unicode", 16);
 pref("font.size.fixed.x-unicode", 12);
 
-pref("font.default.x-western", "serif");
 pref("font.size.variable.x-western", 16);
 pref("font.size.fixed.x-western", 12);
 
-pref("font.default.zh-CN", "sans-serif");
 pref("font.size.variable.zh-CN", 16);
 pref("font.size.fixed.zh-CN", 16);
 
-pref("font.default.zh-TW", "sans-serif");
 pref("font.size.variable.zh-TW", 16);
 pref("font.size.fixed.zh-TW", 16);
 
-pref("font.default.zh-HK", "sans-serif");
 pref("font.size.variable.zh-HK", 16);
 pref("font.size.fixed.zh-HK", 16);
 
@@ -2377,16 +1935,4 @@ pref("font.name.sans-serif.x-unicode", "dt-interface system-ucs2.cjk_japan-0");
 pref("font.name.monospace.x-unicode", "dt-interface user-ucs2.cjk_japan-0");
 
 # AIX
-#endif
-
-#ifdef SOLARIS
-
-pref("print.postscript.print_command", "lp -c -s ${MOZ_PRINTER_NAME:+'-d '}${MOZ_PRINTER_NAME}");
-pref("print.print_command", "lp -c -s ${MOZ_PRINTER_NAME:+'-d '}${MOZ_PRINTER_NAME}");
-
-# Solaris
-#endif
-
-#ifdef MOZ_X11
-pref("network.gnomevfs.supported-protocols", "smb:,sftp:");
 #endif

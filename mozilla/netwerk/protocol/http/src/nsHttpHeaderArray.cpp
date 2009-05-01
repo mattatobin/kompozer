@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set ts=4 sw=4 sts=4 ci et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Darin Fisher <darin@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsHttpHeaderArray.h"
 #include "nsHttp.h"
@@ -85,7 +69,7 @@ nsHttpHeaderArray::SetHeader(nsHttpAtom header,
             entry->value.Append('\n');
         else
             // Delimit each value from the others using a comma (per HTTP spec)
-            entry->value.AppendLiteral(", ");
+            entry->value.Append(", ");
         entry->value.Append(value);
     }
     // Replace the existing string with the new value
@@ -143,55 +127,65 @@ void
 nsHttpHeaderArray::ParseHeaderLine(char *line, nsHttpAtom *hdr, char **val)
 {
     //
-    // BNF from section 4.2 of RFC 2616:
+    // Augmented BNF (from section 4.2 of RFC 2616 w/ modifications):
     //
-    //   message-header = field-name ":" [ field-value ]
+    //   message-header = field-name field-sep [ field-value ]
     //   field-name     = token
+    //   field-sep      = LWS ( ":" | "=" | SP | HT )
     //   field-value    = *( field-content | LWS )
     //   field-content  = <the OCTETs making up the field-value
     //                     and consisting of either *TEXT or combinations
     //                     of token, separators, and quoted-string>
     //
-    
-    // We skip over mal-formed headers in the hope that we'll still be able to
-    // do something useful with the response.
+    // Here, we allow a greater set of possible header value separators
+    // for compatibility with the vast number of broken web servers (mostly
+    // lame CGI scripts).  NN4 and IE are similarly tolerant.
+    //
+    //
+    // Examples:
+    //  
+    //   Header: Value
+    //   Header :Value
+    //   Header Value
+    //   Header=Value
+    //
 
     char *p = (char *) strchr(line, ':');
-    if (!p) {
-        LOG(("malformed header [%s]: no colon\n", line));
-        return;
+    if (!p)
+        p = net_FindCharInSet(line, " \t=");
+
+    if (p) {
+        // ignore whitespace between header name and colon
+        char *p2 = net_FindCharInSet(line, p, HTTP_LWS);
+        *p2 = 0; // null terminate header name
+
+        nsHttpAtom atom = nsHttp::ResolveAtom(line);
+        if (atom) {
+            // skip over whitespace
+            p = net_FindCharNotInSet(++p, HTTP_LWS);
+
+            // trim trailing whitespace - bug 86608
+            p2 = net_RFindCharNotInSet(p, HTTP_LWS);
+            *++p2 = 0; // null terminate header value; if all chars
+                       // starting at |p| consisted of LWS, then p2
+                       // would have pointed at |p-1|, so the prefix
+                       // increment is always valid.
+
+            // assign return values
+            if (hdr) *hdr = atom;
+            if (val) *val = p;
+
+            // assign response header
+            SetHeader(atom, nsDependentCString(p, p2 - p), PR_TRUE);
+        }
+        else
+            LOG(("unknown header; skipping\n"));
     }
+    else
+        LOG(("malformed header\n"));
 
-    // make sure we have a valid token for the field-name
-    if (!nsHttp::IsValidToken(line, p)) {
-        LOG(("malformed header [%s]: field-name not a token\n", line));
-        return;
-    }
-    
-    *p = 0; // null terminate field-name
-
-    nsHttpAtom atom = nsHttp::ResolveAtom(line);
-    if (!atom) {
-        LOG(("failed to resolve atom [%s]\n", line));
-        return;
-    }
-
-    // skip over whitespace
-    p = net_FindCharNotInSet(++p, HTTP_LWS);
-
-    // trim trailing whitespace - bug 86608
-    char *p2 = net_RFindCharNotInSet(p, HTTP_LWS);
-
-    *++p2 = 0; // null terminate header value; if all chars starting at |p|
-               // consisted of LWS, then p2 would have pointed at |p-1|, so
-               // the prefix increment is always valid.
-
-    // assign return values
-    if (hdr) *hdr = atom;
-    if (val) *val = p;
-
-    // assign response header
-    SetHeader(atom, nsDependentCString(p, p2 - p), PR_TRUE);
+    // We ignore mal-formed headers in the hope that we'll still be able
+    // to do something useful with the response.
 }
 
 void
@@ -205,9 +199,9 @@ nsHttpHeaderArray::Flatten(nsACString &buf, PRBool pruneProxyHeaders)
                                   (entry->header == nsHttp::Proxy_Connection)))
             continue;
         buf.Append(entry->header);
-        buf.AppendLiteral(": ");
+        buf.Append(": ");
         buf.Append(entry->value);
-        buf.AppendLiteral("\r\n");
+        buf.Append("\r\n");
     }
 }
 

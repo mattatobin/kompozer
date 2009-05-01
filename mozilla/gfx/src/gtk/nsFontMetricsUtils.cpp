@@ -16,10 +16,9 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Christopher Blizzard <blizzard@mozilla.org>.  
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code Christopher Blizzard
+ * <blizzard@mozilla.org>.  Portions created by the Initial Developer
+ * are Copyright (C) 2002 the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
@@ -43,7 +42,7 @@
 #ifdef MOZ_ENABLE_XFT
 #include "nsFontMetricsXft.h"
 #include "nsIPref.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "prenv.h"
 #endif /* MOZ_ENABLE_XFT */
 
@@ -51,21 +50,11 @@
 #include "nsFontMetricsGTK.h"
 #endif
 
-#ifdef MOZ_ENABLE_PANGO
-#include "nsFontMetricsPango.h"
-#include "prenv.h"
-#endif
-
 #include "nsFontMetricsUtils.h"
 
 PRUint32
 NS_FontMetricsGetHints(void)
 {
-#ifdef MOZ_ENABLE_PANGO
-    if (NS_IsPangoEnabled()) {
-        return nsFontMetricsPango::GetHints();
-    }
-#endif
 #ifdef MOZ_ENABLE_XFT
     if (NS_IsXftEnabled()) {
         return nsFontMetricsXft::GetHints();
@@ -80,11 +69,6 @@ NS_FontMetricsGetHints(void)
 nsresult
 NS_FontMetricsFamilyExists(nsIDeviceContext *aDevice, const nsString &aName)
 {
-#ifdef MOZ_ENABLE_PANGO
-    if (NS_IsPangoEnabled()) {
-        return nsFontMetricsPango::FamilyExists(aDevice, aName);
-    }
-#endif
 #ifdef MOZ_ENABLE_XFT
     // try to fall through to the core fonts if xft fails
     if (NS_IsXftEnabled()) {
@@ -97,7 +81,7 @@ NS_FontMetricsFamilyExists(nsIDeviceContext *aDevice, const nsString &aName)
 #endif
 }
 
-#if defined(MOZ_ENABLE_XFT) && defined(MOZ_ENABLE_COREXFONTS)
+#ifdef MOZ_ENABLE_XFT
 
 PRBool
 NS_IsXftEnabled(void)
@@ -136,18 +120,4 @@ NS_IsXftEnabled(void)
     return cachedXftSetting;
 }
 
-#endif
-
-#if defined(MOZ_ENABLE_PANGO) && (defined(MOZ_ENABLE_XFT) || defined(MOZ_ENABLE_COREXFONTS))
-
-PRBool
-NS_IsPangoEnabled(void)
-{
-    char *val = PR_GetEnv("MOZ_DISABLE_PANGO");
-    if (val)
-        return FALSE;
-
-    return TRUE;
-}
-
-#endif
+#endif /* MOZ_ENABLE_XFT */

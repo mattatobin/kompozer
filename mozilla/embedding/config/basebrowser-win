@@ -45,7 +45,6 @@ js3250.dll
 ; XPCOM:
 ; 
 xpcom.dll
-xpcom_core.dll
 xpcom_compat.dll
 components\xpcom_compat_c.dll
 components\xpcom_base.xpt
@@ -80,7 +79,6 @@ moz_art_lgpl.dll
 components\gklayout.dll                   
 components\gkparser.dll                 
 components\layout_base.xpt              
-components\layout_printing.xpt              
 components\layout_xul.xpt
 components\layout_xul_tree.xpt               
 components\content_base.xpt
@@ -91,8 +89,6 @@ res\dtd\xhtml11.dtd
 ; 
 mozz.dll
 components\imglib2.dll
-components\imgicon.xpt
-components\libimgicon.dll
 
 ; 
 ; Components: (need to trim fat)
@@ -174,20 +170,19 @@ components\unicharutil.xpt
 ; dom
 components\dom.xpt                      
 components\dom_base.xpt
-components\dom_canvas.xpt
 components\dom_core.xpt
 components\dom_css.xpt
 components\dom_events.xpt
 components\dom_html.xpt
-components\dom_loadsave.xpt
 components\dom_range.xpt
-components\dom_sidebar.xpt
 components\dom_stylesheets.xpt
 components\dom_traversal.xpt
 components\dom_views.xpt
 components\dom_xbl.xpt
 components\dom_xul.xpt
-components\gksvgrenderer.xpt
+
+; "javascript:" URLs
+components\jsurl.xpt
 
 ; editor
 components\editor.dll                   
@@ -205,6 +200,7 @@ components\necko_data.xpt
 components\necko_dns.xpt                
 components\necko_ftp.xpt
 components\necko_http.xpt               
+components\necko_jar.xpt                
 components\necko_res.xpt                
 components\necko_strconv.xpt
 
@@ -242,13 +238,12 @@ nss3.dll
 smime3.dll
 softokn3.chk
 softokn3.dll
-freebl3.chk
-freebl3.dll
 ssl3.dll
 nssckbi.dll
 
-; xmlextras, optional for XPointer support
+; xmlextras, optional for XMLHttpRequest support
 components\xmlextras.dll
+components\xmlextras.xpt
 
 ; 
 ; res:
@@ -256,13 +251,14 @@ components\xmlextras.dll
 res\html.css   
 res\quirk.css
 res\viewsource.css
-res\hiddenWindow.html
 res\ua.css
 res\forms.css
+res\platform-forms.css
 res\arrow.gif
 res\arrowd.gif
 res\loading-image.gif
 res\broken-image.gif
+res\builtin\platformHTMLBindings.xml
 res\entityTables\html40Special.properties
 res\entityTables\htmlEntityVersions.properties
 res\entityTables\html40Latin1.properties

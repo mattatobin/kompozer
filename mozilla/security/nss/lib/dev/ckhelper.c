@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: ckhelper.c,v $ $Revision: 1.34.28.2 $ $Date: 2008/12/03 04:52:53 $";
+static const char CVS_ID[] = "@(#) $RCSfile: ckhelper.c,v $ $Revision: 1.29 $ $Date: 2003/07/01 00:32:20 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 #ifndef NSSCKEPV_H
@@ -359,10 +356,6 @@ nssCryptokiCertificate_GetAttributes (
 	session = sessionOpt ? 
 	          sessionOpt : 
 	          nssToken_GetDefaultSession(certObject->token);
-	if (!session) {
-	    nss_SetError(NSS_ERROR_INVALID_ARGUMENT);
-	    return PR_FAILURE;
-	}
 
 	slot = nssToken_GetSlot(certObject->token);
 	status = nssCKObject_GetAttributes(certObject->handle, 
@@ -396,6 +389,128 @@ nssCryptokiCertificate_GetAttributes (
     return PR_SUCCESS;
 }
 
+#ifdef PURE_STAN_BUILD
+static NSSKeyPairType
+nss_key_pair_type_from_ck_attrib(CK_ATTRIBUTE_PTR attrib)
+{
+    CK_KEY_TYPE ckKeyType;
+    PR_ASSERT(attrib->pValue);
+    ckKeyType = *((CK_ULONG *)attrib->pValue);
+    switch (ckKeyType) {
+    case CKK_RSA: return NSSKeyPairType_RSA;
+    case CKK_DSA: return NSSKeyPairType_DSA;
+    default: break;
+    }
+    return NSSKeyPairType_Unknown;
+}
+
+NSS_IMPLEMENT PRStatus
+nssCryptokiPrivateKey_GetAttributes (
+  nssCryptokiObject *keyObject,
+  nssSession *sessionOpt,
+  NSSArena *arenaOpt,
+  NSSKeyPairType *keyTypeOpt,
+  NSSItem *idOpt
+)
+{
+    PRStatus status;
+    PRUint32 i;
+    nssSession *session;
+    NSSSlot *slot;
+    CK_ULONG template_size;
+    CK_ATTRIBUTE_PTR attr;
+    CK_ATTRIBUTE key_template[2];
+    /* Set up a template of all options chosen by caller */
+    NSS_CK_TEMPLATE_START(key_template, attr, template_size);
+    if (keyTypeOpt) {
+	NSS_CK_SET_ATTRIBUTE_NULL(attr, CKA_KEY_TYPE);
+    }
+    if (idOpt) {
+	NSS_CK_SET_ATTRIBUTE_NULL(attr, CKA_ID);
+    }
+    NSS_CK_TEMPLATE_FINISH(key_template, attr, template_size);
+    if (template_size == 0) {
+	/* caller didn't want anything */
+	return PR_SUCCESS;
+    }
+
+    session = sessionOpt ? 
+              sessionOpt : 
+              nssToken_GetDefaultSession(keyObject->token);
+
+    slot = nssToken_GetSlot(keyObject->token);
+    status = nssCKObject_GetAttributes(keyObject->handle, 
+                                       key_template, template_size,
+                                       arenaOpt, session, slot);
+    nssSlot_Destroy(slot);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+
+    i=0;
+    if (keyTypeOpt) {
+	*keyTypeOpt = nss_key_pair_type_from_ck_attrib(&key_template[i]); i++;
+    }
+    if (idOpt) {
+	NSS_CK_ATTRIBUTE_TO_ITEM(&key_template[i], idOpt); i++;
+    }
+    return PR_SUCCESS;
+}
+
+NSS_IMPLEMENT PRStatus
+nssCryptokiPublicKey_GetAttributes (
+  nssCryptokiObject *keyObject,
+  nssSession *sessionOpt,
+  NSSArena *arenaOpt,
+  NSSKeyPairType *keyTypeOpt,
+  NSSItem *idOpt
+)
+{
+    PRStatus status;
+    PRUint32 i;
+    nssSession *session;
+    NSSSlot *slot;
+    CK_ULONG template_size;
+    CK_ATTRIBUTE_PTR attr;
+    CK_ATTRIBUTE key_template[2];
+    /* Set up a template of all options chosen by caller */
+    NSS_CK_TEMPLATE_START(key_template, attr, template_size);
+    if (keyTypeOpt) {
+	NSS_CK_SET_ATTRIBUTE_NULL(attr, CKA_KEY_TYPE);
+    }
+    if (idOpt) {
+	NSS_CK_SET_ATTRIBUTE_NULL(attr, CKA_ID);
+    }
+    NSS_CK_TEMPLATE_FINISH(key_template, attr, template_size);
+    if (template_size == 0) {
+	/* caller didn't want anything */
+	return PR_SUCCESS;
+    }
+
+    session = sessionOpt ? 
+              sessionOpt : 
+              nssToken_GetDefaultSession(keyObject->token);
+
+    slot = nssToken_GetSlot(keyObject->token);
+    status = nssCKObject_GetAttributes(keyObject->handle, 
+                                       key_template, template_size,
+                                       arenaOpt, session, slot);
+    nssSlot_Destroy(slot);
+    if (status != PR_SUCCESS) {
+	return status;
+    }
+
+    i=0;
+    if (keyTypeOpt) {
+	*keyTypeOpt = nss_key_pair_type_from_ck_attrib(&key_template[i]); i++;
+    }
+    if (idOpt) {
+	NSS_CK_ATTRIBUTE_TO_ITEM(&key_template[i], idOpt); i++;
+    }
+    return PR_SUCCESS;
+}
+#endif /* PURE_STAN_BUILD */
+
 static nssTrustLevel 
 get_nss_trust (
   CK_TRUST ckt
@@ -425,21 +540,16 @@ nssCryptokiTrust_GetAttributes (
   nssTrustLevel *serverAuth,
   nssTrustLevel *clientAuth,
   nssTrustLevel *codeSigning,
-  nssTrustLevel *emailProtection,
-  PRBool *stepUpApproved
+  nssTrustLevel *emailProtection
 )
 {
     PRStatus status;
     NSSSlot *slot;
     nssSession *session;
-    CK_BBOOL isToken = PR_FALSE;
-    CK_BBOOL stepUp = PR_FALSE;
-    CK_TRUST saTrust = CKT_NETSCAPE_TRUST_UNKNOWN;
-    CK_TRUST caTrust = CKT_NETSCAPE_TRUST_UNKNOWN;
-    CK_TRUST epTrust = CKT_NETSCAPE_TRUST_UNKNOWN;
-    CK_TRUST csTrust = CKT_NETSCAPE_TRUST_UNKNOWN;
+    CK_BBOOL isToken;
+    CK_TRUST saTrust, caTrust, epTrust, csTrust;
     CK_ATTRIBUTE_PTR attr;
-    CK_ATTRIBUTE trust_template[7];
+    CK_ATTRIBUTE trust_template[6];
     CK_ULONG trust_size;
 
     /* Use the trust object to find the trust settings */
@@ -449,7 +559,6 @@ nssCryptokiTrust_GetAttributes (
     NSS_CK_SET_ATTRIBUTE_VAR(attr, CKA_TRUST_CLIENT_AUTH,      caTrust);
     NSS_CK_SET_ATTRIBUTE_VAR(attr, CKA_TRUST_EMAIL_PROTECTION, epTrust);
     NSS_CK_SET_ATTRIBUTE_VAR(attr, CKA_TRUST_CODE_SIGNING,     csTrust);
-    NSS_CK_SET_ATTRIBUTE_VAR(attr, CKA_TRUST_STEP_UP_APPROVED, stepUp);
     NSS_CK_SET_ATTRIBUTE_ITEM(attr, CKA_CERT_SHA1_HASH,     sha1_hash);
     NSS_CK_TEMPLATE_FINISH(trust_template, attr, trust_size);
 
@@ -461,10 +570,6 @@ nssCryptokiTrust_GetAttributes (
 	session = sessionOpt ? 
 	          sessionOpt : 
 	          nssToken_GetDefaultSession(trustObject->token);
-	if (!session) {
-	    nss_SetError(NSS_ERROR_INVALID_ARGUMENT);
-	    return PR_FAILURE;
-	}
 
 	slot = nssToken_GetSlot(trustObject->token);
 	status = nssCKObject_GetAttributes(trustObject->handle,
@@ -480,7 +585,6 @@ nssCryptokiTrust_GetAttributes (
     *clientAuth = get_nss_trust(caTrust);
     *emailProtection = get_nss_trust(epTrust);
     *codeSigning = get_nss_trust(csTrust);
-    *stepUpApproved = stepUp;
     return PR_SUCCESS;
 }
 
@@ -530,10 +634,6 @@ nssCryptokiCRL_GetAttributes (
 	session = sessionOpt ? 
 	          sessionOpt : 
 	          nssToken_GetDefaultSession(crlObject->token);
-	if (session == NULL) {
-	    nss_SetError(NSS_ERROR_INVALID_ARGUMENT);
-	    return PR_FAILURE;
-	}
 
 	slot = nssToken_GetSlot(crlObject->token);
 	status = nssCKObject_GetAttributes(crlObject->handle, 
@@ -592,16 +692,14 @@ nssCryptokiPrivateKey_SetCertificate (
     if (sessionOpt) {
 	if (!nssSession_IsReadWrite(sessionOpt)) {
 	    return PR_FAILURE;
+	} else {
+	    session = sessionOpt;
 	}
-	session = sessionOpt;
-    } else if (defaultSession && nssSession_IsReadWrite(defaultSession)) {
+    } else if (nssSession_IsReadWrite(defaultSession)) {
 	session = defaultSession;
     } else {
 	NSSSlot *slot = nssToken_GetSlot(token);
 	session = nssSlot_CreateSession(token->slot, NULL, PR_TRUE);
-	if (!session) {
-	    return PR_FAILURE;
-	}
 	createdSession = PR_TRUE;
 	nssSlot_Destroy(slot);
     }

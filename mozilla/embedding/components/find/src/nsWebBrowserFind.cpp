@@ -1,43 +1,26 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
+ * Contributors:
  *   Conrad Carlen <ccarlen@netscape.com>
  *   Simon Fraser  <sfraser@netscape.com>
  *   Akkana Peck  <akkana@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsWebBrowserFind.h"
 
@@ -58,7 +41,7 @@
 #include "nsIEnumerator.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIEventStateManager.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
@@ -371,11 +354,11 @@ NS_IMETHODIMP nsWebBrowserFind::SetMatchCase(PRBool aMatchCase)
 static void
 FocusElementButNotDocument(nsIDocument* aDocument, nsIContent* aContent)
 {
-  nsIFocusController *focusController = nsnull;
+  nsCOMPtr<nsIFocusController> focusController;
   nsCOMPtr<nsPIDOMWindow> ourWindow =
     do_QueryInterface(aDocument->GetScriptGlobalObject());
   if (ourWindow)
-    focusController = ourWindow->GetRootFocusController();
+    ourWindow->GetRootFocusController(getter_AddRefs(focusController));
   if (!focusController)
     return;
 
@@ -390,7 +373,9 @@ FocusElementButNotDocument(nsIDocument* aDocument, nsIContent* aContent)
   focusController->SetFocusedElement(newFocusedElement);
 
   nsIPresShell* presShell = aDocument->GetShellAt(0);
-  nsIEventStateManager* esm = presShell->GetPresContext()->EventStateManager();
+  nsCOMPtr<nsIPresContext> presContext;
+  presShell->GetPresContext(getter_AddRefs(presContext));
+  nsIEventStateManager* esm = presContext->EventStateManager();
 
   // Temporarily set esm::mCurrentFocus so that esm::GetContentState() tells 
   // layout system to show focus on this element. 
@@ -404,21 +389,6 @@ FocusElementButNotDocument(nsIDocument* aDocument, nsIContent* aContent)
   // does get focus next time via preHandleEvent() NS_GOTFOCUS,
   // the old document gets blurred
   esm->SetFocusedContent(nsnull);
-}
-
-static PRBool
-IsNativeAnonymous(nsIContent* aContent)
-{
-    while (aContent) {
-        nsIContent* bindingParent = aContent->GetBindingParent();
-        if (bindingParent == aContent) {
-            return PR_TRUE;
-        }
-
-        aContent = bindingParent;
-    }
-
-    return PR_FALSE;
 }
 
 void nsWebBrowserFind::SetSelectionAndScroll(nsIDOMWindow* aWindow,
@@ -440,7 +410,7 @@ void nsWebBrowserFind::SetSelectionAndScroll(nsIDOMWindow* aWindow,
   aRange->GetStartContainer(getter_AddRefs(node));
   nsCOMPtr<nsIContent> content(do_QueryInterface(node));
   for ( ; content; content = content->GetParent()) {
-    if (!IsNativeAnonymous(content)) {
+    if (!content->IsNativeAnonymous()) {
       presShell->GetPrimaryFrameFor(content, &frame);
       if (!frame)
         return;
@@ -470,7 +440,8 @@ void nsWebBrowserFind::SetSelectionAndScroll(nsIDOMWindow* aWindow,
       FocusElementButNotDocument(doc, content);
     }
     else {
-      nsCOMPtr<nsPresContext> presContext = presShell->GetPresContext();
+      nsCOMPtr<nsIPresContext> presContext;
+      presShell->GetPresContext(getter_AddRefs(presContext));
       PRBool isSelectionWithFocus;
       presContext->EventStateManager()->
         MoveFocusToCaret(PR_TRUE, &isSelectionWithFocus);
@@ -765,20 +736,14 @@ nsresult nsWebBrowserFind::SearchInFrame(nsIDOMWindow* aWindow,
     rv = secMan->CheckSameOrigin(nsnull, docURI);
     if (NS_FAILED(rv)) return rv;
 
-    if (!mFind) {
+    if (!mFind)
         mFind = do_CreateInstance(NS_FIND_CONTRACTID, &rv);
-        NS_ENSURE_SUCCESS(rv, rv);
-    }
 
     (void) mFind->SetCaseSensitive(mMatchCase);
     (void) mFind->SetFindBackwards(mFindBackwards);
 
     // XXX Make and set a line breaker here, once that's implemented.
     (void) mFind->SetWordBreaker(0);
-
-    // Now make sure the content (for actual finding) and frame (for
-    // selection) models are up to date.
-    theDoc->FlushPendingNotifications(Flush_Frames);
 
     nsCOMPtr<nsISelection> sel;
     GetFrameSelection(aWindow, getter_AddRefs(sel));
@@ -852,7 +817,9 @@ nsWebBrowserFind::GetFrameSelection(nsIDOMWindow* aWindow,
 
   // text input controls have their independent selection controllers
   // that we must use when they have focus.
-  nsPresContext *presContext = presShell->GetPresContext();
+
+  nsCOMPtr<nsIPresContext> presContext;
+  presShell->GetPresContext(getter_AddRefs(presContext));
 
   nsIFrame *frame = nsnull;
   presContext->EventStateManager()->GetFocusedFrame(&frame);
@@ -860,15 +827,13 @@ nsWebBrowserFind::GetFrameSelection(nsIDOMWindow* aWindow,
     nsCOMPtr<nsPIDOMWindow> ourWindow = 
       do_QueryInterface(doc->GetScriptGlobalObject());
     if (ourWindow) {
-      nsIFocusController *focusController =
-          ourWindow->GetRootFocusController();
+      nsCOMPtr<nsIFocusController> focusController;
+      ourWindow->GetRootFocusController(getter_AddRefs(focusController));
       if (focusController) {
         nsCOMPtr<nsIDOMElement> focusedElement;
         focusController->GetFocusedElement(getter_AddRefs(focusedElement));
-        if (focusedElement) {
-            nsCOMPtr<nsIContent> content(do_QueryInterface(focusedElement));
-            presShell->GetPrimaryFrameFor(content, &frame);
-        }
+        nsCOMPtr<nsIContent> content(do_QueryInterface(focusedElement));
+        presShell->GetPrimaryFrameFor(content, &frame);
       }
     }
   }
@@ -913,9 +878,9 @@ nsresult nsWebBrowserFind::OnFind(nsIDOMWindow *aFoundWindow)
 
     // focus the frame we found in
     nsCOMPtr<nsPIDOMWindow> ourWindow = do_QueryInterface(aFoundWindow);
-    nsIFocusController *focusController = nsnull;
+    nsCOMPtr<nsIFocusController> focusController;
     if (ourWindow)
-        focusController = ourWindow->GetRootFocusController();
+        ourWindow->GetRootFocusController(getter_AddRefs(focusController));
     if (focusController)
     {
         nsCOMPtr<nsIDOMWindowInternal> windowInt = do_QueryInterface(aFoundWindow);

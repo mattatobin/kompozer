@@ -1,43 +1,26 @@
 /*
  * vim:ts=2:et:sw=2
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Christopher Blizzard. Portions created by Christopher Blizzard are Copyright (C) Christopher Blizzard.  All Rights Reserved.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Christopher Blizzard.
+ * Portions created by Christopher Blizzard are Copyright (C)
+ * Christopher Blizzard.  All Rights Reserved.
  *
  * Contributor(s):
  *   Christopher Blizzard <blizzard@mozilla.org>
  *   Brian Edmond <briane@qnx.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 #include <nsIDocShell.h>
 #include <nsIWebProgress.h>
 #include <nsIURI.h>
@@ -345,16 +328,7 @@ EmbedWindow::SetDimensions(PRUint32 aFlags, PRInt32 aX, PRInt32 aY,
     rv =  mBaseWindow->SetPositionAndSize(aX, aY, aCX, aCY, PR_TRUE);
   }
   else if (aFlags & nsIEmbeddingSiteWindow::DIM_FLAGS_POSITION) {
-    //
-    // This position should never be called because it gets the
-    // PtRawDrawContainer under the PtMozilla widget out of sync with
-    // the PtMozilla widget. In the past with mozserver the position
-    // synchronizing in PtMozilla.cpp's mozilla_extent() function was enough,
-    // but with kwww it does not wait as long to realize PtMozilla, so we need
-    // this position setting commented out. This fixes problems when a new win-
-    // dow is opened and there is a large position offset to the actual content.
-    //
-    //rv =  mBaseWindow->SetPosition(aX, aY);
+    rv =  mBaseWindow->SetPosition(aX, aY);
   }
   else if (aFlags & (nsIEmbeddingSiteWindow::DIM_FLAGS_SIZE_INNER |
          nsIEmbeddingSiteWindow::DIM_FLAGS_SIZE_OUTER)) {
@@ -428,8 +402,7 @@ EmbedWindow::SetTitle(const PRUnichar *aTitle)
   PtCallbackInfo_t  cbinfo;
   PtMozillaInfoCb_t   info;
   nsString mTitleString(aTitle);
-  const char *str;
-	int to_free = 0;
+  char *str;
 
   mTitle = aTitle;
 
@@ -446,23 +419,19 @@ EmbedWindow::SetTitle(const PRUnichar *aTitle)
 
 	/* see if the title is empty */
 	if( mTitleString.Length() == 0 ) {
-		if( moz->EmbedRef->mURI.Length() > 0 ) {
+		if( moz->EmbedRef->mURI.Length() > 0 )
 			str = ToNewCString( moz->EmbedRef->mURI );
-			to_free = 1;
-			}
 		else {
-			str = " ";
+			str = (char*) nsMemory::Alloc( 2 );
+			str[0] = ' '; str[1] = 0;
 			}
 		}
-  else {
-		NS_ConvertUCS2toUTF8 theUnicodeString( mTitleString );
-		str = theUnicodeString.get( );
-		}
+  else str = ToNewCString(mTitleString);
 
-  info.data = (char*) str;
+  info.data = str;
   PtInvokeCallbackList(cb, (PtWidget_t *) moz, &cbinfo);
 
-  if( to_free ) nsMemory::Free( (void*)str );
+  nsMemory::Free( (void*)str );
 
   return NS_OK;
 }
@@ -512,15 +481,13 @@ EmbedWindow::OnShowTooltip(PRInt32 aXCoords, PRInt32 aYCoords,
   PtWidget_t *window;
   window = NS_STATIC_CAST(PtWidget_t *, mainWidget->GetNativeData(NS_NATIVE_WINDOW));
 
-  PgExtentText(&extent, NULL, font, tipString, 0);
+  PgExtentText(&extent, &pos, font, tipString, 0);
   w = extent.lr.x - extent.ul.x + 1;
   h = extent.lr.y - extent.ul.y + 1;
 
   n = 0;
-  if (window)
-    PtGetAbsPosition( window, &pos.x, &pos.y);
-  pos.x += aXCoords;
-  pos.y += aYCoords + 10; /* we add 10 so that we don't position it right under the mouse */
+  pos.x = aXCoords;
+  pos.y = aYCoords + 10; /* we add 10 so that we don't position it right under the mouse */
 	dim.w = w + 6; dim.h = h + 6;
   PtSetArg(&args[n++], Pt_ARG_POS, &pos, 0);
   PtSetArg(&args[n++], Pt_ARG_DIM, &dim, 0);
@@ -533,7 +500,7 @@ EmbedWindow::OnShowTooltip(PRInt32 aXCoords, PRInt32 aYCoords,
   PtSetArg(&args[n++], Pt_ARG_POS, &pos, 0);
   PtSetArg(&args[n++], Pt_ARG_DIM, &dim, 0);
   PtSetArg(&args[n++], Pt_ARG_FLAGS, Pt_HIGHLIGHTED, -1 );
-  PtSetArg(&args[n++], Pt_ARG_FILL_COLOR, Pg_BALLOONCOLOR, 0);
+  PtSetArg(&args[n++], Pt_ARG_FILL_COLOR, 0xfeffb1, 0);
   PtSetArg(&args[n++], Pt_ARG_TEXT_FONT, font, 0);
   PtSetArg(&args[n++], Pt_ARG_TEXT_STRING, tipString, 0);
   PtSetArg(&args[n++], Pt_ARG_BASIC_FLAGS, Pt_STATIC_GRADIENT | Pt_TOP_OUTLINE | Pt_LEFT_OUTLINE |
@@ -605,7 +572,7 @@ NS_IMETHODIMP EmbedWindow::OnFound(nsISupports *ctxt, const char *hostname, nsHo
 #endif
 
 /* void OnStopLookup (in nsISupports ctxt, in string hostname, in nsresult status); */
-NS_IMETHODIMP EmbedWindow::OnLookupComplete(nsICancelable *aRequest, nsIDNSRecord *aRecord, nsresult aStatus)
+NS_IMETHODIMP EmbedWindow::OnLookupComplete(nsIDNSRequest *aRequest, nsIDNSRecord *aRecord, nsresult aStatus)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }

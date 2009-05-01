@@ -70,7 +70,7 @@ static char * sAtkPropertyNameArray[PROP_LAST] = {
     "accessible_table_summary"
 };
 
-static  AtkStateType TranslateAState(PRUint32 aState, PRUint32 aExtState);
+static  AtkStateType TranslateAState(PRUint32 aState);
 
 NS_IMPL_ISUPPORTS_INHERITED2(nsDocAccessibleWrap, nsDocAccessible, nsIAccessibleText, nsIAccessibleEditableText)
 
@@ -123,18 +123,12 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
         switch (pAtkStateChange->state) {
         case nsIAccessible::STATE_INVISIBLE:
             atkState = ATK_STATE_VISIBLE;
-            pAtkStateChange->enable = !pAtkStateChange->enable;
             break;
         case nsIAccessible::STATE_UNAVAILABLE:
             atkState = ATK_STATE_ENABLED;
-            pAtkStateChange->enable = !pAtkStateChange->enable;
-            break;
-        case nsIAccessible::STATE_READONLY:
-            atkState = ATK_STATE_EDITABLE;
-            pAtkStateChange->enable = !pAtkStateChange->enable;
             break;
         default:
-            atkState = TranslateAState(pAtkStateChange->state, pAtkStateChange->extState);
+            atkState = TranslateAState(pAtkStateChange->state);
         }
 
         atk_object_notify_state_change(accWrap->GetAtkObject(),
@@ -202,13 +196,11 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
             g_value_set_pointer (&values.new_value, pAtkPropChange->newvalue);
             rv = NS_OK;
         }
-        if (NS_SUCCEEDED(rv)) {
-            char *signal_name = g_strconcat("property_change::",
-                                            values.property_name, NULL);
-            g_signal_emit_by_name(accWrap->GetAtkObject(), signal_name,
+        if (NS_SUCCEEDED(rv))
+            g_signal_emit_by_name(accWrap->GetAtkObject(),
+                                  g_strconcat("property_change::",
+                                              values.property_name),
                                   &values, NULL);
-            g_free (signal_name);
-        }
 
         break;
 
@@ -349,7 +341,6 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
 
     case nsIAccessibleEvent::EVENT_ATK_LINK_SELECTED:
         MAI_LOG_DEBUG(("\n\nReceived: EVENT_ATK_LINK_SELECTED\n"));
-        atk_focus_tracker_notify(accWrap->GetAtkObject());
         g_signal_emit_by_name(accWrap->GetAtkObject(),
                               "link_selected",
                               // Selected link index 
@@ -378,15 +369,8 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
                                    NULL);
         }
         else {
-            //
-            // EVENT_REORDER is normally fired by "HTML Document".
-            //
-            // In GOK, [only] "children_changed::add" can cause foreground
-            // window accessible to update it children, which will
-            // refresh "UI-Grab" window.
-            //
             g_signal_emit_by_name (accWrap->GetAtkObject(),
-                                   "children_changed::add",
+                                   "children_changed",
                                    -1, NULL, NULL);
         }
 
@@ -415,22 +399,18 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
         break;
 
     case nsIAccessibleEvent::EVENT_ATK_WINDOW_ACTIVATE:
-      {
         MAI_LOG_DEBUG(("\n\nReceived: EVENT_ATK_WINDOW_ACTIVATED\n"));
-        AtkObject *accessible = accWrap->GetAtkObject();
-        guint id = g_signal_lookup ("activate", MAI_TYPE_ATK_OBJECT);
-        g_signal_emit(accessible, id, 0);
+        g_signal_emit(accWrap->GetAtkObject(),
+                      g_signal_lookup ("activate", MAI_TYPE_ATK_OBJECT), 0);
         rv = NS_OK;
-      } break;
+        break;
 
     case nsIAccessibleEvent::EVENT_ATK_WINDOW_DEACTIVATE:
-      {
         MAI_LOG_DEBUG(("\n\nReceived: EVENT_ATK_WINDOW_DEACTIVATED\n"));
-        AtkObject *accessible = accWrap->GetAtkObject();
-        guint id = g_signal_lookup ("deactivate", MAI_TYPE_ATK_OBJECT);
-        g_signal_emit(accessible, id, 0);
+        g_signal_emit(accWrap->GetAtkObject(),
+                      g_signal_lookup ("deactivate", MAI_TYPE_ATK_OBJECT), 0);
         rv = NS_OK;
-      } break;
+        break;
 
     default:
         // Don't transfer others
@@ -443,7 +423,7 @@ NS_IMETHODIMP nsDocAccessibleWrap::FireToolkitEvent(PRUint32 aEvent,
 
 /* static */
 AtkStateType
-TranslateAState(PRUint32 aState, PRUint32 aExtState)
+TranslateAState(PRUint32 aState)
 {
     switch (aState) {
     case nsIAccessible::STATE_SELECTED:
@@ -471,46 +451,47 @@ TranslateAState(PRUint32 aState, PRUint32 aExtState)
         return ATK_STATE_MULTISELECTABLE;
 
 #if 0
-        // The following states are opposite the MSAA states.
-        // We need to deal with them specially
+        // The following two state need to deal specially
     case nsIAccessible::STATE_INVISIBLE:
         return !ATK_STATE_VISIBLE;
 
     case nsIAccessible::STATE_UNAVAILABLE:
         return !ATK_STATE_ENABLED;
-
-    case nsIAccessible::STATE_READONLY:
-        return !ATK_STATE_EDITABLE;
 #endif
-    }
 
-    // The following state is
-    // Extended state flags (for non-MSAA, for Java and Gnome/ATK support)
-    switch (aExtState) {
-    case nsIAccessible::EXT_STATE_ACTIVE:
+        // The following state is
+        // Extended state flags (for non-MSAA, for Java and Gnome/ATK support)
+        // They are only the states that are not already  mapped in MSAA
+        // See www.accessmozilla.org/article.php?sid=11 for information on the
+        // mappings between accessibility API state
+
+    case nsIAccessible::STATE_ACTIVE:
         return ATK_STATE_ACTIVE;
-    case nsIAccessible::EXT_STATE_EXPANDABLE:
+    case nsIAccessible::STATE_EXPANDABLE:
         return ATK_STATE_EXPANDABLE;
 #if 0
         // Need change definitions in nsIAccessible.idl to avoid
         // duplicate value
-    case nsIAccessible::EXT_STATE_MODAL:
+    case nsIAccessible::STATE_MODAL:
         return ATK_STATE_MODAL;
 #endif
-    case nsIAccessible::EXT_STATE_MULTI_LINE:
+    case nsIAccessible::STATE_MULTI_LINE:
         return ATK_STATE_MULTI_LINE;
-    case nsIAccessible::EXT_STATE_SENSITIVE:
+    case nsIAccessible::STATE_SENSITIVE:
         return ATK_STATE_SENSITIVE;
-    case nsIAccessible::EXT_STATE_SHOWING:
+    case nsIAccessible::STATE_RESIZABLE:
+        return ATK_STATE_RESIZABLE;
+    case nsIAccessible::STATE_SHOWING:
         return ATK_STATE_SHOWING;
-    case nsIAccessible::EXT_STATE_SINGLE_LINE:
+    case nsIAccessible::STATE_SINGLE_LINE:
         return ATK_STATE_SINGLE_LINE;
-    case nsIAccessible::EXT_STATE_TRANSIENT:
+    case nsIAccessible::STATE_TRANSIENT:
         return ATK_STATE_TRANSIENT;
-    case nsIAccessible::EXT_STATE_VERTICAL:
+    case nsIAccessible::STATE_VERTICAL:
         return ATK_STATE_VERTICAL;
+    default:
+        return ATK_STATE_INVALID;
     }
-    return ATK_STATE_INVALID;
 }
 
 NS_IMETHODIMP nsDocAccessibleWrap::Shutdown()
@@ -524,12 +505,12 @@ NS_IMETHODIMP nsDocAccessibleWrap::GetRole(PRUint32 *_retval)
     PRBool isEditable;
     GetIsEditable(&isEditable);
 
-    if (isEditable)
+    if (isEditable) {
         *_retval = ROLE_TEXT;
-    else
-        *_retval = ROLE_HTML_CONTAINER;
+        return NS_OK;
+    }
 
-    return NS_OK;
+    return nsDocAccessible::GetRole(_retval);
 }
 
 void nsDocAccessibleWrap::CheckForEditor()
@@ -537,21 +518,4 @@ void nsDocAccessibleWrap::CheckForEditor()
     nsDocAccessible::CheckForEditor();
     if (mEditor)
         SetEditor(mEditor); // set editor for nsAccessibleEditableText
-}
-
-NS_IMETHODIMP nsDocAccessibleWrap::FireDocLoadingEvent(PRBool aIsFinished)
-{
-  if (!mDocument || !mWeakShell)
-    return NS_OK;  // Document has been shut down
-
-  if (!aIsFinished) {
-    // Load has been verified, it will occur, about to commence
-    AtkChildrenChange childrenData;
-    childrenData.index = -1;
-    childrenData.child = 0;
-    childrenData.add = PR_FALSE;
-    FireToolkitEvent(nsIAccessibleEvent::EVENT_REORDER, this, &childrenData);
-  }
-
-  return nsDocAccessible::FireDocLoadingEvent(aIsFinished);
 }

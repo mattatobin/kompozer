@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -22,22 +22,22 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsMimeTypeArray.h"
-#include "nsContentUtils.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIDOMNavigator.h"
 #include "nsIDOMPluginArray.h"
@@ -46,35 +46,36 @@
 #include "nsIMIMEService.h"
 #include "nsIMIMEInfo.h"
 #include "nsIFile.h"
+#include "nsIPrefService.h"
 
 
-nsMimeTypeArray::nsMimeTypeArray(nsIDOMNavigator* navigator)
+MimeTypeArrayImpl::MimeTypeArrayImpl(nsIDOMNavigator* navigator)
 {
   mNavigator = navigator;
   mMimeTypeCount = 0;
   mMimeTypeArray = nsnull;
 }
 
-nsMimeTypeArray::~nsMimeTypeArray()
+MimeTypeArrayImpl::~MimeTypeArrayImpl()
 {
   Clear();
 }
 
 
-// QueryInterface implementation for nsMimeTypeArray
-NS_INTERFACE_MAP_BEGIN(nsMimeTypeArray)
+// QueryInterface implementation for MimeTypeArrayImpl
+NS_INTERFACE_MAP_BEGIN(MimeTypeArrayImpl)
   NS_INTERFACE_MAP_ENTRY(nsISupports)
   NS_INTERFACE_MAP_ENTRY(nsIDOMMimeTypeArray)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(MimeTypeArray)
 NS_INTERFACE_MAP_END
 
 
-NS_IMPL_ADDREF(nsMimeTypeArray)
-NS_IMPL_RELEASE(nsMimeTypeArray)
+NS_IMPL_ADDREF(MimeTypeArrayImpl)
+NS_IMPL_RELEASE(MimeTypeArrayImpl)
 
 
 NS_IMETHODIMP
-nsMimeTypeArray::GetLength(PRUint32* aLength)
+MimeTypeArrayImpl::GetLength(PRUint32* aLength)
 {
   if (mMimeTypeArray == nsnull) {
     nsresult rv = GetMimeTypes();
@@ -86,7 +87,7 @@ nsMimeTypeArray::GetLength(PRUint32* aLength)
 }
 
 NS_IMETHODIMP
-nsMimeTypeArray::Item(PRUint32 aIndex, nsIDOMMimeType** aReturn)
+MimeTypeArrayImpl::Item(PRUint32 aIndex, nsIDOMMimeType** aReturn)
 {
   if (mMimeTypeArray == nsnull) {
     nsresult rv = GetMimeTypes();
@@ -102,7 +103,8 @@ nsMimeTypeArray::Item(PRUint32 aIndex, nsIDOMMimeType** aReturn)
 }
 
 NS_IMETHODIMP
-nsMimeTypeArray::NamedItem(const nsAString& aName, nsIDOMMimeType** aReturn)
+MimeTypeArrayImpl::NamedItem(const nsAString& aName,
+                             nsIDOMMimeType** aReturn)
 {
   NS_ENSURE_ARG_POINTER(aReturn);
   *aReturn = nsnull;
@@ -113,9 +115,10 @@ nsMimeTypeArray::NamedItem(const nsAString& aName, nsIDOMMimeType** aReturn)
       return rv;
   }
 
-  nsAutoString type;
+  PRUint32 i;
 
-  for (PRUint32 i = 0; i < mMimeTypeCount; i++) {
+  nsAutoString type;
+  for (i = 0; i < mMimeTypeCount; i++) {
     nsIDOMMimeType *mtype = mMimeTypeArray[i];
 
     mtype->GetType(type);
@@ -133,7 +136,7 @@ nsMimeTypeArray::NamedItem(const nsAString& aName, nsIDOMMimeType** aReturn)
   nsCOMPtr<nsIMIMEService> mimeSrv = do_GetService("@mozilla.org/mime;1");
   if (mimeSrv) {
     nsCOMPtr<nsIMIMEInfo> mimeInfo;
-    mimeSrv->GetFromTypeAndExtension(NS_ConvertUCS2toUTF8(aName), EmptyCString(),
+    mimeSrv->GetFromTypeAndExtension(NS_ConvertUCS2toUTF8(aName).get(), nsnull,
                                      getter_AddRefs(mimeInfo));
     if (mimeInfo) {
       // Now we check whether we can really claim to support this type
@@ -148,8 +151,8 @@ nsMimeTypeArray::NamedItem(const nsAString& aName, nsIDOMMimeType** aReturn)
           if (!helper) {
             // mime info from the OS may not have a PreferredApplicationHandler
             // so just check for an empty default description
-            nsAutoString defaultDescription;
-            mimeInfo->GetDefaultDescription(defaultDescription);
+            nsXPIDLString defaultDescription;
+            mimeInfo->GetDefaultDescription(getter_Copies(defaultDescription));
             if (defaultDescription.IsEmpty()) {
               // no support; just leave
               return NS_OK;
@@ -159,23 +162,23 @@ nsMimeTypeArray::NamedItem(const nsAString& aName, nsIDOMMimeType** aReturn)
       }
 
       // If we got here, we support this type!  Say so.
-      nsCOMPtr<nsIDOMMimeType> helper = new nsHelperMimeType(aName);
-      if (!helper) {
+      nsCOMPtr<nsIDOMMimeType> helperImpl = new HelperMimeTypeImpl(aName);
+      if (!helperImpl) {
         return NS_ERROR_OUT_OF_MEMORY;
       }
-      nsCOMPtr<nsIDOMMimeType> entry = new nsMimeType(nsnull, helper);
+      MimeTypeElementImpl* entry = new MimeTypeElementImpl(nsnull, helperImpl);
       if (!entry) {
         return NS_ERROR_OUT_OF_MEMORY;
       }
 
-      entry.swap(*aReturn);
+      return CallQueryInterface(entry, aReturn);
     }
   }
 
   return NS_OK;
 }
 
-void  nsMimeTypeArray::Clear()
+void  MimeTypeArrayImpl::Clear()
 {
   if (mMimeTypeArray != nsnull) {
     for (PRUint32 i = 0; i < mMimeTypeCount; i++) {
@@ -187,13 +190,13 @@ void  nsMimeTypeArray::Clear()
   mMimeTypeCount = 0;
 }
 
-nsresult nsMimeTypeArray::Refresh()
+nsresult MimeTypeArrayImpl::Refresh()
 {
   Clear();
   return GetMimeTypes();
 }
 
-nsresult nsMimeTypeArray::GetMimeTypes()
+nsresult MimeTypeArrayImpl::GetMimeTypes()
 {
   NS_PRECONDITION(!mMimeTypeArray && mMimeTypeCount==0,
                       "already initialized");
@@ -210,8 +213,7 @@ nsresult nsMimeTypeArray::GetMimeTypes()
       PRUint32 i;
       for (i = 0; i < pluginCount; i++) {
         nsIDOMPlugin* plugin = nsnull;
-        if (NS_SUCCEEDED(pluginArray->Item(i, &plugin)) &&
-            plugin) {
+        if (pluginArray->Item(i, &plugin) == NS_OK) {
           PRUint32 mimeTypeCount = 0;
           if (plugin->GetLength(&mimeTypeCount) == NS_OK)
             mMimeTypeCount += mimeTypeCount;
@@ -241,37 +243,38 @@ nsresult nsMimeTypeArray::GetMimeTypes()
   return rv;
 }
 
-nsMimeType::nsMimeType(nsIDOMPlugin* aPlugin, nsIDOMMimeType* aMimeType)
+MimeTypeElementImpl::MimeTypeElementImpl(nsIDOMPlugin* aPlugin,
+                                         nsIDOMMimeType* aMimeType)
 {
   mPlugin = aPlugin;
   mMimeType = aMimeType;
 }
 
-nsMimeType::~nsMimeType()
+MimeTypeElementImpl::~MimeTypeElementImpl()
 {
 }
 
 
-// QueryInterface implementation for nsMimeType
-NS_INTERFACE_MAP_BEGIN(nsMimeType)
+// QueryInterface implementation for MimeTypeElementImpl
+NS_INTERFACE_MAP_BEGIN(MimeTypeElementImpl)
   NS_INTERFACE_MAP_ENTRY(nsISupports)
   NS_INTERFACE_MAP_ENTRY(nsIDOMMimeType)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(MimeType)
 NS_INTERFACE_MAP_END
 
 
-NS_IMPL_ADDREF(nsMimeType)
-NS_IMPL_RELEASE(nsMimeType)
+NS_IMPL_ADDREF(MimeTypeElementImpl)
+NS_IMPL_RELEASE(MimeTypeElementImpl)
 
 
 NS_IMETHODIMP
-nsMimeType::GetDescription(nsAString& aDescription)
+MimeTypeElementImpl::GetDescription(nsAString& aDescription)
 {
   return mMimeType->GetDescription(aDescription);
 }
 
 NS_IMETHODIMP
-nsMimeType::GetEnabledPlugin(nsIDOMPlugin** aEnabledPlugin)
+MimeTypeElementImpl::GetEnabledPlugin(nsIDOMPlugin** aEnabledPlugin)
 {
   nsAutoString type;
   GetType(type);
@@ -279,55 +282,58 @@ nsMimeType::GetEnabledPlugin(nsIDOMPlugin** aEnabledPlugin)
   PRBool disabled = PR_FALSE;
 
   if (type.Length() == 1 && type.First() == '*') {
-    // Check if the default plugin is disabled.
-    disabled = nsContentUtils::GetBoolPref("plugin.default_plugin_disabled");
+    nsCOMPtr<nsIPrefBranch> prefBranch =
+      do_GetService(NS_PREFSERVICE_CONTRACTID);
+    if (prefBranch) {
+      // Check if the default plugin is disabled.
+      prefBranch->GetBoolPref("plugin.default_plugin_disabled", &disabled);
+    }
   }
 
   *aEnabledPlugin = disabled ? nsnull : mPlugin;
-
   NS_IF_ADDREF(*aEnabledPlugin);
 
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMimeType::GetSuffixes(nsAString& aSuffixes)
+MimeTypeElementImpl::GetSuffixes(nsAString& aSuffixes)
 {
   return mMimeType->GetSuffixes(aSuffixes);
 }
 
 NS_IMETHODIMP
-nsMimeType::GetType(nsAString& aType)
+MimeTypeElementImpl::GetType(nsAString& aType)
 {
   return mMimeType->GetType(aType);
 }
 
-// QueryInterface implementation for nsHelperMimeType
-NS_IMPL_ISUPPORTS1(nsHelperMimeType, nsIDOMMimeType)
+// QueryInterface implementation for HelperMimeTypeImpl
+NS_IMPL_ISUPPORTS1(HelperMimeTypeImpl, nsIDOMMimeType)
 
 NS_IMETHODIMP
-nsHelperMimeType::GetDescription(nsAString& aDescription)
+HelperMimeTypeImpl::GetDescription(nsAString& aDescription)
 {
   aDescription.Truncate();
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHelperMimeType::GetEnabledPlugin(nsIDOMPlugin** aEnabledPlugin)
+HelperMimeTypeImpl::GetEnabledPlugin(nsIDOMPlugin** aEnabledPlugin)
 {
   *aEnabledPlugin = nsnull;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHelperMimeType::GetSuffixes(nsAString& aSuffixes)
+HelperMimeTypeImpl::GetSuffixes(nsAString& aSuffixes)
 {
   aSuffixes.Truncate();
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHelperMimeType::GetType(nsAString& aType)
+HelperMimeTypeImpl::GetType(nsAString& aType)
 {
   aType = mType;
   return NS_OK;

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,30 +14,30 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *  Mark Mentovai <mark@moxienet.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsMacWindow.h"
 #include "nsMacEventHandler.h"
+#include "nsMacControl.h"
 #include "nsToolkit.h"
 
 #include "nsIServiceManager.h"    // for drag and drop
@@ -48,47 +48,26 @@
 #include "nsGUIEvent.h"
 #include "nsCarbonHelpers.h"
 #include "nsGfxUtils.h"
+#include "DefProcFakery.h"
 #include "nsMacResources.h"
 #include "nsIRollupListener.h"
 #include "nsCRT.h"
 #include "nsWidgetSupport.h"
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <Carbon/Carbon.h>
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_3
-#define kWindowFadeTransitionEffect 4
-#define kEventWindowTransitionCompleted 89
-
-typedef struct TransitionWindowOptions {
-  UInt32    version;
-  EventTime duration;
-  WindowRef window;
-  void*     userData;
-} TransitionWindowOptions;
-
-#define kEventParamWindowPartCode 'wpar'
-#define typeWindowPartCode        'wpar'
+#if TARGET_CARBON
+#include <CFString.h>
 #endif
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_4
-// http://developer.apple.com/qa/qa2005/qa1453.html
-// These are not defined in early versions of the 10.4/10.4u SDK (as of Xcode
-// 2.2), but they may appear in later releases.  Since we can't check which
-// version of the SDK is in use beyond knowing that it's "10.4", define these
-// on 10.4.  #defines should override what's present in the SDK when defined,
-// because the system headers use enums.
-#define kEventParamMouseWheelSmoothVerticalDelta   'saxy'
-#define kEventParamMouseWheelSmoothHorizontalDelta 'saxx'
-#define kEventMouseScroll 11
-#endif
+#include <Gestalt.h>
+#include <Quickdraw.h>
+#include <MacWindows.h>
 
-typedef OSStatus (*TransitionWindowWithOptions_type) (WindowRef,
-                                             WindowTransitionEffect,
-                                             WindowTransitionAction,
-                                             const HIRect*,
-                                             Boolean,
-                                             TransitionWindowOptions*);
+#if UNIVERSAL_INTERFACES_VERSION < 0x0340
+enum {
+  kEventWindowConstrain = 83
+};
+const UInt32 kWindowLiveResizeAttribute = (1L << 28);
+#endif
 
 static const char sScreenManagerContractID[] = "@mozilla.org/gfx/screenmanager;1";
 
@@ -104,53 +83,24 @@ static const char sScreenManagerContractID[] = "@mozilla.org/gfx/screenmanager;1
 extern nsIRollupListener * gRollupListener;
 extern nsIWidget         * gRollupWidget;
 
+#if !TARGET_CARBON
+pascal long BorderlessWDEF ( short inCode, WindowPtr inWindow, short inMessage, long inParam ) ;
+long CallSystemWDEF ( short inCode, WindowPtr inWindow, short inMessage, long inParam ) ;
+#endif
 
 #define kWindowPositionSlop 20
 
 // These are only initial guesses. Real values are filled in
 // after window creation.
 const short kWindowTitleBarHeight = 22;
-const short kWindowMarginWidth = 0;
-const short kDialogTitleBarHeight = 22;
-const short kDialogMarginWidth = 0;
-
-#if 0
-
-// routines for debugging port state issues (which are legion)
-static void PrintRgn(const char* inLabel, RgnHandle inRgn)
-{
-  Rect regionBounds;
-  GetRegionBounds(inRgn, &regionBounds);
-  printf("%s left %d, top %d, right %d, bottom %d\n", inLabel,
-    regionBounds.left, regionBounds.top, regionBounds.right, regionBounds.bottom);
-}
-
-static void PrintPortState(WindowPtr inWindow, const char* label)
-{
-  CGrafPtr currentPort = CGrafPtr(GetQDGlobalsThePort());
-  Rect bounds;
-  GetPortBounds(currentPort, &bounds);
-  printf("%s: Current port: %p, top, left = %d, %d\n", label, currentPort, bounds.top, bounds.left);
-
-  StRegionFromPool savedClip;
-  ::GetClip(savedClip);
-  PrintRgn("  clip:", savedClip);
-
-  StRegionFromPool updateRgn;
-  ::GetWindowUpdateRegion(inWindow, updateRgn);
-  Rect windowBounds;
-  ::GetWindowBounds(inWindow, kWindowContentRgn, &windowBounds);
-  ::OffsetRgn(updateRgn, -windowBounds.left, -windowBounds.top);
-
-  PrintRgn("  update:", updateRgn);
-}
-
-#endif
+const short kWindowMarginWidth = 6;
+const short kDialogTitleBarHeight = 26;
+const short kDialogMarginWidth = 6;
 
 #pragma mark -
 
 pascal OSErr
-nsMacWindow::DragTrackingHandler ( DragTrackingMessage theMessage, WindowPtr theWindow, 
+nsMacWindow :: DragTrackingHandler ( DragTrackingMessage theMessage, WindowPtr theWindow, 
                     void *handlerRefCon, DragReference theDrag)
 {
   static nsCOMPtr<nsIDragHelperService> sDragHelper;
@@ -200,7 +150,7 @@ nsMacWindow::DragTrackingHandler ( DragTrackingMessage theMessage, WindowPtr the
 
 
 pascal OSErr
-nsMacWindow::DragReceiveHandler (WindowPtr theWindow, void *handlerRefCon,
+nsMacWindow :: DragReceiveHandler (WindowPtr theWindow, void *handlerRefCon,
                   DragReference theDragRef)
 {
   nsCOMPtr<nsIEventSink> windowEventSink;
@@ -224,7 +174,7 @@ nsMacWindow::DragReceiveHandler (WindowPtr theWindow, void *handlerRefCon,
 } // DragReceiveHandler
 
 
-NS_IMPL_ISUPPORTS_INHERITED5(nsMacWindow, Inherited, nsIEventSink, nsPIWidgetMac, nsPIWidgetMac_MOZILLA_1_8_BRANCH, nsPIEventSinkStandalone, 
+NS_IMPL_ISUPPORTS_INHERITED4(nsMacWindow, Inherited, nsIEventSink, nsPIWidgetMac, nsPIEventSinkStandalone, 
                                           nsIMacTextInputEventSink)
 
 
@@ -236,22 +186,19 @@ NS_IMPL_ISUPPORTS_INHERITED5(nsMacWindow, Inherited, nsIEventSink, nsPIWidgetMac
 nsMacWindow::nsMacWindow() : Inherited()
   , mWindowMadeHere(PR_FALSE)
   , mIsSheet(PR_FALSE)
+  , mIgnoreDeactivate(PR_FALSE)
   , mAcceptsActivation(PR_TRUE)
   , mIsActive(PR_FALSE)
   , mZoomOnShow(PR_FALSE)
   , mZooming(PR_FALSE)
   , mResizeIsFromUs(PR_FALSE)
-  , mShown(PR_FALSE)
-  , mSheetNeedsShow(PR_FALSE)
-  , mSheetShown(PR_FALSE)
-  , mInPixelMouseScroll(PR_FALSE)
   , mMacEventHandler(nsnull)
-#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_3
-  , mNeedsResize(PR_FALSE)
+#if !TARGET_CARBON
+  , mPhantomScrollbar(nsnull)
+  , mPhantomScrollbarData(nsnull)
 #endif
-  , mScrollEventHandler(NULL)
-  , mWindowEventHandler(NULL)
 {
+  mMacEventHandler.reset(new nsMacEventHandler(this));
   WIDGET_SET_CLASSNAME("nsMacWindow");  
 
   // create handlers for drag&drop
@@ -270,6 +217,19 @@ nsMacWindow::nsMacWindow() : Inherited()
 nsMacWindow::~nsMacWindow()
 {
   if ( mWindowPtr && mWindowMadeHere ) {
+    
+    // cleanup our special defproc if we are a popup
+    if ( mWindowType == eWindowType_popup )
+      RemoveBorderlessDefProc ( mWindowPtr );
+
+#if !TARGET_CARBON
+    // cleanup the struct we hang off the scrollbar's refcon  
+    if ( mPhantomScrollbar ) {
+      ::SetControlReference(mPhantomScrollbar, (long)nsnull);
+      delete mPhantomScrollbarData;
+    }
+#endif    
+      
     // clean up DragManager stuff
     if ( mDragTrackingHandlerUPP ) {
       ::RemoveTrackingHandler ( mDragTrackingHandlerUPP, mWindowPtr );
@@ -285,19 +245,10 @@ nsMacWindow::~nsMacWindow()
     CGrafPtr    windowPort = ::GetWindowPort(mWindowPtr);
     ::GetPort((GrafPtr*)&curPort);
     PRBool      mustResetPort = (curPort == windowPort);
-
-    if (mScrollEventHandler)
-      ::RemoveEventHandler(mScrollEventHandler);
-    if (mWindowEventHandler)
-      ::RemoveEventHandler(mWindowEventHandler);
-
-    // Clear references in nsMacEventHandler to this window (bug 388181) and
-    // null out mWindowPtr to prevent handling events beyond this point.
-    if (mMacEventHandler.get())
-      mMacEventHandler->ClearWindowRefs(this);
-    WindowPtr w = mWindowPtr;
+    
+    
+    ::DisposeWindow(mWindowPtr);
     mWindowPtr = nsnull;
-    ::DisposeWindow(w);
     
     if (mustResetPort)
       nsGraphicsUtils::SetPortToKnownGoodPort();
@@ -306,11 +257,6 @@ nsMacWindow::~nsMacWindow()
     (void)::RemoveWindowProperty(mWindowPtr, kTopLevelWidgetPropertyCreator,
         kTopLevelWidgetRefPropertyTag);
   }
-
-  // Explicitly reset mMacEventHandler to null so that any use after free of
-  // this object crashes on a null-ptr deref rather than using freed memory.
-  // ~auto_ptr() only deletes the pointer, it does not set it to null.
-  mMacEventHandler.reset(nsnull);
 }
 
 //-------------------------------------------------------------------------
@@ -331,40 +277,8 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
   short bottomPinDelta = 0;     // # of pixels to subtract to pin window bottom
   nsCOMPtr<nsIToolkit> theToolkit = aToolkit;
 
-  NS_ASSERTION(!aInitData || aInitData->mWindowType != eWindowType_popup ||
-               !aParent, "Popups should not be hooked into nsIWidget hierarchy");
-
-  nsMacEventDispatchHandler* eventDispatchHandler = nsnull;
-
-  if (aInitData && aInitData->mWindowType == eWindowType_popup &&
-      aNativeParent) {
-    // For popup windows, use the same event dispatch handler as the
-    // associated top-level window.  This ensures that enter/exit events
-    // will be generated as the mouse moves between the top-level window
-    // and the popup when both are "active."
-
-    // When creating a popup window, aNativeParent is not a WindowPtr but
-    // an nsIWidget, so walk up that tree to the top-level window and get
-    // the dispatch handler.
-    nsCOMPtr<nsIWidget> widget = NS_STATIC_CAST(nsIWidget*, aNativeParent);
-    nsIWidget* topWidget = nsnull;
-
-    while (widget && (widget = dont_AddRef(widget->GetParent())))
-      topWidget = widget;
-
-    if (topWidget) {
-      nsCOMPtr<nsPIWidgetMac_MOZILLA_1_8_BRANCH> parentMacWindow =
-       do_QueryInterface(topWidget);
-
-      if (parentMacWindow)
-        parentMacWindow->GetEventDispatchHandler(&eventDispatchHandler);
-    }
-  }
-
-  mMacEventHandler.reset(new nsMacEventHandler(this, eventDispatchHandler));
-
   // build the main native window
-  if (!aNativeParent || (aInitData && aInitData->mWindowType == eWindowType_popup))
+  if (aNativeParent == nsnull)
   {
     PRBool allOrDefault;
 
@@ -399,7 +313,7 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
         // mAcceptsActivation to false so we don't activate the window
         // when we show it.
         mOffsetParent = aParent;
-        if( aParent )
+        if( !aParent )
           theToolkit = getter_AddRefs(aParent->GetToolkit());
 
         mAcceptsActivation = PR_FALSE;
@@ -418,26 +332,50 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
         mIsTopWidgetWindow = PR_TRUE;
         if (aInitData)
         {
+          // I'm making the assumption here that any dialog created w/out a titlebar is modal and am
+          // therefore keeping the old modal dialog proc. I'm only special-casing dialogs with a
+          // titlebar since those are the only ones that might end up not being modal.
+          // We never give dialog boxes a close box.
+
           switch (aInitData->mBorderStyle)
           {
             case eBorderStyle_none:
-              windowClass = kModalWindowClass;
-              break;
-
             case eBorderStyle_default:
-              windowClass = kDocumentWindowClass;
+              windowClass = kModalWindowClass;
               break;
 
             case eBorderStyle_all:
               windowClass = kDocumentWindowClass;
               attributes = kWindowCollapseBoxAttribute |
-                           kWindowResizableAttributes |
-                           kWindowCloseBoxAttribute;
+                           kWindowResizableAttributes;
               break;
 
             default:
+              if (aParent && (aInitData->mBorderStyle & eBorderStyle_sheet))
+              {
+                nsWindowType parentType;
+                aParent->GetWindowType(parentType);
+                if (parentType != eWindowType_invisible)
+                {
+                  // Mac OS X sheet support
+                  mIsSheet = PR_TRUE;
+                  windowClass = kSheetWindowClass;
+                  if (aInitData->mBorderStyle & eBorderStyle_resizeh)
+                  {
+                    attributes = kWindowResizableAttributes;
+                  }
+                }
+                else
+                {
+                  windowClass = kDocumentWindowClass;
+                  attributes = kWindowCollapseBoxAttribute;
+                }
+              }
+              else
+              {
                 windowClass = kDocumentWindowClass;
 
+                // we ignore the close flag here, since mac dialogs should never have a close box.
                 switch(aInitData->mBorderStyle & (eBorderStyle_resizeh | eBorderStyle_title))
                 {
                   // combinations of individual options.
@@ -451,56 +389,11 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
                       kWindowCollapseBoxAttribute | kWindowResizableAttributes;
                     break;
 
-                  case eBorderStyle_none: // 0
-                    // kSimpleWindowClass (18) is only defined in SDK >=
-                    // 10.3, but it works with runtime >= 10.1.  It's
-                    // borderless and chromeless, which is more visually
-                    // appropriate in Aqua than kPlainWindowClass, which
-                    // gives a 1px black border.
-                    windowClass = 18; // kSimpleWindowClass
-                    break;
-
-                  default: // not reached
+                  default:
                     NS_WARNING("Unhandled combination of window flags");
                     break;
                 }
-
-                // if we set any attributes above then check the close flag and set it here
-                if (attributes != kWindowNoAttributes &&
-                    aInitData->mBorderStyle & eBorderStyle_close)
-                  attributes |= kWindowCloseBoxAttribute;
-          }
-        }
-        else
-        {
-          windowClass = kMovableModalWindowClass;
-          attributes = kWindowCollapseBoxAttribute;
-        }
-
-        hOffset = kDialogMarginWidth;
-        vOffset = kDialogTitleBarHeight;
-        break;
-
-      case eWindowType_sheet:
-        mIsTopWidgetWindow = PR_TRUE;
-        if (aInitData)
-        {
-          nsWindowType parentType;
-          aParent->GetWindowType(parentType);
-          if (parentType != eWindowType_invisible)
-          {
-            // Mac OS X sheet support
-            mIsSheet = PR_TRUE;
-            windowClass = kSheetWindowClass;
-            if (aInitData->mBorderStyle & eBorderStyle_resizeh)
-            {
-              attributes = kWindowResizableAttributes;
-            }
-          }
-          else
-          {
-            windowClass = kDocumentWindowClass;
-            attributes = kWindowCollapseBoxAttribute;
+              }
           }
         }
         else
@@ -558,26 +451,19 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
     else
       ::OffsetRect(&wRect, hOffset, vOffset);
 
-    // If aRect is empty (zero width and/or zero height, as often happens at
-    // least with eWindowType_popup windows), wRect.bottom can end up set here
-    // to a a wildly inappropriate value.  This in turn can can cause
-    // bottomPinDelta to to be set incorrectly, which leads to the bounds
-    // being set incorrectly by the call to Inherited::StandardCreate() below.
-    if (!aRect.IsEmpty()) {
-      nsCOMPtr<nsIScreenManager> screenmgr = do_GetService(sScreenManagerContractID);
-      if (screenmgr) {
-        nsCOMPtr<nsIScreen> screen;
-        //screenmgr->GetPrimaryScreen(getter_AddRefs(screen));
-        screenmgr->ScreenForRect(wRect.left, wRect.top,
-                                   wRect.right - wRect.left, wRect.bottom - wRect.top,
-                                   getter_AddRefs(screen));
-        if (screen) {
-          PRInt32 left, top, width, height;
-          screen->GetAvailRect(&left, &top, &width, &height);
-          if (wRect.bottom > top+height) {
-            bottomPinDelta = wRect.bottom - (top+height);
-            wRect.bottom -= bottomPinDelta;
-          }
+    nsCOMPtr<nsIScreenManager> screenmgr = do_GetService(sScreenManagerContractID);
+    if (screenmgr) {
+      nsCOMPtr<nsIScreen> screen;
+      //screenmgr->GetPrimaryScreen(getter_AddRefs(screen));
+      screenmgr->ScreenForRect(wRect.left, wRect.top,
+                                 wRect.right - wRect.left, wRect.bottom - wRect.top,
+                                 getter_AddRefs(screen));
+      if (screen) {
+        PRInt32 left, top, width, height;
+        screen->GetAvailRect(&left, &top, &width, &height);
+        if (wRect.bottom > top+height) {
+          bottomPinDelta = wRect.bottom - (top+height);
+          wRect.bottom -= bottomPinDelta;
         }
       }
     }
@@ -586,38 +472,11 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
 
     mWindowMadeHere = PR_TRUE;
 
-    // If aRect is empty (zero width and/or zero height, as often happens at
-    // least with eWindowType_popup windows), we've just created an empty
-    // window.  This isn't a problem in itself.  But calling GetWindowBounds()
-    // on an empty window can (and usually does) return a rectangle which,
-    // though empty, has arbitrarily different dimensions than the rectangle
-    // that was used to create the window (i.e. wRect).  If the upper-left
-    // corners of these rectangles are different, this will cause mBoundsOffset
-    // to be set incorrectly -- which is likely to cause trouble elsewhere.
-    // It's possible that this never happened before OS X Leopard (10.5) was
-    // released.  But it _can_ happen on Leopard, where it caused bmo bug
-    // 400082 (and probably also other bugs).
-    //
-    // Bmo bug 400082 happened (on Leopard) as follows:  For some kinds of
-    // (empty) popup windows (those that don't yet have any content?, that
-    // aren't yet visible?), often (always?) structure.top != wRect.top.
-    // This caused mBoundsOffset.v to be set incorrectly here, which caused
-    // nsMacWindow::Resize() to always reset its height to 0, which in turn
-    // made nsMacWindow::Show() always fail to display the window (because
-    // the window's mBounds was always empty).
-    if (aRect.IsEmpty()) {
-      // An empty window's mBoundsOffset was (I think) always zeroed by the
-      // pre-patch code below on Tiger.  So it makes sense to continue doing
-      // this.
-      mBoundsOffset.v = mBoundsOffset.h = 0;
-    } else {
-      // Getting kWindowContentRgn can give back bad values on Panther
-      // (fixed on Tiger), but wRect is already set to the content rect anyway.
-      Rect structure;
-      ::GetWindowBounds(mWindowPtr, kWindowStructureRgn, &structure);
-      mBoundsOffset.v = wRect.top - structure.top;
-      mBoundsOffset.h = wRect.left - structure.left;
-    }
+    Rect content, structure;
+    ::GetWindowBounds(mWindowPtr, kWindowStructureRgn, &structure);
+    ::GetWindowBounds(mWindowPtr, kWindowContentRgn, &content);
+    mBoundsOffset.v = content.top - structure.top;
+    mBoundsOffset.h = content.left - structure.left;
   }
   else
   {
@@ -646,7 +505,8 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
   nsRect bounds(0, 0, aRect.width, aRect.height - bottomPinDelta);
 
   // We only need a valid aParent if we have a sheet
-  if (!aInitData || aInitData->mWindowType != eWindowType_sheet)
+  if (!aInitData || (aInitData->mBorderStyle == eBorderStyle_default) ||
+      !(aInitData->mBorderStyle & eBorderStyle_sheet))
     aParent = nil;
 
   // init base class
@@ -665,80 +525,36 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
       ::SetWindowGroup(mWindowPtr, ::GetWindowGroupOfClass(kHelpWindowClass));
       ::SetWindowActivationScope(mWindowPtr, kWindowActivationScopeNone);
     }
+    else if ( mWindowType == eWindowType_toplevel ) {
+      EventTypeSpec scrollEventList[] = { {kEventClassMouse, kEventMouseWheelMoved} };
+      err = ::InstallWindowEventHandler ( mWindowPtr, NewEventHandlerUPP(ScrollEventHandler), 1, scrollEventList, this, NULL );
+        // note, passing NULL as the final param to IWEH() causes the UPP to be disposed automatically
+        // when the event target (the window) goes away. See CarbonEvents.h for info.
 
-    if ( mWindowType != eWindowType_invisible &&
-         mWindowType != eWindowType_plugin &&
-         mWindowType != eWindowType_java) {
-      const EventTypeSpec kScrollEventList[] = {
-        { kEventClassMouse, kEventMouseWheelMoved },
-#if 0
-        // Disabled due to bug 347626
-        { kEventClassMouse, kEventMouseScroll },
-#endif
-      };
-
-      static EventHandlerUPP sScrollEventHandlerUPP;
-      if (!sScrollEventHandlerUPP)
-        sScrollEventHandlerUPP = ::NewEventHandlerUPP(ScrollEventHandler);
-
-      err = ::InstallWindowEventHandler(mWindowPtr,
-                                        sScrollEventHandlerUPP,
-                                        GetEventTypeCount(kScrollEventList),
-                                        kScrollEventList,
-                                        (void*)this,
-                                        &mScrollEventHandler);
-      NS_ASSERTION(err == noErr, "Couldn't install scroll event handler");
+      NS_ASSERTION(err == noErr, "Couldn't install Carbon Scroll Event handlers");
     }
 
-    // Window event handler
-    const EventTypeSpec kWindowEventList[] = {
-      // to enable live resizing
-      { kEventClassWindow, kEventWindowBoundsChanged },
-      // to roll up popups when we're minimized
-      { kEventClassWindow, kEventWindowCollapsing },
-      // to activate when restoring
-      { kEventClassWindow, kEventWindowExpanded },
-      // to keep invisible windows off the screen
-      { kEventClassWindow, kEventWindowConstrain },
-      // to handle update events
-      { kEventClassWindow, kEventWindowUpdate },
-      // to handle activation
-      { kEventClassWindow, kEventWindowActivated },
-      { kEventClassWindow, kEventWindowDeactivated },
-      // to clean up after a transition is complete
-      { kEventClassWindow, kEventWindowTransitionCompleted },
-    };
+    if (mIsSheet)
+    {
+      // Mac OS X sheet support
+      EventTypeSpec windEventList[] = { {kEventClassWindow, kEventWindowUpdate},
+                                        {kEventClassWindow, kEventWindowDrawContent} };
+      err = ::InstallWindowEventHandler ( mWindowPtr,
+          NewEventHandlerUPP(WindowEventHandler), 2, windEventList, this, NULL );
 
-    static EventHandlerUPP sWindowEventHandlerUPP;
-    if (!sWindowEventHandlerUPP)
-      sWindowEventHandlerUPP = ::NewEventHandlerUPP(WindowEventHandler);
+      NS_ASSERTION(err == noErr, "Couldn't install sheet Event handlers");
+    }
 
-    err = ::InstallWindowEventHandler(mWindowPtr,
-                                      sWindowEventHandlerUPP,
-                                      GetEventTypeCount(kWindowEventList),
-                                      kWindowEventList,
-                                      (void*)this,
-                                      &mWindowEventHandler);
-    NS_ASSERTION(err == noErr, "Couldn't install window event handler");
-
-    // Key event handler
-    const EventTypeSpec kKeyEventList[] = {
-      { kEventClassKeyboard, kEventRawKeyDown },
-      { kEventClassKeyboard, kEventRawKeyUp },
-      { kEventClassKeyboard, kEventRawKeyModifiersChanged },
-    };
-
-    static EventHandlerUPP sKeyEventHandlerUPP;
-    if (!sKeyEventHandlerUPP)
-      sKeyEventHandlerUPP = ::NewEventHandlerUPP(KeyEventHandler);
-
-    err = ::InstallWindowEventHandler(mWindowPtr,
-                                      sKeyEventHandlerUPP,
-                                      GetEventTypeCount(kKeyEventList),
-                                      kKeyEventList,
-                                      NS_STATIC_CAST(void*, this),
-                                      NULL);
-    NS_ASSERTION(err == noErr, "Couldn't install key event handler");
+    // Since we can only call IWEH() once for each event class such as kEventClassWindow, we register all the event types that
+    // we are going to handle here
+    const EventTypeSpec windEventList[] = {
+                                            {kEventClassWindow, kEventWindowBoundsChanged}, // to enable live resizing
+                                            {kEventClassWindow, kEventWindowCollapse},      // to roll up popups when we're minimized
+                                            {kEventClassWindow, kEventWindowConstrain}      // to keep invisible windows off the screen
+                                          };
+    err = ::InstallWindowEventHandler ( mWindowPtr, NewEventHandlerUPP(WindowEventHandler),
+                                        GetEventTypeCount(windEventList), windEventList, this, NULL );
+    NS_ASSERTION(err == noErr, "Couldn't install Carbon window event handler");
 
     // register tracking and receive handlers with the native Drag Manager
     if ( mDragTrackingHandlerUPP ) {
@@ -750,14 +566,10 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
       NS_ASSERTION ( err == noErr, "can't install drag receive handler");
     }
 
-    if (mWindowType == eWindowType_popup) {
-      // Popup windows are used for contextual menus, pop-up/drop-down menus,
-      // autocomplete dropdowns, and tooltips, all of which have a very slight
-      // transparency when native.  Use 5%, which is almost imperceptible
-      // and matches what Tiger does.
-      const float kPopupWindowAlpha = 0.95;
-      ::SetWindowAlpha(mWindowPtr, kPopupWindowAlpha);
-    }
+    // If we're a popup, we don't want a border (we want CSS to draw it for us). So
+    // install our own window defProc.
+    if ( mWindowType == eWindowType_popup )
+      InstallBorderlessDefProc(mWindowPtr);
 
   } // if we created windowPtr
 
@@ -767,135 +579,46 @@ nsresult nsMacWindow::StandardCreate(nsIWidget *aParent,
 }
 
 
+#if TARGET_CARBON
 
 pascal OSStatus
-nsMacWindow::ScrollEventHandler(EventHandlerCallRef aHandlerCallRef,
-                                EventRef            aEvent,
-                                void*               aUserData)
+nsMacWindow :: ScrollEventHandler ( EventHandlerCallRef inHandlerChain, EventRef inEvent, void* userData )
 {
-  OSStatus retVal = eventNotHandledErr;
-
+  EventMouseWheelAxis axis = kEventMouseWheelAxisY;
+  SInt32 delta = 0;
   Point mouseLoc;
-  UInt32 modifiers = 0;
-  if (::GetEventParameter(aEvent, kEventParamMouseLocation,
-                          typeQDPoint, NULL,
-                          sizeof(Point), NULL, &mouseLoc) != noErr ||
-      ::GetEventParameter(aEvent, kEventParamKeyModifiers,
-                          typeUInt32, NULL,
-                          sizeof(UInt32), NULL, &modifiers) != noErr) {
-    // Need both of these params regardless of event kind.
-    return retVal;
-  }
+  OSErr err1 = ::GetEventParameter ( inEvent, kEventParamMouseWheelAxis, typeMouseWheelAxis,
+                        NULL, sizeof(EventMouseWheelAxis), NULL, &axis ); 
+  OSErr err2 = ::GetEventParameter ( inEvent, kEventParamMouseWheelDelta, typeLongInteger,
+                        NULL, sizeof(SInt32), NULL, &delta ); 
+  OSErr err3 = ::GetEventParameter ( inEvent, kEventParamMouseLocation, typeQDPoint,
+                        NULL, sizeof(Point), NULL, &mouseLoc ); 
 
-  SInt32 deltaY = 0, deltaX = 0;
-  PRBool isPixels = PR_FALSE;
-
-  nsMacWindow* self = NS_REINTERPRET_CAST(nsMacWindow*, aUserData);
-
-  EventKind kind = ::GetEventKind(aEvent);
-
-  switch (kind) {
-    case kEventMouseWheelMoved: {
-      // Notchy scrolling hardware, like conventional wheel mice, scroll
-      // a line at a time.
-
-      if (self->mInPixelMouseScroll) {
-        // A smooth scroll was already done by pixels.  Don't scroll again by
-        // lines.
-        return noErr; 
-      }
-
-      EventMouseWheelAxis axis = kEventMouseWheelAxisY;
-      SInt32 delta = 0;
-      if (::GetEventParameter(aEvent, kEventParamMouseWheelAxis,
-                              typeMouseWheelAxis, NULL,
-                              sizeof(EventMouseWheelAxis), NULL,
-                              &axis) != noErr ||
-          ::GetEventParameter(aEvent, kEventParamMouseWheelDelta,
-                              typeLongInteger, NULL,
-                              sizeof(SInt32), NULL, &delta) != noErr) {
-        // Need both of these params.
-        return retVal;
-      }
-
-      if (axis == kEventMouseWheelAxisY)
-        deltaY = delta;
-      else
-        deltaX = delta;
-
-      break;
-    }
-
-    case kEventMouseScroll: {
-      // On Tiger or later, smooth scrolling hardware, like Apple touchpads
-      // and Mighty Mice, scroll a pixel at a time.  Handling this event means
-      // that the system won't send a kEventMouseWheelMoved event.
-      isPixels = PR_TRUE;
-      OSErr errY, errX;
-      errY = ::GetEventParameter(aEvent,
-                                 kEventParamMouseWheelSmoothVerticalDelta,
-                                 typeSInt32, NULL,
-                                 sizeof(SInt32), NULL, &deltaY);
-      errX = ::GetEventParameter(aEvent,
-                                 kEventParamMouseWheelSmoothHorizontalDelta,
-                                 typeSInt32, NULL,
-                                 sizeof(SInt32), NULL, &deltaX);
-      if (errY != noErr && errX != noErr) {
-        // Need at least one of these params.
-        return retVal;
-      }
-      if ((errY != noErr && errY != eventParameterNotFoundErr) ||
-          (errX != noErr && errX != eventParameterNotFoundErr)) {
-        // eventParameterNotFoundErr is the only permissible "error",
-        // in that case, leave the delta set to 0.
-        return retVal;
-      }
-      break;
-    }
-
-    default: {
-      // What?
-      return retVal;
-      break;
+  if ( err1 == noErr && err2 == noErr && err3 == noErr ) {
+    nsMacWindow* self = NS_REINTERPRET_CAST(nsMacWindow*, userData);
+    if ( self ) {
+      // convert mouse to local coordinates since that's how the event handler wants them
+      StPortSetter portSetter(self->mWindowPtr);
+      StOriginSetter originSetter(self->mWindowPtr);
+      ::GlobalToLocal(&mouseLoc);
+      self->mMacEventHandler->Scroll ( axis, delta, mouseLoc );
     }
   }
-
-  {
-    // Convert mouse to local coordinates since that's how the event handler 
-    // wants them
-    StPortSetter portSetter(self->mWindowPtr);
-    StOriginSetter originSetter(self->mWindowPtr);
-    ::GlobalToLocal(&mouseLoc);
-    self->mMacEventHandler->Scroll(deltaY, deltaX, isPixels, mouseLoc,
-                                   self, modifiers);
-    retVal = noErr;
-  }
-
-  if (kind == kEventMouseScroll && (deltaX != 0 || deltaY != 0)) {
-    // Plug-ins might depend on kEventMouseWheelMoved, so if the event was
-    // kEventMouseScroll, call to the next handler to give the system the
-    // chance to turn one event into the other.  See
-    // http://developer.apple.com/qa/qa2005/qa1453.html .  When the
-    // new event reaches this handler, mInPixelMouseScroll will prevent
-    // double-scrolling.
-    PRBool lastInPixelMouseScroll = self->mInPixelMouseScroll;
-    self->mInPixelMouseScroll = PR_TRUE;
-    ::CallNextEventHandler(aHandlerCallRef, aEvent);
-    self->mInPixelMouseScroll = lastInPixelMouseScroll;
-  }
-
-  return retVal;
+  return noErr;
+  
 } // ScrollEventHandler
 
 
 pascal OSStatus
-nsMacWindow::WindowEventHandler ( EventHandlerCallRef inHandlerChain, EventRef inEvent, void* userData )
+nsMacWindow :: WindowEventHandler ( EventHandlerCallRef inHandlerChain, EventRef inEvent, void* userData )
 {
   OSStatus retVal = eventNotHandledErr;  // Presume we won't consume the event
-  nsMacWindow* self = NS_REINTERPRET_CAST(nsMacWindow*, userData);
-  if (self) {
-    UInt32 what = ::GetEventKind(inEvent);
-    switch (what) {
+  
+  WindowRef myWind = NULL;
+  ::GetEventParameter ( inEvent, kEventParamDirectObject, typeWindowRef, NULL, sizeof(myWind), NULL, &myWind );
+  if ( myWind ) {
+    UInt32 what = ::GetEventKind ( inEvent );
+    switch ( what ) {
     
       case kEventWindowBoundsChanged:
       {
@@ -903,16 +626,14 @@ nsMacWindow::WindowEventHandler ( EventHandlerCallRef inHandlerChain, EventRef i
         UInt32 attributes = 0;
         ::GetEventParameter ( inEvent, kEventParamAttributes, typeUInt32, NULL, sizeof(attributes), NULL, &attributes );
         if ( attributes & kWindowBoundsChangeSizeChanged ) {
-          WindowRef myWind = NULL;
-          ::GetEventParameter(inEvent, kEventParamDirectObject, typeWindowRef, NULL, sizeof(myWind), NULL, &myWind);
           Rect bounds;
           ::InvalWindowRect(myWind, ::GetWindowPortBounds(myWind, &bounds));
           
           // resize the window and repaint
-          NS_ENSURE_TRUE(self->mMacEventHandler.get(), eventNotHandledErr);
-          if (!self->mResizeIsFromUs ) {
+          nsMacWindow* self = NS_REINTERPRET_CAST(nsMacWindow*, userData);
+          if ( self && !self->mResizeIsFromUs ) {
             self->mMacEventHandler->ResizeEvent(myWind);
-            self->Update();
+            self->mMacEventHandler->UpdateEvent();
           }
           retVal = noErr;  // We did consume the resize event
         }
@@ -923,70 +644,37 @@ nsMacWindow::WindowEventHandler ( EventHandlerCallRef inHandlerChain, EventRef i
       {
         // Ignore this event if we're an invisible window, otherwise pass along the
         // chain to ensure it's onscreen.
-        if ( self->mWindowType != eWindowType_invisible )
-          retVal = ::CallNextEventHandler(inHandlerChain, inEvent);
-        else
-          retVal = noErr;  // consume the event for the hidden window
+        nsMacWindow* self = NS_REINTERPRET_CAST(nsMacWindow*, userData);
+        if ( self ) {
+          if ( self->mWindowType != eWindowType_invisible )
+            retVal = ::CallNextEventHandler(inHandlerChain, inEvent);
+          else
+            retVal = noErr;  // consume the event for the hidden window
+        }
         break;
       }      
 
       case kEventWindowUpdate:
+      case kEventWindowDrawContent:
       {
-        self->Update();
-        retVal = noErr; // consume
+        nsMacWindow *self = NS_REINTERPRET_CAST(nsMacWindow *, userData);
+        if (self) self->mMacEventHandler->UpdateEvent();
       }
       break;
 
       // roll up popups when we're minimized
-      case kEventWindowCollapsing:
+      case kEventWindowCollapse:
       {
         if ( gRollupListener && gRollupWidget )
           gRollupListener->Rollup();        
-        self->mMacEventHandler->GetEventDispatchHandler()->DispatchGuiEvent(self, NS_DEACTIVATE);
-        ::CallNextEventHandler(inHandlerChain, inEvent);
-        retVal = noErr; // do default processing, but consume
+        retVal = ::CallNextEventHandler(inHandlerChain, inEvent);
       }
       break;
-
-      // Activate when restoring from the minimized state.  This ensures that
-      // the restored window will be able to take focus.
-      case kEventWindowExpanded:
-      {
-        self->mMacEventHandler->GetEventDispatchHandler()->DispatchGuiEvent(self, NS_ACTIVATE);
-        ::CallNextEventHandler(inHandlerChain, inEvent);
-        retVal = noErr; // do default processing, but consume
-      }
-      break;
-
-      case kEventWindowActivated:
-      {
-        // This cooperates with the sheet case in Show to avoid activating
-        // sheets prematurely.  The activate event sent by ShowSheetWindow
-        // will be ignored, but Show will set mSheetShown and send another
-        // activate event to ensure that activation occurs.
-        if (self->mWindowType != eWindowType_sheet ||
-            self->mSheetShown) {
-          self->mMacEventHandler->HandleActivateEvent(inEvent);
-        }
-        ::CallNextEventHandler(inHandlerChain, inEvent);
-        retVal = noErr; // do default processing, but consume
-      }
-      break;
-
-      case kEventWindowDeactivated:
-      {
-        self->mMacEventHandler->HandleActivateEvent(inEvent);
-        ::CallNextEventHandler(inHandlerChain, inEvent);
-        retVal = noErr; // do default processing, but consume
-      }
-      break;
-
-      case kEventWindowTransitionCompleted: {
-        self->mDeathGripDuringTransition = nsnull;
-        retVal = noErr;
+        
+      default:
+        // do nothing...
         break;
-      }
-
+    
     } // case of which event?
   }
   
@@ -994,6 +682,7 @@ nsMacWindow::WindowEventHandler ( EventHandlerCallRef inHandlerChain, EventRef i
   
 } // WindowEventHandler
 
+#endif
 
 
 //-------------------------------------------------------------------------
@@ -1015,106 +704,105 @@ NS_IMETHODIMP nsMacWindow::Create(nsNativeWidget aNativeParent,   // this is a w
 }
 
 
+//
+// InstallBorderlessDefProc
+//
+// For xul popups, we want borderless windows to match win32's borderless windows. Stash
+// our fake WDEF into this window which takes care of not-drawing the borders.
+//
+void 
+nsMacWindow :: InstallBorderlessDefProc ( WindowPtr inWindow )
+{
+#if !TARGET_CARBON
+  // stash the real WDEF so we can call it later
+  Handle systemPopupWDEF = ((WindowPeek)inWindow)->windowDefProc;
+
+  // load the stub WDEF and stash it away. If this fails, we'll just use the normal one.
+  WindowDefUPP wdef = NewWindowDefUPP( BorderlessWDEF );
+  Handle fakedDefProc;
+  DefProcFakery::CreateDefProc ( wdef, systemPopupWDEF, &fakedDefProc );
+  if ( fakedDefProc )
+    ((WindowPeek)inWindow)->windowDefProc = fakedDefProc;
+#endif
+} // InstallBorderlessDefProc
+
+
+//
+// RemoveBorderlessDefProc
+//
+// Clean up the mess we've made with our fake defproc. Reset it to
+// the system one, just in case someone needs it around after we're
+// through with it.
+//
+void
+nsMacWindow :: RemoveBorderlessDefProc ( WindowPtr inWindow )
+{
+#if !TARGET_CARBON
+  Handle fakedProc = ((WindowPeek)inWindow)->windowDefProc;
+  Handle oldProc = DefProcFakery::GetSystemDefProc(fakedProc);
+  DefProcFakery::DestroyDefProc ( fakedProc );
+  ((WindowPeek)inWindow)->windowDefProc = oldProc;
+#endif
+}
+
+
 //-------------------------------------------------------------------------
 //
 // Hide or show this window
 //
 //-------------------------------------------------------------------------
-NS_IMETHODIMP nsMacWindow::Show(PRBool aState)
+NS_IMETHODIMP nsMacWindow::Show(PRBool bState)
 {
+#if TARGET_CARBON
   // Mac OS X sheet support
   nsIWidget *parentWidget = mParent;
-  nsCOMPtr<nsPIWidgetMac_MOZILLA_1_8_BRANCH> piParentWidget ( do_QueryInterface(parentWidget) );
+  nsCOMPtr<nsPIWidgetMac> piParentWidget ( do_QueryInterface(parentWidget) );
   WindowRef parentWindowRef = (parentWidget) ?
     reinterpret_cast<WindowRef>(parentWidget->GetNativeData(NS_NATIVE_DISPLAY)) : nsnull;
+#endif
 
-  Inherited::Show(aState);
+  Inherited::Show(bState);
   
   // we need to make sure we call ::Show/HideWindow() to generate the 
   // necessary activate/deactivate events. Calling ::ShowHide() is
   // not adequate, unless we don't want activation (popups). (pinkerton).
-  if (aState && !mBounds.IsEmpty()) {
-    if (mIsSheet) {
-      if (parentWindowRef) {
+  if ( bState && !mBounds.IsEmpty() ) {
+#if TARGET_CARBON
+    if ( mIsSheet && parentWindowRef ) {
         WindowPtr top = GetWindowTop(parentWindowRef);
-        if (piParentWidget) {
-          PRBool parentIsSheet = PR_FALSE;
-          if (NS_SUCCEEDED(piParentWidget->GetIsSheet(&parentIsSheet)) &&
-              parentIsSheet) {
-            // If this sheet is the child of another sheet, hide the parent
-            // so that this sheet can be displayed.
-            // Leave the parent's mShown and mSheetNeedsShow alone, those are
-            // only used to handle sibling sheet contention.  The parent will
-            // be displayed again when it has no more child sheets.
+        if (piParentWidget)
+        {
+          piParentWidget->SetIgnoreDeactivate(PR_TRUE);
+          PRBool sheetFlag = PR_FALSE;
+          if (parentWindowRef &&
+            NS_SUCCEEDED(piParentWidget->GetIsSheet(&sheetFlag)) && (sheetFlag))
+          {
             ::GetSheetWindowParent(parentWindowRef, &top);
             ::HideSheetWindow(parentWindowRef);
-            piParentWidget->SetSheetShown(PR_FALSE);
           }
         }
-
-        nsMacWindow* sheetShown = nsnull;
-        if (NS_SUCCEEDED(piParentWidget->GetChildSheet(PR_TRUE,
-                                                       &sheetShown)) &&
-            (!sheetShown || sheetShown == this)) {
-          if (!sheetShown) {
-            // There is no sheet on the top-level window, show this one.
-
-            // Important to set these member variables first, because
-            // ShowSheetWindow may result in native event dispatch causing
-            // reentrancy into this code for this window - if mSheetNeedsShow
-            // is true, it's possible to show the same sheet twice, and that
-            // will cause tremendous problems.
-            mShown = PR_TRUE;
-            mSheetNeedsShow = PR_FALSE;
-
-            ::ShowSheetWindow(mWindowPtr, top);
-
-            // ShowSheetWindow sends an activate event, which could potentially
-            // cause the modal loop to run.  In some cases, this will occur
-            // before the sheet is actually displayed, resulting in a loop
-            // waiting for input from the user that is impossible to achieve.
-            // As a workaround, the activate event sent by ShowSheetWindow
-            // will not be handled by Gecko, and instead another activate
-            // event will be sent once the sheet is known to be displayed.
-            mSheetShown = PR_TRUE;
-            ::ActivateWindow(mWindowPtr, true);
-          }
-          UpdateWindowMenubar(parentWindowRef, PR_FALSE);
-          mMacEventHandler->GetEventDispatchHandler()->DispatchGuiEvent(this, NS_GOTFOCUS);
-          mMacEventHandler->GetEventDispatchHandler()->DispatchGuiEvent(this, NS_ACTIVATE);
-          ComeToFront();
-        }
-        else {
-          // A sibling of this sheet is active, don't show this sheet yet.
-          // When the active sheet hides, its brothers and sisters that have
-          // mSheetNeedsShow set will have their opportunities to display.
-          mSheetNeedsShow = PR_TRUE;
-        }
-      }
+        ::ShowSheetWindow(mWindowPtr, top);
+        UpdateWindowMenubar(parentWindowRef, PR_FALSE);
+        gEventDispatchHandler.DispatchGuiEvent(this, NS_GOTFOCUS);
+        gEventDispatchHandler.DispatchGuiEvent(this, NS_ACTIVATE);
     }
+    else
+#endif
+    if ( mAcceptsActivation )
+      ::ShowWindow(mWindowPtr);
     else {
-      if (mAcceptsActivation)
-        ::ShowWindow(mWindowPtr);
-      else {
-        ::ShowHide(mWindowPtr, true);
-        // competes with ComeToFront, but makes popups work
-        ::BringToFront(mWindowPtr);
-      }
-      ComeToFront();
-      mShown = PR_TRUE;
+      ::ShowHide(mWindowPtr, true);
+      ::BringToFront(mWindowPtr); // competes with ComeToFront, but makes popups work
     }
-
     if (mZoomOnShow) {
       SetSizeMode(nsSizeMode_Maximized);
       mZoomOnShow = PR_FALSE;
     }
-
-    if (::IsWindowCollapsed(mWindowPtr))
-      ::CollapseWindow(mWindowPtr, false);
+    ComeToFront();
   }
   else {
-    // when a toplevel window goes away, make sure we rollup any popups that
-    // may be lurking. We want to catch this here because we're guaranteed that
+    // when a toplevel window goes away, make sure we rollup any popups that may 
+    // be lurking. We want to catch this here because we're guaranteed that
     // we hide a window before we destroy it, and doing it here more closely
     // approximates where we do the same thing on windows.
     if ( mWindowType == eWindowType_toplevel ) {
@@ -1123,132 +811,56 @@ NS_IMETHODIMP nsMacWindow::Show(PRBool aState)
       NS_IF_RELEASE(gRollupListener);
       NS_IF_RELEASE(gRollupWidget);
     }
-
+#if TARGET_CARBON
     // Mac OS X sheet support
     if (mIsSheet) {
-      if (mShown) {
-        // Set mShown here because a sibling sheet may want to be activated,
-        // and mShown needs to be false in order for sibling sheets to display.
-        mShown = PR_FALSE;
+      if (piParentWidget)
+        piParentWidget->SetIgnoreDeactivate(PR_FALSE);
 
-        // get sheet's parent *before* hiding the sheet (which breaks the
-        // linkage)
-        WindowPtr sheetParent = nsnull;
-        ::GetSheetWindowParent(mWindowPtr, &sheetParent);
+      // get sheet's parent *before* hiding the sheet (which breaks the linkage)
+      WindowPtr sheetParent = nsnull;
+      ::GetSheetWindowParent(mWindowPtr, &sheetParent);
 
-        ::HideSheetWindow(mWindowPtr);
-        mSheetShown = PR_FALSE;
+      ::HideSheetWindow(mWindowPtr);
 
-        mMacEventHandler->GetEventDispatchHandler()->DispatchGuiEvent(this, NS_DEACTIVATE);
+      gEventDispatchHandler.DispatchGuiEvent(this, NS_DEACTIVATE);
 
-        WindowPtr top = GetWindowTop(parentWindowRef);
-        nsMacWindow* siblingSheetToShow = nsnull;
-        PRBool parentIsSheet = PR_FALSE;
+      // if we had several sheets open, when the last one goes away
+      // we need to ensure that the top app window is active
+      WindowPtr top = GetWindowTop(parentWindowRef);
+      piParentWidget = do_QueryInterface(parentWidget);
 
-        if (parentWindowRef && piParentWidget &&
-            NS_SUCCEEDED(piParentWidget->GetChildSheet(PR_FALSE, 
-                                                       &siblingSheetToShow)) &&
-            siblingSheetToShow) {
-          // First, give sibling sheets an opportunity to show.
-          siblingSheetToShow->Show(PR_TRUE);
-        }
-        else if (parentWindowRef && piParentWidget &&
-                 NS_SUCCEEDED(piParentWidget->GetIsSheet(&parentIsSheet)) &&
-                 parentIsSheet) {
-          // If there are no sibling sheets, but the parent is a sheet, restore
-          // it.  It wasn't sent any deactivate events when it was hidden, so
-          // don't call through Show, just let the OS put it back up.
-          ::ShowSheetWindow(parentWindowRef, sheetParent);
-
-          // See the other ShowSheetWindow call above for an explanation of
-          // why this is done.
-          piParentWidget->SetSheetShown(PR_TRUE);
-          ::ActivateWindow(parentWindowRef, true);
-        }
-        else {
-          // Sheet, that was hard.  No more siblings or parents, going back
-          // to a real window.
-
-          // if we had several sheets open, when the last one goes away
-          // we need to ensure that the top app window is active
-          if (mAcceptsActivation)
-            ::ShowWindow(top);
-          else {
-            ::ShowHide(top, true);
-            // competes with ComeToFront, but makes popups work
-            ::BringToFront(top);
-          }
-        }
-        ComeToFront();
-
-        if (top == parentWindowRef)
-          UpdateWindowMenubar(parentWindowRef, PR_TRUE);
+      PRBool sheetFlag = PR_FALSE;
+      if (parentWindowRef && piParentWidget &&
+        NS_SUCCEEDED(piParentWidget->GetIsSheet(&sheetFlag)) && (sheetFlag))
+      {
+        nsCOMPtr<nsIWidget> parentWidget;
+        nsToolkit::GetTopWidget(sheetParent, getter_AddRefs(parentWidget));
+        piParentWidget = do_QueryInterface(parentWidget);
+        if (piParentWidget)
+          piParentWidget->SetIgnoreDeactivate(PR_TRUE);
+        ::ShowSheetWindow(parentWindowRef, sheetParent);
       }
-      else if (mSheetNeedsShow) {
-        // This is an attempt to hide a sheet that never had a chance to
-        // be shown.  There's nothing to do other than make sure that it
-        // won't show.
-        mSheetNeedsShow = PR_FALSE;
+      else if ( mAcceptsActivation ) {
+        ::ShowWindow(top);
+      }
+      else {
+        ::ShowHide(top, true);
+        ::BringToFront(top); // competes with ComeToFront, but makes popups work
+      }
+      ComeToFront();
+
+      if (top == parentWindowRef) {
+        UpdateWindowMenubar(parentWindowRef, PR_TRUE);
       }
     }
-    else {
-      if (mWindowPtr) {
-#ifndef MOZ_SUNBIRD
-// XXX bug 348146 - Hiding and showing the popup rapidly screws up
-//                  Sunbird's datepicker as the hide isn't finished
-//                  before we try to show. We need to fix this.
-//
-        static TransitionWindowWithOptions_type transitionFunc;
-        if (mWindowType == eWindowType_popup) {
-          // Popups will hide by fading out with TransitionWindowWithOptions,
-          // if available.  It's present in 10.3 and later.  If that SDK or
-          // newer is used, just grab the address of the function, otherwise,
-          // dynamically look it up at runtime.  Fall back to calling
-          // HideWindow if TransitionWindowWithOptions isn't available.
-          static PRBool sChecked;
-          if (!sChecked) {
-            sChecked = PR_TRUE;
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_3
-            transitionFunc = ::TransitionWindowWithOptions;
-#else
-            CFBundleRef carbonBundle =
-             ::CFBundleGetBundleWithIdentifier(CFSTR("com.apple.Carbon"));
-            if (carbonBundle) {
-              transitionFunc = (TransitionWindowWithOptions_type)
-               ::CFBundleGetFunctionPointerForName(carbonBundle,
-                                         CFSTR("TransitionWindowWithOptions"));
-            }
+    else
 #endif
-          }
-        }
-        // Bug 345388: hiding windows using the async
-        // TransitionWindowWithOptions causes memory corruption on 10.3, even
-        // though the API is supported there.  Only fade these windows out on
-        // 10.4 or later, which are able to handle it without corruption or
-        // crashing.
-        if (mWindowType == eWindowType_popup && transitionFunc
-#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_4
-            && nsToolkit::OSXVersion() >= MAC_OS_X_VERSION_10_4_HEX
-#endif
-           ) {
-          mDeathGripDuringTransition = this;
-          TransitionWindowOptions transitionOptions = { version  : 0,
-                                                        duration : 0.2,
-                                                        window   : nsnull,
-                                                        userData : nsnull };
-          transitionFunc(mWindowPtr, kWindowFadeTransitionEffect,
-                         kWindowHideTransitionAction, nsnull,
-                         PR_TRUE, &transitionOptions);
-        }
-        else
-#endif // ifndef MOZ_SUNBIRD
-          ::HideWindow(mWindowPtr);
+      if ( mWindowPtr ) {
+        ::HideWindow(mWindowPtr);
       }
-      mShown = PR_FALSE;
     }
-  }
-
-  return NS_OK;
+    return NS_OK;
 }
 
 
@@ -1435,25 +1047,42 @@ NS_IMETHODIMP nsMacWindow::Move(PRInt32 aX, PRInt32 aY)
   StPortSetter setOurPortForLocalToGlobal ( mWindowPtr );
   
   if (eWindowType_popup == mWindowType) {
-    // there is a bug on OSX where if we call ::MoveWindow() with the same
-    // coordinates (within a pixel or two) as a window's current location, it will 
-    // move to (0,0,-1,-1). The fix is to not move the window if we're already
-    // there. (radar# 2669004)
+    nsRect  localRect,globalRect;
 
-    const PRInt32 kMoveThreshold = 2;
-    Rect currBounds;
-    ::GetWindowBounds ( mWindowPtr, kWindowGlobalPortRgn, &currBounds );
-    if ( abs(currBounds.left-aX) > kMoveThreshold || abs(currBounds.top-aY) > kMoveThreshold ) {
-      ::MoveWindow(mWindowPtr, aX, aY, false);
+    // convert to screen coordinates
+    localRect.x = aX;
+    localRect.y = aY;
+    localRect.width = 100;
+    localRect.height = 100; 
+
+    if ( mOffsetParent ) {
+      mOffsetParent->WidgetToScreen(localRect,globalRect);
+      aX=globalRect.x;
+      aY=globalRect.y;
       
-      // update userstate to match, if appropriate
-      PRInt32 sizeMode;
-      nsBaseWidget::GetSizeMode ( &sizeMode );
-      if ( sizeMode == nsSizeMode_Normal ) {
-        ::GetWindowBounds ( mWindowPtr, kWindowGlobalPortRgn, &currBounds );
-        ::SetWindowUserState ( mWindowPtr, &currBounds );
+      // there is a bug on OSX where if we call ::MoveWindow() with the same
+      // coordinates (within a pixel or two) as a window's current location, it will 
+      // move to (0,0,-1,-1). The fix is to not move the window if we're already
+      // there. (radar# 2669004)
+#if TARGET_CARBON
+      const PRInt32 kMoveThreshold = 2;
+#else
+      const PRInt32 kMoveThreshold = 0;
+#endif
+      Rect currBounds;
+      ::GetWindowBounds ( mWindowPtr, kWindowGlobalPortRgn, &currBounds );
+      if ( abs(currBounds.left-aX) > kMoveThreshold || abs(currBounds.top-aY) > kMoveThreshold ) {
+        ::MoveWindow(mWindowPtr, aX, aY, false);
+        
+        // update userstate to match, if appropriate
+        PRInt32 sizeMode;
+        nsBaseWidget::GetSizeMode ( &sizeMode );
+        if ( sizeMode == nsSizeMode_Normal ) {
+          ::GetWindowBounds ( mWindowPtr, kWindowGlobalPortRgn, &currBounds );
+          ::SetWindowUserState ( mWindowPtr, &currBounds );
+        }  
       }  
-    }  
+    }
 
     return NS_OK;
   } else if (mWindowMadeHere) {
@@ -1492,11 +1121,8 @@ NS_IMETHODIMP nsMacWindow::Move(PRInt32 aX, PRInt32 aY)
       // update userstate to match, if appropriate
       PRInt32 sizeMode;
       GetSizeMode(&sizeMode);
-      if (sizeMode == nsSizeMode_Normal) {
-        Rect newBounds;
-        ::GetWindowBounds(mWindowPtr, kWindowGlobalPortRgn, &newBounds);
-        ::SetWindowUserState(mWindowPtr, &newBounds);
-      }
+      if (sizeMode == nsSizeMode_Normal)
+        ::SetWindowUserState(mWindowPtr, &portBounds);
     }
 
     // propagate the event in global coordinates
@@ -1535,7 +1161,7 @@ NS_METHOD nsMacWindow::PlaceBehind(nsTopLevelWidgetZPlacement aPlacement,
 //-------------------------------------------------------------------------
 NS_METHOD nsMacWindow::SetSizeMode(PRInt32 aMode)
 {
-  nsresult rv = NS_OK;
+  nsresult rv;
 
   // resize during zoom may attempt to unzoom us. here's where we put a stop to that.
   if (mZooming)
@@ -1552,30 +1178,23 @@ NS_METHOD nsMacWindow::SetSizeMode(PRInt32 aMode)
        to avoid flashing. here's where we defeat that. */
     mZoomOnShow = aMode == nsSizeMode_Maximized;
   } else {
-    PRInt32 previousMode;
+    Rect macRect;
     mZooming = PR_TRUE;
-
-    nsBaseWidget::GetSizeMode(&previousMode);
     rv = nsBaseWidget::SetSizeMode(aMode);
     if (NS_SUCCEEDED(rv)) {
-      if (aMode == nsSizeMode_Minimized) {
+      if (aMode == nsSizeMode_Minimized)
         ::CollapseWindow(mWindowPtr, true);
-      } else {
+      else
+      {
         if (aMode == nsSizeMode_Maximized) {
           CalculateAndSetZoomedSize();
           ::ZoomWindow(mWindowPtr, inZoomOut, ::FrontWindow() == mWindowPtr);
-        } else {
-          // Only zoom in if the previous state was Maximized
-          if (previousMode == nsSizeMode_Maximized)
-            ::ZoomWindow(mWindowPtr, inZoomIn, ::FrontWindow() == mWindowPtr);
-        }
-
-        Rect macRect;
+        } else if (aMode == nsSizeMode_Normal)
+          ::ZoomWindow(mWindowPtr, inZoomIn, ::FrontWindow() == mWindowPtr);
         ::GetWindowPortBounds(mWindowPtr, &macRect);
         Resize(macRect.right - macRect.left, macRect.bottom - macRect.top, PR_FALSE);
       }
     }
-
     mZooming = PR_FALSE;
   }
 
@@ -1716,13 +1335,15 @@ nsMacWindow::GetMenuBar(nsIMenuBar **_retval)
 NS_IMETHODIMP
 nsMacWindow::GetIgnoreDeactivate(PRBool *_retval)
 {
-  return NS_ERROR_NOT_IMPLEMENTED;
+  *_retval = mIgnoreDeactivate;
+  return(NS_OK);
 }
 
 NS_IMETHODIMP
 nsMacWindow::SetIgnoreDeactivate(PRBool ignoreDeactivate)
 {
-  return NS_ERROR_NOT_IMPLEMENTED;
+  mIgnoreDeactivate = ignoreDeactivate;
+  return(NS_OK);
 }
 
 NS_IMETHODIMP
@@ -1778,168 +1399,55 @@ void nsMacWindow::MoveToGlobalPoint(PRInt32 aX, PRInt32 aY)
 //-------------------------------------------------------------------------
 NS_IMETHODIMP nsMacWindow::Resize(PRInt32 aWidth, PRInt32 aHeight, PRBool aRepaint)
 {
-  return Resize(aWidth, aHeight, aRepaint, PR_FALSE); // resize not from UI
-}
-
-nsresult nsMacWindow::Resize(PRInt32 aWidth, PRInt32 aHeight, PRBool aRepaint, PRBool aFromUI)
-{
   if (mWindowMadeHere) {
-#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_3
-    if (mInUpdate && nsToolkit::OSXVersion() < MAC_OS_X_VERSION_10_3_HEX) {
-      // Calling SizeWindow in the middle of an update will hang on 10.2,
-      // even if care is taken to break out of the update with EndUpdate.
-      // On 10.2, defer the resize until the update is done.  Update will
-      // call back into Resize with these values after the update is
-      // finished.
-      mResizeTo.width = aWidth;
-      mResizeTo.height = aHeight;
-      mResizeTo.repaint = aRepaint;
-      mResizeTo.fromUI = aFromUI;
+      // Sanity check against screen size
+      Rect screenRect;
+    ::GetRegionBounds(::GetGrayRgn(), &screenRect);
 
-      mNeedsResize = PR_TRUE;
-
-      return NS_OK;
-    }
-#endif
-
-    Rect windowRect;
-    if (::GetWindowBounds(mWindowPtr, kWindowContentRgn, &windowRect)
-        != noErr) {
-      NS_ERROR("::GetWindowBounds() didn't get window bounds");
-      return NS_ERROR_FAILURE;
-    }
-
-    if (!aFromUI) {
-      // If the resize came from the UI, trust the system's constraints.
-      // If it came from the application, make sure it's rational.
-      // @@@mm the ultimate goal is to separate UI, chrome, and content,
-      // and enforce different restrictions in each case.
-      Rect desktopRect;
-      if (NS_FAILED(GetDesktopRect(&desktopRect))) {
-        return NS_ERROR_FAILURE;
-      }
-
-#if 1
-      // Use the desktop's dimensions as the maximum size without taking
-      // the window's position into account.  This is the code that will
-      // eventually be used as a sanity check on chrome callers, which are
-      // trusted to be able to resize windows to arbitrary sizes regardless
-      // of their position on screen.  Since chrome and content can't be
-      // separated here yet, use this less restrictive approach for both,
-      // otherwise chrome would break.
-      //
-      // The maximum window dimensions are the desktop area, but if the
-      // window is already larger than the desktop, don't force it to
-      // shrink.  This doesn't take the window's origin into account,
-      // but the window won't be able to expand so that it can't be
-      // displayed entirely onscreen without being obscured by the dock
-      // (unless the user already made it larger with UI resizing.)
-      // Use mBoundsOffset to account for the difference between window
-      // structure and content (like the title bar).
-      short maxWidth  = PR_MAX(desktopRect.right  - desktopRect.left -
-                                 mBoundsOffset.h,
-                               windowRect.right   - windowRect.left);
-      short maxHeight = PR_MAX(desktopRect.bottom - desktopRect.top  -
-                                 mBoundsOffset.v,
-                               windowRect.bottom  - windowRect.top);
-#else
-      // This will eventually become the branch that is used for resizes
-      // that come from content.  It's fairly restrictive and takes the
-      // window's current position into account.
-      //
-      // Consider the window's position when computing the maximum size.
-      // The goal is to use this on resizes that come from content, but
-      // it's currently not possible to distinguish between resizes that
-      // come from chrome and content.
-      //
-      // Use PR_MAX to pick the greatest (top,left) point.  If the window's
-      // left edge is to the right of the desktop's left edge, the maximum
-      // width needs to be smaller than the width of the desktop to avoid
-      // resizing the window past the desktop during this operation.  If
-      // the window's left edge is left of the desktop's left edge (offscreen),
-      // use the desktop's left edge to ensure that the window, if moved,
-      // will fit on the desktop.  The max of the desktop and window right
-      // edges are used so that windows already offscreen aren't forced to
-      // shrink during a resize.
-      short maxWidth = PR_MAX(desktopRect.right, windowRect.right) -
-                       PR_MAX(desktopRect.left, windowRect.left);
-
-      // There shouldn't be any way for the window top to be above the desktop
-      // top, but paranoia dictates that the same check should be done for
-      // height as width.
-      short maxHeight = PR_MAX(desktopRect.bottom, windowRect.bottom) -
-                        PR_MAX(desktopRect.top, windowRect.top);
-#endif
-
-      aWidth = PR_MIN(aWidth, maxWidth);
-      aHeight = PR_MIN(aHeight, maxHeight);
-    } // !aFromUI
-
-    short currentWidth = windowRect.right - windowRect.left;
-    short currentHeight = windowRect.bottom - windowRect.top;
-
-    if (currentWidth != aWidth || currentHeight != aHeight) {
-      if (aWidth != 0 && aHeight != 0) {
-        // make sure that we don't infinitely recurse if live-resize is on
-        mResizeIsFromUs = PR_TRUE;
+      // Need to use non-negative coordinates
+      PRInt32 screenWidth;
+      if(screenRect.left < 0)
+        screenWidth = screenRect.right - screenRect.left;
+      else
+        screenWidth = screenRect.right;
         
-        // If we're in the middle of a BeginUpdate/EndUpdate pair, SizeWindow
-        // causes bad painting thereafter, because the EndUpdate restores a stale
-        // visRgn on the window. So we have to temporarily break out of the
-        // BeginUpdate/EndUpdate state.
-        StRegionFromPool savedUpdateRgn;
-        PRBool wasInUpdate = mInUpdate;
-        if (mInUpdate)
-        {
-          // Get the visRgn (which, if we're inside BeginUpdate/EndUpdate,
-          // is the intersection of the window visible region, and the
-          // update region).
-          ::GetPortVisibleRegion(::GetWindowPort(mWindowPtr), savedUpdateRgn);
-          ::EndUpdate(mWindowPtr);
-        }
+      PRInt32 screenHeight;
+      if(screenRect.top < 0)
+        screenHeight = screenRect.bottom - screenRect.top;
+      else
+        screenHeight = screenRect.bottom;
           
-        ::SizeWindow(mWindowPtr, aWidth, aHeight, aRepaint);
+      if(aHeight > screenHeight)
+        aHeight = screenHeight;
+        
+      if(aWidth > screenWidth)
+        aWidth = screenWidth;      
+    
+    Rect macRect;
+    ::GetWindowPortBounds ( mWindowPtr, &macRect );
 
-        if (wasInUpdate)
-        {
-          // restore the update region (note that is redundant
-          // if aRepaint is true, because the SizeWindow will cause a full-window
-          // invalidate anyway).
-          ::InvalWindowRgn(mWindowPtr, savedUpdateRgn);
-          ::BeginUpdate(mWindowPtr);
-        }
+    short w = macRect.right - macRect.left;
+    short h = macRect.bottom - macRect.top;
 
-        // update userstate to match, if appropriate
-        PRInt32 sizeMode;
-        GetSizeMode(&sizeMode);
-        if (sizeMode == nsSizeMode_Normal) {
-          Rect portBounds;
-          ::GetWindowBounds(mWindowPtr, kWindowGlobalPortRgn, &portBounds);
-          ::SetWindowUserState(mWindowPtr, &portBounds);
-        }
+    if ((w != aWidth) || (h != aHeight))
+    {
+      // make sure that we don't infinitely recurse if live-resize is on
+      mResizeIsFromUs = PR_TRUE;
+      ::SizeWindow(mWindowPtr, aWidth, aHeight, aRepaint);
 
-        mResizeIsFromUs = PR_FALSE;
-      } else {
-        // If width or height are zero, then ::SizeWindow() has no effect. So
-        // instead we just hide the window by calling Show(false), which sets
-        // mVisible to false. But the window is still considered to be 'visible'
-        // so we set that back to true.
-        if (mVisible) {
-          Show(PR_FALSE);
-          mVisible = PR_TRUE;
-        }
+      // update userstate to match, if appropriate
+      PRInt32 sizeMode;
+      GetSizeMode(&sizeMode);
+      if (sizeMode == nsSizeMode_Normal) {
+        Rect portBounds;
+        ::GetWindowBounds(mWindowPtr, kWindowGlobalPortRgn, &portBounds);
+        ::SetWindowUserState(mWindowPtr, &portBounds);
       }
+
+      mResizeIsFromUs = PR_FALSE;
     }
-  } // mWindowMadeHere
+  }
   Inherited::Resize(aWidth, aHeight, aRepaint);
-
-  // Make window visible.  Show() will not make a window visible if mBounds are
-  // still empty.  So when resizing a window, we check if it is supposed to be
-  // visible but has yet to be made so.  This needs to be called after
-  // Inherited::Resize(), since that function sets mBounds.
-  if (aWidth != 0 && aHeight != 0 && mVisible && !mShown)
-    Show(PR_TRUE);
-
   return NS_OK;
 }
 
@@ -1987,16 +1495,20 @@ PRBool nsMacWindow::OnPaint(nsPaintEvent &event)
 // Set this window's title
 //
 //-------------------------------------------------------------------------
-NS_IMETHODIMP nsMacWindow::SetTitle(const nsAString& aTitle)
+NS_IMETHODIMP nsMacWindow::SetTitle(const nsString& aTitle)
 {
-  nsAString::const_iterator begin;
-  const PRUnichar *strTitle = aTitle.BeginReading(begin).get();
-  CFStringRef labelRef = ::CFStringCreateWithCharacters(kCFAllocatorDefault, (UniChar*)strTitle, aTitle.Length());
-  if (labelRef) {
+  // Try to use the unicode friendly CFString version first
+  CFStringRef labelRef = ::CFStringCreateWithCharacters(kCFAllocatorDefault, (UniChar*)aTitle.get(), aTitle.Length());
+  if(labelRef) {
     ::SetWindowTitleWithCFString(mWindowPtr, labelRef);
     ::CFRelease(labelRef);
+    return NS_OK;
   }
 
+  Str255 title;
+  // unicode to file system charset
+  nsMacControl::StringToStr255(aTitle, title);
+  ::SetWTitle(mWindowPtr, title);
   return NS_OK;
 }
 
@@ -2031,7 +1543,15 @@ nsMacWindow::HandleUpdateActiveInputAreaForNonUnicode(const nsACString & text,
                                                       PRInt32 fixLen, void * hiliteRng, 
                                                       OSStatus *_retval)
 {
-  return NS_ERROR_NOT_IMPLEMENTED;
+  *_retval = eventNotHandledErr;
+  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
+  const nsPromiseFlatCString& buffer = PromiseFlatCString(text);
+  // ignore langauge information for now. 
+  nsresult res = mMacEventHandler->HandleUpdateInputArea(buffer.get(), buffer.Length(), script, fixLen, (TextRangeArray*) hiliteRng);
+  // we will lost the real OSStatus for now untill we change the nsMacEventHandler
+  if (NS_SUCCEEDED(res))
+    *_retval = noErr;
+  return res;
 }
 
 /* OSStatus HandleUnicodeForKeyEvent (in wstring text, in long textLength, in short script, in short language, in voidPtr keyboardEvent); */
@@ -2107,24 +1627,8 @@ NS_IMETHODIMP
 nsMacWindow::DispatchEvent ( void* anEvent, PRBool *_retval )
 {
   *_retval = PR_FALSE;
-
-  // This method is presently only used for mouse events, which are sent into
-  // into nsMacEventHandler::HandleOSEvent.  Mouse events can't be sent to
-  // windows that aren't shown, but in some cases, we'll see them anyway.  This
-  // can happen when a pop-up window is logically hidden but is physically in
-  // the process of fading out.
-  //
-  // If a pop-up is fading out because its parent widget hierarchy has
-  // disappeared (such as when its parent window is closed), then the pop-up
-  // will be destroyed as soon as it has faded out, and some of the objects
-  // in the pop-up, including the event handler, will be invalid.  To avoid
-  // definite crashes, filter out these events that logically should not
-  // even exist.
-  if (!mShown)
-    return NS_OK;
-
-  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
-  *_retval = mMacEventHandler->HandleOSEvent(*NS_REINTERPRET_CAST(EventRecord*,anEvent));
+  if (mMacEventHandler.get())
+    *_retval = mMacEventHandler->HandleOSEvent(*NS_REINTERPRET_CAST(EventRecord*,anEvent));
 
   return NS_OK;
 }
@@ -2140,8 +1644,8 @@ nsMacWindow::DispatchMenuEvent ( void* anEvent, PRInt32 aNativeResult, PRBool *_
 {
 #if USE_MENUSELECT
   *_retval = PR_FALSE;
-  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
-  *_retval = mMacEventHandler->HandleMenuCommand(*NS_REINTERPRET_CAST(EventRecord*,anEvent), aNativeResult);
+  if (mMacEventHandler.get())
+    *_retval = mMacEventHandler->HandleMenuCommand(*NS_REINTERPRET_CAST(EventRecord*,anEvent), aNativeResult);
 #endif
 
   return NS_OK;
@@ -2162,9 +1666,9 @@ nsMacWindow::DragEvent(PRUint32 aMessage, PRInt16 aMouseGlobalX, PRInt16 aMouseG
                          PRUint16 aKeyModifiers, PRBool *_retval)
 {
   *_retval = PR_FALSE;
-  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
   Point globalPoint = {aMouseGlobalY, aMouseGlobalX};         // QD Point stored as v, h
-  *_retval = mMacEventHandler->DragEvent(aMessage, globalPoint, aKeyModifiers);
+  if (mMacEventHandler.get())
+    *_retval = mMacEventHandler->DragEvent(aMessage, globalPoint, aKeyModifiers);
   
   return NS_OK;
 }
@@ -2182,11 +1686,10 @@ nsMacWindow::Scroll ( PRBool aVertical, PRInt16 aNumLines, PRInt16 aMouseLocalX,
                         PRInt16 aMouseLocalY, PRBool *_retval )
 {
   *_retval = PR_FALSE;
-  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
   Point localPoint = {aMouseLocalY, aMouseLocalX};
-  *_retval = mMacEventHandler->Scroll(aVertical ? aNumLines : 0,
-                                      aVertical ? 0 : aNumLines,
-                                      PR_FALSE, localPoint, this, 0);
+  if ( mMacEventHandler.get() )
+    *_retval = mMacEventHandler->Scroll(aVertical ? kEventMouseWheelAxisY : kEventMouseWheelAxisX,
+                                          aNumLines, localPoint);
   return NS_OK;
 }
 
@@ -2210,7 +1713,7 @@ nsMacWindow::Idle()
 NS_IMETHODIMP
 nsMacWindow::ComeToFront()
 {
-  nsZLevelEvent event(PR_TRUE, NS_SETZLEVEL, this);
+  nsZLevelEvent  event(NS_SETZLEVEL, this);
 
   event.point.x = mBounds.x;
   event.point.y = mBounds.y;
@@ -2226,7 +1729,6 @@ nsMacWindow::ComeToFront()
 
 NS_IMETHODIMP nsMacWindow::ResetInputState()
 {
-  NS_ENSURE_TRUE(mMacEventHandler.get(), NS_ERROR_FAILURE);
   return mMacEventHandler->ResetInputState();
 }
 
@@ -2240,302 +1742,63 @@ void nsMacWindow::IsActive(PRBool* aActive)
   *aActive = mIsActive;
 }
 
-//
-// GetDesktopRect
-//
-// Determines a suitable desktop size for this window.  The desktop
-// size can be used to restrict resizes and moves.
-//
-// If a window already lies on a single screen (possibly with portions
-// beyond the visible desktop shown on any screen), then the containing
-// screen's bounds are the limiting factor.  If a window lies on multiple
-// multiple screens (or the resize comes from the UI as opposed to a
-// script), the rect encompassing all screens is the maximum limit.
-// That rect (screen size or desktop size) will be put into
-// desktopRect.  If the menu bar is at the top edge of desktopRect, or
-// the dock is at any other edge of desktopRect, they will be clipped out
-// of desktopRect, because scripted resizes should not be able to make
-// windows that don't fit in the visible area.
-typedef enum {
-  kDockOrientationNone       = 0,
-  kDockOrientationHorizontal = 1,
-  kDockOrientationVertical   = 2
-} nsMacDockOrientation;
 
-nsresult nsMacWindow::GetDesktopRect(Rect* desktopRect)
+#if !TARGET_CARBON
+
+// needed for CallWindowDefProc() to work correctly
+#pragma options align=mac68k
+
+
+//
+// BorderlessWDEF
+//
+// The window defproc for borderless windows. 
+//
+// NOTE: Assumes the window was created with a variant of |plainDBox| so our
+// content/structure adjustments work correctly.
+// 
+pascal long
+BorderlessWDEF ( short inCode, WindowPtr inWindow, short inMessage, long inParam )
 {
-  // This is how to figure out where the dock and menu bar are, in global
-  // coordinates, when there seems to be no way to get that information
-  // directly from the system.  Compare the real dimensions of each screen
-  // with the dimensions of the screen less the space used for the dock (as
-  // given by GetAvailableWindowPositioningBounds) and apply deductive
-  // reasoning.  While doing that, it's a convenient time to add each
-  // screen's full rect to the union in desktopRect.
-
-  ::SetRect(desktopRect, 0, 0, 0, 0);
-  Rect menuBarRect = {0, 0, 0, 0};
-  Rect dockRect = {0, 0, 0, 0};
-
-  Rect windowRect;
-  if (::GetWindowBounds(mWindowPtr, kWindowStructureRgn, &windowRect)
-      != noErr) {
-    NS_ERROR("::GetWindowBounds() didn't get window bounds");
-    return NS_ERROR_FAILURE;
+  switch ( inMessage ) {
+    case kWindowMsgDraw:
+    case kWindowMsgDrawGrowOutline:
+    case kWindowMsgGetFeatures:
+      break;
+      
+    default:
+      return CallSystemWDEF(inCode, inWindow, inMessage, inParam);
+      break;
   }
 
-  Rect tempRect; // for various short-lived purposes, such as holding
-                 // unimportant overlap areas in ::SectRect calls
-
-  PRUint32 windowOnScreens = 0; // number of screens containing window
-  Rect windowOnScreenRect = {0, 0, 0, 0}; // only valid if windowOnScreens==1
-  GDHandle screen = ::DMGetFirstScreenDevice(TRUE);
-  nsMacDockOrientation dockOrientation = kDockOrientationNone;
-  while (screen != NULL) {
-    Rect screenRect = (*screen)->gdRect;
-    if (::EmptyRect(&screenRect)) {
-      NS_WARNING("Couldn't determine screen dimensions");
-      continue;
-    }
-
-    ::UnionRect(desktopRect, &screenRect, desktopRect);
-
-    if (::SectRect(&screenRect, &windowRect, &tempRect)) {
-      // The window is at least partially on this screen.  Set
-      // windowOnScreenRect to the bounds of this screen.
-      // If, after checking any other screens, the window is only on one
-      // screen, then windowOnScreenRect will be used as the bounds,
-      // limiting the window to the screen that contains it.
-      windowOnScreens++;
-      windowOnScreenRect = screenRect;
-    }
-
-    // GetAvailableWindowPositioningBounds clips out the menu bar
-    // and the dock.  Since the menu bar is clipped from the top,
-    // and the dock can't be at the top, this suffices.
-    Rect availableRect;
-    if (::GetAvailableWindowPositioningBounds(screen, &availableRect)
-        != noErr) {
-      NS_ERROR("::GetAvailableWindowPositioningBounds couldn't determine" \
-               "available screen dimensions");
-      return NS_ERROR_FAILURE;
-    }
-
-    // The menu bar is at the top of the primary display.  Its bounds
-    // could be retrieved by looking at the main display outside of the
-    // screen iterator loop.
-    if (availableRect.top > screenRect.top) {
-      ::SetRect(&menuBarRect, screenRect.left, screenRect.top,
-                              screenRect.right, availableRect.top);
-    }
-
-    // The dock, if it's not hidden, will be at the bottom, right,
-    // or left edge of a screen.  Look for it on this screen.  If
-    // it's found, set up dockRect to extend from the extremity of
-    // availableRect to the extremity of screenRect.
-    //
-    // It seems that even if the dock is hidden, the system reserves
-    // 4px at the screen edge for it.
-    if (availableRect.bottom < screenRect.bottom) {
-      // Dock on bottom
-      ::SetRect(&dockRect, availableRect.left, availableRect.bottom,
-                           availableRect.right, screenRect.bottom);
-      dockOrientation = kDockOrientationHorizontal;
-    }
-    else if (availableRect.right < screenRect.right) {
-      // Dock on right
-      ::SetRect(&dockRect, availableRect.right, availableRect.top,
-                           screenRect.right, availableRect.bottom);
-      dockOrientation = kDockOrientationVertical;
-    }
-    else if (availableRect.left > screenRect.left) {
-      // Dock on left
-      ::SetRect(&dockRect, screenRect.left, availableRect.top,
-                           availableRect.left, availableRect.bottom);
-      dockOrientation = kDockOrientationVertical;
-    }
-
-    screen = ::DMGetNextScreenDevice(screen, TRUE);
-  }
-
-  if (windowOnScreens == 1) {
-    // The window is contained entirely on a single screen.  It may actually
-    // be partly offscreen, the key is that no part of the window is on a
-    // screen other than the one with screen bounds in windowOnScreenRect.
-    // Use that screen's bounds.
-    //
-    // It's tempting to save the screen's available positioning bounds and
-    // return early here, but we still need to check to see if the window is
-    // under the dock already, and permit it to remain there if so.
-    //
-    // Keep in mind that if the resize came from the UI as opposed to a
-    // script, the window's dimensions will already appear to exceed the
-    // screen it had formerly been contained within if the user has resized
-    // it to cover multiple screens.  In other words, this won't constrain
-    // UI resizes to a single screen.  That's perfect, because we only
-    // want to police script resizing.
-    *desktopRect = windowOnScreenRect;
-  }
-
-  if (::EmptyRect(desktopRect)) {
-    NS_ERROR("Couldn't determine desktop dimensions\n");
-    return NS_ERROR_FAILURE;
-  }
-
-  // *desktopRect is now the smallest rectangle enclosing all of
-  // the screens, or if the window is on a single screen, the rectangle
-  // corresponding to the screen itself, without any areas clipped out for
-  // the menu bar or dock.
-
-  // Clip where appropriate.
-
-  if (::SectRect(desktopRect, &menuBarRect, &tempRect) &&
-      menuBarRect.top == desktopRect->top) {
-    // The menu bar is in the desktop rect at the very top.  Adjust the
-    // top of the desktop to clip out the menu bar.
-    // menuBarRect.bottom is the height of the menu bar because
-    // menuBarRect.top is 0, so there's no need to subtract top
-    // from bottom.  When using multiple monitors, the menu bar
-    // might not be at the desktop top - in that case, don't clip it.
-    desktopRect->top += menuBarRect.bottom;
-  }
-
-  if (dockOrientation != kDockOrientationNone &&
-      ::SectRect(desktopRect, &dockRect, &tempRect)) {
-    // There's a dock and it's somewhere in the desktop rect.
-
-    // Determine the orientation of the dock before checking to see if
-    // it's on an edge, so that the proper edge can be clipped.  If
-    // the dock is on an edge corresponding to its orientation, clip
-    // the dock out of the available desktop.
-    switch (dockOrientation) {
-      case kDockOrientationVertical:
-        // The dock is oriented vertically, so check the left and right
-        // edges.
-        if (dockRect.left == desktopRect->left) {
-          desktopRect->left += dockRect.right - dockRect.left;
-        }
-        else if (dockRect.right == desktopRect->right) {
-          desktopRect->right -= dockRect.right - dockRect.left;
-        }
-        break;
-
-      case kDockOrientationHorizontal:
-        // The dock is oriented horizontally, so check the bottom edge.
-        // The dock can't be at the top edge.
-        if (dockRect.bottom == desktopRect->bottom) {
-          desktopRect->bottom -= dockRect.bottom - dockRect.top;
-        }
-        break;
-
-      default:
-        break;
-    } // switch
-  } // dockRect overlaps *desktopRect
-
-  // *desktopRect is now clear of the menu bar and dock, if they needed
-  // to be cleared.
-  return NS_OK;
+  return 0;
 }
 
+
 //
-// GetChildSheet
+// CallSystemWDEF
 //
-// If aShown is true, returns the child widget associated with the sheet
-// attached to this nsMacWindow, or nsnull if none.
+// We really don't want to reinvent the wheel, so call back into the system wdef we have
+// stashed away.
 //
-// If aShown is false, returns the first child widget of this nsMacWindow
-// corresponding to a sheet that wishes to be displayed, or nsnull if no
-// sheets are waiting to be shown.
-//
-NS_IMETHODIMP nsMacWindow::GetChildSheet(PRBool aShown, nsMacWindow** _retval)
+long
+CallSystemWDEF ( short inCode, WindowPtr inWindow, short inMessage, long inParam )
 {
-  nsIWidget* child = GetFirstChild();
+  // extract the real system wdef out of the fake one we've stored in the window
+  Handle fakedWDEF = ((WindowPeek)inWindow)->windowDefProc;
+  Handle systemDefProc = DefProcFakery::GetSystemDefProc ( fakedWDEF );
+  
+  SInt8 state = ::HGetState(systemDefProc);
+  ::HLock(systemDefProc);
 
-  while (child) {
-    // nsWindow is the base widget in the Carbon widget library, this is safe
-    nsWindow* window = NS_STATIC_CAST(nsWindow*, child);
+  long retval = CallWindowDefProc( (RoutineDescriptorPtr)*systemDefProc, inCode, inWindow, inMessage, inParam);
 
-    nsWindowType type;
-    if (NS_SUCCEEDED(window->GetWindowType(type)) &&
-        type == eWindowType_sheet) {
-      // if it's a sheet, it must be an nsMacWindow
-      nsMacWindow* macWindow = NS_STATIC_CAST(nsMacWindow*, window);
-
-      if ((aShown && macWindow->mShown) ||
-          (!aShown && macWindow->mSheetNeedsShow)) {
-        *_retval = macWindow;
-        return NS_OK;
-      }
-    }
-
-    child = child->GetNextSibling();
-  }
-
-  *_retval = nsnull;
-  return NS_OK;
+  ::HSetState(systemDefProc, state);
+  
+  return retval;
 }
 
-NS_IMETHODIMP nsMacWindow::Update()
-{
-  nsresult rv = Inherited::Update();
 
-#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_3
-  if (NS_SUCCEEDED(rv) && mNeedsResize) {
-    // Something wanted to resize this window in the middle of the update
-    // above, and the host OS is 10.2.  The resize would have caused a
-    // hang in SizeWindow, so it was deferred.  Now that the update is
-    // done, it's safe to resize.
-    mNeedsResize = PR_FALSE;
+#pragma options align=reset
 
-    Resize(mResizeTo.width, mResizeTo.height,
-           mResizeTo.repaint, mResizeTo.fromUI);
-  }
 #endif
-
-  return rv;
-}
-
-pascal OSStatus
-nsMacWindow::KeyEventHandler(EventHandlerCallRef aHandlerCallRef,
-                             EventRef            aEvent,
-                             void*               aUserData)
-{
-  nsMacWindow* self = NS_STATIC_CAST(nsMacWindow*, aUserData);
-  NS_ASSERTION(self, "No self?");
-  NS_ASSERTION(self->mMacEventHandler.get(), "No mMacEventHandler?");
-
-  PRBool handled = PR_FALSE;
-
-  EventKind kind = ::GetEventKind(aEvent);
-  if (kind == kEventRawKeyModifiersChanged)
-    handled = self->mMacEventHandler->HandleKeyModifierEvent(aHandlerCallRef,
-                                                             aEvent);
-  else
-    handled = self->mMacEventHandler->HandleKeyUpDownEvent(aHandlerCallRef,
-                                                           aEvent);
-
-  if (!handled)
-    return eventNotHandledErr;
-
-  return noErr;
-}
-
-NS_IMETHODIMP
-nsMacWindow::GetEventDispatchHandler(nsMacEventDispatchHandler** aEventDispatchHandler) {
-  *aEventDispatchHandler = mMacEventHandler->GetEventDispatchHandler();
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsMacWindow::GetSheetShown(PRBool *aSheetShown)
-{
-  *aSheetShown = mSheetShown;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsMacWindow::SetSheetShown(PRBool aSheetShown)
-{
-  mSheetShown = aSheetShown;
-  return NS_OK;
-}

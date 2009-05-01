@@ -1,42 +1,37 @@
 #! /bin/sh  
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
+# The contents of this file are subject to the Mozilla Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/MPL/
 #
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
 #
 # The Original Code is the Netscape security libraries.
 #
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1994-2000
-# the Initial Developer. All Rights Reserved.
+# The Initial Developer of the Original Code is Netscape
+# Communications Corporation.  Portions created by Netscape are
+# Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+# Rights Reserved.
 #
 # Contributor(s):
-#   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
 #
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
+# Alternatively, the contents of this file may be used under the
+# terms of the GNU General Public License Version 2 or later (the
+# "GPL"), in which case the provisions of the GPL are applicable
+# instead of those above.  If you wish to allow use of your
+# version of this file only under the terms of the GPL and not to
+# allow others to use your version of this file under the MPL,
+# indicate your decision by deleting the provisions above and
+# replace them with the notice and other provisions required by
+# the GPL.  If you do not delete the provisions above, a recipient
+# may use your version of this file under either the MPL or the
+# GPL.
 #
-# ***** END LICENSE BLOCK *****
-
+#
 ########################################################################
 #
 # mozilla/security/nss/tests/smime/smime.sh
@@ -72,12 +67,7 @@ smime_init()
       . ./cert.sh
   fi
   SCRIPTNAME=smime.sh
-
-  if [ -n "$NSS_ENABLE_ECC" ] ; then
-      html_head "S/MIME Tests with ECC"
-  else
-      html_head "S/MIME Tests"
-  fi
+  html_head "S/MIME Tests"
 
   grep "SUCCESS: SMIME passed" $CERT_LOG_FILE >/dev/null || {
       Exit 11 "Fatal - S/MIME of cert.sh needs to pass first"
@@ -90,61 +80,6 @@ smime_init()
   cp ${QADIR}/smime/alice.txt ${SMIMEDIR}
 }
 
-smime_sign()
-{
-  HASH_CMD="-H ${HASH}"
-  SIG=sig.${HASH}
-
-  echo "$SCRIPTNAME: Signing Detached Message {$HASH} ------------------"
-  echo "cmsutil -S -T -N Alice ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.d${SIG}"
-  cmsutil -S -T -N Alice ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.d${SIG}
-  html_msg $? 0 "Create Detached Signature Alice (${HASH})" "."
-
-  echo "cmsutil -D -i alice.d${SIG} -c alice.txt -d ${P_R_BOBDIR} "
-  cmsutil -D -i alice.d${SIG} -c alice.txt -d ${P_R_BOBDIR} 
-  html_msg $? 0 "Verifying Alice's Detached Signature (${HASH})" "."
-
-  echo "$SCRIPTNAME: Signing Attached Message (${HASH}) ------------------"
-  echo "cmsutil -S -N Alice ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.${SIG}"
-  cmsutil -S -N Alice ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.${SIG}
-  html_msg $? 0 "Create Attached Signature Alice (${HASH})" "."
-
-  echo "cmsutil -D -i alice.${SIG} -d ${P_R_BOBDIR} -o alice.data.${HASH}"
-  cmsutil -D -i alice.${SIG} -d ${P_R_BOBDIR} -o alice.data.${HASH}
-  html_msg $? 0 "Decode Alice's Attached Signature (${HASH})" "."
-
-  echo "diff alice.txt alice.data.${HASH}"
-  diff alice.txt alice.data.${HASH}
-  html_msg $? 0 "Compare Attached Signed Data and Original (${HASH})" "."
-
-# Test ECDSA signing for all hash algorithms.
-  if [ -n "$NSS_ENABLE_ECC" ] ; then
-      echo "$SCRIPTNAME: Signing Detached Message ECDSA w/ {$HASH} ------------------"
-      echo "cmsutil -S -T -N Alice-ec ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice-ec.d${SIG}"
-      cmsutil -S -T -N Alice-ec ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice-ec.d${SIG}
-      html_msg $? 0 "Create Detached Signature Alice (ECDSA w/ ${HASH})" "."
-
-      echo "cmsutil -D -i alice-ec.d${SIG} -c alice.txt -d ${P_R_BOBDIR} "
-      cmsutil -D -i alice-ec.d${SIG} -c alice.txt -d ${P_R_BOBDIR} 
-      html_msg $? 0 "Verifying Alice's Detached Signature (ECDSA w/ ${HASH})" "."
-
-      echo "$SCRIPTNAME: Signing Attached Message (ECDSA w/ ${HASH}) ------------------"
-      echo "cmsutil -S -N Alice-ec ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice-ec.${SIG}"
-      cmsutil -S -N Alice-ec ${HASH_CMD} -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice-ec.${SIG}
-      html_msg $? 0 "Create Attached Signature Alice (ECDSA w/ ${HASH})" "."
-
-      echo "cmsutil -D -i alice-ec.${SIG} -d ${P_R_BOBDIR} -o alice-ec.data.${HASH}"
-      cmsutil -D -i alice-ec.${SIG} -d ${P_R_BOBDIR} -o alice-ec.data.${HASH}
-      html_msg $? 0 "Decode Alice's Attached Signature (ECDSA w/ ${HASH})" "."
-
-      echo "diff alice.txt alice-ec.data.${HASH}"
-      diff alice.txt alice-ec.data.${HASH}
-      html_msg $? 0 "Compare Attached Signed Data and Original (ECDSA w/ ${HASH})" "."
-  fi
-
-}
-
-
 
 ############################## smime_main ##############################
 # local shell function to test basic signed and enveloped messages 
@@ -153,14 +88,57 @@ smime_sign()
 smime_main()
 {
 
-  HASH=SHA1
-  smime_sign
-  HASH=SHA256
-  smime_sign
-  HASH=SHA384
-  smime_sign
-  HASH=SHA512
-  smime_sign
+  echo "$SCRIPTNAME: Signing Attached Message (SHA1) ------------------"
+  echo "cmsutil -S -N Alice -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig"
+  cmsutil -S -N Alice -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig
+  html_msg $? 0 "Create Signature Alice (SHA1)" "."
+
+  echo "cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1"
+  cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1
+  html_msg $? 0 "Decode Alice's Signature (SHA1)" "."
+
+  echo "diff alice.txt alice.data1"
+  diff alice.txt alice.data1
+  html_msg $? 0 "Compare Decoded Signature and Original (SHA1)" "."
+
+  echo "$SCRIPTNAME: Signing Attached Message (SHA256) ------------------"
+  echo "cmsutil -S -N Alice -H SHA256 -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig"
+  cmsutil -S -N Alice -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig
+  html_msg $? 0 "Create Signature Alice (SHA256)" "."
+
+  echo "cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1"
+  cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1
+  html_msg $? 0 "Decode Alice's Signature (SHA256)" "."
+
+  echo "diff alice.txt alice.data1"
+  diff alice.txt alice.data1
+  html_msg $? 0 "Compare Decoded Signature and Original (SHA256)" "."
+
+  echo "$SCRIPTNAME: Signing Attached Message (SHA384) ------------------"
+  echo "cmsutil -S -N Alice -H SHA384 -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig"
+  cmsutil -S -N Alice -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig
+  html_msg $? 0 "Create Signature Alice (SHA384)" "."
+
+  echo "cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1"
+  cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1
+  html_msg $? 0 "Decode Alice's Signature (SHA384)" "."
+
+  echo "diff alice.txt alice.data1"
+  diff alice.txt alice.data1
+  html_msg $? 0 "Compare Decoded Signature and Original (SHA384)" "."
+
+  echo "$SCRIPTNAME: Signing Attached Message (SHA512) ------------------"
+  echo "cmsutil -S -N Alice -H SHA512 -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig"
+  cmsutil -S -N Alice -i alice.txt -d ${P_R_ALICEDIR} -p nss -o alice.sig
+  html_msg $? 0 "Create Signature Alice (SHA512)" "."
+
+  echo "cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1"
+  cmsutil -D -i alice.sig -d ${P_R_BOBDIR} -o alice.data1
+  html_msg $? 0 "Decode Alice's Signature (SHA512)" "."
+
+  echo "diff alice.txt alice.data1"
+  diff alice.txt alice.data1
+  html_msg $? 0 "Compare Decoded Signature and Original (SHA512)" "."
 
   echo "$SCRIPTNAME: Enveloped Data Tests ------------------------------"
   echo "cmsutil -E -r bob@bogus.com -i alice.txt -d ${P_R_ALICEDIR} -p nss \\"
@@ -178,21 +156,29 @@ smime_main()
 
   # multiple recip
   echo "$SCRIPTNAME: Testing multiple recipients ------------------------------"
-  echo "cmsutil -E -i alice.txt -d ${P_R_ALICEDIR} -o alicecc.env \\"
+  echo "cmsutil -E -i alicecc.txt -d ${P_R_ALICEDIR} -o alicecc.env \\"
   echo "        -r bob@bogus.com,dave@bogus.com"
   cmsutil -E -i alice.txt -d ${P_R_ALICEDIR} -o alicecc.env \
           -r bob@bogus.com,dave@bogus.com
   ret=$?
   html_msg $ret 0 "Create Multiple Recipients Enveloped Data Alice" "."
   if [ $ret != 0 ] ; then
-	echo "certutil -L -d ${P_R_ALICEDIR}"
-	certutil -L -d ${P_R_ALICEDIR}
-	echo "certutil -L -d ${P_R_ALICEDIR} -n dave@bogus.com"
-	certutil -L -d ${P_R_ALICEDIR} -n dave@bogus.com
+        i=0
+        echo "cp -r ${R_ALICEDIR} ${R_ALICEDIR}.trouble"
+        cp -r ${R_ALICEDIR} ${R_ALICEDIR}.trouble
+        while [ $i -lt 100 ] ; do
+            echo "will attempt to list the certs in the db `expr 100 - $i` more times"
+	    echo "certutil -L -d ${P_R_ALICEDIR}"
+	    certutil -L -d ${P_R_ALICEDIR}
+	    echo "certutil -L -d ${P_R_ALICEDIR} -n dave@bogus.com"
+	    certutil -L -d ${P_R_ALICEDIR} -n dave@bogus.com
+            sleep 30
+            i=`expr $i + 1`
+        done
   fi
 
   echo "$SCRIPTNAME: Testing multiple email addrs ------------------------------"
-  echo "cmsutil -E -i alice.txt -d ${P_R_ALICEDIR} -o aliceve.env \\"
+  echo "cmsutil -E -i alicecc.txt -d ${P_R_ALICEDIR} -o aliceve.env \\"
   echo "        -r eve@bogus.net"
   cmsutil -E -i alice.txt -d ${P_R_ALICEDIR} -o aliceve.env \
           -r eve@bogus.net

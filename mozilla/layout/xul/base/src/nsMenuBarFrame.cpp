@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,28 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
+ * 
  * Contributor(s):
- *   Dan Rosen <dr@netscape.com>
- *   Dean Tessman <dean_tessman@hotmail.com>
+ *                 Dan Rosen <dr@netscape.com>
+ *                 Dean Tessman <dean_tessman@hotmail.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +45,7 @@
 #include "nsIContent.h"
 #include "prtypes.h"
 #include "nsIAtom.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsStyleContext.h"
 #include "nsCSSRendering.h"
 #include "nsINameSpaceManager.h"
@@ -132,7 +134,7 @@ nsMenuBarFrame::~nsMenuBarFrame()
 }
 
 NS_IMETHODIMP
-nsMenuBarFrame::Init(nsPresContext*  aPresContext,
+nsMenuBarFrame::Init(nsIPresContext*  aPresContext,
                      nsIContent*      aContent,
                      nsIFrame*        aParent,
                      nsStyleContext*  aContext,
@@ -205,7 +207,8 @@ nsMenuBarFrame::SetActive(PRBool aActiveFlag)
     if (!presShell)
       break;
 
-    nsIDocument *document = presShell->GetDocument();
+    nsCOMPtr<nsIDocument> document;
+    presShell->GetDocument(getter_AddRefs(document));
     if (!document)
       break;
 
@@ -214,8 +217,8 @@ nsMenuBarFrame::SetActive(PRBool aActiveFlag)
     if (!windowPrivate)
       break;
 
-    nsIFocusController *focusController =
-      windowPrivate->GetRootFocusController();
+    nsCOMPtr<nsIFocusController> focusController;
+    windowPrivate->GetRootFocusController(getter_AddRefs(focusController));
     if (!focusController)
       break;
 
@@ -225,13 +228,12 @@ nsMenuBarFrame::SetActive(PRBool aActiveFlag)
       break;
 
     nsCOMPtr<nsIDOMDocument> domDoc;
-    nsCOMPtr<nsIDocument> focusedDoc;
     windowInternal->GetDocument(getter_AddRefs(domDoc));
-    focusedDoc = do_QueryInterface(domDoc);
-    if (!focusedDoc)
+    document = do_QueryInterface(domDoc);
+    if (!document)
       break;
 
-    presShell = focusedDoc->GetShellAt(0);
+    presShell = document->GetShellAt(0);
     nsCOMPtr<nsISelectionController> selCon(do_QueryInterface(presShell));
     // there is no selection controller for full page plugins
     if (!selCon)
@@ -251,7 +253,7 @@ nsMenuBarFrame::SetActive(PRBool aActiveFlag)
   NS_NAMED_LITERAL_STRING(active, "DOMMenuBarActive");
   NS_NAMED_LITERAL_STRING(inactive, "DOMMenuBarInactive");
   
-  FireDOMEventSynch(mIsActive ? active : inactive);
+  FireDOMEvent(mPresContext, mIsActive ? active : inactive);
 
   return NS_OK;
 }
@@ -280,7 +282,8 @@ nsMenuBarFrame::ToggleMenuActiveState()
     // Set the active menu to be the top left item (e.g., the File menu).
     // We use an attribute called "menuactive" to track the current 
     // active menu.
-    nsIMenuFrame* firstFrame = GetNextMenuItem(nsnull);
+    nsIMenuFrame* firstFrame;
+    GetNextMenuItem(nsnull, &firstFrame);
     if (firstFrame) {
       firstFrame->SelectMenu(PR_TRUE);
       
@@ -296,7 +299,8 @@ static void GetInsertionPoint(nsIPresShell* aShell, nsIFrame* aFrame, nsIFrame* 
   nsIContent* child = nsnull;
   if (aChild)
     child = aChild->GetContent();
-  aShell->FrameConstructor()->GetInsertionPoint(aFrame, child, aResult);
+  aShell->FrameConstructor()->GetInsertionPoint(aShell, aFrame,
+                                                      child, aResult);
 }
 
 nsIMenuFrame*
@@ -327,11 +331,10 @@ nsMenuBarFrame::FindMenuWithShortcut(nsIDOMKeyEvent* aKeyEvent)
         if ( shortcutKey.Equals(Substring(&letter, &letter+1),
                                 nsCaseInsensitiveStringComparator()) )  {
           // We match!
-          nsIMenuFrame *menuFrame;
-          if (NS_FAILED(CallQueryInterface(currFrame, &menuFrame))) {
-            menuFrame = nsnull;
-          }
-          return menuFrame;
+          nsCOMPtr<nsIMenuFrame> menuFrame = do_QueryInterface(currFrame);
+          if (menuFrame)
+            return menuFrame.get();
+          return nsnull;
         }
       }
     }
@@ -370,21 +373,11 @@ nsMenuBarFrame::ShortcutNavigation(nsIDOMKeyEvent* aKeyEvent, PRBool& aHandledFl
   nsIMenuFrame* result = FindMenuWithShortcut(aKeyEvent);
   if (result) {
     // We got one!
-    nsWeakFrame weakFrame(this);
-    nsIFrame* frame = nsnull;
-    CallQueryInterface(result, &frame);
-    nsWeakFrame weakResult(frame);
     aHandledFlag = PR_TRUE;
     SetActive(PR_TRUE);
-    if (weakFrame.IsAlive()) {
-      SetCurrentMenuItem(result);
-    }
-    if (weakResult.IsAlive()) {
-      result->OpenMenu(PR_TRUE);
-      if (weakResult.IsAlive()) {
-        result->SelectFirstItem();
-      }
-    }
+    SetCurrentMenuItem(result);
+    result->OpenMenu(PR_TRUE);
+    result->SelectFirstItem();
   }
 
   return NS_OK;
@@ -398,7 +391,6 @@ nsMenuBarFrame::KeyboardNavigation(PRUint32 aKeyCode, PRBool& aHandledFlag)
   if (!mCurrentMenu)
     return NS_OK;
   
-  nsWeakFrame weakFrame(this);
   PRBool isContainer = PR_FALSE;
   PRBool isOpen = PR_FALSE;
   mCurrentMenu->MenuIsContainer(isContainer);
@@ -416,17 +408,14 @@ nsMenuBarFrame::KeyboardNavigation(PRUint32 aKeyCode, PRBool& aHandledFlag)
 
   if NS_DIRECTION_IS_INLINE(theDirection) {
     
-    nsIMenuFrame* nextItem = (theDirection == eNavigationDirection_End) ?
-                             GetNextMenuItem(mCurrentMenu) : 
-                             GetPreviousMenuItem(mCurrentMenu);
+    nsIMenuFrame* nextItem;
+    
+    if (theDirection == eNavigationDirection_End)
+      GetNextMenuItem(mCurrentMenu, &nextItem);
+    else GetPreviousMenuItem(mCurrentMenu, &nextItem);
 
-    nsIFrame* nextFrame = nsnull;
-    if (nextItem) {
-      CallQueryInterface(nextItem, &nextFrame);
-    }
-    nsWeakFrame weakNext(nextFrame);
     SetCurrentMenuItem(nextItem);
-    if (weakNext.IsAlive()) {
+    if (nextItem) {
       PRBool nextIsOpen;
       nextItem->MenuIsOpen(nextIsOpen);
       if (nextIsOpen) {
@@ -436,23 +425,16 @@ nsMenuBarFrame::KeyboardNavigation(PRUint32 aKeyCode, PRBool& aHandledFlag)
     }
   }
   else if NS_DIRECTION_IS_BLOCK(theDirection) {
-    NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
-    nsIFrame* frame = nsnull;
-    CallQueryInterface(mCurrentMenu, &frame);
-    nsWeakFrame weakCurrentMenu(frame);
-    nsIMenuFrame* currentMenu = mCurrentMenu;
-     // Open the menu and select its first item.
-    currentMenu->OpenMenu(PR_TRUE);
-    if (weakCurrentMenu.IsAlive()) {
-      currentMenu->SelectFirstItem();
-    }
+    // Open the menu and select its first item.
+    mCurrentMenu->OpenMenu(PR_TRUE);
+    mCurrentMenu->SelectFirstItem();
   }
 
   return NS_OK;
 }
 
-/* virtual */ nsIMenuFrame*
-nsMenuBarFrame::GetNextMenuItem(nsIMenuFrame* aStart)
+NS_IMETHODIMP
+nsMenuBarFrame::GetNextMenuItem(nsIMenuFrame* aStart, nsIMenuFrame** aResult)
 {
   nsIFrame* immediateParent = nsnull;
   GetInsertionPoint(mPresContext->PresShell(), this, nsnull, &immediateParent);
@@ -474,10 +456,10 @@ nsMenuBarFrame::GetNextMenuItem(nsIMenuFrame* aStart)
   while (currFrame) {
     // See if it's a menu item.
     if (IsValidItem(currFrame->GetContent())) {
-      nsIMenuFrame *menuFrame;
-      if (NS_FAILED(CallQueryInterface(currFrame, &menuFrame)))
-        menuFrame = nsnull;
-      return menuFrame;
+      nsCOMPtr<nsIMenuFrame> menuFrame = do_QueryInterface(currFrame);
+      *aResult = menuFrame.get();
+      NS_IF_ADDREF(*aResult);
+      return NS_OK;
     }
     currFrame = currFrame->GetNextSibling();
   }
@@ -488,21 +470,22 @@ nsMenuBarFrame::GetNextMenuItem(nsIMenuFrame* aStart)
   while (currFrame && currFrame != startFrame) {
     // See if it's a menu item.
     if (IsValidItem(currFrame->GetContent())) {
-      nsIMenuFrame *menuFrame;
-      if (NS_FAILED(CallQueryInterface(currFrame, &menuFrame)))
-        menuFrame = nsnull;
-      return menuFrame;
+      nsCOMPtr<nsIMenuFrame> menuFrame = do_QueryInterface(currFrame);
+      *aResult = menuFrame.get();
+      NS_IF_ADDREF(*aResult);
+      return NS_OK;
     }
 
     currFrame = currFrame->GetNextSibling();
   }
 
   // No luck. Just return our start value.
-  return aStart;
+  *aResult = aStart;
+  return NS_OK;
 }
 
-/* virtual */ nsIMenuFrame*
-nsMenuBarFrame::GetPreviousMenuItem(nsIMenuFrame* aStart)
+NS_IMETHODIMP
+nsMenuBarFrame::GetPreviousMenuItem(nsIMenuFrame* aStart, nsIMenuFrame** aResult)
 {
   nsIFrame* immediateParent = nsnull;
   GetInsertionPoint(mPresContext->PresShell(), this, nsnull, &immediateParent);
@@ -525,10 +508,10 @@ nsMenuBarFrame::GetPreviousMenuItem(nsIMenuFrame* aStart)
   while (currFrame) {
     // See if it's a menu item.
     if (IsValidItem(currFrame->GetContent())) {
-      nsIMenuFrame *menuFrame;
-      if (NS_FAILED(CallQueryInterface(currFrame, &menuFrame)))
-        menuFrame = nsnull;
-      return menuFrame;
+      nsCOMPtr<nsIMenuFrame> menuFrame = do_QueryInterface(currFrame);
+      *aResult = menuFrame.get();
+      NS_IF_ADDREF(*aResult);
+      return NS_OK;
     }
     currFrame = frames.GetPrevSiblingFor(currFrame);
   }
@@ -539,23 +522,25 @@ nsMenuBarFrame::GetPreviousMenuItem(nsIMenuFrame* aStart)
   while (currFrame && currFrame != startFrame) {
     // See if it's a menu item.
     if (IsValidItem(currFrame->GetContent())) {
-      nsIMenuFrame *menuFrame;
-      if (NS_FAILED(CallQueryInterface(currFrame, &menuFrame)))
-        menuFrame = nsnull;
-      return menuFrame;
+      nsCOMPtr<nsIMenuFrame> menuFrame = do_QueryInterface(currFrame);
+      *aResult = menuFrame.get();
+      NS_IF_ADDREF(*aResult);
+      return NS_OK;
     }
 
     currFrame = frames.GetPrevSiblingFor(currFrame);
   }
 
   // No luck. Just return our start value.
-  return aStart;
+  *aResult = aStart;
+  return NS_OK;
 }
 
-/* virtual */ nsIMenuFrame*
-nsMenuBarFrame::GetCurrentMenuItem()
+NS_IMETHODIMP nsMenuBarFrame::GetCurrentMenuItem(nsIMenuFrame** aResult)
 {
-  return mCurrentMenu;
+  *aResult = mCurrentMenu;
+  NS_IF_ADDREF(*aResult);
+  return NS_OK;
 }
 
 
@@ -565,36 +550,23 @@ NS_IMETHODIMP nsMenuBarFrame::SetCurrentMenuItem(nsIMenuFrame* aMenuItem)
     return NS_OK;
 
   PRBool wasOpen = PR_FALSE;
-  
-  // check if there's an open context menu, we ignore this
-  if (nsMenuFrame::GetContextMenu())
-    return NS_OK;
 
-  nsWeakFrame weakFrame(this);
+  // check if there's an open context menu, we ignore this
+  if (nsMenuFrame::IsContextMenuActive())
+    return NS_OK;
 
   // Unset the current child.
   if (mCurrentMenu) {
-    nsIFrame* frame = nsnull;
-    CallQueryInterface(mCurrentMenu, &frame);
-    nsWeakFrame weakCurrentMenu(frame);
-    nsIMenuFrame* currentMenu = mCurrentMenu;
-    currentMenu->MenuIsOpen(wasOpen);
-    currentMenu->SelectMenu(PR_FALSE);
-    if (wasOpen && weakCurrentMenu.IsAlive()) {
-      currentMenu->OpenMenu(PR_FALSE);
-    }
+    mCurrentMenu->MenuIsOpen(wasOpen);
+    mCurrentMenu->SelectMenu(PR_FALSE);
+    if (wasOpen)
+      mCurrentMenu->OpenMenu(PR_FALSE);
   }
-  NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
 
   // Set the new child.
   if (aMenuItem) {
-    nsIFrame* newMenu = nsnull;
-    CallQueryInterface(aMenuItem, &newMenu);
-    nsWeakFrame weakNewMenu(newMenu);
     aMenuItem->SelectMenu(PR_TRUE);
-    NS_ENSURE_TRUE(weakNewMenu.IsAlive(), NS_OK);
     aMenuItem->MarkAsGenerated(); // Have the menu building. Get it ready to be shown.
-    NS_ENSURE_TRUE(weakNewMenu.IsAlive(), NS_OK);
 
     PRBool isDisabled = PR_FALSE;
     aMenuItem->MenuIsDisabled(isDisabled);
@@ -603,7 +575,6 @@ NS_IMETHODIMP nsMenuBarFrame::SetCurrentMenuItem(nsIMenuFrame* aMenuItem)
     ClearRecentlyRolledUp();
   }
 
-  NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
   mCurrentMenu = aMenuItem;
 
   return NS_OK;
@@ -616,7 +587,6 @@ nsMenuBarFrame::Escape(PRBool& aHandledFlag)
   if (!mCurrentMenu)
     return NS_OK;
 
-  nsWeakFrame weakFrame(this);
   // See if our menu is open.
   PRBool isOpen = PR_FALSE;
   mCurrentMenu->MenuIsOpen(isOpen);
@@ -624,12 +594,10 @@ nsMenuBarFrame::Escape(PRBool& aHandledFlag)
     // Let the child menu handle this.
     aHandledFlag = PR_FALSE;
     mCurrentMenu->Escape(aHandledFlag);
-    NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
     if (!aHandledFlag) {
       // Close up this menu but keep our current menu item
       // designation.
       mCurrentMenu->OpenMenu(PR_FALSE);
-      NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
     }
 	if (nsMenuFrame::sDismissalListener)
       nsMenuFrame::sDismissalListener->Unregister();
@@ -638,7 +606,6 @@ nsMenuBarFrame::Escape(PRBool& aHandledFlag)
 
   // Clear our current menu item if we've got one.
   SetCurrentMenuItem(nsnull);
-  NS_ENSURE_TRUE(weakFrame.IsAlive(), NS_OK);
 
   SetActive(PR_FALSE);
 
@@ -697,15 +664,6 @@ nsMenuBarFrame::RecentlyRolledUp(nsIMenuFrame *aMenuFrame, PRBool *aJustRolledUp
 NS_IMETHODIMP
 nsMenuBarFrame::HideChain()
 {
-  // XXX hack if a context menu is active, do an Escape, which is
-  // currently bugged and destroys everything.  We need to close
-  // the context menu first, otherwise SetCurrentMenuItem above
-  // would get blocked.
-  if (nsMenuFrame::GetContextMenu()) {
-    PRBool dummy;
-    mCurrentMenu->Escape(dummy);
-  }
-
   // Stop capturing rollups
   // (must do this during Hide, which happens before the menu item is executed,
   // since this reinstates normal event handling.)
@@ -719,25 +677,27 @@ nsMenuBarFrame::HideChain()
     mRecentRollupMenu = mCurrentMenu;
   }
 
-  if (mIsActive) {
-    ToggleMenuActiveState();
-  }
-
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsMenuBarFrame::DismissChain()
 {
+  // XXX hack if a context menu is active, do an Escape, which is
+  // currently bugged and destroys everything.  We need to close
+  // the context menu first, otherwise SetCurrentMenuItem below
+  // would get blocked.
+  if (nsMenuFrame::IsContextMenuActive()) {
+    PRBool dummy;
+    mCurrentMenu->Escape(dummy);
+  }
+
   // Stop capturing rollups
   if (nsMenuFrame::sDismissalListener)
     nsMenuFrame::sDismissalListener->Unregister();
   
-  nsWeakFrame weakFrame(this);
   SetCurrentMenuItem(nsnull);
-  if (weakFrame.IsAlive()) {
-    SetActive(PR_FALSE);
-  }
+  SetActive(PR_FALSE);
   return NS_OK;
 }
 
@@ -830,13 +790,13 @@ nsMenuBarFrame::IsDisabled(nsIContent* aContent)
 {
   nsString disabled;
   aContent->GetAttr(kNameSpaceID_None, nsHTMLAtoms::disabled, disabled);
-  if (disabled.EqualsLiteral("true"))
+  if (disabled.Equals(NS_LITERAL_STRING("true")))
     return PR_TRUE;
   return PR_FALSE;
 }
 
 NS_IMETHODIMP
-nsMenuBarFrame::Destroy(nsPresContext* aPresContext)
+nsMenuBarFrame::Destroy(nsIPresContext* aPresContext)
 {
   mTarget->RemoveEventListener(NS_LITERAL_STRING("keypress"), (nsIDOMKeyListener*)mMenuBarListener, PR_FALSE); 
   mTarget->RemoveEventListener(NS_LITERAL_STRING("keydown"), (nsIDOMKeyListener*)mMenuBarListener, PR_FALSE);  

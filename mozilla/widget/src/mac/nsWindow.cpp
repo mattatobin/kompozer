@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -63,7 +63,6 @@
 #include "nsMacResources.h"
 #include "nsIRegion.h"
 #include "nsIRollupListener.h"
-#include "nsPIWidgetMac.h"
 
 #include "nsCarbonHelpers.h"
 #include "nsGfxUtils.h"
@@ -71,20 +70,10 @@
 
 #include <Gestalt.h>
 
-#ifdef MAC_OS_X_VERSION_10_3
-const short PANTHER_RESIZE_UP_CURSOR     = 19;
-const short PANTHER_RESIZE_DOWN_CURSOR   = 20;
-const short PANTHER_RESIZE_UPDOWN_CURSOR = 21;
-#else
-//19, 20, 21 from Appearance.h in 10.3
-const short PANTHER_RESIZE_UP_CURSOR     = 19; // kThemeResizeUpCursor
-const short PANTHER_RESIZE_DOWN_CURSOR   = 20; // kThemeResizeDownCursor
-const short PANTHER_RESIZE_UPDOWN_CURSOR = 21; // kThemeResizeUpDownCursor
+#if PINK_PROFILING
+#include "profilerutils.h"
 #endif
 
-const short JAGUAR_RESIZE_UP_CURSOR      = 135;
-const short JAGUAR_RESIZE_DOWN_CURSOR    = 136;
-const short JAGUAR_RESIZE_UPDOWN_CURSOR  = 141;
 
 ////////////////////////////////////////////////////
 nsIRollupListener * gRollupListener = nsnull;
@@ -99,8 +88,15 @@ static Boolean	gNotificationInstalled = false;
 static CursorSpinner *gCursorSpinner = nsnull;
 static const int kSpinCursorFirstFrame = 200;
 
-// Iterates over the rects of a region.
+// Routines for iterating over the rects of a region. Carbon and pre-Carbon
+// do this differently so provide a way to do both.
+#if TARGET_CARBON
+static RegionToRectsUPP sUpdateRectProc = nsnull;
 static RegionToRectsUPP sAddRectToArrayProc = nsnull;
+static RegionToRectsUPP sCountRectProc = nsnull;
+#else
+void EachRegionRect (RgnHandle r, void (* proc)(Rect *, void *), void* data) ;
+#endif
 
 #pragma mark -
 
@@ -132,9 +128,11 @@ static Boolean caps_lock()
 
 static void FlushCurPortBuffer()
 {
+#if TARGET_CARBON
     CGrafPtr    curPort;
     ::GetPort((GrafPtr*)&curPort);
     ::QDFlushPortBuffer(curPort, nil);      // OK to call on 9/carbon (does nothing)
+#endif
 }
 
 static void blinkRect(const Rect* r, PRBool isPaint)
@@ -150,8 +148,11 @@ static void blinkRect(const Rect* r, PRBool isPaint)
     if (isPaint)
     {
         Pattern grayPattern;
-
+#if TARGET_CARBON
         ::GetQDGlobalsGray(&grayPattern);
+#else
+        grayPattern = qd.gray;
+#endif
 
         ::ForeColor(blackColor);
         ::BackColor(whiteColor);
@@ -191,8 +192,11 @@ static void blinkRgn(RgnHandle rgn, PRBool isPaint)
     if (isPaint)
     {
         Pattern grayPattern;
-
+#if TARGET_CARBON
         ::GetQDGlobalsGray(&grayPattern);
+#else
+        grayPattern = qd.gray;
+#endif
 
         ::ForeColor(blackColor);
         ::BackColor(whiteColor);
@@ -222,17 +226,20 @@ static void blinkRgn(RgnHandle rgn, PRBool isPaint)
 
 #endif
 
-struct TRectArray
-{
-  TRectArray(Rect* aRectList, PRUint32 aCapacity)
-  : mRectList(aRectList)
-  , mNumRects(0)
-  , mCapacity(aCapacity) { }
 
-  Rect*    mRectList;
-  PRUint32 mNumRects;
-  PRUint32 mCapacity;
-};
+static Boolean control_key_down()
+{
+	EventRecord event;
+	::EventAvail(0, &event);
+	return (event.modifiers & controlKey) != 0;
+}
+
+static long long microseconds()
+{
+	unsigned long long micros;
+	Microseconds((UnsignedWide*)&micros);
+	return micros;
+}
 
 #pragma mark -
 
@@ -262,7 +269,7 @@ nsWindow::nsWindow() : nsBaseWidget() , nsDeleteObserved(this), nsIKBStateContro
   mVisRegion = nsnull;
   mWindowPtr = nsnull;
   mDrawing = PR_FALSE;
-  mInUpdate = PR_FALSE;
+  mDestroyCalled = PR_FALSE;
   mDestructorCalled = PR_FALSE;
 
   SetBackgroundColor(NS_RGB(255, 255, 255));
@@ -272,8 +279,14 @@ nsWindow::nsWindow() : nsBaseWidget() , nsDeleteObserved(this), nsIKBStateContro
 
   AcceptFocusOnClick(PR_TRUE);
   
-  if (!sAddRectToArrayProc)
-    sAddRectToArrayProc = ::NewRegionToRectsUPP(AddRectToArrayProc);
+#if TARGET_CARBON
+  if ( !sUpdateRectProc ) {
+    sUpdateRectProc = NewRegionToRectsUPP ( PaintUpdateRectProc );
+    sAddRectToArrayProc = NewRegionToRectsUPP ( AddRectToArrayProc );
+    sCountRectProc = NewRegionToRectsUPP ( CountRectProc );
+  }
+#endif
+
 }
 
 
@@ -285,9 +298,21 @@ nsWindow::nsWindow() : nsBaseWidget() , nsDeleteObserved(this), nsIKBStateContro
 nsWindow::~nsWindow()
 {
 	// notify the children that we're gone
-	for (nsIWidget* kid = mFirstChild; kid; kid = kid->GetNextSibling()) {
-		nsWindow* childWindow = NS_STATIC_CAST(nsWindow*, kid);
-		childWindow->mParent = nsnull;
+	nsCOMPtr<nsIEnumerator> children ( getter_AddRefs(GetChildren()) );
+	if (children)
+	{
+		children->First();
+		do
+		{
+			nsISupports* child;
+			if (NS_SUCCEEDED(children->CurrentItem(&child)))
+			{
+				nsWindow* childWindow = static_cast<nsWindow*>(static_cast<nsIWidget*>(child));
+				NS_RELEASE(child);
+
+				childWindow->mParent = nsnull;
+    	}
+		} while (NS_SUCCEEDED(children->Next()));			
 	}
 
 	mDestructorCalled = PR_TRUE;
@@ -404,9 +429,9 @@ NS_IMETHODIMP nsWindow::Create(nsNativeWidget aNativeParent,		// this is a nsWin
 //-------------------------------------------------------------------------
 NS_IMETHODIMP nsWindow::Destroy()
 {
-	if (mOnDestroyCalled)
+	if (mDestroyCalled)
 		return NS_OK;
-	mOnDestroyCalled = PR_TRUE;
+	mDestroyCalled = PR_TRUE;
 
 	nsBaseWidget::OnDestroy();
 	nsBaseWidget::Destroy();
@@ -449,8 +474,6 @@ nsIWidget* nsWindow::GetParent(void)
 //-------------------------------------------------------------------------
 void* nsWindow::GetNativeData(PRUint32 aDataType)
 {
-	NS_ASSERTION(mWindowPtr, "GetNativeData was called after the window was destroyed?");
-  
 	nsPoint		point;
 	void*		retVal = nsnull;
 
@@ -584,20 +607,7 @@ static Boolean we_are_front_process()
 //-------------------------------------------------------------------------
 NS_IMETHODIMP nsWindow::SetFocus(PRBool aRaise)
 {
-  nsCOMPtr<nsIWidget> top;
-  nsToolkit::GetTopWidget(mWindowPtr, getter_AddRefs(top));
-
-  if (top) {
-    nsCOMPtr<nsPIWidgetMac_MOZILLA_1_8_BRANCH> topMac = do_QueryInterface(top);
-
-    if (topMac) {
-      nsMacEventDispatchHandler* eventDispatchHandler = nsnull;
-      topMac->GetEventDispatchHandler(&eventDispatchHandler);
-
-      if (eventDispatchHandler)
-        eventDispatchHandler->SetFocus(this);
-    }
-  }
+	gEventDispatchHandler.SetFocus(this);
 	
 	// Here's where we see if there's a notification we need to remove
 	if (gNotificationInstalled && we_are_front_process())
@@ -683,18 +693,17 @@ nsIMenuBar* nsWindow::GetMenuBar()
   return mMenuBar;
 }
 
-
-PRBool OnPantherOrLater() // Return true if we are on Mac OS X 10.3 or later
+PRBool OnJaguarOrLater() // Return true if we are on Mac OS X 10.2 or later
 {
-    static PRBool gInitVer1030 = PR_FALSE;
-    static PRBool gOnPantherOrLater = PR_FALSE;
-    if(!gInitVer1030)
+    static PRBool gInitVer = PR_FALSE;
+    static PRBool gOnJaguarOrLater = PR_FALSE;
+    if(!gInitVer)
     {
-        gOnPantherOrLater =
-            (nsToolkit::OSXVersion() >= MAC_OS_X_VERSION_10_3_HEX);
-        gInitVer1030 = PR_TRUE;
+        gOnJaguarOrLater =
+            (nsToolkit::OSXVersion() >= MAC_OS_X_VERSION_10_2_HEX);
+        gInitVer = PR_TRUE;
     }
-    return gOnPantherOrLater;
+    return gOnJaguarOrLater;
 }
 
 //
@@ -706,7 +715,14 @@ NS_METHOD nsWindow::SetCursor(nsCursor aCursor)
 {
   nsBaseWidget::SetCursor(aCursor);
 	
-  if ( gCursorSpinner == nsnull )
+  // allow the cursor to be set internally if we're in the bg, but
+  // don't actually set it.
+  if ( !nsToolkit::IsAppInForeground() )
+  {
+    return NS_OK;
+  }
+
+  if ( gCursorSpinner == nsnull && OnJaguarOrLater())
   {
       gCursorSpinner = new CursorSpinner();
   }
@@ -719,49 +735,51 @@ NS_METHOD nsWindow::SetCursor(nsCursor aCursor)
     case eCursor_wait:                cursor = kThemeWatchCursor; break;
     case eCursor_select:              cursor = kThemeIBeamCursor; break;
     case eCursor_hyperlink:           cursor = kThemePointingHandCursor; break;
+    case eCursor_sizeWE:              cursor = kThemeResizeLeftRightCursor; break;
+    case eCursor_sizeNS:              cursor = 129; break;
+    case eCursor_sizeNW:              cursor = 130; break;
+    case eCursor_sizeSE:              cursor = 131; break;
+    case eCursor_sizeNE:              cursor = 132; break;
+    case eCursor_sizeSW:              cursor = 133; break;
+    case eCursor_arrow_north:         cursor = 134; break;
+    case eCursor_arrow_north_plus:    cursor = 135; break;
+    case eCursor_arrow_south:         cursor = 136; break;
+    case eCursor_arrow_south_plus:    cursor = 137; break;
+    case eCursor_arrow_west:          cursor = 138; break;
+    case eCursor_arrow_west_plus:     cursor = 139; break;
+    case eCursor_arrow_east:          cursor = 140; break;
+    case eCursor_arrow_east_plus:     cursor = 141; break;
     case eCursor_crosshair:           cursor = kThemeCrossCursor; break;
     case eCursor_move:                cursor = kThemeOpenHandCursor; break;
-    case eCursor_help:                cursor = 128; break;
-    case eCursor_copy:                cursor = kThemeCopyArrowCursor; break;
-    case eCursor_alias:               cursor = kThemeAliasArrowCursor; break;
-    case eCursor_context_menu:        cursor = kThemeContextualMenuArrowCursor; break;
+    case eCursor_help:                cursor = 143; break;
+    case eCursor_copy:                cursor = 144; break; // CSS3
+    case eCursor_alias:               cursor = 145; break;
+    case eCursor_context_menu:        cursor = 146; break;
     case eCursor_cell:                cursor = kThemePlusCursor; break;
     case eCursor_grab:                cursor = kThemeOpenHandCursor; break;
     case eCursor_grabbing:            cursor = kThemeClosedHandCursor; break;
     case eCursor_spinning:            cursor = kSpinCursorFirstFrame; break; // better than kThemeSpinningCursor
-    case eCursor_zoom_in:             cursor = 129; break;
-    case eCursor_zoom_out:            cursor = 130; break;
-    case eCursor_not_allowed:
-    case eCursor_no_drop:             cursor = kThemeNotAllowedCursor; break;  
-    case eCursor_col_resize:          cursor = 132; break; 
-    case eCursor_row_resize:          cursor = 133; break;
-    case eCursor_vertical_text:       cursor = 134; break;   
-    case eCursor_all_scroll:          cursor = kThemeOpenHandCursor; break;
-    case eCursor_n_resize:            cursor = OnPantherOrLater() ? PANTHER_RESIZE_UP_CURSOR : JAGUAR_RESIZE_UP_CURSOR; break;
-    case eCursor_s_resize:            cursor = OnPantherOrLater() ? PANTHER_RESIZE_DOWN_CURSOR : JAGUAR_RESIZE_DOWN_CURSOR; break;
-    case eCursor_w_resize:            cursor = kThemeResizeLeftCursor; break; 
-    case eCursor_e_resize:            cursor = kThemeResizeRightCursor; break;
-    case eCursor_nw_resize:           cursor = 137; break;
-    case eCursor_se_resize:           cursor = 138; break;
-    case eCursor_ne_resize:           cursor = 139; break;
-    case eCursor_sw_resize:           cursor = 140; break;
-    case eCursor_ew_resize:           cursor = kThemeResizeLeftRightCursor; break;
-    case eCursor_ns_resize:           cursor = OnPantherOrLater() ? PANTHER_RESIZE_UPDOWN_CURSOR : JAGUAR_RESIZE_UPDOWN_CURSOR; break;
-    case eCursor_nesw_resize:         cursor = 142; break;
-    case eCursor_nwse_resize:         cursor = 143; break;        
-    default:                          
-      cursor = kThemeArrowCursor; 
-      break;
+    case eCursor_count_up:            cursor = kThemeCountingUpHandCursor; break;
+    case eCursor_count_down:          cursor = kThemeCountingDownHandCursor; break;
+    case eCursor_count_up_down:       cursor = kThemeCountingUpAndDownHandCursor; break;
+    case eCursor_zoom_in:             cursor = 149; break;
+    case eCursor_zoom_out:            cursor = 150; break;
+    default:                          cursor = kThemeArrowCursor; break;
   }
 
-
-  if (aCursor == eCursor_spinning)
+  //animated cursors cause crash on Mac OS X 10.1 when Japanese Kotorei input method is enabled
+  if ( OnJaguarOrLater() )
   {
-    gCursorSpinner->StartSpinCursor();
-  }
-  else
-  {
-    gCursorSpinner->StopSpinCursor();
+    if (aCursor == eCursor_spinning)
+    {
+      gCursorSpinner->StartSpinCursor();
+    }
+    else
+    {
+      gCursorSpinner->StopSpinCursor();
+      nsWindow::SetCursorResource(cursor);
+    }
+  } else {
     nsWindow::SetCursorResource(cursor);
   }
 
@@ -1040,7 +1058,7 @@ NS_IMETHODIMP nsWindow::Invalidate(const nsRect &aRect, PRBool aIsSynchronous)
 	nsRectToMacRect(wRect, macRect);
 
 	StPortSetter portSetter(mWindowPtr);
-	StOriginSetter  originSetter(mWindowPtr);
+    StOriginSetter  originSetter(mWindowPtr);
 
 #ifdef INVALIDATE_DEBUGGING
 	if (caps_lock())
@@ -1106,7 +1124,7 @@ inline PRUint16 COLOR8TOCOLOR16(PRUint8 color8)
 //-------------------------------------------------------------------------
 void nsWindow::StartDraw(nsIRenderingContext* aRenderingContext)
 {
-	if (mDrawing || mOnDestroyCalled)
+	if (mDrawing)
 		return;
 	mDrawing = PR_TRUE;
 
@@ -1161,11 +1179,12 @@ void nsWindow::StartDraw(nsIRenderingContext* aRenderingContext)
 //-------------------------------------------------------------------------
 void nsWindow::EndDraw()
 {
-	if (! mDrawing || mOnDestroyCalled)
+	if (! mDrawing)
 		return;
 	mDrawing = PR_FALSE;
 
-	mTempRenderingContext->PopState();
+	PRBool clipEmpty;
+	mTempRenderingContext->PopState(clipEmpty);
 
 	NS_RELEASE(mTempRenderingContext);
 	
@@ -1230,62 +1249,40 @@ NS_IMETHODIMP	nsWindow::Update()
   {
     reentrant = PR_TRUE;
     
-    StRegionFromPool redrawnRegion;
-    if (!redrawnRegion)
+    StRegionFromPool regionToValidate;
+    if (!regionToValidate)
       return NS_ERROR_OUT_OF_MEMORY;
 
     // make a copy of the window update rgn (which is in global coords)
     StRegionFromPool saveUpdateRgn;
     if (!saveUpdateRgn)
       return NS_ERROR_OUT_OF_MEMORY;
-    ::GetWindowRegion(mWindowPtr, kWindowUpdateRgn, saveUpdateRgn);
 
-    // Sometimes, the window update region will be larger than the window
-    // itself.  Because we obviously don't redraw anything outside of the
-    // window, redrawnRegion won't include that larger area, and the
-    // larger area will be re-invalidated.  That triggers an endless
-    // sequence of kEventWindowUpdate events.  Avoid that condition by
-    // restricting the update region to the content region.
-    StRegionFromPool windowContentRgn;
-    if (!windowContentRgn)
-      return NS_ERROR_OUT_OF_MEMORY;
-
-    ::GetWindowRegion(mWindowPtr, kWindowContentRgn, windowContentRgn);
-
-    ::SectRgn(saveUpdateRgn, windowContentRgn, saveUpdateRgn);
+    if (mWindowPtr)
+      ::GetWindowUpdateRegion(mWindowPtr, saveUpdateRgn);
 
     // draw the widget
     StPortSetter portSetter(mWindowPtr);
-    StOriginSetter originSetter(mWindowPtr);
+    ::SetOrigin(0, 0);
 
     // BeginUpate replaces the visRgn with the intersection of the
     // visRgn and the updateRgn.
     ::BeginUpdate(mWindowPtr);
-    mInUpdate = PR_TRUE;
 
-    HandleUpdateEvent(redrawnRegion);
+    HandleUpdateEvent(regionToValidate);
 
     // EndUpdate replaces the normal visRgn
     ::EndUpdate(mWindowPtr);
-    mInUpdate = PR_FALSE;
-    
-    // Restore the parts of the window update rgn that we didn't draw,
-    // taking care to maintain any bits that got invalidated during the
-    // paint (yes, this can happen). We do this because gecko might not own
-    // the entire window (think: embedding).
 
+    // restore the window update rgn
+    // saveUpdateRgn is in global coords, so we need to shift it to local coords
     Point origin = {0, 0};
     ::GlobalToLocal(&origin);
-    // saveUpdateRgn is in global coords, so we need to shift it to local coords
     ::OffsetRgn(saveUpdateRgn, origin.h, origin.v);
-    
-    // figure out the difference between the old update region
-    // and what we redrew
-    ::DiffRgn(saveUpdateRgn, redrawnRegion, saveUpdateRgn);
-
-    // and invalidate it
     ::InvalWindowRgn(mWindowPtr, saveUpdateRgn);
 
+    ::ValidWindowRgn(mWindowPtr, regionToValidate);
+    
     reentrant = PR_FALSE;
   }
 
@@ -1296,6 +1293,41 @@ NS_IMETHODIMP	nsWindow::Update()
 #pragma mark -
 
 
+#if TARGET_CARBON
+
+
+//
+// UpdateRect
+//
+// Called once for every rect in the update region. Send a paint event to Gecko to handle
+// this. |refCon| contains the |nsWindow| being updated. 
+//
+OSStatus
+nsWindow::PaintUpdateRectProc (UInt16 message, RgnHandle rgn, const Rect *inDirtyRect, void *refCon)
+{
+  if (message == kQDRegionToRectsMsgParse) {
+    nsWindow* self = NS_REINTERPRET_CAST(nsWindow*, refCon);
+    Rect dirtyRect = *inDirtyRect;
+  
+  	nsCOMPtr<nsIRenderingContext> renderingContext ( dont_AddRef(self->GetRenderingContext()) );
+  	if (renderingContext)
+  	{
+    	nsRect bounds = self->mBounds;
+    	self->LocalToWindowCoordinate(bounds);
+    	
+  		// determine the rect to draw
+  		::OffsetRect(&dirtyRect, -bounds.x, -bounds.y);
+  		nsRect rect ( dirtyRect.left, dirtyRect.top, dirtyRect.right - dirtyRect.left,
+  		                dirtyRect.bottom - dirtyRect.top );
+
+  		// update the widget
+  		self->UpdateWidget(rect, renderingContext);
+    }
+  }
+  
+  return noErr;
+  
+} // PaintUpdateRectProc
 
 
 //
@@ -1305,35 +1337,42 @@ NS_IMETHODIMP	nsWindow::Update()
 // pointer to the TRectArray we're adding to.
 //
 OSStatus
-nsWindow::AddRectToArrayProc(UInt16 message, RgnHandle rgn,
-                             const Rect* inDirtyRect, void* inArray)
+nsWindow::AddRectToArrayProc (UInt16 message, RgnHandle rgn, const Rect *inDirtyRect, void *inArray)
 {
   if (message == kQDRegionToRectsMsgParse) {
-    NS_ASSERTION(inArray, "You better pass an array!");
+    NS_ASSERTION ( inArray, "You better pass an array!" );
     TRectArray* rectArray = NS_REINTERPRET_CAST(TRectArray*, inArray);
-
-    if (rectArray->mNumRects == rectArray->mCapacity) {
-      // This should not happen - returning memFullErr below should have
-      // prevented it.
-      return memFullErr;
-    }
-
-    rectArray->mRectList[rectArray->mNumRects++] = *inDirtyRect;
-
-    if (rectArray->mNumRects == rectArray->mCapacity) {
-      // Signal that the array is full and QDRegionToRects should stop.
-      // After returning memFullErr, this proc should not be called with
-      // the same |message| again.
-      return memFullErr;
-    }
+  
+    rectArray->mRectList[rectArray->Count()] = *inDirtyRect;
+    ++rectArray->mNumRects;
   }
-
+  
   return noErr;
 }
 
 
 //
-// PaintUpdateRect
+// CountUpdateRectProc
+// 
+// Used to count the number of rects in a region. |refCon| is a pointer to a
+// counter. We just increment it every time we're called and by the end we'll have
+// the number of rects.
+//
+OSStatus
+nsWindow::CountRectProc (UInt16 message, RgnHandle rgn, const Rect *inDirtyRect, void *refCon)
+{
+  if (message == kQDRegionToRectsMsgParse) {
+    NS_ASSERTION ( refCon, "You better pass a counter!" );
+    (*NS_REINTERPRET_CAST(long*, refCon))++;                  // increment
+  }
+  return noErr;
+}
+
+
+#endif
+
+//
+// UpdateRect
 //
 // Called once for every rect in the update region. Send a paint event to Gecko to handle
 // this. |inData| contains the |nsWindow| being updated. 
@@ -1362,6 +1401,39 @@ nsWindow::PaintUpdateRect(Rect *inDirtyRect, void* inData)
 } // PaintUpdateRect
 
 
+//
+// CountRect
+//
+// Used to count the number of rects in a region. |refCon| is a pointer to a
+// counter. We just increment it every time we're called and by the end we'll have
+// the number of rects.
+//
+void
+nsWindow::CountRect ( Rect *inDirtyRect, void *refCon )
+{
+  NS_ASSERTION ( refCon, "You better pass a counter!" );
+  (*NS_REINTERPRET_CAST(long*, refCon))++;                  // increment
+}
+
+
+//
+// AddRectToArray
+//
+// Add each rect to an array so we can post-process them. |inArray| is a
+// pointer to the TRectArray we're adding to.
+//
+void
+nsWindow::AddRectToArray ( Rect* inDirtyRect, void* inArray )
+{
+  NS_ASSERTION ( inArray, "You better pass an array!" );
+  TRectArray* rectArray = NS_REINTERPRET_CAST(TRectArray*, inArray);
+  
+  rectArray->mRectList[rectArray->Count()] = *inDirtyRect;
+  ++rectArray->mNumRects;
+  
+} // AddRectToArray
+
+
 //-------------------------------------------------------------------------
 //	HandleUpdateEvent
 //
@@ -1371,105 +1443,173 @@ nsWindow::PaintUpdateRect(Rect *inDirtyRect, void* inData)
 //-------------------------------------------------------------------------
 nsresult nsWindow::HandleUpdateEvent(RgnHandle regionToValidate)
 {
-  if (! mVisible || !ContainerHierarchyIsVisible())
-    return NS_OK;
+#if PINK_PROFILING
+if (KeyDown(0x39))	// press [caps lock] to start the profile
+	ProfileStart();
+else
+	ProfileStop(); 
+#endif
 
-  // make sure the port is set and origin is (0, 0).
-  StPortSetter    portSetter(mWindowPtr);
-  // zero the origin, and set it back after drawing widgets
-  StOriginSetter  originSetter(mWindowPtr);
-  
-  // get the damaged region from the OS
-  StRegionFromPool damagedRgn;
-  if (!damagedRgn)
-    return NS_ERROR_OUT_OF_MEMORY;
-  ::GetPortVisibleRegion(::GetWindowPort(mWindowPtr), damagedRgn);
+	if (! mVisible || !ContainerHierarchyIsVisible())
+		return NS_OK;
+
+	// make sure the port is set and origin is (0, 0).
+	StPortSetter    portSetter(mWindowPtr);
+	// zero the origin, and set it back after drawing widgets
+	StOriginSetter  originSetter(mWindowPtr);
+	
+	// get the damaged region from the OS
+	StRegionFromPool damagedRgn;
+	if (!damagedRgn)
+		return NS_ERROR_OUT_OF_MEMORY;
+	::GetPortVisibleRegion(::GetWindowPort(mWindowPtr), damagedRgn);
 
 /*
-#ifdef PAINT_DEBUGGING  
-  if (caps_lock())
-    blinkRgn(damagedRgn, PR_TRUE);
+#ifdef PAINT_DEBUGGING	
+	if (caps_lock())
+  	blinkRgn(damagedRgn, PR_TRUE);
 #endif
 */
-  // calculate the update region relatively to the window port rect
-  // (at this point, the grafPort origin should always be 0,0
-  // so mWindowRegion has to be converted to window coordinates)
-  StRegionFromPool updateRgn;
-  if (!updateRgn)
-    return NS_ERROR_OUT_OF_MEMORY;
-  ::CopyRgn(mWindowRegion, updateRgn);
+	// calculate the update region relatively to the window port rect
+	// (at this point, the grafPort origin should always be 0,0
+	// so mWindowRegion has to be converted to window coordinates)
+	StRegionFromPool updateRgn;
+	if (!updateRgn)
+		return NS_ERROR_OUT_OF_MEMORY;
+	::CopyRgn(mWindowRegion, updateRgn);
 
-  nsRect bounds = mBounds;
-  LocalToWindowCoordinate(bounds);
-  ::OffsetRgn(updateRgn, bounds.x, bounds.y);
+	nsRect bounds = mBounds;
+	LocalToWindowCoordinate(bounds);
+	::OffsetRgn(updateRgn, bounds.x, bounds.y);
 
-  // check if the update region is visible
-  ::SectRgn(damagedRgn, updateRgn, updateRgn);
+	// check if the update region is visible
+	::SectRgn(damagedRgn, updateRgn, updateRgn);
 
 #ifdef PAINT_DEBUGGING
-  if (caps_lock())
-    blinkRgn(updateRgn, PR_TRUE);
+	if (caps_lock())
+  	blinkRgn(updateRgn, PR_TRUE);
 #endif
 
-  if (!::EmptyRgn(updateRgn)) {
-    // Iterate over each rect in the region, sending a paint event for each.
-    // If the region is very complicated (more than 15 pieces), just use a
-    // bounding box.
+	if (!::EmptyRgn(updateRgn))
+	{
 
-    // The most rects we'll try to deal with:
-    const PRUint32 kMaxUpdateRects = 15;
+#if TARGET_CARBON
+    // Ref: http://developer.apple.com/technotes/tn/tn2051.html
+    //      short-circuit QD's implicit LockPortBits()
+    //      Note: MUST unlock before exiting this scope (see below)
+    ::LockPortBits(::GetWindowPort(mWindowPtr));
+#endif
+
+#if DEBUG
+		// measure the time it takes to refresh the window, if the control key is down.
+    unsigned long long start, finish;
+    Boolean measure_duration = control_key_down();
+    if (measure_duration)
+      start = microseconds();
+#endif
+
+	  // Iterate over each rect in the region, sending a paint event for each. Carbon
+	  // has a routine for this, pre-carbon doesn't so we roll our own. If the region
+	  // is very complicated (more than 15 pieces), just use a bounding box.
+    const int kMaxUpdateRects = 15;           // the most rects we'll try to deal with
+    const int kRectsBeforeBoundingBox = 10;   // if we have more than this, just do bounding box
+
+    int numRects = 0;
+
+#if TARGET_CARBON
+    QDRegionToRects ( updateRgn, kQDParseRegionFromTopLeft, sCountRectProc, &numRects );
+    if ( numRects <= kMaxUpdateRects ) {
+      Rect rectList[kMaxUpdateRects];
+      TRectArray rectWrapper ( rectList );
+       
+      // compile a list of rectangles 
+      QDRegionToRects ( updateRgn, kQDParseRegionFromTopLeft, sAddRectToArrayProc, &rectWrapper );
     
-    // If, after combining rects, there are still more than this, just do
-    // a bounding box:
-    const PRUint32 kRectsBeforeBoundingBox = 10;
-
-    // Leave one extra slot in rectList to give AddRectToArrayProc a way to
-    // signal that kMaxUpdateRects has been exceeded.
-    const PRUint32 kRectCapacity = kMaxUpdateRects + 1;
-
-    Rect rectList[kRectCapacity];
-    TRectArray rectWrapper(rectList, kRectCapacity);
-    ::QDRegionToRects(updateRgn, kQDParseRegionFromTopLeft,
-                      sAddRectToArrayProc, &rectWrapper);
-    PRUint32 numRects = rectWrapper.mNumRects;
-
-    PRBool painted = PR_FALSE;
-
-    if (numRects <= kMaxUpdateRects) {
-      if (numRects > 1) {
-        // amalgamate adjoining rects into a single rect. This 
-        // may over-draw a little, but will prevent us from going down into
-        // the layout engine for lots of little 1-pixel wide rects.
-        CombineRects(rectWrapper);
-
-        // |numRects| may be invalid now, so check count again.
-        numRects = rectWrapper.mNumRects;
+      // amalgamate adjoining rects into a single rect. This 
+      // may over-draw a little, but will prevent us from going down into
+      // the layout engine for lots of little 1-pixel wide rects.
+      if ( numRects > 1 )
+        CombineRects ( rectWrapper );
+    
+      // now paint 'em! (|numRects| may be invalid now, so check count again). If
+      // we're above a certain threshold, just bail and do bounding box
+      if ( rectWrapper.Count() < kRectsBeforeBoundingBox ) {
+        for ( int i = 0; i < rectWrapper.Count(); ++i )
+          PaintUpdateRectProc (kQDRegionToRectsMsgParse, updateRgn, &rectList[i], this );
       }
-
-      // Now paint 'em!
-      // If we're above a certain threshold, just bail and do bounding box.
-      if (numRects < kRectsBeforeBoundingBox) {
-        painted = PR_TRUE;
-        for (PRUint32 i = 0 ; i < numRects ; i++)
-          PaintUpdateRect(&rectList[i], this);
+      else {
+        Rect boundingBox;
+        ::GetRegionBounds(updateRgn, &boundingBox);
+        PaintUpdateRectProc ( kQDRegionToRectsMsgParse, updateRgn, &boundingBox, this );
       }
     }
-
-    if (!painted) {
-      // There were too many rects.  Do a bounding box.
+    else {
       Rect boundingBox;
       ::GetRegionBounds(updateRgn, &boundingBox);
-      PaintUpdateRect(&boundingBox, this);
+      PaintUpdateRect ( &boundingBox, this );
     }
+#else
+    EachRegionRect ( updateRgn, CountRect, &numRects );
+    if ( numRects <= kMaxUpdateRects ) {
+      Rect rectList[kMaxUpdateRects];
+      TRectArray rectWrapper ( rectList );
+       
+      // compile a list of rectangles 
+      EachRegionRect ( updateRgn, AddRectToArray, &rectWrapper );
+    
+      // amalgamate adjoining rects into a single rect. This 
+      // may over-draw a little, but will prevent us from going down into
+      // the layout engine for lots of little 1-pixel wide rects.
+      if ( numRects > 1 )
+        CombineRects ( rectWrapper );
+    
+      // now paint 'em! (|numRects| may be invalid now, so check count again). If
+      // we're above a certain threshold, just bail and do bounding box
+      if ( rectWrapper.Count() < kRectsBeforeBoundingBox ) {
+        for ( int i = 0; i < rectWrapper.Count(); ++i )
+          PaintUpdateRect ( &rectList[i], this );
+      }
+      else {
+        Rect boundingBox;
+        ::GetRegionBounds(updateRgn, &boundingBox);
+        PaintUpdateRect ( &boundingBox, this );
+      }
+    }
+    else {
+      Rect boundingBox;
+      ::GetRegionBounds(updateRgn, &boundingBox);
+      PaintUpdateRect ( &boundingBox, this );
+    }
+#endif
+
+#if DEBUG
+    if (measure_duration) {
+      finish = microseconds();
+      printf("update took %g microseconds.\n", double(finish - start));
+    }
+#endif
 
     // Copy updateRgn to regionToValidate
     if (regionToValidate)
       ::CopyRgn(updateRgn, regionToValidate);
-  }
 
-  NS_ASSERTION(ValidateDrawingState(), "Bad drawing state");
+#if TARGET_CARBON
+    // Ref: http://developer.apple.com/technotes/tn/tn2051.html
+    //      short-circuit QD's implicit LockPortBits()
+    //      Note: unlock before exiting (locked above)
+    ::UnlockPortBits(::GetWindowPort(mWindowPtr));
+#endif
 
-  return NS_OK;
+	}
+
+#if PINK_PROFILING
+	ProfileSuspend();
+	ProfileStop();
+#endif
+
+	NS_ASSERTION(ValidateDrawingState(), "Bad drawing state");
+
+	return NS_OK;
 }
 
 
@@ -1485,7 +1625,7 @@ nsresult nsWindow::HandleUpdateEvent(RgnHandle regionToValidate)
 void
 nsWindow::SortRectsLeftToRight ( TRectArray & inRectArray )
 {
-  PRInt32 numRects = inRectArray.mNumRects;
+  PRInt32 numRects = inRectArray.Count();
   
   for ( int i = 0; i < numRects - 1; ++i ) {
     for ( int j = i+1; j < numRects; ++j ) {
@@ -1528,8 +1668,8 @@ nsWindow::CombineRects ( TRectArray & rectArray )
   //   delete X+1 from array and don't advance X, 
   //    otherwise move along to X+1
   
-  PRUint32 i = 0;
-  while (i < rectArray.mNumRects - 1) {
+  int i = 0;
+  while ( i < rectArray.Count()-1) {
     Rect* curr = &rectArray.mRectList[i];
     Rect* next = &rectArray.mRectList[i+1];
   
@@ -1552,7 +1692,7 @@ nsWindow::CombineRects ( TRectArray & rectArray )
       // make the current rectangle the bounding box and shift everything from 
       // i+2 over.
       *curr = boundingBox;
-      for (PRUint32 j = i + 1 ; j < rectArray.mNumRects - 1 ; ++j)
+      for ( int j = i+1; j < rectArray.Count()-1; ++j )
         rectArray.mRectList[j] = rectArray.mRectList[j+1];
       --rectArray.mNumRects;
       
@@ -1577,7 +1717,7 @@ void nsWindow::UpdateWidget(nsRect& aRect, nsIRenderingContext* aContext)
 		return;
 
 	// initialize the paint event
-	nsPaintEvent paintEvent(PR_TRUE, NS_PAINT, this);
+	nsPaintEvent paintEvent(NS_PAINT, this);
 	paintEvent.renderingContext = aContext;         // nsPaintEvent
 	paintEvent.rect             = &aRect;
 
@@ -1597,27 +1737,36 @@ void nsWindow::UpdateWidget(nsRect& aRect, nsIRenderingContext* aContext)
 	// and it does for the most part. However; certain cases, such as overlapping
 	// areas that are handled by different view managers, don't properly clip siblings.
 #ifdef FRONT_TO_BACK
-#	define FIRST_CHILD() (mLastChild)
-#	define NEXT_CHILD(child) ((child)->GetPrevSibling())
+#	define FIRST_CHILD(children) (children->Last())
+#	define NEXT_CHILD(children) (children->Prev())
 #else
-#	define FIRST_CHILD() (mFirstChild)
-#	define NEXT_CHILD(child) ((child)->GetNextSibling())
+#	define FIRST_CHILD(children) (children->First())
+#	define NEXT_CHILD(children) (children->Next())
 #endif
 
 	// recursively draw the children
-	for (nsIWidget* kid = FIRST_CHILD(); kid; kid = NEXT_CHILD(kid)) {
-		nsWindow* childWindow = NS_STATIC_CAST(nsWindow*, kid);
+	nsCOMPtr<nsIBidirectionalEnumerator> children(getter_AddRefs((nsIBidirectionalEnumerator*)GetChildren()));
+	if (children) {
+		FIRST_CHILD(children);
+		do {
+			nsISupports* child;
+			if (NS_SUCCEEDED(children->CurrentItem(&child))) {
+				nsWindow* childWindow = static_cast<nsWindow*>(static_cast<nsIWidget*>(child));
 
-		nsRect childBounds;
-		childWindow->GetBounds(childBounds);
+				nsRect childBounds;
+				childWindow->GetBounds(childBounds);
 
-		// redraw only the intersection of the child rect and the update rect
-		nsRect intersection;
-		if (intersection.IntersectRect(aRect, childBounds))
-		{
-			intersection.MoveBy(-childBounds.x, -childBounds.y);
-			childWindow->UpdateWidget(intersection, aContext);
-		}
+				// redraw only the intersection of the child rect and the update rect
+				nsRect intersection;
+				if (intersection.IntersectRect(aRect, childBounds))
+				{
+					intersection.MoveBy(-childBounds.x, -childBounds.y);
+					childWindow->UpdateWidget(intersection, aContext);
+				}
+				
+				NS_RELEASE(child);
+    		}
+		} while (NS_SUCCEEDED(NEXT_CHILD(children)));
 	}
 
 #undef FIRST_CHILD
@@ -1645,9 +1794,116 @@ void nsWindow::UpdateWidget(nsRect& aRect, nsIRenderingContext* aContext)
 //
 void
 nsWindow::ScrollBits ( Rect & inRectToScroll, PRInt32 inLeftDelta, PRInt32 inTopDelta )
-{
+{                        
+#if TARGET_CARBON
   ::ScrollWindowRect ( mWindowPtr, &inRectToScroll, inLeftDelta, inTopDelta, 
                         kScrollWindowInvalidate, NULL );
+#else
+  // Get Frame in local coords from clip rect (there might be a border around view)
+  StRegionFromPool clipRgn;
+  if ( !clipRgn ) return;
+  ::GetClip(clipRgn);
+  ::SectRgn(clipRgn, mVisRegion, clipRgn);
+
+  StRegionFromPool localVisRgn;
+  if ( !localVisRgn ) return;
+
+  Rect frame;
+  ::GetRegionBounds(clipRgn, &frame);
+
+  StRegionFromPool totalVisRgn;
+  if ( !totalVisRgn ) return;
+  ::RectRgn(totalVisRgn, &frame);
+  
+    // compute the source and destination of copybits
+  Rect source = inRectToScroll;
+  SectRect(&source, &frame, &source);
+
+  Rect dest = source;
+  ::OffsetRect(&dest, inLeftDelta, inTopDelta);
+
+  // compute the area that is to be updated by subtracting the dest from the visible area
+  StRegionFromPool destRgn;
+  if ( !destRgn ) return;
+  ::RectRgn(destRgn, &dest);    
+
+  StRegionFromPool updateRgn;
+  if ( !updateRgn ) return;
+  ::RectRgn(updateRgn, &frame);
+  ::DiffRgn (updateRgn, destRgn, updateRgn);
+
+  if(::EmptyRgn(mWindowPtr->visRgn))    
+  {
+    ::CopyBits ( 
+      &mWindowPtr->portBits, 
+      &mWindowPtr->portBits, 
+      &source, 
+      &dest, 
+      srcCopy, 
+      nil);
+  }
+  else
+  {
+    // compute the non-visible region by subtracting what's currently
+    // visible (the window's visRgn) from the whole area we're updating
+    StRegionFromPool nonVisibleRgn;
+    if ( !nonVisibleRgn ) return;
+    ::DiffRgn ( totalVisRgn, mWindowPtr->visRgn, nonVisibleRgn );
+    
+    // compute the extra area that may need to be updated
+    // scoll the non-visible region to determine what needs updating
+    ::OffsetRgn ( nonVisibleRgn, inLeftDelta, inTopDelta );
+    
+    // calculate a mask region to not copy the non-visble portions of the window from the port
+    StRegionFromPool copyMaskRgn;
+    if ( !copyMaskRgn ) return;
+    ::DiffRgn(totalVisRgn, nonVisibleRgn, copyMaskRgn);
+    
+    // use copybits to simulate a ScrollRect()
+    RGBColor black = { 0, 0, 0 };
+    RGBColor white = { 0xFFFF, 0xFFFF, 0xFFFF } ;
+    ::RGBForeColor(&black);
+    ::RGBBackColor(&white);
+    ::PenNormal();  
+    ::CopyBits ( 
+      &mWindowPtr->portBits, 
+      &mWindowPtr->portBits, 
+      &source, 
+      &dest, 
+      srcCopy, 
+      copyMaskRgn);
+
+    // union the update regions together and invalidate them
+    ::UnionRgn(nonVisibleRgn, updateRgn, updateRgn);
+  }
+  
+  // If the region to be scrolled contains regions which are currently dirty,
+  // we must scroll those too, and union them with the updateRgn.
+  // get a copy of the dirty region.
+  ::BeginUpdate(mWindowPtr);
+  ::CopyRgn(mWindowPtr->visRgn, localVisRgn);   // re-use localVisRgn
+  ::EndUpdate(mWindowPtr);
+
+  StRegionFromPool  dirtyRgn;
+  if (!dirtyRgn) return;
+  // get only the part of the dirtyRgn that intersects the frame
+  ::SectRgn(localVisRgn, totalVisRgn, dirtyRgn);
+  // offset by the amount scrolled
+  ::OffsetRgn(dirtyRgn, inLeftDelta, inTopDelta);
+  // now intersect with the frame again
+  ::SectRgn(dirtyRgn, totalVisRgn, dirtyRgn);
+  // and add it to the dirty region
+  ::UnionRgn(updateRgn, dirtyRgn, updateRgn);
+  
+  // we also need to re-dirty the dirty rgn outside out frame,
+  // since BeginUpdate/EndUpdate cleared it.
+  ::DiffRgn(localVisRgn, totalVisRgn, localVisRgn);
+  // and add it to the dirty region
+  ::UnionRgn(updateRgn, localVisRgn, updateRgn);
+  
+  ::InvalWindowRgn(mWindowPtr, updateRgn);
+  
+#endif // !TARGET_CARBON
 }
 
 
@@ -1658,70 +1914,73 @@ nsWindow::ScrollBits ( Rect & inRectToScroll, PRInt32 inLeftDelta, PRInt32 inTop
 //-------------------------------------------------------------------------
 NS_IMETHODIMP nsWindow::Scroll(PRInt32 aDx, PRInt32 aDy, nsRect *aClipRect)
 {
-  if (mVisible && ContainerHierarchyIsVisible())
-  {
-    // If the clipping region is non-rectangular, just force a full update.
-    // Happens when scrolling pages with absolutely-positioned divs
-    // (see bug 289353 for examples).
-    if (!IsRegionRectangular(mWindowRegion))
-    {
-      Invalidate(PR_FALSE);
-      goto scrollChildren;
-    }
 
-    //--------
-    // Scroll this widget
-    nsRect scrollRect;  
-    if (aClipRect)
-      scrollRect = *aClipRect;
-    else
-    {
-      scrollRect = mBounds;
-      scrollRect.x = scrollRect.y = 0;
-    }
+  
+  if (mVisible && ContainerHierarchyIsVisible())  {
+    nsRect scrollRect;	
 
-    // If we're scrolling by an amount that is larger than the height or
-    // width, just invalidate the entire area.
-    if (aDx >= scrollRect.width || aDy >= scrollRect.height)
-    {
-      Invalidate(scrollRect, PR_FALSE);
-    }
-    else
-    {
-      Rect macRect;
-      nsRectToMacRect(scrollRect, macRect);
+	  // If the clipping region is non-rectangular, just force a full update, sorry.
+    // XXX ?
+	  if (!IsRegionRectangular(mWindowRegion)) {
+		  Invalidate(PR_TRUE);
+		  goto scrollChildren;
+	  }
 
-      StartDraw();
+	  //--------
+	  // Scroll this widget
+	  if (aClipRect)
+		  scrollRect = *aClipRect;
+	  else
+	  {
+		  scrollRect = mBounds;
+		  scrollRect.x = scrollRect.y = 0;
+	  }
 
-      // Clip to the windowRegion instead of the visRegion (note: the visRegion
-      // is equal to the windowRegion minus the children). The result is that
-      // ScrollRect() scrolls the visible bits of this widget as well as its children.
-      ::SetClip(mWindowRegion);
+	  Rect macRect;
+	  nsRectToMacRect(scrollRect, macRect);
 
-      // Scroll the bits now. We've rolled our own because ::ScrollRect looks ugly
-      ScrollBits(macRect,aDx,aDy);
 
-      EndDraw();
-    }
+	  StartDraw();
+
+		// Clip to the windowRegion instead of the visRegion (note: the visRegion
+		// is equal to the windowRegion minus the children). The result is that
+		// ScrollRect() scrolls the visible bits of this widget as well as its children.
+		::SetClip(mWindowRegion);
+
+		// Scroll the bits now. We've rolled our own because ::ScrollRect looks ugly
+		ScrollBits(macRect,aDx,aDy);
+
+	EndDraw();
   }
 
 scrollChildren:
-  //--------
-  // Scroll the children
-  for (nsIWidget* kid = mFirstChild; kid; kid = kid->GetNextSibling()) {
-    nsWindow* childWindow = NS_STATIC_CAST(nsWindow*, kid);
+	//--------
+	// Scroll the children
+	nsCOMPtr<nsIEnumerator> children ( getter_AddRefs(GetChildren()) );
+	if (children)
+	{
+		children->First();
+		do
+		{
+			nsISupports* child;
+			if (NS_SUCCEEDED(children->CurrentItem(&child)))
+			{
+				nsWindow* childWindow = static_cast<nsWindow*>(static_cast<nsIWidget*>(child));
+				NS_RELEASE(child);
 
-    nsRect bounds;
-    childWindow->GetBounds(bounds);
-    bounds.x += aDx;
-    bounds.y += aDy;
-    childWindow->SetBounds(bounds);
-  }
+				nsRect bounds;
+				childWindow->GetBounds(bounds);
+				bounds.x += aDx;
+				bounds.y += aDy;
+				childWindow->SetBounds(bounds);
+  		}
+		} while (NS_SUCCEEDED(children->Next()));			
+	}
 
-  // recalculate the window regions
-  CalcWindowRegions();
+	// recalculate the window regions
+	CalcWindowRegions();
 
-  return NS_OK;
+	return NS_OK;
 }
 
 //-------------------------------------------------------------------------
@@ -1737,7 +1996,7 @@ PRBool nsWindow::ConvertStatus(nsEventStatus aStatus)
     case nsEventStatus_eConsumeNoDefault:		return(PR_TRUE);	// don't do default processing
     case nsEventStatus_eConsumeDoDefault:		return(PR_FALSE);
     default:
-      NS_ERROR("Illegal nsEventStatus enumeration value");
+      NS_ASSERTION(0, "Illegal nsEventStatus enumeration value");
       break;
   }
   return(PR_FALSE);
@@ -1853,7 +2112,7 @@ PRBool nsWindow::DispatchMouseEvent(nsMouseEvent &aEvent)
 PRBool nsWindow::ReportDestroyEvent()
 {
 	// nsEvent
-	nsGUIEvent moveEvent(PR_TRUE, NS_DESTROY, this);
+	nsGUIEvent moveEvent(NS_DESTROY, this);
 	moveEvent.message			= NS_DESTROY;
 	moveEvent.time				= PR_IntervalNow();
 
@@ -1868,7 +2127,7 @@ PRBool nsWindow::ReportDestroyEvent()
 PRBool nsWindow::ReportMoveEvent()
 {
 	// nsEvent
-	nsGUIEvent moveEvent(PR_TRUE, NS_MOVE, this);
+	nsGUIEvent moveEvent(NS_MOVE, this);
 	moveEvent.point.x			= mBounds.x;
 	moveEvent.point.y			= mBounds.y;
 	moveEvent.time				= PR_IntervalNow();
@@ -1884,7 +2143,7 @@ PRBool nsWindow::ReportMoveEvent()
 PRBool nsWindow::ReportSizeEvent()
 {
 	// nsEvent
-	nsSizeEvent sizeEvent(PR_TRUE, NS_SIZE, this);
+	nsSizeEvent sizeEvent(NS_SIZE, this);
 	sizeEvent.time				= PR_IntervalNow();
 
 	// nsSizeEvent
@@ -1955,29 +2214,33 @@ void nsWindow::CalcWindowRegions()
 	::CopyRgn(mWindowRegion, mVisRegion);
 
 	// clip the children out of the visRegion
-	if (mFirstChild)
+	nsCOMPtr<nsIEnumerator> children ( getter_AddRefs(GetChildren()) );
+	if (children)
 	{
 		StRegionFromPool childRgn;
 		if (childRgn != nsnull) {
-			nsIWidget* child = mFirstChild;
+			children->First();
 			do
 			{
-				nsWindow* childWindow = NS_STATIC_CAST(nsWindow*, child);
+				nsISupports* child;
+				if (NS_SUCCEEDED(children->CurrentItem(&child)))
+				{
+					nsWindow* childWindow = static_cast<nsWindow*>(static_cast<nsIWidget*>(child));
+					NS_RELEASE(child);
 					
-				PRBool visible;
-				childWindow->IsVisible(visible);
-				if (visible) {
-					nsRect childRect;
-					childWindow->GetBounds(childRect);
+					PRBool visible;
+					childWindow->IsVisible(visible);
+					if (visible) {
+						nsRect childRect;
+						childWindow->GetBounds(childRect);
 
-					Rect macRect;
-					::SetRect(&macRect, childRect.x, childRect.y, childRect.XMost(), childRect.YMost());
-					::RectRgn(childRgn, &macRect);
-					::DiffRgn(mVisRegion, childRgn, mVisRegion);
+						Rect macRect;
+						::SetRect(&macRect, childRect.x, childRect.y, childRect.XMost(), childRect.YMost());
+						::RectRgn(childRgn, &macRect);
+						::DiffRgn(mVisRegion, childRgn, mVisRegion);
+					}
 				}
-				
-				child = child->GetNextSibling();
-			} while (child);
+			} while (NS_SUCCEEDED(children->Next()));
 		}
 	}
 }
@@ -2079,16 +2342,29 @@ nsWindow*  nsWindow::FindWidgetHit(Point aThePoint)
 
 	nsWindow* widgetHit = this;
 
-	// traverse through all the nsWindows to find out who got hit, lowest level of course
-	for (nsIWidget* kid = mLastChild; kid; kid = kid->GetPrevSibling()) {
-		nsWindow* childWindow = NS_STATIC_CAST(nsWindow*, kid);
-		
-		nsWindow* deeperHit = childWindow->FindWidgetHit(aThePoint);
-		if (deeperHit)
+	nsCOMPtr<nsIEnumerator> normalEnum ( getter_AddRefs(GetChildren()) );
+	nsCOMPtr<nsIBidirectionalEnumerator> children ( do_QueryInterface(normalEnum) );
+	if (children)
+	{
+		// traverse through all the nsWindows to find out who got hit, lowest level of course
+		children->Last();
+		do
 		{
-			widgetHit = deeperHit;
-			break;
+			nsISupports* child;
+			if (NS_SUCCEEDED(children->CurrentItem(&child)))
+      {
+      	nsWindow* childWindow = static_cast<nsWindow*>(static_cast<nsIWidget*>(child));
+				NS_RELEASE(child);
+
+			  nsWindow* deeperHit = childWindow->FindWidgetHit(aThePoint);
+			  if (deeperHit)
+			  {
+				  widgetHit = deeperHit;
+				  break;
+			  }
+      }
 		}
+    while (NS_SUCCEEDED(children->Prev()));
 	}
 
 	return widgetHit;
@@ -2127,7 +2403,7 @@ NS_IMETHODIMP nsWindow::WidgetToScreen(const nsRect& aLocalRect, nsRect& aGlobal
 		// When there is no parent, we're at the top level window. Use
 		// the origin (shifted into global coordinates) to find the offset.
 		StPortSetter	portSetter(mWindowPtr);
-		StOriginSetter	originSetter(mWindowPtr);
+		::SetOrigin(0,0);
 		
 		// convert origin into global coords and shift output rect by that ammount
 		Point origin = {0, 0};
@@ -2168,7 +2444,7 @@ NS_IMETHODIMP nsWindow::ScreenToWidget(const nsRect& aGlobalRect, nsRect& aLocal
 		// When there is no parent, we're at the top level window. Use
 		// the origin (shifted into local coordinates) to find the offset.
 		StPortSetter	portSetter(mWindowPtr);
-		StOriginSetter	originSetter(mWindowPtr);
+		::SetOrigin(0,0);
 		
 		// convert origin into local coords and shift output rect by that ammount
 		Point origin = {0, 0};
@@ -2233,9 +2509,9 @@ NS_IMETHODIMP nsWindow::CaptureRollupEvents(nsIRollupListener * aListener,
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWindow::SetTitle(const nsAString& title)
+NS_IMETHODIMP nsWindow::SetTitle(const nsString& title)
 {
-  NS_ERROR("Would some Mac person please implement me? Thanks.");
+  NS_ASSERTION(0, "Would some Mac person please implement me? Thanks.");
   return NS_OK;
 }
 
@@ -2264,12 +2540,12 @@ NS_IMETHODIMP nsWindow::GetAttention(PRInt32 aCycleCount)
 		gNMRec.nmIcon = NULL;
 		
 	// Setup and install the notification manager rec
-	gNMRec.qType    = nmType;
-	gNMRec.nmMark   = 1;      // Make the dock icon bounce
-	gNMRec.nmSound  = NULL;   // No alert sound, see bug 307323
-	gNMRec.nmStr    = NULL;   // No alert/window so no text
-	gNMRec.nmResp   = NULL;   // No response proc, use the default behavior
-	gNMRec.nmRefCon = 0;
+	gNMRec.qType		= nmType;
+	gNMRec.nmMark		= 1;			// Flag the icon in the process menu
+	gNMRec.nmSound		= (Handle)-1L;	// Use the default alert sound
+	gNMRec.nmStr		= NULL;			// No alert/window so no text
+	gNMRec.nmResp		= NULL;			// No response proc, use the default behavior
+	gNMRec.nmRefCon	= NULL;
 	if (::NMInstall(&gNMRec) == noErr)
 		gNotificationInstalled = true;
 
@@ -2377,27 +2653,113 @@ NS_IMETHODIMP nsWindow::ResetInputState()
 	// currently, the nsMacEventHandler is owned by nsMacWindow, which is the top level window
 	// we delegate this call to its parent
   nsCOMPtr<nsIWidget> parent = getter_AddRefs(GetParent());
-  NS_WARN_IF_FALSE(parent, "cannot get parent");
-  if (parent)
+  NS_ASSERTION(parent, "cannot get parent");
+  if(parent)
   {
-    nsCOMPtr<nsIKBStateControl> kb = do_QueryInterface(parent);
-    NS_WARN_IF_FALSE(kb, "cannot get parent");
-  	if (kb) {
+  	nsCOMPtr<nsIKBStateControl> kb = do_QueryInterface(parent);
+ 	  NS_ASSERTION(kb, "cannot get parent");
+  	if(kb) {
   		return kb->ResetInputState();
   	}
   }
 	return NS_ERROR_ABORT;
 }
 
-NS_IMETHODIMP nsWindow::SetIMEOpenState(PRBool aState) {
-  return NS_ERROR_NOT_IMPLEMENTED;
+
+#if !TARGET_CARBON
+
+void EachRegionRect (RgnHandle r, void (* proc)(Rect *, void *), void* data) ;
+
+//
+// Written by Hugh Fisher, March 1993.
+// Used w/out asking his permission.
+//
+// This can go away when we get an api on nsIRegion to create one from
+// a RgnHandle. Then we can use nsIRegion::GetRects to do the work for us.
+//
+void 
+EachRegionRect (RgnHandle r, void (* proc)(Rect *, void *), void* inData)
+{
+#define EndMark 	32767
+#define MaxY		32767
+#define StackMax	1024
+
+	typedef struct {
+		short	size;
+		Rect	bbox;
+		short	data[];
+		} ** Internal;
+	
+	Internal region;
+	short	 width, xAdjust, y, index, x1, x2, x;
+	Rect	 box;
+	short	 stackStorage[1024];
+	short *	 buffer;
+	
+	region = (Internal)r;
+	
+	/* Check for plain rectangle */
+	if ((**region).size == 10) {
+		proc(&(**region).bbox, inData);
+		return;
+	}
+	/* Got to scale x coordinates into range 0..something */
+	xAdjust = (**region).bbox.left;
+	width = (**region).bbox.right - xAdjust;
+	/* Most regions will be less than 1024 pixels wide */
+	if (width < StackMax)
+		buffer = stackStorage;
+	else {
+		buffer = (short *)PR_Malloc(width * 2);
+		if (buffer == NULL)
+			/* Truly humungous region or very low on memory.
+			   Quietly doing nothing seems to be the
+			   traditional Quickdraw response. */
+			return;
+	}
+	/* Initialise scan line list to bottom edges */
+	for (x = (**region).bbox.left; x < (**region).bbox.right; x++)
+		buffer[x - xAdjust] = MaxY;
+	index = 0;
+	/* Loop until we hit an empty scan line */
+	while ((**region).data[index] != EndMark) {
+		y = (**region).data[index];
+		index ++;
+		/* Loop through horizontal runs on this line */
+		while ((**region).data[index] != EndMark) {
+			x1 = (**region).data[index];
+			index ++;
+			x2 = (**region).data[index];
+			index ++;
+			x = x1;
+			while (x < x2) {
+				if (buffer[x - xAdjust] < y) {
+					/* We have a bottom edge - how long for? */
+					box.left = x;
+					box.top  = buffer[x - xAdjust];
+					while (x < x2 && buffer[x - xAdjust] == box.top) {
+						buffer[x - xAdjust] = MaxY;
+						x ++;
+					}
+					/* Pass to client proc */
+					box.right  = x;
+					box.bottom = y;
+					proc(&box, inData);
+				} else {
+					/* This becomes a top edge */
+					buffer[x - xAdjust] = y;
+					x ++;
+				}
+			}
+		}
+		index ++;
+	}
+	/* Clean up after ourselves */
+	if (width >= StackMax)
+		PR_Free((void *)buffer);
+#undef EndMark
+#undef MaxY
+#undef StackMax
 }
 
-NS_IMETHODIMP nsWindow::GetIMEOpenState(PRBool* aState) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP nsWindow::CancelIMEComposition() {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
+#endif

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Peter Annema <disttsc@bart.nl>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #ifndef nsTextBoxFrame_h___
@@ -58,15 +58,16 @@ public:
 
   friend nsresult NS_NewTextBoxFrame(nsIPresShell* aPresShell, nsIFrame** aNewFrame);
 
-  NS_IMETHOD  Init(nsPresContext*  aPresContext,
+  NS_IMETHOD  Init(nsIPresContext*  aPresContext,
                    nsIContent*      aContent,
                    nsIFrame*        aParent,
                    nsStyleContext*  aContext,
                    nsIFrame*        asPrevInFlow);
 
-  NS_IMETHOD Destroy(nsPresContext* aPresContext);
+  NS_IMETHOD Destroy(nsIPresContext* aPresContext);
 
-  NS_IMETHOD AttributeChanged(nsIContent*     aChild,
+  NS_IMETHOD AttributeChanged(nsIPresContext* aPresContext,
+                              nsIContent*     aChild,
                               PRInt32         aNameSpaceID,
                               nsIAtom*        aAttribute,
                               PRInt32         aModType);
@@ -75,13 +76,13 @@ public:
   NS_IMETHOD GetFrameName(nsAString& aResult) const;
 #endif
 
-  virtual void UpdateAttributes(nsPresContext*  aPresContext,
+  virtual void UpdateAttributes(nsIPresContext*  aPresContext,
                                 nsIAtom*         aAttribute,
                                 PRBool&          aResize,
                                 PRBool&          aRedraw);
 
 
-  NS_IMETHOD Paint(nsPresContext*      aPresContext,
+  NS_IMETHOD Paint(nsIPresContext*      aPresContext,
                    nsIRenderingContext& aRenderingContext,
                    const nsRect&        aDirtyRect,
                    nsFramePaintLayer    aWhichLayer,
@@ -90,20 +91,16 @@ public:
 
   virtual ~nsTextBoxFrame();
 protected:
-  friend class nsAsyncAccesskeyUpdate;
-  // Should be called only by nsAsyncAccesskeyUpdate.
-  // Returns PR_TRUE if accesskey was updated.
-  PRBool UpdateAccesskey(nsWeakFrame& aWeakThis);
 
   void UpdateAccessTitle();
   void UpdateAccessIndex();
 
-  NS_IMETHOD PaintTitle(nsPresContext*      aPresContext,
+  NS_IMETHOD PaintTitle(nsIPresContext*      aPresContext,
                         nsIRenderingContext& aRenderingContext,
                         const nsRect&        aDirtyRect,
                         const nsRect&        aRect);
 
-  virtual void LayoutTitle(nsPresContext*      aPresContext,
+  virtual void LayoutTitle(nsIPresContext*      aPresContext,
                            nsIRenderingContext& aRenderingContext,
                            const nsRect&        aRect);
 
@@ -113,23 +110,22 @@ protected:
 
   nsTextBoxFrame(nsIPresShell* aShell);
 
-  virtual void CalculateTitleForWidth(nsPresContext*      aPresContext,
+  virtual void CalculateTitleForWidth(nsIPresContext*      aPresContext,
                                       nsIRenderingContext& aRenderingContext,
                                       nscoord              aWidth);
 
-  virtual void GetTextSize(nsPresContext*      aPresContext,
+  virtual void GetTextSize(nsIPresContext*      aPresContext,
                            nsIRenderingContext& aRenderingContext,
                            const nsString&      aString,
                            nsSize&              aSize,
                            nscoord&             aAscent);
 
-  nsresult RegUnregAccessKey(nsPresContext* aPresContext,
+  nsresult RegUnregAccessKey(nsIPresContext* aPresContext,
                              PRBool          aDoReg);
 
 private:
 
-  PRBool AlwaysAppendAccessKey();
-  PRBool InsertSeparatorBeforeAccessKey();
+  PRBool  AlwaysAppendAccessKey();
 
   CroppingStyle mCropType;
   nsString mTitle;
@@ -137,15 +133,12 @@ private:
   nsString mAccessKey;
   nscoord mTitleWidth;
   nsAccessKeyInfo* mAccessKeyInfo;
-  PRPackedBool mNeedsRecalc;
-  PRPackedBool mNeedsReflowCallback;
+  PRBool mNeedsRecalc;
   nsSize mTextSize;
   nscoord mAscent;
 
   static PRBool gAlwaysAppendAccessKey;
   static PRBool gAccessKeyPrefInitialized;
-  static PRBool gInsertSeparatorBeforeAccessKey;
-  static PRBool gInsertSeparatorPrefInitialized;
 
 }; // class nsTextBoxFrame
 

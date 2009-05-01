@@ -1,11 +1,11 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -139,8 +139,7 @@ jsd_IsValuePrimitive(JSDContext* jsdc, JSDValue* jsdval)
 JSBool
 jsd_IsValueFunction(JSDContext* jsdc, JSDValue* jsdval)
 {
-    return !JSVAL_IS_PRIMITIVE(jsdval->val) &&
-           JS_ObjectIsFunction(jsdc->dumbContext, JSVAL_TO_OBJECT(jsdval->val));
+    return JSVAL_IS_FUNCTION(jsdc->dumbContext, jsdval->val);
 }
 
 JSBool
@@ -151,7 +150,10 @@ jsd_IsValueNative(JSDContext* jsdc, JSDValue* jsdval)
     JSFunction* fun;
     JSExceptionState* exceptionState;
 
-    if(jsd_IsValueFunction(jsdc, jsdval))
+    if(!JSVAL_IS_OBJECT(val))
+        return JS_FALSE;
+
+    if(JSVAL_IS_FUNCTION(cx, val))
     {
         exceptionState = JS_SaveExceptionState(cx);
         fun = JS_ValueToFunction(cx, val);
@@ -163,7 +165,7 @@ jsd_IsValueNative(JSDContext* jsdc, JSDValue* jsdval)
         }
         return JS_GetFunctionScript(cx, fun) ? JS_FALSE : JS_TRUE;
     }
-    return !JSVAL_IS_PRIMITIVE(val);
+    return JSVAL_TO_OBJECT(val) && OBJ_IS_NATIVE(JSVAL_TO_OBJECT(val));
 }
 
 /***************************************************************************/
@@ -225,13 +227,14 @@ const char*
 jsd_GetValueFunctionName(JSDContext* jsdc, JSDValue* jsdval)
 {
     JSContext* cx = jsdc->dumbContext;
+    jsval val = jsdval->val;
     JSFunction* fun;
     JSExceptionState* exceptionState;
 
-    if(!jsdval->funName && jsd_IsValueFunction(jsdc, jsdval))
+    if(!jsdval->funName && JSVAL_IS_FUNCTION(cx, val))
     {
         exceptionState = JS_SaveExceptionState(cx);
-        fun = JS_ValueToFunction(cx, jsdval->val);
+        fun = JS_ValueToFunction(cx, val);
         JS_RestoreExceptionState(cx, exceptionState);
         if(!fun)
             return NULL;
@@ -507,7 +510,7 @@ jsd_GetValuePrototype(JSDContext* jsdc, JSDValue* jsdval)
             return NULL;
         if(!(obj = JSVAL_TO_OBJECT(jsdval->val)))
             return NULL;
-        if(!(proto = JS_GetPrototype(jsdc->dumbContext, obj)))
+        if(!(proto = OBJ_GET_PROTO(jsdc->dumbContext,obj)))
             return NULL;
         jsdval->proto = jsd_NewValue(jsdc, OBJECT_TO_JSVAL(proto));
     }
@@ -529,7 +532,7 @@ jsd_GetValueParent(JSDContext* jsdc, JSDValue* jsdval)
             return NULL;
         if(!(obj = JSVAL_TO_OBJECT(jsdval->val)))
             return NULL;
-        if(!(parent = JS_GetParent(jsdc->dumbContext,obj)))
+        if(!(parent = OBJ_GET_PARENT(jsdc->dumbContext,obj)))
             return NULL;
         jsdval->parent = jsd_NewValue(jsdc, OBJECT_TO_JSVAL(parent));
     }
@@ -552,7 +555,7 @@ jsd_GetValueConstructor(JSDContext* jsdc, JSDValue* jsdval)
             return NULL;
         if(!(obj = JSVAL_TO_OBJECT(jsdval->val)))
             return NULL;
-        if(!(proto = JS_GetPrototype(jsdc->dumbContext,obj)))
+        if(!(proto = OBJ_GET_PROTO(jsdc->dumbContext,obj)))
             return NULL;
         if(!(ctor = JS_GetConstructor(jsdc->dumbContext,proto)))
             return NULL;
@@ -572,8 +575,8 @@ jsd_GetValueClassName(JSDContext* jsdc, JSDValue* jsdval)
         JSObject* obj;
         if(!(obj = JSVAL_TO_OBJECT(val)))
             return NULL;
-        if(JS_GET_CLASS(jsdc->dumbContext, obj))
-            jsdval->className = JS_GET_CLASS(jsdc->dumbContext, obj)->name;
+        if(OBJ_GET_CLASS(jsdc->dumbContext, obj))
+            jsdval->className = OBJ_GET_CLASS(jsdc->dumbContext, obj)->name;
     }
     return jsdval->className;
 }

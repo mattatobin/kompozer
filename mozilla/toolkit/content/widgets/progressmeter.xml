@@ -30,13 +30,8 @@
             var delta = p - c;
             if (delta < 0)
               delta = -delta;
-            if (delta > 3 || p == 0 || p == 100) {
+            if (delta > 3 || p == 0 || p == 100)
               this.setAttribute("value", p);
-              // Fire DOM event so that accessible value change events occur
-              var event = document.createEvent('Events');
-              event.initEvent('ValueChange', true, true);
-              this.dispatchEvent(event);
-            }
           }
           
           return p;
@@ -69,18 +64,17 @@
           var spacer = document.getAnonymousElementByAttribute(this, "anonid", "spacer");
           var position = -1;
           var interval = setInterval(function nextStep() {
-            if (stack.parentNode) {
-              var width = stack.boxObject.width >> 2;
+            try {
               spacer.height = stack.boxObject.height;
-              spacer.width = width;
-              spacer.left = width * position;
-              position += 15 / (width + 150);
+              spacer.width = stack.boxObject.width >> 2;
+              spacer.left = spacer.width * position;
+              position += 30 / (stack.boxObject.width + 600);
               if (position >= 4)
                 position = -1;
-            } else {
+            } catch (e) {
               clearInterval(interval);
             }
-          }, 20);
+          }, 10);
         ]]></body>
       </method>
 

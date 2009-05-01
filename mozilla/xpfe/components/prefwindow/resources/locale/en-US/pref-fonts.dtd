@@ -1,7 +1,7 @@
 <!-- extracted from content/pref-fonts.xul -->
 
 <!-- LOCALIZATION NOTE : FILE 'Fonts' prefs dialog -->
-<!ENTITY  pref.fonts.title                        "Fonts">
+<!ENTITY  lHeader                                 "Fonts">
 
 <!ENTITY  language.label                          "Fonts for:">
 <!ENTITY  language.accesskey                      "t">
@@ -37,22 +37,13 @@
 <!ENTITY  font.langGroup.baltic                   "Baltic">
 <!ENTITY  font.langGroup.el                       "Greek">
 <!ENTITY  font.langGroup.turkish                  "Turkish">
-<!ENTITY  font.langGroup.unicode                  "Other Languages">
+<!ENTITY  font.langGroup.unicode                  "Unicode">
 <!ENTITY  font.langGroup.user-def                 "User Defined">
 <!ENTITY  font.langGroup.thai                     "Thai">
 <!ENTITY  font.langGroup.hebrew                   "Hebrew">
 <!ENTITY  font.langGroup.arabic                   "Arabic">
 <!ENTITY  font.langGroup.devanagari               "Devanagari">
 <!ENTITY  font.langGroup.tamil                    "Tamil">
-<!ENTITY  font.langGroup.armenian                 "Armenian">
-<!ENTITY  font.langGroup.bengali                  "Bengali">
-<!ENTITY  font.langGroup.canadian                 "Unified Canadian Syllabary">
-<!ENTITY  font.langGroup.ethiopic                 "Ethiopic">
-<!ENTITY  font.langGroup.georgian                 "Georgian">
-<!ENTITY  font.langGroup.gujarati                 "Gujarati">
-<!ENTITY  font.langGroup.gurmukhi                 "Gurmukhi">
-<!ENTITY  font.langGroup.khmer                    "Khmer">
-<!ENTITY  font.langGroup.malayalam                "Malayalam">
 <!-- Minimum font size -->
 <!ENTITY minSize.label                            "Minimum font size:">
 <!ENTITY minSize.accesskey                        "z">
@@ -78,3 +69,19 @@
 <!-- LOCALIZATION NOTE (useDocFontDynamic): Translate 'Dynamic Fonts' according to Netscape Glossary -->
 <!ENTITY  useDocFontDynamic.label                 "Use all the fonts chosen by the page">
 <!ENTITY  useDocFontDynamic.accesskey             "a">
+
+<!-- font scaling -->
+<!ENTITY  resolution.label                        "Display resolution:">
+<!ENTITY  resolution.accesskey                    "r">
+<!-- LOCALIZATION NOTE (resolution.dpi): dpi stands for "dots per inch" -->
+<!ENTITY  resolution.dpi                          "dpi">
+<!-- LOCALIZATION NOTE (resolution.dpi): $val will be replaced by a numeric dpi value. -->
+<!ENTITY  resolution.dpival                       "$val &resolution.dpi;">
+<!ENTITY  resolution.system.label                 "System setting">
+<!ENTITY  resolution.other                        "Other...">
+
+<!-- screen calibration dialog -->
+<!ENTITY  calibrateDialog.title                   "Calibrate Resolution">
+<!ENTITY  calibrate.instructions                  "The length of the line above is:">
+<!ENTITY  units.inches                            "inches">
+<!ENTITY  units.centimetres                       "centimeters">

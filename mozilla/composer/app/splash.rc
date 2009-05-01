@@ -36,7 +36,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 #include <windows.h>
-#include "nsNativeAppSupportWin.h"
+#include "nsINativeAppSupportWin.h"
 
 1 24 "kompozer.exe.manifest" 
 

@@ -1,11 +1,11 @@
 /* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Chris Saari <saari@netscape.com>
+ *  Chris Saari <saari@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -28,11 +28,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -71,13 +71,43 @@ or revised. This service is offered free of charge; please provide us with your
 mailing address.
 */
 
-#include <stddef.h>
 #include "prtypes.h"
 #include "prmem.h"
 #include "prlog.h"
 #include "GIF2.h"
+#include "nsCRT.h"
+#include "nsRecyclingAllocator.h"
+#include "nsAutoLock.h"
 
 #include "nsGIFDecoder2.h"
+
+/*******************************************************************************
+ * Gif decoder allocator
+ *
+ * For every image that gets loaded, we allocate
+ *     4097 x 2 : gs->prefix
+ *     4097 x 1 : gs->suffix
+ *     4097 x 1 : gs->stack
+ * for lzw to operate on the data. These are held for a very short interval
+ * and freed. This allocator tries to keep one set of these around
+ * and reuses them; automatically fails over to use calloc/free when all
+ * buckets are full.
+ */
+const int kGifAllocatorNBucket = 9;
+nsRecyclingAllocator *gGifAllocator = nsnull;
+
+void nsGifShutdown()
+{
+  // Release cached buffers from zlib allocator
+  delete gGifAllocator;
+}
+
+#define MAX_HOLD 768        /* for now must be big enough for a cmap */
+
+#define MAX_LZW_BITS          12
+#define MAX_BITS            4097 /* 2^MAX_LZW_BITS+1 */
+#define MINIMUM_DELAY_TIME    10
+
 
 /* Gather n characters from the input stream and then enter state s. */
 #define GETN(n,s)                    \
@@ -347,7 +377,7 @@ static int do_lzw(gif_struct *gs, const PRUint8 *q)
         *stackp++ = suffix[code];
         code = prefix[code];
 
-        if (stackp == stack + MAX_BITS || code >= MAX_BITS)
+        if (stackp == stack + MAX_BITS)
           return -1;
       }
 
@@ -398,6 +428,28 @@ static int do_lzw(gif_struct *gs, const PRUint8 *q)
   return 0;
 }
 
+static inline void *gif_calloc(size_t n, size_t s)
+{
+  if (!gGifAllocator)
+    gGifAllocator = new nsRecyclingAllocator(kGifAllocatorNBucket,
+                                             NS_DEFAULT_RECYCLE_TIMEOUT, "gif");
+  if (gGifAllocator)
+    return gGifAllocator->Calloc(n, s);
+  else
+    return calloc(n, s);
+}
+
+static inline void gif_free(void *ptr)
+{
+  if (!ptr)
+    return;
+  if (gGifAllocator)
+    gGifAllocator->Free(ptr);
+  else
+    free(ptr);
+}
+
+
 /*******************************************************************************
  * setup for gif_struct decoding
  */
@@ -407,8 +459,6 @@ PRBool GIFInit(gif_struct* gs, void* aClientData)
   if (!gs)
     return PR_FALSE;
 
-  // Clear out the structure, excluding the arrays
-  memset(gs, 0, sizeof(gif_struct));
   gs->clientptr = aClientData;
 
   gs->state = gif_init;
@@ -430,7 +480,8 @@ PRBool gif_write_ready(const gif_struct* gs)
   if (!gs)
     return PR_FALSE;
 
-  return (gs->gathered < MAX_READ_AHEAD);
+  PRInt32 max = PR_MAX(MAX_READ_AHEAD, gs->requested_buffer_fullness);
+  return (gs->gathered < max);
 }
 
 /******************************************************************************/
@@ -468,7 +519,7 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
     {
       /* Initialize LZW parser/decoder */
       gs->datasize = *q;
-      if (gs->datasize >= MAX_LZW_BITS) {
+      if (gs->datasize > MAX_LZW_BITS) {
         gs->state = gif_error;
         break;
       }
@@ -480,6 +531,17 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
       gs->codemask = (1 << gs->codesize) - 1;
 
       gs->datum = gs->bits = 0;
+      if (!gs->prefix)
+        gs->prefix = (PRUint16 *)gif_calloc(sizeof(PRUint16), MAX_BITS);
+      if (!gs->suffix)
+        gs->suffix = ( PRUint8 *)gif_calloc(sizeof(PRUint8),  MAX_BITS);
+      if (!gs->stack)
+        gs->stack  = ( PRUint8 *)gif_calloc(sizeof(PRUint8),  MAX_BITS);
+      if (!gs->prefix || !gs->suffix || !gs->stack) {
+        /* complete from abort will free prefix & suffix */
+        gs->state = gif_oom;
+        break;
+      }
 
       if (gs->clear_code >= MAX_BITS) {
         gs->state = gif_error;
@@ -565,7 +627,14 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
 
     case gif_global_colormap:
     {
-      memcpy(gs->global_colormap, q, 3 * gs->global_colormap_size);
+      PRUint8* map = (PRUint8*)PR_MALLOC(3 * gs->global_colormap_size);
+      if (!map) {
+        gs->state = gif_oom;
+        break;
+      }
+
+      gs->global_colormap = map;
+      memcpy(map, q, 3 * gs->global_colormap_size);
 
       GETN(1, gif_image_start);
     }
@@ -657,6 +726,7 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
         gs->is_transparent = PR_FALSE;
         // ignoring gfx control extension
       }
+      gs->control_extension = PR_TRUE;
       gs->disposal_method = (gdispose)(((*q) >> 2) & 0x7);
       // Some specs say 3rd bit (value 4), other specs say value 3
       // Let's choose 3 (the more popular)
@@ -716,16 +786,19 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
       }
       /* Wait for specified # of bytes to enter buffer */
       else if (netscape_extension == 2) {
-        // Don't do this, this extension doesn't exist (isn't used at all) 
-        // and doesn't do anything, as our streaming/buffering takes care of it all...
-        // See: http://semmix.pl/color/exgraf/eeg24.htm
-        GETN(1, gif_netscape_extension_block);
+        gs->requested_buffer_fullness = GETINT32(q + 1);
+        GETN(gs->requested_buffer_fullness, gif_wait_for_buffer_full);
       } else
         gs->state = gif_error; // 0,3-7 are yet to be defined netscape
                                // extension codes
 
       break;
     }
+
+    case gif_wait_for_buffer_full:
+      gs->gathered = gs->requested_buffer_fullness;
+      GETN(1, gif_netscape_extension_block);
+      break;
 
     case gif_image_header:
     {
@@ -828,6 +901,7 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
       }
 
       /* Clear state from last image */
+      gs->requested_buffer_fullness = 0;
       gs->irow = 0;
       gs->rows_remaining = gs->height;
       gs->rowend = gs->rowbuf + gs->width;
@@ -839,7 +913,6 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
       {
         int num_colors = 2 << (q[8] & 0x7);
 
-        // If current local_colormap is not big enough, force reallocation
         if (num_colors > gs->local_colormap_size)
           PR_FREEIF(gs->local_colormap);
         gs->local_colormap_size = num_colors;
@@ -900,6 +973,7 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
                                      gs->delay_time);
 
         /* Clear state from this image */
+        gs->control_extension = PR_FALSE;
         gs->is_transparent = PR_FALSE;
 
         /* An image can specify a delay time before which to display
@@ -977,7 +1051,7 @@ PRStatus gif_write(gif_struct *gs, const PRUint8 *buf, PRUint32 len)
     // Handle general errors
     case gif_error:
       nsGIFDecoder2::EndGIF(gs->clientptr, gs->loop_count);
-      return PR_SUCCESS;
+      return PR_FAILURE;
 
     case gif_stop_animating:
       return PR_SUCCESS;
@@ -1003,8 +1077,13 @@ void gif_destroy(gif_struct *gs)
     gs->delay_time = 0;
 
   PR_FREEIF(gs->rowbuf);
+  gif_free(gs->prefix);
+  gif_free(gs->suffix);
+  gif_free(gs->stack);
   PR_FREEIF(gs->hold);
 
   PR_FREEIF(gs->local_colormap);
+  PR_FREEIF(gs->global_colormap);
+  PR_FREEIF(gs);
 }
 

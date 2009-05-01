@@ -258,13 +258,13 @@ yyloop:
     if (yyerrflag) goto yyinrecovery;
 #ifdef lint
     goto yynewerror;
-yynewerror:
 #endif
+yynewerror:
     yyerror("syntax error");
 #ifdef lint
     goto yyerrlab;
-yyerrlab:
 #endif
+yyerrlab:
     ++yynerrs;
 yyinrecovery:
     if (yyerrflag < 3)

@@ -1,41 +1,37 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/ 
+ * 
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
  * for the specific language governing rights and limitations under the
- * License.
+ * License. 
  *
- * The Original Code is The JavaScript Debugger.
- *
+ * The Original Code is The JavaScript Debugger
+ * 
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * Netscape Communications Corporation
+ * Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation.
+ *
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU Public License (the "GPL"), in which case the
+ * provisions of the GPL are applicable instead of those above.
+ * If you wish to allow use of your version of this file only
+ * under the terms of the GPL and not to allow others to use your
+ * version of this file under the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice
+ * and other provisions required by the GPL.  If you do not delete
+ * the provisions above, a recipient may use your version of this
+ * file under either the MPL or the GPL.
  *
  * Contributor(s):
- *   Robert Ginda, <rginda@netscape.com>, original author
+ *  Robert Ginda, <rginda@netscape.com>, original author
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 const DEFAULT_VURLS =
 ("x-vloc:/mainwindow/initial-container?target=container&id=outer&type=horizontal;" +
@@ -146,9 +142,10 @@ function syncTreeView (treeContent, treeView, cb)
             throw "tantrum";
         
         treeContent.treeBoxObject.view = treeView;
-        if (treeView.selection)
+        if (treeContent.treeBoxObject.selection)
         {
-            treeView.selection.tree = treeContent.treeBoxObject;
+            treeContent.treeBoxObject.selection.tree =
+                treeContent.treeBoxObject;
         }
     }
     catch (ex)
@@ -197,7 +194,7 @@ function getTreeContext (view, cx, recordContextGetter)
     //dd ("getTreeContext {");
 
     var i = 0;
-    var selection = view.tree.view.selection;
+    var selection = view.tree.selection;
     var row = selection.currentIndex;
     var rec;
     
@@ -491,9 +488,9 @@ function bv_getcx(cx)
 }
 
 console.views.breaks.getCellProperties =
-function bv_cellprops (index, col, properties)
+function bv_cellprops (index, colID, properties)
 {
-    if (col.id == "breaks:col-0")
+    if (colID == "breaks:col-0")
     {
         var row = this.childData.locateChildByVisualRow(index);
         if (row.type == "future")
@@ -612,8 +609,7 @@ function lv_renit (jsdFrame)
     
     if (jsdFrame.scope)
     {
-        this.scopeRecord = new ValueRecord(jsdFrame.scope, MSG_VAL_SCOPE, "",
-                                           jsdFrame);
+        this.scopeRecord = new ValueRecord (jsdFrame.scope, MSG_VAL_SCOPE, "");
         this.scopeRecord.onPreRefresh = null;
         this.childData.appendChild(this.scopeRecord);
         if (!state && jsdFrame.scope.propertyCount <
@@ -635,7 +631,7 @@ function lv_renit (jsdFrame)
     if (jsdFrame.thisValue)
     {
         this.thisRecord = new ValueRecord (jsdFrame.thisValue, MSG_VAL_THIS,
-                                           "", jsdFrame);
+                                           "");
         this.thisRecord.onPreRefresh = null;
         this.childData.appendChild(this.thisRecord);
         if (!state && jsdFrame.thisValue.propertyCount < 
@@ -770,9 +766,9 @@ function lv_rowcommand(rec)
 }
 
 console.views.locals.getCellProperties =
-function lv_cellprops (index, col, properties)
+function lv_cellprops (index, colID, properties)
 {
-    if (col.id != "locals:col-0")
+    if (colID != "locals:col-0")
         return null;
     
     var row = this.childData.locateChildByVisualRow(index);
@@ -800,7 +796,30 @@ function lv_getcx(cx)
         if (i == 0)
         {
             cx.jsdValue = rec.value;
-            cx.expression = rec.expression;
+            var items = new Array();
+            items.unshift(rec.displayName);
+            
+            if ("value" in rec.parentRecord)
+            {
+                cx.parentValue = rec.parentRecord.value;
+                var cur = rec.parentRecord;
+                while (cur != locals.childData &&
+                       cur != locals.scopeRecord)
+                {
+                    if ("isECMAProto" in cur)
+                        items.unshift("__proto__");
+                    else if ("isECMAParent" in cur)
+                        items.unshift("__parent__");
+                    else
+                        items.unshift(cur.displayName);
+                    cur = cur.parentRecord;
+                }
+            }
+            else
+            {
+                cx.parentValue = null;
+            }
+            cx.expression = makeExpression(items);
             cx.propertyName = rec.displayName;
         }
         else
@@ -1237,13 +1256,13 @@ function scv_click (e)
     {
         /* resort by column */
         var rowIndex = new Object();
-        var col = new Object();
+        var colID = new Object();
         var childElt = new Object();
         
         var treeBox = console.views.scripts.tree;
-        treeBox.getCellAt(e.clientX, e.clientY, rowIndex, col, childElt);
+        treeBox.getCellAt(e.clientX, e.clientY, rowIndex, colID, childElt);
         var prop;
-        switch (col.value.id)
+        switch (colID.value)
         {
             case "scripts:col-0":
                 prop = "functionName";
@@ -1268,11 +1287,15 @@ console.views.scripts.onDragStart = Prophylactic(console.views.scripts,
                                                  scv_dstart);
 function scv_dstart (e, transferData, dragAction)
 {
-    var row = this.tree.getRowAt(e.clientX, e.clientY);
-    if (row == -1)
+    var row = new Object();
+    var colID = new Object();
+    var childElt = new Object();
+
+    this.tree.getCellAt(e.clientX, e.clientY, row, colID, childElt);
+    if (!colID.value)
         return false;
     
-    row = this.childData.locateChildByVisualRow (row);
+    row = this.childData.locateChildByVisualRow (row.value);
     var rv = false;
     if (row && ("onDragStart" in row))
         rv = row.onDragStart (e, transferData, dragAction);
@@ -1291,9 +1314,9 @@ function scv_setmode (flag)
 }
 
 console.views.scripts.getCellProperties =
-function scv_cellprops (index, col, properties)
+function scv_cellprops (index, colID, properties)
 {
-    if (col.id != "scripts:col-0")
+    if (colID != "scripts:col-0")
         return null;
     
     var row = this.childData.locateChildByVisualRow(index);
@@ -2085,7 +2108,7 @@ function skv_hookFrame (e)
     if (console.views.stack.tree)
     {
         stackView.scrollTo (e.frameIndex, 0);
-        stackView.tree.view.selection.currentIndex = e.frameIndex;
+        stackView.tree.selection.currentIndex = e.frameIndex;
         stackView.tree.invalidate();
     }
 }
@@ -2159,9 +2182,9 @@ function sv_getcx(cx)
 }    
 
 console.views.stack.getCellProperties =
-function sv_cellprops (index, col, properties)
+function sv_cellprops (index, colID, properties)
 {
-    if (col.id != "stack:col-0")
+    if (colID != "stack:col-0")
         return;
 
     var row = this.childData.locateChildByVisualRow(index);
@@ -2774,7 +2797,7 @@ function s2v_sourceclick (event)
         target = target.parentNode;
     }
     
-    if (target && target.localName == "margin" && event.button == 0)
+    if (target && target.localName == "margin")
     {
         var line = parseInt (target.nextSibling.firstChild.data);
         sourceText.onMarginClick (event, line);
@@ -3056,8 +3079,8 @@ console.views.source2.onCloseButton =
 function s2v_onclose(e)
 {
     var index = this.getIndexOfTab(e.target.parentNode);
-    this.removeSourceTabAtIndex(index);
-    e.stopPropagation();
+    this.removeSourceTabAtIndex(index);    
+    e.preventBubble()
 }
 
 console.views.source2.onTabClick =
@@ -3648,21 +3671,21 @@ function sv_click (e)
     if (target.localName == "treechildren")
     {
         var row = new Object();
-        var col = new Object();
+        var colID = new Object();
         var childElt = new Object();
         
         var treeBox = console.views.source.tree;
-        treeBox.getCellAt(e.clientX, e.clientY, row, col, childElt);
+        treeBox.getCellAt(e.clientX, e.clientY, row, colID, childElt);
         if (row.value == -1)
           return;
         
-        colID = col.value.id;
+        colID = colID.value;
         row = row.value;
         
         if (colID == "source:col-0")
         {
             if ("onMarginClick" in console.views.source.childData)
-                console.views.source.childData.onMarginClick (e, row.value + 1);
+                console.views.source.childData.onMarginClick (e, row + 1);
         }
     }
 
@@ -3672,7 +3695,7 @@ console.views.source.onSelect =
 function sv_select (e)
 {
     var sourceView = console.views.source;
-    sourceView.currentLine = sourceView.tree.view.selection.currentIndex + 1;
+    sourceView.currentLine = sourceView.tree.selection.currentIndex + 1;
     console.views.source.syncHeader();
 }
 
@@ -3942,7 +3965,7 @@ function sv_rowprops (row, properties)
 
 /* nsITreeView */
 console.views.source.getCellProperties =
-function sv_cellprops (row, col, properties)
+function sv_cellprops (row, colID, properties)
 {
     if (!("childData" in this) || !this.childData.isLoaded ||
         row < 0 || row >= this.childData.lines.length)
@@ -3952,7 +3975,7 @@ function sv_cellprops (row, col, properties)
     if (!line)
         return;
     
-    if (col.id == "source:col-0")
+    if (colID == "source:col-0")
     {
         if ("lineMap" in this.childData && row in this.childData.lineMap)
         {
@@ -3995,17 +4018,17 @@ function sv_cellprops (row, col, properties)
 
 /* nsITreeView */
 console.views.source.getCellText =
-function sv_getcelltext (row, col)
+function sv_getcelltext (row, colID)
 {    
     if (!this.childData.isLoaded || 
         row < 0 || row > this.childData.lines.length)
         return "";
     
-    var ary = col.id.match (/:(.*)/);
+    var ary = colID.match (/:(.*)/);
     if (ary)
-        col = ary[1];
+        colID = ary[1];
     
-    switch (col)
+    switch (colID)
     {
         case "col-2":
             return this.childData.lines[row];
@@ -4113,9 +4136,9 @@ function onHide()
 }
 
 console.views.watches.getCellProperties =
-function wv_cellprops (index, col, properties)
+function wv_cellprops (index, colID, properties)
 {
-    if (col.id != "watches:col-0")
+    if (colID != "watches:col-0")
         return null;
     
     var row = this.childData.locateChildByVisualRow(index);
@@ -4282,19 +4305,9 @@ function cmdWatchExpr (e)
 
         refresher = function () {
                         if ("frames" in console)
-                        {
-                            this.jsdFrame = getCurrentFrame();
                             this.value = evalInTargetScope(e.expression, true);
-                        }
                         else
-                        {
-                            /* This is a security protection; leaving the
-                             * object open allows access to child items when
-                             * we have no frame to safely eval them on.
-                             */
-                            this.close();
                             throw MSG_VAL_NA;
-                        }
                     };
     }
     else
@@ -4447,9 +4460,9 @@ function winv_hide ()
 }
 
 console.views.windows.getCellProperties =
-function winv_cellprops (index, col, properties)
+function winv_cellprops (index, colID, properties)
 {
-    if (col.id == "windows:col-0")
+    if (colID == "windows:col-0")
     {
         var row = this.childData.locateChildByVisualRow(index);
         if (row)

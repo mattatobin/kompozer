@@ -1,40 +1,26 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "MPL"); you may not use this file except in
+ * compliance with the MPL.  You may obtain a copy of the MPL at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * Software distributed under the MPL is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the MPL
  * for the specific language governing rights and limitations under the
- * License.
+ * MPL.
  *
- * The Original Code is mozilla.org Code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU Library General Public License (the "LGPL"), in
+ * which case the provisions of the LGPL are applicable instead of
+ * those above.  If you wish to allow use of your version of this file
+ * only under the terms of the LGPL and not to allow others to use
+ * your version of this file under the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice and
+ * other provisions required by the LGPL.  If you do not delete the
+ * provisions above, a recipient may use your version of this file
+ * under either the MPL or the LGPL.
+ */
 
 /*
  * This code is derived from GdkRgb.
@@ -86,13 +72,6 @@ _XFUNCPROTOBEGIN
 /* prtypes contains definitions for uint32/int32 and uint16/int16 */
 #include "prtypes.h"
 #include "prcpucfg.h"
-#include "nscore.h"
-
-#ifdef _IMPL_XLIBRGB_API
-#define NS_XLIBRGB_API(type) NS_EXPORT_(type)
-#else
-#define NS_XLIBRGB_API(type) NS_IMPORT_(type)
-#endif
 
 #define NS_TO_XXLIB_RGB(ns) (ns & 0xff) << 16 | (ns & 0xff00) | ((ns >> 16) & 0xff)
 #else
@@ -100,8 +79,6 @@ typedef unsigned int uint32;
 typedef int int32;
 typedef unsigned short uint16;
 typedef short int16;
-
-#define NS_XLIBRGB_API(type) type
 #endif /* USE_MOZILLA_TYPES */
 
 typedef struct _XlibRgbCmap XlibRgbCmap;
@@ -132,23 +109,23 @@ typedef struct
   long        xtemplate_mask;
 } XlibRgbArgs;
 
-NS_XLIBRGB_API(XlibRgbHandle *)
+XlibRgbHandle *
 xxlib_rgb_create_handle (Display *display, Screen *screen, 
                          XlibRgbArgs *args);
                                   
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_destroy_handle (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(unsigned long)
+unsigned long
 xxlib_rgb_xpixel_from_rgb (XlibRgbHandle *handle, uint32 rgb);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_gc_set_foreground (XlibRgbHandle *handle, GC gc, uint32 rgb);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_gc_set_background (XlibRgbHandle *handle, GC gc, uint32 rgb);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_rgb_image (XlibRgbHandle *handle, Drawable drawable,
                       GC gc,
                       int x,
@@ -159,7 +136,7 @@ xxlib_draw_rgb_image (XlibRgbHandle *handle, Drawable drawable,
                       unsigned char *rgb_buf,
                       int rowstride);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_rgb_image_dithalign (XlibRgbHandle *handle, Drawable drawable,
                                 GC gc,
                                 int x,
@@ -172,7 +149,7 @@ xxlib_draw_rgb_image_dithalign (XlibRgbHandle *handle, Drawable drawable,
                                 int xdith,
                                 int ydith);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_rgb_32_image (XlibRgbHandle *handle, Drawable drawable,
                          GC gc,
                          int x,
@@ -183,7 +160,7 @@ xxlib_draw_rgb_32_image (XlibRgbHandle *handle, Drawable drawable,
                          unsigned char *buf,
                          int rowstride);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_gray_image (XlibRgbHandle *handle, Drawable drawable,
                        GC gc,
                        int x,
@@ -194,13 +171,13 @@ xxlib_draw_gray_image (XlibRgbHandle *handle, Drawable drawable,
                        unsigned char *buf,
                        int rowstride);
 
-NS_XLIBRGB_API(XlibRgbCmap *)
+XlibRgbCmap *
 xxlib_rgb_cmap_new (XlibRgbHandle *handle, uint32 *colors, int n_colors);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_cmap_free (XlibRgbHandle *handle, XlibRgbCmap *cmap);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_indexed_image (XlibRgbHandle *handle, Drawable drawable,
                           GC gc,
                           int x,
@@ -212,7 +189,7 @@ xxlib_draw_indexed_image (XlibRgbHandle *handle, Drawable drawable,
                           int rowstride,
                           XlibRgbCmap *cmap);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_draw_xprint_scaled_rgb_image( XlibRgbHandle *handle,
                                     Drawable drawable,
                                     long paper_resolution,
@@ -228,50 +205,50 @@ xxlib_draw_xprint_scaled_rgb_image( XlibRgbHandle *handle,
 
 /* Below are some functions which are primarily useful for debugging
    and experimentation. */
-NS_XLIBRGB_API(Bool)
+Bool
 xxlib_rgb_ditherable (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_set_verbose (XlibRgbHandle *handle, Bool verbose);
 
-NS_XLIBRGB_API(void)
+void
 xxlib_rgb_set_min_colors (XlibRgbHandle *handle, int min_colors);
 
-NS_XLIBRGB_API(Colormap)
+Colormap
 xxlib_rgb_get_cmap (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(Visual *)
+Visual *
 xxlib_rgb_get_visual (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(XVisualInfo *)
+XVisualInfo *
 xxlib_rgb_get_visual_info (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(int)
+int
 xxlib_rgb_get_depth (XlibRgbHandle *handle);
 
 /* hint: if you don't how to obtain a handle - use |xxlib_find_handle()| :-) */
-NS_XLIBRGB_API(Display *)
+Display *
 xxlib_rgb_get_display (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(Screen *)
+Screen *
 xxlib_rgb_get_screen (XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(unsigned long)
+unsigned long
 xxlib_get_prec_from_mask(unsigned long);
 
-NS_XLIBRGB_API(unsigned long)
+unsigned long
 xxlib_get_shift_from_mask(unsigned long);
 
 /* default name - for cases where there is only one XlibRgbHandle required */
 #define XXLIBRGB_DEFAULT_HANDLE ("xxlib-default")
 
-NS_XLIBRGB_API(Bool)
+Bool 
 xxlib_register_handle(const char *name, XlibRgbHandle *handle);
 
-NS_XLIBRGB_API(Bool)
+Bool 
 xxlib_deregister_handle(const char *name);
 
-NS_XLIBRGB_API(XlibRgbHandle *)
+XlibRgbHandle *
 xxlib_find_handle(const char *name);
 
 _XFUNCPROTOEND

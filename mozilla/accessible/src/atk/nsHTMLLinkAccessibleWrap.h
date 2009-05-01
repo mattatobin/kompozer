@@ -43,7 +43,6 @@
 #include "nsHTMLImageAccessible.h"
 #include "nsHTMLLinkAccessible.h"
 #include "nsIAccessibleHyperLink.h"
-#include "nsArray.h"
 
 class nsHTMLLinkAccessibleWrap : public nsHTMLLinkAccessible,
                                  public nsIAccessibleHyperLink
@@ -52,10 +51,7 @@ public:
   NS_DECL_ISUPPORTS_INHERITED
   NS_DECL_NSIACCESSIBLEHYPERLINK
 
-  nsHTMLLinkAccessibleWrap(nsIDOMNode* aDomNode, nsIArray* aTextNodes, nsIWeakReference* aShell, nsIFrame *aFrame);
-private:
-  nsresult GetLinkOffset(PRInt32* aStartOffset, PRInt32* aEndOffset);
-  nsCOMPtr<nsIArray> mTextNodes;
+  nsHTMLLinkAccessibleWrap(nsIDOMNode* aDomNode, nsIWeakReference* aShell);
 };
 
 class nsHTMLImageMapAccessible : public nsHTMLImageAccessible,

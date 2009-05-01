@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -52,7 +52,6 @@
 #include "nsIServiceManager.h"
 
 #include "nsIDocument.h"
-#include "nsPIDOMWindow.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptContext.h"
 #include "nsIDirectoryService.h"
@@ -106,9 +105,7 @@ NS_IMPL_ISUPPORTS6(nsPluginInstancePeerImpl,
                    nsPIPluginInstancePeer)
 #endif
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetValue(nsPluginInstancePeerVariable variable,
-                                   void *value)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetValue(nsPluginInstancePeerVariable variable, void *value)
 {
   if(!mOwner)
     return NS_ERROR_FAILURE;
@@ -116,8 +113,7 @@ nsPluginInstancePeerImpl::GetValue(nsPluginInstancePeerVariable variable,
   return mOwner->GetValue(variable, value);
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetMIMEType(nsMIMEType *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetMIMEType(nsMIMEType *result)
 {
   if (nsnull == mMIMEType)
     *result = "";
@@ -127,8 +123,7 @@ nsPluginInstancePeerImpl::GetMIMEType(nsMIMEType *result)
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetMode(nsPluginMode *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetMode(nsPluginMode *result)
 {
   if (nsnull != mOwner)
     return mOwner->GetMode(result);
@@ -165,10 +160,9 @@ protected:
 NS_IMPL_ADDREF(nsPluginStreamToFile)
 NS_IMPL_RELEASE(nsPluginStreamToFile)
 
-nsPluginStreamToFile::nsPluginStreamToFile(const char* target,
-                                           nsIPluginInstanceOwner* owner)
-  : mTarget(PL_strdup(target)),
-    mOwner(owner)
+nsPluginStreamToFile::nsPluginStreamToFile(const char* target, nsIPluginInstanceOwner* owner) :
+  mTarget(PL_strdup(target)),
+  mOwner(owner)
 {
   nsresult rv;
   nsCOMPtr<nsIFile> pluginTmp;
@@ -208,9 +202,8 @@ nsPluginStreamToFile::~nsPluginStreamToFile()
     PL_strfree(mTarget);
 }
 
-nsresult
-nsPluginStreamToFile::QueryInterface(const nsIID& aIID,
-                                     void** aInstancePtrResult)
+nsresult nsPluginStreamToFile::QueryInterface(const nsIID& aIID,
+                                              void** aInstancePtrResult)
 {
   NS_PRECONDITION(nsnull != aInstancePtrResult, "null pointer");
 
@@ -233,8 +226,7 @@ nsPluginStreamToFile::Flush()
 }
 
 NS_IMETHODIMP
-nsPluginStreamToFile::Write(const char* aBuf, PRUint32 aCount,
-                            PRUint32 *aWriteCount)
+nsPluginStreamToFile::Write(const char* aBuf, PRUint32 aCount, PRUint32 *aWriteCount)
 {
   PRUint32 actualCount;
   mOutputStream->Write(aBuf, aCount, &actualCount);
@@ -245,16 +237,14 @@ nsPluginStreamToFile::Write(const char* aBuf, PRUint32 aCount,
 }
     
 NS_IMETHODIMP
-nsPluginStreamToFile::WriteFrom(nsIInputStream *inStr, PRUint32 count,
-                                PRUint32 *_retval)
+nsPluginStreamToFile::WriteFrom(nsIInputStream *inStr, PRUint32 count, PRUint32 *_retval)
 {
   NS_NOTREACHED("WriteFrom");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsPluginStreamToFile::WriteSegments(nsReadSegmentFun reader, void * closure,
-                                    PRUint32 count, PRUint32 *_retval)
+nsPluginStreamToFile::WriteSegments(nsReadSegmentFun reader, void * closure, PRUint32 count, PRUint32 *_retval)
 {
   NS_NOTREACHED("WriteSegments");
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -276,9 +266,7 @@ nsPluginStreamToFile::Close(void)
 
 // end of nsPluginStreamToFile
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::NewStream(nsMIMEType type, const char* target,
-                                    nsIOutputStream* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::NewStream(nsMIMEType type, const char* target, nsIOutputStream* *result)
 {
   nsresult rv;
   nsPluginStreamToFile*  stream = new nsPluginStreamToFile(target, mOwner);
@@ -290,8 +278,7 @@ nsPluginInstancePeerImpl::NewStream(nsMIMEType type, const char* target,
   return rv;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::ShowStatus(const char* message)
+NS_IMETHODIMP nsPluginInstancePeerImpl::ShowStatus(const char* message)
 {
   if (nsnull != mOwner)
     return mOwner->ShowStatus(message);
@@ -299,9 +286,7 @@ nsPluginInstancePeerImpl::ShowStatus(const char* message)
     return NS_ERROR_FAILURE;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetAttributes(PRUint16& n, const char*const*& names,
-                                        const char*const*& values)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetAttributes(PRUint16& n, const char*const*& names, const char*const*& values)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo  *tinfo;
@@ -325,8 +310,7 @@ nsPluginInstancePeerImpl::GetAttributes(PRUint16& n, const char*const*& names,
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetAttribute(const char* name, const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetAttribute(const char* name, const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo  *tinfo;
@@ -347,8 +331,7 @@ nsPluginInstancePeerImpl::GetAttribute(const char* name, const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetDOMElement(nsIDOMElement* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetDOMElement(nsIDOMElement* *result)
 {
   if (mOwner == nsnull) {
     *result = nsnull;
@@ -368,8 +351,7 @@ nsPluginInstancePeerImpl::GetDOMElement(nsIDOMElement* *result)
   return rv;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetTagType(nsPluginTagType *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetTagType(nsPluginTagType *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -390,8 +372,7 @@ nsPluginInstancePeerImpl::GetTagType(nsPluginTagType *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetTagText(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetTagText(const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -412,9 +393,7 @@ nsPluginInstancePeerImpl::GetTagText(const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetParameters(PRUint16& n, const char*const*& names,
-                                        const char*const*& values)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetParameters(PRUint16& n, const char*const*& names, const char*const*& values)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -438,8 +417,7 @@ nsPluginInstancePeerImpl::GetParameters(PRUint16& n, const char*const*& names,
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetParameter(const char* name, const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetParameter(const char* name, const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -460,8 +438,7 @@ nsPluginInstancePeerImpl::GetParameter(const char* name, const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetDocumentBase(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetDocumentBase(const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -482,8 +459,7 @@ nsPluginInstancePeerImpl::GetDocumentBase(const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetDocumentEncoding(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetDocumentEncoding(const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -504,8 +480,7 @@ nsPluginInstancePeerImpl::GetDocumentEncoding(const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetAlignment(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetAlignment(const char* *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -526,8 +501,7 @@ nsPluginInstancePeerImpl::GetAlignment(const char* *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetWidth(PRUint32 *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetWidth(PRUint32 *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -548,8 +522,7 @@ nsPluginInstancePeerImpl::GetWidth(PRUint32 *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetHeight(PRUint32 *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetHeight(PRUint32 *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -570,8 +543,7 @@ nsPluginInstancePeerImpl::GetHeight(PRUint32 *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetBorderVertSpace(PRUint32 *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetBorderVertSpace(PRUint32 *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -592,8 +564,7 @@ nsPluginInstancePeerImpl::GetBorderVertSpace(PRUint32 *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetBorderHorizSpace(PRUint32 *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetBorderHorizSpace(PRUint32 *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -614,8 +585,7 @@ nsPluginInstancePeerImpl::GetBorderHorizSpace(PRUint32 *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetUniqueID(PRUint32 *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetUniqueID(PRUint32 *result)
 {
   if (nsnull != mOwner) {
     nsIPluginTagInfo2 *tinfo;
@@ -636,8 +606,7 @@ nsPluginInstancePeerImpl::GetUniqueID(PRUint32 *result)
   }
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetCode(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetCode(const char* *result)
 {
 #ifdef OJI
   if (nsnull != mOwner) {
@@ -662,8 +631,7 @@ nsPluginInstancePeerImpl::GetCode(const char* *result)
 #endif
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetCodeBase(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetCodeBase(const char* *result)
 {
 #ifdef OJI
   if (nsnull != mOwner) {
@@ -688,8 +656,7 @@ nsPluginInstancePeerImpl::GetCodeBase(const char* *result)
 #endif
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetArchive(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetArchive(const char* *result)
 {
 #ifdef OJI
   if (nsnull != mOwner) {
@@ -714,8 +681,7 @@ nsPluginInstancePeerImpl::GetArchive(const char* *result)
 #endif
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetName(const char* *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetName(const char* *result)
 {
 #ifdef OJI
   if (nsnull != mOwner) {
@@ -740,8 +706,7 @@ nsPluginInstancePeerImpl::GetName(const char* *result)
 #endif
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetMayScript(PRBool *result)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetMayScript(PRBool *result)
 {
 #ifdef OJI
   if (nsnull != mOwner) {
@@ -766,14 +731,12 @@ nsPluginInstancePeerImpl::GetMayScript(PRBool *result)
 #endif
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::SetWindowSize(PRUint32 width, PRUint32 height)
+NS_IMETHODIMP nsPluginInstancePeerImpl::SetWindowSize(PRUint32 width, PRUint32 height)
 {
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetJSWindow(JSObject* *outJSWindow)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetJSWindow(JSObject* *outJSWindow)
 {
   *outJSWindow = NULL;
   nsresult rv = NS_ERROR_FAILURE;
@@ -782,9 +745,8 @@ nsPluginInstancePeerImpl::GetJSWindow(JSObject* *outJSWindow)
   rv = mOwner->GetDocument(getter_AddRefs(document));
 
   if (NS_SUCCEEDED(rv) && document) {
-    nsPIDOMWindow *win = document->GetWindow();
+    nsIScriptGlobalObject *global = document->GetScriptGlobalObject();
 
-    nsCOMPtr<nsIScriptGlobalObject> global = do_QueryInterface(win);
     if(global) {
       *outJSWindow = global->GetGlobalJSObject();
     }
@@ -793,15 +755,13 @@ nsPluginInstancePeerImpl::GetJSWindow(JSObject* *outJSWindow)
   return rv;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetJSThread(PRUint32 *outThreadID)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetJSThread(PRUint32 *outThreadID)
 {
 	*outThreadID = mThreadID;
 	return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetJSContext(JSContext* *outContext)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetJSContext(JSContext* *outContext)
 {
   *outContext = NULL;
   nsresult rv = NS_ERROR_FAILURE;
@@ -824,9 +784,8 @@ nsPluginInstancePeerImpl::GetJSContext(JSContext* *outContext)
   return rv;
 }
 
-nsresult
-nsPluginInstancePeerImpl::Initialize(nsIPluginInstanceOwner *aOwner,
-                                     const nsMIMEType aMIMEType)
+nsresult nsPluginInstancePeerImpl::Initialize(nsIPluginInstanceOwner *aOwner,
+                                                const nsMIMEType aMIMEType)
 {
   mOwner = aOwner;
   NS_IF_ADDREF(mOwner);
@@ -847,8 +806,7 @@ nsPluginInstancePeerImpl::Initialize(nsIPluginInstanceOwner *aOwner,
   return NS_OK;
 }
 
-nsresult
-nsPluginInstancePeerImpl::SetOwner(nsIPluginInstanceOwner *aOwner)
+nsresult nsPluginInstancePeerImpl::SetOwner(nsIPluginInstanceOwner *aOwner)
 {
   // get rid of the previous owner
   NS_IF_RELEASE(mOwner);
@@ -861,8 +819,7 @@ nsPluginInstancePeerImpl::SetOwner(nsIPluginInstanceOwner *aOwner)
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::GetOwner(nsIPluginInstanceOwner **aOwner)
+NS_IMETHODIMP nsPluginInstancePeerImpl::GetOwner(nsIPluginInstanceOwner **aOwner)
 {
   NS_ENSURE_ARG_POINTER(aOwner);
   *aOwner = mOwner;
@@ -870,8 +827,7 @@ nsPluginInstancePeerImpl::GetOwner(nsIPluginInstanceOwner **aOwner)
   return (mOwner) ? NS_OK : NS_ERROR_FAILURE;
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::InvalidateRect(nsPluginRect *invalidRect)
+NS_IMETHODIMP nsPluginInstancePeerImpl::InvalidateRect(nsPluginRect *invalidRect)
 {
   if(!mOwner)
     return NS_ERROR_FAILURE;
@@ -879,8 +835,7 @@ nsPluginInstancePeerImpl::InvalidateRect(nsPluginRect *invalidRect)
   return mOwner->InvalidateRect(invalidRect);
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::InvalidateRegion(nsPluginRegion invalidRegion)
+NS_IMETHODIMP nsPluginInstancePeerImpl::InvalidateRegion(nsPluginRegion invalidRegion)
 {
   if(!mOwner)
     return NS_ERROR_FAILURE;
@@ -888,8 +843,7 @@ nsPluginInstancePeerImpl::InvalidateRegion(nsPluginRegion invalidRegion)
   return mOwner->InvalidateRegion(invalidRegion);
 }
 
-NS_IMETHODIMP
-nsPluginInstancePeerImpl::ForceRedraw(void)
+NS_IMETHODIMP nsPluginInstancePeerImpl::ForceRedraw(void)
 {
   if(!mOwner)
     return NS_ERROR_FAILURE;

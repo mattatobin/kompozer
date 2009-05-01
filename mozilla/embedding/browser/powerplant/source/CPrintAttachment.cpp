@@ -43,7 +43,7 @@
 // Gecko
 #include "nsIPrintingPromptService.h"
 #include "nsIDOMWindow.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "nsIWebBrowserPrint.h"
 #include "nsIInterfaceRequestorUtils.h"
 #include "nsIWebProgressListener.h"

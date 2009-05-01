@@ -139,11 +139,16 @@ getNameCB(AtkAction *aAction, gint aActionIndex)
                        accWrap->GetMaiInterface(MAI_INTERFACE_ACTION));
     NS_ENSURE_TRUE(action, nsnull);
 
-    nsAutoString autoStr;
-    nsresult rv = accWrap->GetActionName(aActionIndex, autoStr);
-    NS_ENSURE_SUCCESS(rv, nsnull);
-    action->SetName(autoStr);
-    return action->GetName();
+    const char *name = action->GetName();
+    if (!name || !*name) {
+        nsAutoString autoStr;
+        nsresult rv = accWrap->GetActionName(aActionIndex, autoStr);
+        NS_ENSURE_SUCCESS(rv, nsnull);
+
+        action->SetName(autoStr);
+        name = action->GetName();
+    }
+    return name;
 }
 
 const gchar *
@@ -157,7 +162,7 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
                        accWrap->GetMaiInterface(MAI_INTERFACE_ACTION));
     NS_ENSURE_TRUE(action, nsnull);
 
-    if (*action->GetKeyBinding())
+    if (action->GetKeyBinding())
         return action->GetKeyBinding();
 
     //return all KeyBindings including accesskey and shortcut
@@ -183,7 +188,7 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
                                 rightChar;
             }
             else if ((role == ATK_ROLE_MENU) || (role == ATK_ROLE_MENU_ITEM)) {
-                //it is submenu, change from "s" to "s;<Alt>f:s"
+                //it is submenu, change from "s" to "s;<Alt>fs"
                 nsAutoString allKey = accessKey;
                 nsCOMPtr<nsIAccessible> grandParentAcc = parentAccessible;
 
@@ -194,7 +199,7 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
                     if (!grandParentKey.IsEmpty()) {
                         nsAutoString rightChar;
                         grandParentKey.Right(rightChar, 1);
-                        allKey = rightChar + NS_LITERAL_STRING(":") + allKey;
+                        allKey = rightChar + allKey;
                     }
 
                     nsCOMPtr<nsIAccessible> tempAcc = grandParentAcc;
@@ -214,7 +219,7 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
         }
     }
     else  //don't have accesskey
-        allKeyBinding.AssignLiteral(";");
+        allKeyBinding = NS_LITERAL_STRING(";");
 
     //get shortcut
     nsAutoString keyBinding, subShortcut;
@@ -235,8 +240,8 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
                 keyBinding.Mid(subString, oldPos, curPos - oldPos);
       
                 //change "Ctrl" to "Control"
-                if (subString.LowerCaseEqualsLiteral("ctrl"))
-                    subString.AssignLiteral("Control");
+                if (subString.EqualsIgnoreCase("ctrl"))
+                    subString = NS_LITERAL_STRING("Control");
       
                 subShortcut += NS_LITERAL_STRING("<") + subString +
                                NS_LITERAL_STRING(">");

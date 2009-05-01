@@ -80,7 +80,7 @@
           
           try {
             var isupports = Components.classes['@mozilla.org/consoleservice;1'].getService();
-            this.mCService = isupports.QueryInterface(Components.interfaces.nsIConsoleService_MOZILLA_1_8_BRANCH);
+            this.mCService = isupports.QueryInterface(Components.interfaces.nsIConsoleService);
             this.mCService.registerListener(this.mConsoleListener);
           } catch (ex) {
             appendItem(
@@ -128,6 +128,8 @@
       <method name="appendItem">
         <parameter name="aObject"/>
         <body><![CDATA[
+          if (!aObject.message) return;
+
           try {
             // Try to QI it to a script error to get more info
             var scriptError = aObject.QueryInterface(Components.interfaces.nsIScriptError);
@@ -141,10 +143,7 @@
             try {
               // Try to QI it to a console message
               var msg = aObject.QueryInterface(Components.interfaces.nsIConsoleMessage);
-              if (msg.message)
-                this.appendMessage(msg.message);
-              else // observed a null/"clear" message
-                this.clearConsole();
+              this.appendMessage(msg.message);
             } catch (ex2) {
               // Give up and append the object itself as a string
               this.appendMessage(aObject);
@@ -165,10 +164,9 @@
           var typetext = warning ? "typeWarning" : "typeError";
           row.setAttribute("typetext", this.mStrBundle.getString(typetext));
           row.setAttribute("type", warning ? "warning" : "error");
-          row.setAttribute("msg", aObject.errorMessage);
-          row.setAttribute("category", aObject.category);
+          row.setAttribute("msg", aObject.message);
           if (aObject.lineNumber || aObject.sourceName) {
-            row.setAttribute("href", aObject.sourceName);
+            row.setAttribute("url", aObject.sourceName);
             row.setAttribute("line", aObject.lineNumber);
           } else {
             row.setAttribute("hideSource", "true");
@@ -202,9 +200,12 @@
       
       <method name="clear">
         <body><![CDATA[
-          // add a "clear" message (mainly for other listeners)
           this.mCService.logStringMessage(null);
-          this.mCService.reset();
+          this.mCount = 0;
+          
+          var newRows = this.mConsoleRowBox.cloneNode(false);
+          this.mConsoleRowBox.parentNode.replaceChild(newRows, this.mConsoleRowBox);
+          this.mConsoleRowBox = newRows;
         ]]></body>
       </method>
             
@@ -248,18 +249,6 @@
         ]]></body>
       </method>
             
-      <method name="clearConsole">
-        <body><![CDATA[
-          if (this.mCount == 0) // already clear
-            return;
-          this.mCount = 0;
-          
-          var newRows = this.mConsoleRowBox.cloneNode(false);
-          this.mConsoleRowBox.parentNode.replaceChild(newRows, this.mConsoleRowBox);
-          this.mConsoleRowBox = newRows;
-        ]]></body>
-      </method>
-      
       <!-- UTILITY FUNCTIONS -->
       
       <method name="repeatChar">
@@ -307,12 +296,10 @@
           </xul:box>
           <xul:box class="console-row-file" xbl:inherits="hidden=hideSource">
             <xul:label class="label" value="&errFile.label;"/>
-            <xul:box class="console-error-source" xbl:inherits="href,line"/>
+            <xul:box class="console-error-source" xbl:inherits="url,line"/>
             <spacer flex="1"/>
-            <xul:hbox class="lineNumberRow" xbl:inherits="line">
-              <xul:label class="label" value="&errLine.label;"/>
-              <xul:label class="label" xbl:inherits="value=line"/>
-            </xul:hbox>
+            <xul:label class="label" value="&errLine.label;"/>
+            <xul:label class="label" xbl:inherits="value=line" flex="1"/>
           </xul:box>
           <xul:vbox class="console-row-code" xbl:inherits="selected,hidden=hideCode">
             <xul:label class="monospace console-code" xbl:inherits="value=code" crop="end"/>
@@ -334,9 +321,9 @@
           
           var strBundle = this._ConsoleBox.mStrBundle;
           
-          if (this.hasAttribute("line") && this.hasAttribute("href")) {
+          if (this.hasAttribute("line") && this.hasAttribute("url")) {
             msg += "\n" + strBundle.getFormattedString("errFile", 
-                                        [this.getAttribute("href")]) + "\n";
+                                        [this.getAttribute("url")]) + "\n";
             if (this.hasAttribute("col")) {
               msg += strBundle.getFormattedString("errLineCol",
                          [this.getAttribute("line"), this.getAttribute("col")]);
@@ -380,19 +367,17 @@
 
   <binding id="console-error-source" extends="xul:box">
     <content>
-      <xul:label class="text-link" xbl:inherits="href,value=href" crop="right"/>
+      <xul:label class="text-link" xbl:inherits="value=url" crop="right"/>
     </content>
 
     <handlers>
-      <handler event="click" phase="capturing" button="0" preventdefault="true">
-        <![CDATA[
-          var url = this.getAttribute("href");
+      <handler event="click"><![CDATA[
+          var url = this.getAttribute("url");
           var line = getAttribute("line");  
           window.openDialog(
             "chrome://global/content/viewSource.xul", "_blank", 
             "all,dialog=no", url, null, null, line);
-        ]]>
-      </handler>
+      ]]></handler>
     </handlers>
   </binding>
 

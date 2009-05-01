@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -97,8 +98,7 @@ nsresult nsCharsetConverterManager::RegisterConverterManagerData()
 {
   nsresult rv;
   nsCOMPtr<nsICategoryManager> catman = do_GetService(NS_CATEGORYMANAGER_CONTRACTID, &rv);
-  if (NS_FAILED(rv))
-    return rv;
+  if (NS_FAILED(rv)) return rv;
 
   RegisterConverterCategory(catman, NS_TITLE_BUNDLE_CATEGORY,
                             "chrome://global/locale/charsetTitles.properties");
@@ -121,14 +121,16 @@ nsresult nsCharsetConverterManager::LoadExtensibleBundle(
                                     const char* aCategory, 
                                     nsIStringBundle ** aResult)
 {
-  nsresult rv = NS_OK;
+  nsresult res = NS_OK;
 
   nsCOMPtr<nsIStringBundleService> sbServ = 
-           do_GetService(kStringBundleServiceCID, &rv);
-  if (NS_FAILED(rv))
-    return rv;
+           do_GetService(kStringBundleServiceCID, &res);
+  if (NS_FAILED(res)) return res;
 
-  return sbServ->CreateExtensibleBundle(aCategory, aResult);
+  res = sbServ->CreateExtensibleBundle(aCategory, aResult);
+  if (NS_FAILED(res)) return res;
+
+  return res;
 }
 
 nsresult nsCharsetConverterManager::GetBundleValue(nsIStringBundle * aBundle, 
@@ -136,13 +138,15 @@ nsresult nsCharsetConverterManager::GetBundleValue(nsIStringBundle * aBundle,
                                                    const nsAFlatString& aProp, 
                                                    PRUnichar ** aResult)
 {
-  nsAutoString key; 
+  nsresult res = NS_OK;
 
-  key.AssignWithConversion(aName);
+  nsAutoString key; key.AssignWithConversion(aName);
+
   ToLowerCase(key); // we lowercase the main comparison key
-  key.Append(aProp);
+  if (!aProp.IsEmpty()) key.Append(aProp.get()); // yes, this param may be NULL
 
-  return aBundle->GetStringFromName(key.get(), aResult);
+  res = aBundle->GetStringFromName(key.get(), aResult);
+  return res;
 }
 
 nsresult nsCharsetConverterManager::GetBundleValue(nsIStringBundle * aBundle, 
@@ -150,12 +154,11 @@ nsresult nsCharsetConverterManager::GetBundleValue(nsIStringBundle * aBundle,
                                                    const nsAFlatString& aProp, 
                                                    nsAString& aResult)
 {
-  nsresult rv = NS_OK;
+  nsresult res = NS_OK;
 
   nsXPIDLString value;
-  rv = GetBundleValue(aBundle, aName, aProp, getter_Copies(value));
-  if (NS_FAILED(rv))
-    return rv;
+  res = GetBundleValue(aBundle, aName, aProp, getter_Copies(value));
+  if (NS_FAILED(res)) return res;
 
   aResult = value;
 
@@ -203,23 +206,23 @@ nsCharsetConverterManager::GetUnicodeEncoderRaw(const char * aDest,
     }
   }
 #endif  
-  nsresult rv = NS_OK;
+  nsresult res = NS_OK;
 
   nsCAutoString
     contractid(NS_LITERAL_CSTRING(NS_UNICODEENCODER_CONTRACTID_BASE) +
                nsDependentCString(aDest));
 
   // Always create an instance since encoders hold state.
-  encoder = do_CreateInstance(contractid.get(), &rv);
+  encoder = do_CreateInstance(contractid.get(), &res);
 
-  if (NS_FAILED(rv))
-    rv = NS_ERROR_UCONV_NOCONV;
+  if (NS_FAILED(res))
+    res = NS_ERROR_UCONV_NOCONV;
   else
   {
     *aResult = encoder.get();
     NS_ADDREF(*aResult);
   }
-  return rv;
+  return res;
 }
 
 NS_IMETHODIMP
@@ -258,7 +261,7 @@ nsCharsetConverterManager::GetUnicodeDecoderRaw(const char * aSrc,
     }
   }
 #endif
-  nsresult rv = NS_OK;
+  nsresult res = NS_OK;;
 
   NS_NAMED_LITERAL_CSTRING(kUnicodeDecoderContractIDBase,
                            NS_UNICODEDECODER_CONTRACTID_BASE);
@@ -271,20 +274,20 @@ nsCharsetConverterManager::GetUnicodeDecoderRaw(const char * aSrc,
                NS_1BYTE_CODER_PATTERN_LEN))
   {
     // Single byte decoders dont hold state. Optimize by using a service.
-    decoder = do_GetService(contractid.get(), &rv);
+    decoder = do_GetService(contractid.get(), &res);
   }
   else
   {
-    decoder = do_CreateInstance(contractid.get(), &rv);
+    decoder = do_CreateInstance(contractid.get(), &res);
   }
-  if(NS_FAILED(rv))
-    rv = NS_ERROR_UCONV_NOCONV;
+  if(NS_FAILED(res))
+    res = NS_ERROR_UCONV_NOCONV;
   else
   {
     *aResult = decoder.get();
     NS_ADDREF(*aResult);
   }
-  return rv;
+  return res;
 }
 
 nsresult 
@@ -304,8 +307,7 @@ nsCharsetConverterManager::GetList(const nsACString& aCategory,
     return NS_ERROR_OUT_OF_MEMORY;
 
   nsCOMPtr<nsICategoryManager> catman = do_GetService(NS_CATEGORYMANAGER_CONTRACTID, &rv);
-  if (NS_FAILED(rv))
-    return rv;
+  if (NS_FAILED(rv)) return rv;
   
   nsCOMPtr<nsISimpleEnumerator> enumerator;
   catman->EnumerateCategory(PromiseFlatCString(aCategory).get(), 
@@ -379,8 +381,8 @@ nsCharsetConverterManager::GetCharsetAlias(const char * aCharset,
   NS_ASSERTION(csAlias, "failed to get the CharsetAlias service");
   if (csAlias) {
     nsAutoString pref;
-    nsresult rv = csAlias->GetPreferred(charset, aResult);
-    if (NS_SUCCEEDED(rv)) {
+    nsresult res = csAlias->GetPreferred(charset, aResult);
+    if (NS_SUCCEEDED(res)) {
       return (!aResult.IsEmpty()) ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
     }
   }
@@ -396,13 +398,15 @@ nsCharsetConverterManager::GetCharsetTitle(const char * aCharset,
 {
   if (aCharset == NULL) return NS_ERROR_NULL_POINTER;
 
+  nsresult res = NS_OK;
+
   if (mTitleBundle == NULL) {
-    nsresult rv = LoadExtensibleBundle(NS_TITLE_BUNDLE_CATEGORY, &mTitleBundle);
-    if (NS_FAILED(rv))
-      return rv;
+    res = LoadExtensibleBundle(NS_TITLE_BUNDLE_CATEGORY, &mTitleBundle);
+    if (NS_FAILED(res)) return res;
   }
 
-  return GetBundleValue(mTitleBundle, aCharset, NS_LITERAL_STRING(".title"), aResult);
+  res = GetBundleValue(mTitleBundle, aCharset, NS_LITERAL_STRING(".title"), aResult);
+  return res;
 }
 
 NS_IMETHODIMP
@@ -410,17 +414,18 @@ nsCharsetConverterManager::GetCharsetData(const char * aCharset,
                                           const PRUnichar * aProp,
                                           nsAString& aResult)
 {
-  if (aCharset == NULL)
-    return NS_ERROR_NULL_POINTER;
+  if (aCharset == NULL) return NS_ERROR_NULL_POINTER;
   // aProp can be NULL
 
+  nsresult res = NS_OK;
+
   if (mDataBundle == NULL) {
-    nsresult rv = LoadExtensibleBundle(NS_DATA_BUNDLE_CATEGORY, &mDataBundle);
-    if (NS_FAILED(rv))
-      return rv;
+    res = LoadExtensibleBundle(NS_DATA_BUNDLE_CATEGORY, &mDataBundle);
+    if (NS_FAILED(res)) return res;
   }
 
-  return GetBundleValue(mDataBundle, aCharset, nsDependentString(aProp), aResult);
+  res = GetBundleValue(mDataBundle, aCharset, nsDependentString(aProp), aResult);
+  return res;
 }
 
 NS_IMETHODIMP
@@ -431,8 +436,7 @@ nsCharsetConverterManager::GetCharsetLangGroup(const char * aCharset,
   nsCAutoString charset;
 
   nsresult rv = GetCharsetAlias(aCharset, charset);
-  if (NS_FAILED(rv))
-    return rv;
+  if (NS_FAILED(rv)) return rv;
 
   // fully qualify to possibly avoid vtable call
   return nsCharsetConverterManager::GetCharsetLangGroupRaw(charset.get(),
@@ -444,23 +448,18 @@ nsCharsetConverterManager::GetCharsetLangGroupRaw(const char * aCharset,
                                                   nsIAtom** aResult)
 {
 
-  *aResult = nsnull;
-  if (aCharset == NULL)
-    return NS_ERROR_NULL_POINTER;
+  if (aCharset == NULL) return NS_ERROR_NULL_POINTER;
 
-  nsresult rv = NS_OK;
+  nsresult res = NS_OK;
 
   if (mDataBundle == NULL) {
-    rv = LoadExtensibleBundle(NS_DATA_BUNDLE_CATEGORY, &mDataBundle);
-    if (NS_FAILED(rv))
-      return rv;
+    res = LoadExtensibleBundle(NS_DATA_BUNDLE_CATEGORY, &mDataBundle);
+    if (NS_FAILED(res)) return res;
   }
 
   nsAutoString langGroup;
-  rv = GetBundleValue(mDataBundle, aCharset, NS_LITERAL_STRING(".LangGroup"), langGroup);
+  res = GetBundleValue(mDataBundle, aCharset, NS_LITERAL_STRING(".LangGroup"), langGroup);
 
-  if (NS_SUCCEEDED(rv))
-    *aResult = NS_NewAtom(langGroup);
-
-  return rv;
+  *aResult = NS_NewAtom(langGroup);
+  return res;
 }

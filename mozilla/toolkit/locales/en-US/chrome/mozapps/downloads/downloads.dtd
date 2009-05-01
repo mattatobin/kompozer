@@ -1,6 +1,3 @@
-<!ENTITY window.width                     "400">
-<!ENTITY window.height                    "300"> 
-
 <!ENTITY done.label                       "Done">
 <!ENTITY canceled.label                   "Canceled">
 <!ENTITY installing.label                 "Installing...">
@@ -17,9 +14,7 @@
 <!ENTITY cmd.cancel.label                 "Cancel">
 <!ENTITY cmd.cancel.accesskey             "C">
 <!ENTITY cmd.show.label                   "Open Containing Folder">
-<!ENTITY cmd.show.labelMac                "Show in Finder">
 <!ENTITY cmd.show.accesskey               "F">
-<!ENTITY cmd.show.accesskeyMac            "F">
 <!ENTITY cmd.open.label                   "Open">
 <!ENTITY cmd.open.accesskey               "O">
 <!ENTITY cmd.openWith.label               "Open With...">
@@ -37,10 +32,16 @@
 <!ENTITY cmd.close2Unix.commandKey        "y">
 <!ENTITY cmd.cleanUp.label                "Clean Up">
 <!ENTITY cmd.cleanUp.tooltip              "Removes completed, canceled and failed downloads from the list">
-<!ENTITY cmd.cleanUp.accesskey            "C">
+<!ENTITY cmd.cleanUp.accesskey            "a">
+
+<!ENTITY cmd.change.label                 "Change...">
+<!ENTITY cmd.change.accesskey             "C">
+<!ENTITY cmd.change.tooltip               "Change how and where to save files to">
 
 <!ENTITY closeWhenDone.label              "Close when downloads complete">
 <!ENTITY closeWhenDone.tooltip            "Closes the Downloads window when all files are done downloading">
 
 <!ENTITY filesSavedTo.label               "All files downloaded to:">
 <!ENTITY showFolder.label                 "Show this Folder">
+
+

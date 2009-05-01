@@ -21,12 +21,12 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Simon Fraser    <sfraser@netscape.com>
- *   Ryan Cassin     <rcassin@supernova.org>
- *   Kathleen Brade  <brade@netscape.com>
- *   Daniel Glazman  <glazman@netscape.com>
- *   Daniel Glazman  <glazman@disruptive-innovations.com>, on behalf of Linspire Inc.
- *   Fabien Cazenave <kaze@kompozer.net>
+ *   Simon Fraser (sfraser@netscape.com)
+ *   Ryan Cassin (rcassin@supernova.org)
+ *   Kathleen Brade (brade@netscape.com)
+ *   Daniel Glazman (glazman@netscape.com)
+ *   Daniel Glazman (glazman@disruptive-innovations.com), on behalf of Linspire Inc.
+ *   Fabien Cazenave (Kaze) http://fabiwan.kenobi.free.fr/
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -192,45 +192,40 @@ function SetupComposerWindowCommands()
 
   // Kaze: CaScadeS should be registered here (not working yet)
   commandTable.registerCommand("cmd_cssEditor",      nsCssEditorCommand);
-  // Kaze: cmd_class and cmd_dir should be registered here instead of being in the core patch
-  commandTable.registerCommand("cmd_class",          nsClassCommand);
 
   // File-related commands
-  commandTable.registerCommand("cmd_open",                   nsOpenCommand);
-  commandTable.registerCommand("cmd_openInTab",              nsOpenInTabCommand);
-  commandTable.registerCommand("cmd_save",                   nsSaveCommand);
-  commandTable.registerCommand("cmd_saveAs",                 nsSaveAsCommand);
-  commandTable.registerCommand("cmd_exportToText",           nsExportToTextCommand);
+  commandTable.registerCommand("cmd_open",           nsOpenCommand);
+  commandTable.registerCommand("cmd_openInTab",      nsOpenInTabCommand);
+  commandTable.registerCommand("cmd_save",           nsSaveCommand);
+  commandTable.registerCommand("cmd_saveAs",         nsSaveAsCommand);
+  commandTable.registerCommand("cmd_exportToText",   nsExportToTextCommand);
   commandTable.registerCommand("cmd_saveAndChangeEncoding",  nsSaveAndChangeEncodingCommand);
-  commandTable.registerCommand("cmd_publish",                nsPublishCommand);
-  commandTable.registerCommand("cmd_publishAs",              nsPublishAsCommand);
-  commandTable.registerCommand("cmd_publishSettings",        nsPublishSettingsCommand);
-  commandTable.registerCommand("cmd_revert",                 nsRevertCommand);
-  commandTable.registerCommand("cmd_refreshImages",          nsRefreshImagesCommand);
-  commandTable.registerCommand("cmd_openRemote",             nsOpenRemoteCommand);
-  commandTable.registerCommand("cmd_preview",                nsPreviewCommand);
-  commandTable.registerCommand("cmd_editSendPage",           nsSendPageCommand);
-  commandTable.registerCommand("cmd_print",                  nsPrintCommand);
-  commandTable.registerCommand("cmd_printSetup",             nsPrintSetupCommand);
-  commandTable.registerCommand("cmd_quit",                   nsQuitCommand);
-  commandTable.registerCommand("cmd_close",                  nsCloseCommand);
-  commandTable.registerCommand("cmd_closeAll",               nsCloseAllCommand);
-  commandTable.registerCommand("cmd_preferences",            nsPreferencesCommand);
-  commandTable.registerCommand("cmd_newEdited",              nsNewEditedObjectCommand);
+  commandTable.registerCommand("cmd_publish",        nsPublishCommand);
+  commandTable.registerCommand("cmd_publishAs",      nsPublishAsCommand);
+  commandTable.registerCommand("cmd_publishSettings",nsPublishSettingsCommand);
+  commandTable.registerCommand("cmd_revert",         nsRevertCommand);
+  commandTable.registerCommand("cmd_refreshImages",  nsRefreshImagesCommand);
+  commandTable.registerCommand("cmd_openRemote",     nsOpenRemoteCommand);
+  commandTable.registerCommand("cmd_preview",        nsPreviewCommand);
+  commandTable.registerCommand("cmd_editSendPage",   nsSendPageCommand);
+  commandTable.registerCommand("cmd_print",          nsPrintCommand);
+  commandTable.registerCommand("cmd_printSetup",     nsPrintSetupCommand);
+  commandTable.registerCommand("cmd_quit",           nsQuitCommand);
+  commandTable.registerCommand("cmd_close",          nsCloseCommand);
+  commandTable.registerCommand("cmd_closeAll",       nsCloseAllCommand);
+  commandTable.registerCommand("cmd_preferences",    nsPreferencesCommand);
+  commandTable.registerCommand("cmd_newEdited",      nsNewEditedObjectCommand);
   
   // Edit Mode commands
   if (GetCurrentEditorType() == "html")
   {
-    commandTable.registerCommand("cmd_NormalMode",           nsNormalModeCommand);
-    commandTable.registerCommand("cmd_AllTagsMode",          nsAllTagsModeCommand);
-    commandTable.registerCommand("cmd_HTMLSourceMode",       nsHTMLSourceModeCommand);
-    commandTable.registerCommand("cmd_PreviewMode",          nsPreviewModeCommand);
-    commandTable.registerCommand("cmd_FinishHTMLSource",     nsFinishHTMLSource);
-    commandTable.registerCommand("cmd_CancelHTMLSource",     nsCancelHTMLSource);
-    commandTable.registerCommand("cmd_updateStructToolbar",  nsUpdateStructToolbarCommand);
-    commandTable.registerCommand("cmd_SourceDockToggle",     nsSourceDockToggle);  // Kaze
-    commandTable.registerCommand("cmd_DesignMode",           nsDesignModeCommand); // Kaze
-    commandTable.registerCommand("cmd_SplitMode",            nsSplitModeCommand);  // Kaze
+    commandTable.registerCommand("cmd_NormalMode",         nsNormalModeCommand);
+    commandTable.registerCommand("cmd_AllTagsMode",        nsAllTagsModeCommand);
+    commandTable.registerCommand("cmd_HTMLSourceMode",     nsHTMLSourceModeCommand);
+    commandTable.registerCommand("cmd_PreviewMode",        nsPreviewModeCommand);
+    commandTable.registerCommand("cmd_FinishHTMLSource",   nsFinishHTMLSource);
+    commandTable.registerCommand("cmd_CancelHTMLSource",   nsCancelHTMLSource);
+    commandTable.registerCommand("cmd_updateStructToolbar", nsUpdateStructToolbarCommand);
   }
 
   windowControllers.insertControllerAt(0, editorController);
@@ -411,23 +406,22 @@ function goDoCommandParams(command, params)
 
 function pokeStyleUI(uiID, aDesiredState)
 {
-  try
-  {
-    var commandNode = top.document.getElementById(uiID);
-    if (!commandNode)
-      return;
+ try {
+  var commandNode = top.document.getElementById(uiID);
+  if (!commandNode)
+    return;
 
-    var uiState = ("true" == commandNode.getAttribute("state"));
-    if (aDesiredState != uiState)
-    {
-      var newState;
-      if (aDesiredState)
-        newState = "true";
-      else
-        newState = "false";
-      commandNode.setAttribute("state", newState);
-    }
-  } catch(e) { dump("poking UI for "+uiID+" failed: "+e+"\n"); }
+  var uiState = ("true" == commandNode.getAttribute("state"));
+  if (aDesiredState != uiState)
+  {
+    var newState;
+    if (aDesiredState)
+      newState = "true";
+    else
+      newState = "false";
+    commandNode.setAttribute("state", newState);
+  }
+ } catch(e) { dump("poking UI for "+uiID+" failed: "+e+"\n"); }
 }
 
 function doStyleUICommand(cmdStr)
@@ -877,83 +871,6 @@ var nsPublishAsCommand =
         return Publish(publishData);
     }
     return false;
-  }
-}
-
-// Kaze: this replaces the cmd_class command that used to be handled by the core patch
-var nsClassCommand =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return (GetCurrentEditorElement() &&
-            IsDocumentEditable() &&
-            IsEditingRenderedHTML());
-  },
-
-  getCommandStateParams: function (aCommandName, aParams, aRefcon)
-  {
-    var enabled = this.isCommandEnabled(aCommandName, aRefcon);
-    aParams.setBooleanValue("state_enabled", enabled);
-    aParams.setBooleanValue("state_mixed", false);
-    var selContainer = GetSelectionContainer();
-    if (selContainer) {
-      var classes = GetEditorClasses(selContainer.node).classes;
-      if (classes) {
-        aParams.setCStringValue("state_attribute", classes);
-        return;
-      }
-    }
-
-    aParams.setCStringValue("state_attribute", GetString("NoClassAvailable"));
-  },
-
-  doCommandParams: function(aCommandName, aParams, aRefCon)
-  {
-    var editor = GetCurrentEditor();
-    var selection = editor.selection;
-    var selContainer = GetSelectionContainer();
-    var className = aParams.getCStringValue("state_attribute");
-    var node;
-
-    if (!selContainer.oneElementSelected && (selection.anchorNode == selection.focusNode)) {
-      // create a <span> element on the selection
-      var txtElement = editor.document.createTextNode(selection.toString());
-      if (!txtElement) return;
-
-      var spanElement = editor.createElementWithDefaults("span");
-      spanElement.setAttribute("class", className);
-      spanElement.appendChild(txtElement);
-
-      editor.insertElementAtSelection(spanElement, true);
-      window.content.focus();        
-    }
-
-    else {
-      // add a new class to the selection container
-      var retValue = GetEditorClasses(selContainer.node);
-      var classes = retValue.classes;
-      node = retValue.node;
-
-      var newList = className;
-      if (classes) {
-        var list = classes.split(" ");
-        var found = false;
-        newList = "";
-        for (var i = 0; i < list.length; i++) {
-          if (list[i] == className)
-            found = true;
-          else
-            newList += list[i] + " ";
-        }
-        if (!found)
-          newList += className;
-      }
-
-      if (newList.length)
-        GetCurrentEditor().setAttribute(node, "class", newList);
-      else
-        GetCurrentEditor().removeAttribute(node, "class");
-    }
   }
 }
 
@@ -2764,7 +2681,7 @@ var nsPreviewCommand =
         return;
 
     // Check if we saved again just in case?
-    if (DocumentHasBeenSaved())
+      if (DocumentHasBeenSaved())
     {
       var url = GetDocumentUrl();
       var publishData = CreatePublishDataFromUrl(url);
@@ -3930,7 +3847,7 @@ var nsNormalModeCommand =
 
   doCommand: function(aCommand)
   {
-    SetDisplayMode(kDisplayModeNormal);
+    SetEditMode(kDisplayModeNormal);
   }
 };
 
@@ -3946,7 +3863,23 @@ var nsAllTagsModeCommand =
 
   doCommand: function(aCommand)
   {
-    SetDisplayMode(kDisplayModeAllTags);
+    SetEditMode(kDisplayModeAllTags);
+  }
+};
+
+var nsHTMLSourceModeCommand =
+{
+  isCommandEnabled: function(aCommand, dummy)
+  {
+    return (IsDocumentEditable() && IsHTMLEditor());
+  },
+
+  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
+  doCommandParams: function(aCommand, aParams, aRefCon) {},
+
+  doCommand: function(aCommand)
+  {
+    SetEditMode(kDisplayModeSource);
   }
 };
 
@@ -3962,78 +3895,7 @@ var nsPreviewModeCommand =
 
   doCommand: function(aCommand)
   {
-    SetDisplayMode(kDisplayModePreview);
-  }
-};
-
-// <Kaze> source dock
-var nsSourceDockToggle =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return (IsHTMLEditor() && !IsInHTMLSourceMode());
-  },
-
-  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
-  doCommandParams: function(aCommand, aParams, aRefCon) {},
-
-  doCommand: function(aCommand)
-  {
-    if (gEditorEditMode == kEditModeDesign)
-      SetEditMode(kEditModeSplit);
-    else
-      SetEditMode(kEditModeDesign);
-  }
-};
-
-var nsDesignModeCommand =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return (IsDocumentEditable() && IsHTMLEditor());
-    //return (IsHTMLEditor());
-  },
-
-  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
-  doCommandParams: function(aCommand, aParams, aRefCon) {},
-
-  doCommand: function(aCommand)
-  {
-    SetEditMode(kEditModeDesign);
-  }
-};
-
-var nsSplitModeCommand =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return (IsDocumentEditable() && IsHTMLEditor());
-    //return (IsHTMLEditor());
-  },
-
-  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
-  doCommandParams: function(aCommand, aParams, aRefCon) {},
-
-  doCommand: function(aCommand)
-  {
-    SetEditMode(kEditModeSplit);
-  }
-};
-// </Kaze>
-
-var nsHTMLSourceModeCommand =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return (IsDocumentEditable() && IsHTMLEditor());
-  },
-
-  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
-  doCommandParams: function(aCommand, aParams, aRefCon) {},
-
-  doCommand: function(aCommand)
-  {
-    SetEditMode(kEditModeSource);
+    SetEditMode(kDisplayModePreview);
   }
 };
 

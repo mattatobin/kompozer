@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,8 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com> (original author)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -48,18 +49,14 @@
 #include "txExpandedNameMap.h"
 #include "txXMLEventHandler.h"
 #include "nsIXSLTProcessorObsolete.h"
-#include "nsIXSLTProcessorPrivate.h"
 #include "txXSLTProcessor.h"
 #include "nsVoidArray.h"
 #include "nsAutoPtr.h"
 #include "nsIDocumentObserver.h"
-#include "txNamespaceMap.h"
 
 class nsIURI;
 class nsIXMLContentSink;
 class nsIDOMNode;
-class nsIPrincipal;
-class txResultRecycler;
 
 /* bacd8ad0-552f-11d3-a9f7-000064657374 */
 #define TRANSFORMIIX_XSLT_PROCESSOR_CID   \
@@ -68,22 +65,18 @@ class txResultRecycler;
 #define TRANSFORMIIX_XSLT_PROCESSOR_CONTRACTID \
 "@mozilla.org/document-transformer;1?type=xslt"
 
-#define XSLT_MSGS_URL  "chrome://global/locale/xslt/xslt.properties"
+#define XSLT_MSGS_URL  "chrome://global/locale/layout/xslt.properties"
 
 class txVariable : public txIGlobalParameter
 {
 public:
-    txVariable(nsIVariant *aValue) : mValue(aValue)
+    txVariable(nsIVariant *aValue) : mValue(aValue),
+                                     mTxValue(nsnull)
     {
-        NS_ASSERTION(aValue, "missing value");
-    }
-    txVariable(txAExprResult* aValue) : mTxValue(aValue)
-    {
-        NS_ASSERTION(aValue, "missing value");
     }
     nsresult getValue(txAExprResult** aValue)
     {
-        NS_ASSERTION(mValue || mTxValue, "variablevalue is null");
+        NS_ASSERTION(mValue, "variablevalue is null");
 
         if (!mTxValue) {
             nsresult rv = Convert(mValue, getter_AddRefs(mTxValue));
@@ -107,12 +100,6 @@ public:
         mValue = aValue;
         mTxValue = nsnull;
     }
-    void setValue(txAExprResult* aValue)
-    {
-        NS_ASSERTION(aValue, "setting variablevalue to null");
-        mValue = nsnull;
-        mTxValue = aValue;
-    }
 
 private:
     static nsresult Convert(nsIVariant *aValue, txAExprResult** aResult);
@@ -126,9 +113,7 @@ private:
  */
 class txMozillaXSLTProcessor : public nsIXSLTProcessor,
                                public nsIXSLTProcessorObsolete,
-                               public nsIXSLTProcessorPrivate,
                                public nsIDocumentTransformer,
-                               public nsIDocumentTransformer_1_8_BRANCH,
                                public nsIDocumentObserver
 {
 public:
@@ -151,22 +136,12 @@ public:
     // nsIXSLTProcessorObsolete interface
     NS_DECL_NSIXSLTPROCESSOROBSOLETE
 
-    // nsIXSLTProcessorPrivate interface
-    NS_DECL_NSIXSLTPROCESSORPRIVATE
-
     // nsIDocumentTransformer interface
     NS_IMETHOD SetTransformObserver(nsITransformObserver* aObserver);
     NS_IMETHOD LoadStyleSheet(nsIURI* aUri, nsILoadGroup* aLoadGroup,
-                              nsIPrincipal* aCallerPrincipal);
+                              nsIURI* aReferrerUri);
     NS_IMETHOD SetSourceContentModel(nsIDOMNode* aSource);
     NS_IMETHOD CancelLoads() {return NS_OK;};
-    NS_IMETHOD AddXSLTParamNamespace(const nsString& aPrefix,
-                                     const nsString& aNamespace);
-    NS_IMETHOD AddXSLTParam(const nsString& aName,
-                            const nsString& aNamespace,
-                            const nsString& aSelect,
-                            const nsString& aValue,
-                            nsIDOMNode* aContext);
 
     // nsIDocumentObserver interface
     NS_DECL_NSIDOCUMENTOBSERVER
@@ -174,19 +149,6 @@ public:
     nsresult setStylesheet(txStylesheet* aStylesheet);
     void reportError(nsresult aResult, const PRUnichar *aErrorText,
                      const PRUnichar *aSourceText);
-
-    nsIDOMNode *GetSourceContentModel()
-    {
-        return mSource;
-    }
-
-    nsresult TransformToDoc(nsIDOMDocument *aOutputDoc,
-                            nsIDOMDocument **aResult);
-
-    PRBool IsLoadDisabled()
-    {
-        return (mFlags & DISABLE_ALL_LOADS) != 0;
-    }
 
 private:
     nsresult DoTransform();
@@ -203,18 +165,12 @@ private:
     nsString mErrorText, mSourceText;
     nsCOMPtr<nsITransformObserver> mObserver;
     txExpandedNameMap mVariables;
-    txNamespaceMap mParamNamespaceMap;
-    nsRefPtr<txResultRecycler> mRecycler;
-
-    PRUint32 mFlags;
 };
 
 extern nsresult TX_LoadSheet(nsIURI* aUri, txMozillaXSLTProcessor* aProcessor,
-                             nsILoadGroup* aLoadGroup,
-                             nsIPrincipal* aCallerPrincipal);
+                             nsILoadGroup* aLoadGroup, nsIURI* aReferrerUri);
 
 extern nsresult TX_CompileStylesheet(nsIDOMNode* aNode,
-                                     txMozillaXSLTProcessor* aProcessor,
                                      txStylesheet** aStylesheet);
 
 #endif

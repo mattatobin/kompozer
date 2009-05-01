@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,24 +22,36 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 
+#ifndef _NPAPI_H_
 #include "npapi.h"
+#endif
 
-#include <Carbon/Carbon.h>
+#ifdef XP_MACOSX
+#undef DARWIN
 #include <CoreFoundation/CoreFoundation.h>
+#else
+#include <Gestalt.h>
+#include <Icons.h>
+#include <Resources.h>
+#include <Processes.h>
+#include <Script.h>
+#include <TextUtils.h>
+#include <CFPreferences.h>
+#endif
 
 #include <string.h>
 #include <ctype.h>
@@ -134,6 +146,10 @@ Boolean		CPlugin::sRunningOnOSX		= false;
 
 extern short 		gResFile;
 
+#if !TARGET_API_MAC_CARBON
+extern QDGlobals*	gQDPtr;
+#endif
+
 // 'cicn'
 const short rBrokenPluginIcon = 326;
 
@@ -152,6 +168,34 @@ const short rTypeListStrings = 129;
 
 static const char szPluginFinderCommandBeginning[] = PLUGINFINDER_COMMAND_BEGINNING;
 static const char szPluginFinderCommandEnd[] = PLUGINFINDER_COMMAND_END;
+
+//#ifndef XP_MACOSX
+
+//------------------------------------------------------------------------------------
+// strcasecomp: Why don't the MW C libraries have this??
+//------------------------------------------------------------------------------------
+#define XP_TO_LOWER(i) 	((((unsigned int) (i)) > 0x7f) ? (int) (i) : tolower(i))
+int strcasecmp (const char* one, const char *two);
+
+int strcasecmp (const char* one, const char *two)
+{
+	const char *pA;
+	const char *pB;
+
+	for(pA=one, pB=two; *pA && *pB; pA++, pB++) 
+	{
+		int tmp = XP_TO_LOWER(*pA) - XP_TO_LOWER(*pB);
+		if (tmp) 
+			return tmp;
+	}
+	if (*pA) 
+		return 1;	
+	if (*pB) 
+		return -1;
+	return 0;	
+}
+
+//#endif // XP_MACOSX
 
 
 //------------------------------------------------------------------------------------
@@ -696,8 +740,12 @@ void CPlugin::Draw(HiliteState hilite)
 	RGBForeColor(&black);
 	RGBBackColor(&white);
 
+#if !TARGET_API_MAC_CARBON
+	FillRect(&drawRect, &(gQDPtr->white));
+#else
 	Pattern qdWhite;
 	FillRect(&drawRect, GetQDGlobalsWhite(&qdWhite));
+#endif
 
 	if (hilite == kHilited) {
 		hiliteColor.red = 0xFFFF;
@@ -787,7 +835,11 @@ Boolean CPlugin::FocusDraw()
 		GetPort(&fSavePort);
 		SetPort((GrafPtr) ourPort);
 		Rect portRect;
+#if !TARGET_API_MAC_CARBON
+		portRect = ourPort->portRect;
+#else
 		GetPortBounds(ourPort, &portRect);
+#endif
 		fSavePortTop = portRect.top;
 		fSavePortLeft = portRect.left;
 		GetClip(fSaveClip);
@@ -1141,8 +1193,12 @@ void CPlugin::AskAndLoadURL()
 
 		// NOTE: We need to set the cursor because almost always we will have set it to the
 		// hand cursor before we get here.
+#if !TARGET_API_MAC_CARBON
+		SetCursor(&(gQDPtr->arrow));
+#else
 		Cursor qdArrow;
 		SetCursor(GetQDGlobalsArrow(&qdArrow));
+#endif
 
 		// Now that we’ve queried the user about this mime type,
 		// add it to our list so we won’t bug them again.
@@ -1155,8 +1211,6 @@ void CPlugin::AskAndLoadURL()
 		// is arbitrary since it has nothing to do with the actual
 		// window title shown to the user (it’s only used internally).
 		//
-		NPN_PushPopupsEnabledState(fInstance, true);
-
 		if (fFileURL != NULL) {
 			(void) NPN_GetURL(fInstance, fFileURL, "_current");
 		} else if (fPageURL != NULL) {
@@ -1170,8 +1224,6 @@ void CPlugin::AskAndLoadURL()
 			}
 			NPN_MemFree(pTheURL);
 		}
-
-		NPN_PopPopupsEnabledState(fInstance);
 
 		fUserInstalledPlugin = true;
 		if (FocusDraw()) {

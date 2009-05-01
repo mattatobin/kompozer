@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,19 +22,19 @@
  * Contributor(s):
  *   Ben Goodger <ben@netscape.com> (Original Author)
  *   Blake Ross <blakeross@telocity.com>
- *   Jan Varga <varga@ku.sk>
+ *   Jan Varga <varga@nixcorp.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -46,10 +46,6 @@ var gRDFService = null;
 var gNC_File = null;
 var gFileHandler = null;
 var gStatusBar = null;
-var gCannotLaunch = ((navigator.platform.indexOf("Win") == -1) &&
-                     (navigator.platform.indexOf("OS/2") == -1) &&
-                     (navigator.platform.indexOf("Mac") == -1) &&
-                     (navigator.platform.indexOf("BeOS") == -1));
 
 const dlObserver = {
   observe: function(subject, topic, state) {
@@ -62,7 +58,7 @@ function selectDownload(aDownload)
 {
   var dlElt = document.getElementById(aDownload.targetFile.path);
   var dlIndex = gDownloadView.contentView.getIndexOfItem(dlElt);
-  gDownloadView.view.selection.select(dlIndex);
+  gDownloadView.treeBoxObject.selection.select(dlIndex);
   gDownloadView.treeBoxObject.ensureRowIsVisible(dlIndex);
 }
 
@@ -87,7 +83,7 @@ function DLManagerStartup()
 
   gDownloadView = document.getElementById("downloadView");
   setSortVariables(gDownloadView);
-
+  
   const dlmgrContractID = "@mozilla.org/download-manager;1";
   const dlmgrIID = Components.interfaces.nsIDownloadManager;
   gDownloadManager = Components.classes[dlmgrContractID].getService(dlmgrIID);
@@ -106,14 +102,18 @@ function DLManagerStartup()
   window.setTimeout(onRebuild, 0);
 
   var key;
-  document.getElementById("btn_openfile").hidden = gCannotLaunch;
-  document.getElementById("downloadPaneContext-openfile").hidden = gCannotLaunch;
+  if ((navigator.platform.indexOf("Win") == -1) &&
+      (navigator.platform.indexOf("OS/2") == -1) &&
+      (navigator.platform.indexOf("Mac") == -1))
+  {
+    document.getElementById("btn_openfile").hidden = true;
+  }
 }
 
 function onRebuild() {
   gDownloadView.controllers.appendController(downloadViewController);
   gDownloadView.focus();
-
+  
   // If the window was opened automatically because
   // a download started, select the new download
   if (window.arguments.length > 1 && window.arguments[1]) {
@@ -122,15 +122,15 @@ function onRebuild() {
   }
   else if (gDownloadView.view && gDownloadView.view.rowCount > 0) {
     // Select the first item in the view, if any.
-    gDownloadView.view.selection.select(0);
+    gDownloadView.treeBoxObject.selection.select(0);
   }
 }
 
 function onSelect(aEvent) {
   if (!gStatusBar)
     gStatusBar = document.getElementById("statusbar-text");
-
-  var selectionCount = gDownloadView.view.selection.count;
+  
+  var selectionCount = gDownloadView.treeBoxObject.selection.count;
   if (selectionCount == 1)
     gStatusBar.label = createLocalFile(getSelectedItem().id).path;
   else
@@ -138,14 +138,12 @@ function onSelect(aEvent) {
 
   window.updateCommands("tree-select");
 }
-
-function onTrigger() {
+  
+function onDoubleClick() {
   if (downloadViewController.isCommandEnabled('cmd_properties'))
     goDoCommand('cmd_properties');
   else if (downloadViewController.isCommandEnabled('cmd_openfile'))
     goDoCommand('cmd_openfile');
-  else if (downloadViewController.isCommandEnabled('cmd_showinshell'))
-    goDoCommand('cmd_showinshell');
 }
 
 var downloadViewController = {
@@ -156,7 +154,6 @@ var downloadViewController = {
     case "cmd_pause":
     case "cmd_cancel":
     case "cmd_remove":
-    case "cmd_copyurl":
     case "cmd_openfile":
     case "cmd_showinshell":
     case "cmd_selectAll":
@@ -164,11 +161,11 @@ var downloadViewController = {
     }
     return false;
   },
-
+  
   isCommandEnabled: function dVC_isCommandEnabled (aCommand)
   {
-    if (!gDownloadView.view || !gDownloadView.view.selection) return false;
-    var selectionCount = gDownloadView.view.selection.count;
+    if (!gDownloadView.treeBoxObject.selection) return false;
+    var selectionCount = gDownloadView.treeBoxObject.selection.count;
     if (!selectionCount) return false;
 
     var selectedItem = getSelectedItem();
@@ -176,8 +173,6 @@ var downloadViewController = {
 
     switch (aCommand) {
     case "cmd_openfile":
-      if (gCannotLaunch)
-        return false;
     case "cmd_showinshell":
       // we can't reveal until the download is complete, because we have not given
       // the file its final name until them.
@@ -195,15 +190,13 @@ var downloadViewController = {
       // XXX ensure selection isn't still in progress
       //     and how to handle multiple selection?
       return selectionCount > 0 && !isDownloading;
-    case "cmd_copyurl":
-      return selectionCount > 0;
     case "cmd_selectAll":
       return gDownloadView.view.rowCount != selectionCount;
     default:
       return false;
     }
   },
-
+  
   doCommand: function dVC_doCommand (aCommand)
   {
     var selectedItem, selectedItems;
@@ -258,12 +251,12 @@ var downloadViewController = {
       selectedItem = getSelectedItem();
       if (selectedItem) {
         file = createLocalFile(selectedItem.id);
-
+        
         // on unix, open a browser window rooted at the parent
         if ((navigator.platform.indexOf("Win") == -1) &&
             (navigator.platform.indexOf("Mac") == -1) &&
-            (navigator.platform.indexOf("OS/2") == -1) &&
-            (navigator.platform.indexOf("BeOS") == -1)) {
+            (navigator.platform.indexOf("OS/2") == -1)) {
+          file = file.QueryInterface(Components.interfaces.nsIFile);
           var parent = file.parent;
           if (parent) {
             const browserURL = "chrome://navigator/content/navigator.xul";
@@ -289,7 +282,7 @@ var downloadViewController = {
       // Figure out where to place the selection after deletion
       var newSelectionPos = gDownloadView.contentView.getIndexOfItem(selectedItems[0]);
       gDownloadManager.startBatchUpdate();
-
+      
       // Notify the datasource that we're about to begin a batch operation
       var ds = window.arguments[0]
                      .QueryInterface(Components.interfaces.nsIRDFDataSource);
@@ -305,7 +298,7 @@ var downloadViewController = {
         // Select the item that replaced the first deleted one
         if (newSelectionPos >= gDownloadView.treeBoxObject.view.rowCount)
           newSelectionPos = gDownloadView.treeBoxObject.view.rowCount - 1;
-        gDownloadView.view.selection.select(newSelectionPos);
+        gDownloadView.treeBoxObject.selection.select(newSelectionPos);
         gDownloadView.treeBoxObject.ensureRowIsVisible(newSelectionPos);
         gStatusBar.label = createLocalFile(getSelectedItem().id).path;
       }
@@ -316,18 +309,12 @@ var downloadViewController = {
       window.updateCommands("tree-select");
       break;
     case "cmd_selectAll":
-      gDownloadView.view.selection.selectAll();
-      break;
-    case "cmd_copyurl":
-      selectedItems = getSelectedItems();
-      if (selectedItems.length > 0) {
-        gStatusBar.label = copyToClipboard(selectedItems);
-      }
+      gDownloadView.treeBoxObject.selection.selectAll();
       break;
     default:
     }
   },  
-
+  
   onEvent: function dVC_onEvent (aEvent)
   {
     switch (aEvent) {
@@ -339,7 +326,7 @@ var downloadViewController = {
   onCommandUpdate: function dVC_onCommandUpdate ()
   {
     var cmds = ["cmd_properties", "cmd_pause", "cmd_cancel", "cmd_remove",
-                "cmd_copyurl", "cmd_openfile", "cmd_showinshell"];
+                "cmd_openfile", "cmd_showinshell"];
     for (var command in cmds)
       goUpdateCommand(cmds[command]);
   }
@@ -357,7 +344,7 @@ function getSelectedItems()
   var items = [];
   var k = 0;
 
-  var selection = gDownloadView.view.selection;
+  var selection = gDownloadView.treeBoxObject.selection;
   var rangeCount = selection.getRangeCount();
   for (var i = 0; i < rangeCount; i++) {
     var startIndex = {};
@@ -438,18 +425,4 @@ function doSort(node)
   }
   catch(ex) {
   }
-}
-
-function copyToClipboard(selectedItems)
-{
-  var urlArray = new Array(selectedItems.length);
-  for (var i = 0; i < selectedItems.length; ++i) {
-    urlArray[i] = selectedItems[i].firstChild.lastChild.getAttribute("label");
-  }
-
-  var clipboardHelper = Components.classes["@mozilla.org/widget/clipboardhelper;1"]
-                                  .getService(Components.interfaces.nsIClipboardHelper);
-  clipboardHelper.copyString(urlArray.join("\n"));
-
-  return urlArray.join(" "); // for status text
 }

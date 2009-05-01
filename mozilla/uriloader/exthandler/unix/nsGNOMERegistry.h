@@ -49,9 +49,6 @@ class nsGNOMERegistry
 
   static nsresult LoadURL(nsIURI *aURL);
 
-  static void GetAppDescForScheme(const nsACString& aScheme,
-                                  nsAString& aDesc);
-
   static already_AddRefed<nsMIMEInfoBase> GetFromExtension(const char *aFileExt);
 
   static already_AddRefed<nsMIMEInfoBase> GetFromType(const char *aMIMEType);

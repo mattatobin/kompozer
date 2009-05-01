@@ -1,11 +1,11 @@
 /* -*- Mode: c++; tab-width: 2; indent-tabs-mode: nil; -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License
+ * The contents of this file are subject to the Netscape Public License
  * Version 1.1 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -27,11 +27,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -60,7 +60,6 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(nsAppShellCocoa, nsIAppShell)
 //-------------------------------------------------------------------------
 nsAppShellCocoa::nsAppShellCocoa()
 {
-  mainPool = [[NSAutoreleasePool alloc] init];
 }
 
 //-------------------------------------------------------------------------
@@ -70,7 +69,6 @@ nsAppShellCocoa::nsAppShellCocoa()
 //-------------------------------------------------------------------------
 nsAppShellCocoa::~nsAppShellCocoa()
 {
-  [mainPool release];
 }
 
 
@@ -78,17 +76,15 @@ nsAppShellCocoa::~nsAppShellCocoa()
 //
 // Create the application shell
 //
-// There's reallly not a whole lot that needs to be done here. The
-// window will register its own interest in the necessary events
-// so there's no need for us to create a pump or a sink.
-//
 //-------------------------------------------------------------------------
 
 NS_IMETHODIMP
 nsAppShellCocoa::Create(int* argc, char ** argv)
 {
-  // this call initializes NSApplication
-  [NSApplication sharedApplication];
+  // There's reallly not a whole lot that needs to be done here. The
+  // window will register its own interest in the necessary events
+  // so there's no need for us to create a pump or a sink. 
+
 	return NS_OK;
 }
 
@@ -114,7 +110,7 @@ nsAppShellCocoa::Run(void)
 NS_IMETHODIMP
 nsAppShellCocoa::Exit(void)
 {
-  [NSApp stop:nil];
+  [NSApp stop];
 	return NS_OK;
 }
 
@@ -168,15 +164,32 @@ nsAppShellCocoa::Spindown(void)
 NS_METHOD
 nsAppShellCocoa::GetNativeEvent(PRBool &aRealEvent, void *&aEvent)
 {
-  aEvent = [NSApp nextEventMatchingMask:NSAnyEventMask untilDate:nil inMode:NSEventTrackingRunLoopMode dequeue:YES];
-  aRealEvent = (aEvent != nil);
-  return NS_OK;
+  NS_WARNING("GetNativeEvent NOT YET IMPLEMENTED");
+  
+#if 0
+	static EventRecord	theEvent;	// icky icky static (can't really do any better)
+
+	if (!mMacPump.get())
+		return NS_ERROR_NOT_INITIALIZED;
+
+	aRealEvent = mMacPump->GetEvent(theEvent);
+	aEvent = &theEvent;
+#endif
+	return NS_OK;
 }
 
 NS_METHOD
 nsAppShellCocoa::DispatchNativeEvent(PRBool aRealEvent, void *aEvent)
 {
-  if (aRealEvent)
-    [NSApp sendEvent:(NSEvent*)aEvent];
-  return NS_OK;
+  NS_WARNING("DispatchNativeEvent NOT YET IMPLEMENTED");
+  
+#if 0
+	if (!mMacPump.get())
+		return NS_ERROR_NOT_INITIALIZED;
+
+	mMacPump->DispatchEvent(aRealEvent, (EventRecord *) aEvent);
+#endif
+	return NS_OK;
 }
+
+

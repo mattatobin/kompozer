@@ -49,7 +49,7 @@ typedef unsigned long PtrBits;
 class nsAttrName
 {
 public:
-  nsAttrName(const nsAttrName& aOther)
+  explicit nsAttrName(const nsAttrName& aOther)
     : mBits(aOther.mBits)
   {
     AddRefInternalName();

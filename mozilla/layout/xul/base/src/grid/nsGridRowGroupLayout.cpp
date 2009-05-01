@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,6 +48,7 @@
  */
 
 #include "nsGridRowGroupLayout.h"
+#include "nsIBox.h"
 #include "nsCOMPtr.h"
 #include "nsIScrollableFrame.h"
 #include "nsBoxLayoutState.h"
@@ -198,19 +199,16 @@ nsGridRowGroupLayout::DirtyRows(nsIBox* aBox, nsBoxLayoutState& aState)
     aBox->MarkDirty(aState);
     nsIBox* child = nsnull;
     aBox->GetChildBox(&child); 
+    nsIBox* deepChild = child;
 
     while(child) {
 
       // walk into scrollframes
-      nsIBox* deepChild = nsGrid::GetScrolledBox(child);
+      deepChild = nsGrid::GetScrolledBox(child);
 
       // walk into other monuments
       nsCOMPtr<nsIBoxLayout> layout;
-      // deepChild might be null if child is a scrollframe around a non-box.
-      // But in that case there's nothing to do here, really.
-      if (deepChild) {
-        deepChild->GetLayoutManager(getter_AddRefs(layout));
-      }
+      deepChild->GetLayoutManager(getter_AddRefs(layout));
       if (layout) {
         nsCOMPtr<nsIGridPart> monument( do_QueryInterface(layout) );
         if (monument) 
@@ -218,6 +216,7 @@ nsGridRowGroupLayout::DirtyRows(nsIBox* aBox, nsBoxLayoutState& aState)
       }
 
       child->GetNextBox(&child);
+      deepChild = child;
     }
   }
 
@@ -233,19 +232,15 @@ nsGridRowGroupLayout::CountRowsColumns(nsIBox* aBox, PRInt32& aRowCount, PRInt32
 
     nsIBox* child = nsnull;
     aBox->GetChildBox(&child); 
+    nsIBox* deepChild = child;
 
     while(child) {
       
       // first see if it is a scrollframe. If so walk down into it and get the scrolled child
-      nsIBox* deepChild = nsGrid::GetScrolledBox(child);
+      deepChild = nsGrid::GetScrolledBox(child);
 
       nsCOMPtr<nsIBoxLayout> layout;
-      // deepChild might be null if child is a scrollframe around a non-box.
-      // But in that case I guess we can count this as a single grid row.  Or
-      // something.
-      if (deepChild) {
-        deepChild->GetLayoutManager(getter_AddRefs(layout));
-      }
+      deepChild->GetLayoutManager(getter_AddRefs(layout));
       if (layout) {
         nsCOMPtr<nsIGridPart> monument( do_QueryInterface(layout) );
         if (monument) {
@@ -257,6 +252,7 @@ nsGridRowGroupLayout::CountRowsColumns(nsIBox* aBox, PRInt32& aRowCount, PRInt32
       }
 
       child->GetNextBox(&child);
+      deepChild = child;
 
       // if not a monument. Then count it. It will be a bogus row
       aRowCount++;
@@ -287,18 +283,15 @@ nsGridRowGroupLayout::BuildRows(nsIBox* aBox, nsGridRow* aRows, PRInt32* aCount)
   if (aBox) {
     nsIBox* child = nsnull;
     aBox->GetChildBox(&child); 
+    nsIBox* deepChild = child;
 
     while(child) {
       
       // first see if it is a scrollframe. If so walk down into it and get the scrolled child
-      nsIBox* deepChild = nsGrid::GetScrolledBox(child);
+      deepChild = nsGrid::GetScrolledBox(child);
 
       nsCOMPtr<nsIBoxLayout> layout;
-      // deepChild might be null if child is a scrollframe around a non-box.
-      // But in that case there's nothing special that needs doing there.
-      if (deepChild) {
-        deepChild->GetLayoutManager(getter_AddRefs(layout));
-      }
+      deepChild->GetLayoutManager(getter_AddRefs(layout));
       if (layout) {
         nsCOMPtr<nsIGridPart> monument( do_QueryInterface(layout) );
         if (monument) {
@@ -314,6 +307,7 @@ nsGridRowGroupLayout::BuildRows(nsIBox* aBox, nsGridRow* aRows, PRInt32* aCount)
       aRows[rowCount].Init(child, PR_TRUE);
 
       child->GetNextBox(&child);
+      deepChild = child;
 
       // if not a monument. Then count it. It will be a bogus row
       rowCount++;

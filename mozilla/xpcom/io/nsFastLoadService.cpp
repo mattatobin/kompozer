@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla FastLoad code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Brendan Eich <brendan@mozilla.org> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -109,60 +109,45 @@ nsFastLoadService::Create(nsISupports *aOuter, REFNSIID aIID, void **aResult)
     return rv;
 }
 
+#if defined XP_MAC
+
+// Mac format: "<Basename> FastLoad File" with <basename> capitalized.
+# include "nsCRT.h"
+
+# define MASSAGE_BASENAME(bn)   (bn.SetCharAt(nsCRT::ToUpper(bn.CharAt(0)), 0))
+# define PLATFORM_FASL_SUFFIX   " FastLoad File"
+
+#elif defined(XP_UNIX) || defined(XP_BEOS)
+
+// Unix format: "<basename>.mfasl".
+# define MASSAGE_BASENAME(bn)   /* nothing */
+# define PLATFORM_FASL_SUFFIX   ".mfasl"
+
+#elif defined(XP_WIN) || defined(XP_OS2)
+
+// Windows format: "<basename>.mfl".
+# define MASSAGE_BASENAME(bn)   /* nothing */
+# define PLATFORM_FASL_SUFFIX   ".mfl"
+
+#endif
+
 nsresult
 nsFastLoadService::NewFastLoadFile(const char* aBaseName, nsIFile* *aResult)
 {
     nsresult rv;
-
-    // Try "ProfDS" first, so that we can get the profile directory
-    // during startup.
-    nsCOMPtr<nsIFile> profFile;
-    rv = NS_GetSpecialDirectory("ProfDS",
-                                getter_AddRefs(profFile));
-    if (NS_FAILED(rv)) {
-        // The directory service doesn't know about "ProfDS", so just ask
-        // for the regular profile directory key.  Note, however, that this
-        // will fail if a profile hasn't yet been selected.
-        rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR,
-                                    getter_AddRefs(profFile));
-        if (NS_FAILED(rv)) {
-            return rv;
-        }
-    }
-
-    // Try "ProfLDS" first, so that we can get the local profile directory
-    // during startup.
     nsCOMPtr<nsIFile> file;
-    rv = NS_GetSpecialDirectory("ProfLDS", getter_AddRefs(file));
-    if (NS_FAILED(rv)) {
-        // The directory service doesn't know about "ProfLDS", so just ask
-        // for the regular local profile directory key.  Note, however, that
-        // this will fail if a profile hasn't yet been selected.
-        rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_LOCAL_50_DIR,
-                                    getter_AddRefs(file));
-    }
-    if (NS_FAILED(rv))
-        file = profFile;
 
-    PRBool sameDir;
-    rv = file->Equals(profFile, &sameDir);
+    rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR,
+                                getter_AddRefs(file));
     if (NS_FAILED(rv))
         return rv;
 
     nsCAutoString name(aBaseName);
+    MASSAGE_BASENAME(name);
     name += PLATFORM_FASL_SUFFIX;
     rv = file->AppendNative(name);
     if (NS_FAILED(rv))
         return rv;
-
-    if (!sameDir) {
-        // Cleanup any pre-existing fastload files that may live in the profile
-        // directory from previous versions of the code that didn't store them
-        // in the profile temp directory.
-        rv = profFile->AppendNative(name);
-        if (NS_SUCCEEDED(rv))
-            profFile->Remove(PR_FALSE);  // OK if this fails
-    }
 
     *aResult = file;
     NS_ADDREF(*aResult);
@@ -500,7 +485,7 @@ nsFastLoadService::ReadFastLoadPtr(nsIObjectInputStream* aInputStream,
     if (!seekable)
         return NS_ERROR_FAILURE;
 
-    PRInt64 thisOffset;
+    PRUint32 thisOffset;
     rv = seekable->Tell(&thisOffset);
     if (NS_FAILED(rv))
         return rv;
@@ -524,8 +509,7 @@ nsFastLoadService::ReadFastLoadPtr(nsIObjectInputStream* aInputStream,
     NS_ASSERTION(entry->mPtrAddr == nsnull, "duplicate nsFastLoadPtr?!");
 
     entry->mPtrAddr = aPtrAddr;
-
-    LL_L2UI(entry->mOffset, thisOffset);
+    entry->mOffset = thisOffset;
     return NS_OK;
 }
 
@@ -544,7 +528,7 @@ nsFastLoadService::WriteFastLoadPtr(nsIObjectOutputStream* aOutputStream,
     if (!seekable)
         return NS_ERROR_FAILURE;
 
-    PRInt64 saveOffset;
+    PRUint32 saveOffset;
     rv = seekable->Tell(&saveOffset);
     if (NS_FAILED(rv))
         return rv;
@@ -557,7 +541,7 @@ nsFastLoadService::WriteFastLoadPtr(nsIObjectOutputStream* aOutputStream,
     if (NS_FAILED(rv))
         return rv;
 
-    PRInt64 nextOffset;
+    PRUint32 nextOffset;
     rv = seekable->Tell(&nextOffset);
     if (NS_FAILED(rv))
         return rv;

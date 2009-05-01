@@ -228,6 +228,16 @@ static double private_mem[PRIVATE_mem], *pmem_next = private_mem;
 
 #else /* ifndef Bad_float_h */
 #include "float.h"
+/*
+ * MacOS 10.2 defines the macro FLT_ROUNDS to an internal function
+ * which does not exist on 10.1.  We can safely #define it to 1 here
+ * to allow 10.2 builds to run on 10.1, since we can't use fesetround()
+ * (which does not exist on 10.1 either).
+ */
+#if defined(MACOS_DEPLOYMENT_TARGET) && (MACOS_DEPLOYMENT_TARGET < 100200)
+#undef FLT_ROUNDS   
+#define FLT_ROUNDS 1
+#endif
 #endif /* Bad_float_h */
 
 #ifndef __MATH_H__
@@ -979,7 +989,7 @@ static Bigint *diff(Bigint *a, Bigint *b)
 static double ulp(double x)
 {
     register Long L;
-    double a = 0;
+    double a;
 
     L = (word0(x) & Exp_mask) - (P-1)*Exp_msk1;
 #ifndef Sudden_Underflow
@@ -1010,7 +1020,7 @@ static double b2d(Bigint *a, int32 *e)
 {
     ULong *xa, *xa0, w, y, z;
     int32 k;
-    double d = 0;
+    double d;
 #define d0 word0(d)
 #define d1 word1(d)
 #define set_d0(x) set_word0(d, x)
@@ -1238,7 +1248,7 @@ JS_strtod(CONST char *s00, char **se, int *err)
 
     *err = 0;
 
-    bb = bd = bs = delta = NULL;
+	bb = bd = bs = delta = NULL;
     sign = nz0 = nz = 0;
     rv = 0.;
 
@@ -1360,16 +1370,16 @@ dig_done:
               case 'i':
               case 'I':
                 if (match(&s,"nfinity")) {
-                    set_word0(rv, 0x7ff00000);
-                    set_word1(rv, 0);
+                    word0(rv) = 0x7ff00000;
+                    word1(rv) = 0;
                     goto ret;
                     }
                 break;
               case 'n':
               case 'N':
                 if (match(&s, "an")) {
-                    set_word0(rv, NAN_WORD0);
-                    set_word1(rv, NAN_WORD1);
+                    word0(rv) = NAN_WORD0;
+                    word1(rv) = NAN_WORD1;
                     goto ret;
                     }
               }
@@ -1439,8 +1449,8 @@ dig_done:
                 rv = HUGE_VAL;
 #else
                 /* Can't trust HUGE_VAL */
-                set_word0(rv, Exp_mask);
-                set_word1(rv, 0);
+                word0(rv) = Exp_mask;
+                word1(rv) = 0;
 #endif
                 if (bd0)
                     goto retfree;
@@ -1826,7 +1836,6 @@ dig_done:
     }
 #ifdef Avoid_Underflow
     if (scale) {
-        rv0 = 0.;
         set_word0(rv0, Exp_1 - P*Exp_msk1);
         set_word1(rv0, 0);
         if ((word0(rv) & Exp_mask) <= P*Exp_msk1
@@ -1865,7 +1874,6 @@ nomem:
     Bfree(bs);
     Bfree(bd0);
     Bfree(delta);
-    RELEASE_DTOA_LOCK();
     *err = JS_DTOA_ENOMEM;
     return 0;
 }
@@ -2031,7 +2039,7 @@ static int32 quorem(Bigint *b, Bigint *S)
 
 /* Always emits at least one digit. */
 /* If biasUp is set, then rounding in modes 2 and 3 will round away from zero
- * when the number is exactly halfway between two representable values.  For example,
+ * when the number is exactly halfway between two representable values.  For example, 
  * rounding 2.5 to zero digits after the decimal point will return 3 and not 2.
  * 2.49 will still round to 2, and 2.51 will still round to 3. */
 /* bufsize should be at least 20 for modes 0 and 1.  For the other modes,
@@ -2110,11 +2118,11 @@ js_dtoa(double d, int mode, JSBool biasUp, int ndigits,
         }
         return JS_TRUE;
     }
-
+    
     b = NULL;                           /* initialize for abort protection */
     S = NULL;
     mlo = mhi = NULL;
-
+    
     if (!d) {
       no_digits:
         *decpt = 1;
@@ -2382,9 +2390,7 @@ js_dtoa(double d, int mode, JSBool biasUp, int ndigits,
                 goto no_digits;
             goto one_digit;
         }
-
-        /* Use true number of digits to limit looping. */
-        for(i = 1; i<=k+1; i++) {
+        for(i = 1;; i++) {
             L = (Long) (d / ds);
             d -= L*ds;
 #ifdef Check_FLT_ROUNDS
@@ -2409,7 +2415,8 @@ js_dtoa(double d, int mode, JSBool biasUp, int ndigits,
                 }
                 break;
             }
-            d *= 10.;
+            if (!(d *= 10.))
+                break;
         }
         goto ret1;
     }
@@ -2822,7 +2829,7 @@ JS_dtostr(char *buffer, size_t bufferSize, JSDToStrMode mode, int precision, dou
             } while (numEnd != p);
             *numEnd = '\0';
         }
-
+        
         if (exponentialNotation) {
             /* Insert a decimal point if more than one significand digit */
             if (nDigits != 1) {
@@ -2892,7 +2899,7 @@ divrem(Bigint *b, uint32 divisor)
         ULong dividend = remainder << 16 | a >> 16;
         ULong quotientHi = dividend / divisor;
         ULong quotientLo;
-
+        
         remainder = dividend - quotientHi*divisor;
         JS_ASSERT(quotientHi <= 0xFFFF && remainder < divisor);
         dividend = remainder << 16 | (a & 0xFFFF);
@@ -2947,7 +2954,7 @@ JS_dtobasestr(int base, double d)
 
         /* Locking for Balloc's shared buffers */
         ACQUIRE_DTOA_LOCK();
-
+        
         /* Output the integer part of d with the digits in reverse order. */
         pInt = p;
         di = fd_floor(d);
@@ -2972,8 +2979,6 @@ JS_dtobasestr(int base, double d)
             if (!b) {
               nomem1:
                 Bfree(b);
-                RELEASE_DTOA_LOCK();
-                free(buffer);
                 return NULL;
             }
             do {
@@ -2990,7 +2995,7 @@ JS_dtobasestr(int base, double d)
             *pInt++ = *q;
             *q-- = ch;
         }
-
+        
         df = d - di;
         if (df != 0.0) {
             /* We have a fraction. */
@@ -2998,7 +3003,7 @@ JS_dtobasestr(int base, double d)
             Bigint *b, *s, *mlo, *mhi;
 
             b = s = mlo = mhi = NULL;
-
+            
             *p++ = '.';
             b = d2b(df, &e, &bbits);
             if (!b) {
@@ -3008,13 +3013,11 @@ JS_dtobasestr(int base, double d)
                 if (mlo != mhi)
                     Bfree(mlo);
                 Bfree(mhi);
-                RELEASE_DTOA_LOCK();
-                free(buffer);
                 return NULL;
             }
             JS_ASSERT(e < 0);
             /* At this point df = b * 2^e.  e must be less than zero because 0 < df < 1. */
-
+            
             s2 = -(int32)(word0(d) >> Exp_shift1 & Exp_mask>>Exp_shift1);
 #ifndef Sudden_Underflow
             if (!s2)

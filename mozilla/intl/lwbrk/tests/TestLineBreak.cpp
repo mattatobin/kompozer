@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,31 +14,32 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include <stdio.h>
 #include "nsXPCOM.h"
 #include "nsIComponentManager.h"
 #include "nsISupports.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManager.h"
 #include "nsILineBreakerFactory.h"
 #include "nsILineBreaker.h"
 #include "nsIWordBreakerFactory.h"
@@ -52,6 +53,8 @@
 IMPL_NS_IBREAKSTATE( nsBreakState )
 
 NS_DEFINE_CID(kLWBrkCID, NS_LWBRK_CID);
+NS_DEFINE_IID(kILineBreakerFactory, NS_ILINEBREAKERFACTORY_IID);
+NS_DEFINE_IID(kIWordBreakerFactory, NS_IWORDBREAKERFACTORY_IID);
 
 
 static char teng1[] = 
@@ -218,7 +221,9 @@ PRBool TestLineBreaker()
    nsILineBreakerFactory *t = NULL;
    nsresult res;
    PRBool ok = PR_TRUE;
-   res = CallGetService(kLWBrkCID, &t);
+   res = nsServiceManager::GetService(kLWBrkCID,
+                                kILineBreakerFactory,
+                                (nsISupports**) &t);
            
    printf("Test 1 - GetService():\n");
    if(NS_FAILED(res) || ( t == NULL ) ) {
@@ -226,11 +231,13 @@ PRBool TestLineBreaker()
      ok = PR_FALSE;
    } else {
 #ifdef WORD_AROUND_SERVICE_MANAGER_ASSERT
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kLWBrkCID, t);
 #endif
    }
 
-   res = CallGetService(kLWBrkCID, &t);
+   res = nsServiceManager::GetService(kLWBrkCID,
+                                kILineBreakerFactory,
+                                (nsISupports**) &t);
            
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t2nd GetService failed\n");
@@ -282,7 +289,7 @@ PRBool TestLineBreaker()
      }
 
 #ifdef WORD_AROUND_SERVICE_MANAGER_ASSERT
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kLWBrkCID, t);
 #endif
    }
    printf("==================================\n");
@@ -300,17 +307,21 @@ PRBool TestWordBreaker()
    nsIWordBreakerFactory *t = NULL;
    nsresult res;
    PRBool ok = PR_TRUE;
-   res = CallGetService(kLWBrkCID, &t);
+   res = nsServiceManager::GetService(kLWBrkCID,
+                                kIWordBreakerFactory,
+                                (nsISupports**) &t);
            
    printf("Test 1 - GetService():\n");
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t1st GetService failed\n");
      ok = PR_FALSE;
    } else {
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kLWBrkCID, t);
    }
 
-   res = CallGetService(kLWBrkCID, &t);
+   res = nsServiceManager::GetService(kLWBrkCID,
+                                kIWordBreakerFactory,
+                                (nsISupports**) &t);
            
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t2nd GetService failed\n");
@@ -361,7 +372,7 @@ PRBool TestWordBreaker()
          NS_IF_RELEASE(lb);
      }
 
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kLWBrkCID, t);
    }
    printf("==================================\n");
    printf("Finish nsIWordBreakerFactory Test \n");
@@ -403,7 +414,9 @@ void SamplePrintWordWithBreak()
    PRUint32 numOfFragment = sizeof(wb) / sizeof(char*);
    nsIWordBreakerFactory *t = NULL;
 
-   nsresult res = CallGetService(kLWBrkCID, &t);
+   nsresult res = nsServiceManager::GetService(kLWBrkCID,
+                                kIWordBreakerFactory,
+                                (nsISupports**) &t);
    nsIWordBreaker *wbk;
 
    nsAutoString wb_arg;
@@ -426,7 +439,7 @@ void SamplePrintWordWithBreak()
             tmp.Truncate();
             fragText.Mid(tmp, start, cur - start);
             result.Append(tmp);
-            result.AppendLiteral("^");
+            result.Append(NS_LITERAL_STRING("^"));
             start = cur;
             wbk->NextWord(fragText.get(), fragText.Length(), cur, &cur, &done);
       }
@@ -448,7 +461,7 @@ void SamplePrintWordWithBreak()
                                   &canBreak
                                 );
         if(canBreak)
-            result.AppendLiteral("^");
+            result.Append(NS_LITERAL_STRING("^"));
 
         fragText = nextFragText;
       }
@@ -462,7 +475,9 @@ void SampleFindWordBreakFromPosition(PRUint32 fragN, PRUint32 offset)
    PRUint32 numOfFragment = sizeof(wb) / sizeof(char*);
    nsIWordBreakerFactory *t = NULL;
 
-   nsresult res = CallGetService(kLWBrkCID, &t);
+   nsresult res = nsServiceManager::GetService(kLWBrkCID,
+                                kIWordBreakerFactory,
+                                (nsISupports**) &t);
    nsIWordBreaker *wbk;
 
    nsAutoString wb_arg;
@@ -571,7 +586,13 @@ int main(int argc, char** argv) {
 
    // --------------------------------------------
    printf("Finish All The Test Cases\n");
+   nsresult res = NS_OK;
+   res = nsComponentManager::FreeLibraries();
 
+   if(NS_FAILED(res))
+      printf("nsComponentManager failed\n");
+   else
+      printf("nsComponentManager FreeLibraries Done\n");
    if(lbok && wbok)
       printf("Line/Word Break Test\nOK\n");
    else

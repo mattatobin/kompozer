@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -23,23 +23,21 @@
  *   Peter Annema <jaggernaut@netscape.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #ifndef nsUTF8Utils_h_
 #define nsUTF8Utils_h_
-
-#include "nsCharTraits.h"
 
 class UTF8traits
   {
@@ -52,6 +50,9 @@ class UTF8traits
       static PRBool is5byte(char c) { return (c & 0xFC) == 0xF8; }
       static PRBool is6byte(char c) { return (c & 0xFE) == 0xFC; }
   };
+
+#define PLANE1_BASE           0x00010000  
+#define UCS2_REPLACEMENT_CHAR 0xfffd     
 
 #ifdef __GNUC__
 #define NS_ALWAYS_INLINE __attribute__((always_inline))
@@ -138,14 +139,6 @@ class ConvertUTF8toUTF16
 
             while ( state-- )
               {
-                if (p == end)
-                  {
-                    NS_ERROR("Buffer ended in the middle of a multibyte sequence");
-                    mErrorEncountered = PR_TRUE;
-                    mBuffer = out;
-                    return N;
-                  }
-
                 c = *p++;
 
                 if ( UTF8traits::isInSeq(c) )
@@ -183,11 +176,13 @@ class ConvertUTF8toUTF16
               }
             else if ( ucs4 >= PLANE1_BASE )
               {
-                if ( ucs4 >= UCS_END )
+                if ( ucs4 >= 0x00110000 )
                   *out++ = UCS2_REPLACEMENT_CHAR;
                 else {
-                  *out++ = (buffer_type)H_SURROGATE(ucs4);
-                  *out++ = (buffer_type)L_SURROGATE(ucs4);
+                  // surrogate, see unicode specification 3.7 for following math.
+                  ucs4 -= PLANE1_BASE;
+                  *out++ = (PRUnichar)(ucs4 >> 10) | 0xd800u;
+                  *out++ = (PRUnichar)(ucs4 & 0x3ff) | 0xdc00u;
                 }
               }
             else
@@ -212,7 +207,7 @@ class ConvertUTF8toUTF16
 
 /**
  * A character sink (see |copy_string| in nsAlgorithm.h) for computing
- * the length of the UTF-16 string equivalent to a UTF-8 string.
+ * the length of a UTF-8 string.
  */
 class CalculateUTF8Length
   {
@@ -243,16 +238,6 @@ class CalculateUTF8Length
                 p += 3;
             else if ( UTF8traits::is4byte(*p) ) {
                 p += 4;
-                // Because a UTF-8 sequence of 4 bytes represents a codepoint
-                // greater than 0xFFFF, it will become a surrogate pair in the
-                // UTF-16 string, so add 1 more to mLength.
-                // This doesn't happen with is5byte and is6byte because they
-                // are illegal UTF-8 sequences (greater than 0x10FFFF) so get
-                // converted to a single replacement character.
-                //
-                // XXX: if the 4-byte sequence is an illegal non-shortest form,
-                //      it also gets converted to a replacement character, so
-                //      mLength will be off by one in this case.
                 ++mLength;
             }
             else if ( UTF8traits::is5byte(*p) )
@@ -268,6 +253,7 @@ class CalculateUTF8Length
           {
             NS_ERROR("Not a UTF-8 string. This code should only be used for converting from known UTF-8 strings.");
             mErrorEncountered = PR_TRUE;
+            mLength = 0;
             return N;
           }
         return p - start;
@@ -313,16 +299,17 @@ class ConvertUTF16toUTF8
                 *out++ = 0xC0 | (char)(c >> 6);
                 *out++ = 0x80 | (char)(0x003F & c);
               }
-            else if (!IS_SURROGATE(c)) // U+0800 - U+D7FF,U+E000 - U+FFFF
+            else if (0xD800 != (0xF800 & c)) // U+0800 - U+D7FF,U+E000 - U+FFFF
               {
                 *out++ = 0xE0 | (char)(c >> 12);
                 *out++ = 0x80 | (char)(0x003F & (c >> 6));
                 *out++ = 0x80 | (char)(0x003F & c );
               }
-            else if (IS_HIGH_SURROGATE(c)) // U+D800 - U+DBFF
+            else if (0xD800 == (0xFC00 & c)) // U+D800 - U+DBFF
               {
                 // D800- DBFF - High Surrogate
-                value_type h = c;
+                // N = (H- D800) *400 + 10000 + ...
+                PRUint32 ucs4 = 0x10000 + ((0x03FF & c) << 10);
 
                 ++p;
                 if (p == end)
@@ -333,11 +320,11 @@ class ConvertUTF16toUTF8
                   }
                 c = *p;
 
-                if (IS_LOW_SURROGATE(c))
+                if (0xDC00 == (0xFC00 & c))
                   {
                     // DC00- DFFF - Low Surrogate
-                    // N = (H - D800) *400 + 10000 + ( L - DC00 )
-                    PRUint32 ucs4 = SURROGATE_TO_UCS4(h, c);
+                    // N += ( L - DC00 )
+                    ucs4 |= (0x03FF & c);
 
                     // 0001 0000-001F FFFF
                     *out++ = 0xF0 | (char)(ucs4 >> 18);

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +44,6 @@
 #include "nsIContent.h"
 #include "nsIDOMCharacterData.h"
 #include "nsCRT.h"
-#include "nsIRangeUtils.h"
 
 const PRUnichar nbsp = 160;
 
@@ -708,7 +708,9 @@ nsWSRunObject::GetWSNodes()
   if (mHTMLEditor->IsTextNode(mNode))
   {
     nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNode));
-    const nsTextFragment *textFrag = textNode->Text();
+    const nsTextFragment *textFrag;
+    res = textNode->GetText(&textFrag);
+    NS_ENSURE_SUCCESS(res, res);
     
     res = PrependNodeToList(mNode);
     NS_ENSURE_SUCCESS(res, res);
@@ -769,8 +771,11 @@ nsWSRunObject::GetWSNodes()
         NS_ENSURE_SUCCESS(res, res);
         nsCOMPtr<nsITextContent> textNode(do_QueryInterface(priorNode));
         if (!textNode) return NS_ERROR_NULL_POINTER;
-        const nsTextFragment *textFrag = textNode->Text();
-        PRUint32 len = textNode->TextLength();
+        const nsTextFragment *textFrag;
+        res = textNode->GetText(&textFrag);
+        PRInt32 len;
+        res = textNode->GetTextLength(&len);
+        NS_ENSURE_SUCCESS(res, res);
 
         if (len < 1)
         {
@@ -840,9 +845,11 @@ nsWSRunObject::GetWSNodes()
   {
     // dont need to put it on list. it already is from code above
     nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNode));
-    const nsTextFragment *textFrag = textNode->Text();
-
-    PRUint32 len = textNode->TextLength();
+    const nsTextFragment *textFrag;
+    res = textNode->GetText(&textFrag);
+    NS_ENSURE_SUCCESS(res, res);
+    PRInt32 len;
+    textNode->GetTextLength(&len);
     if (mOffset<len)
     {
       PRInt32 pos;
@@ -901,8 +908,12 @@ nsWSRunObject::GetWSNodes()
         NS_ENSURE_SUCCESS(res, res);
         nsCOMPtr<nsITextContent> textNode(do_QueryInterface(nextNode));
         if (!textNode) return NS_ERROR_NULL_POINTER;
-        const nsTextFragment *textFrag = textNode->Text();
-        PRUint32 len = textNode->TextLength();
+        const nsTextFragment *textFrag;
+        res = textNode->GetText(&textFrag);
+        NS_ENSURE_SUCCESS(res, res);
+        PRInt32 len;
+        res = textNode->GetTextLength(&len);
+        NS_ENSURE_SUCCESS(res, res);
 
         if (len < 1)
         {
@@ -1586,7 +1597,7 @@ nsWSRunObject::DeleteChars(nsIDOMNode *aStartNode, PRInt32 aStartOffset,
       }
       PRBool nodeBefore, nodeAfter;
       nsCOMPtr<nsIContent> content (do_QueryInterface(node));
-      res = mHTMLEditor->sRangeHelper->CompareNodeToRange(content, range, &nodeBefore, &nodeAfter);
+      res = mHTMLEditor->mRangeHelper->CompareNodeToRange(content, range, &nodeBefore, &nodeAfter);
       NS_ENSURE_SUCCESS(res, res);
       if (nodeAfter)
       {
@@ -1665,7 +1676,11 @@ nsWSRunObject::GetCharAfter(WSPoint &aPoint, WSPoint *outPoint)
   if (idx == -1) return NS_OK;  // can't find point, but it's not an error
   PRInt32 numNodes = mNodeArray.Count();
   
-  if (aPoint.mOffset < aPoint.mTextNode->TextLength())
+  PRInt32 len;
+  nsresult res = aPoint.mTextNode->GetTextLength(&len);
+  NS_ENSURE_SUCCESS(res, res);
+  
+  if (aPoint.mOffset < len)
   {
     *outPoint = aPoint;
     outPoint->mChar = GetCharAt(aPoint.mTextNode, aPoint.mOffset);
@@ -1707,9 +1722,9 @@ nsWSRunObject::GetCharBefore(WSPoint &aPoint, WSPoint *outPoint)
     nsIDOMNode* node = mNodeArray[idx-1];
     if (!node) return NS_ERROR_FAILURE;
     outPoint->mTextNode = do_QueryInterface(node);
-
-    PRUint32 len = outPoint->mTextNode->TextLength();
-
+    PRInt32 len;
+    res = outPoint->mTextNode->GetTextLength(&len);
+    NS_ENSURE_SUCCESS(res, res);
     if (len)
     {
       outPoint->mOffset = len-1;
@@ -1848,7 +1863,7 @@ nsWSRunObject::FindRun(nsIDOMNode *aNode, PRInt32 aOffset, WSFragment **outRun, 
   WSFragment *run = mStartRun;
   while (run)
   {
-    PRInt16 comp = mHTMLEditor->sRangeHelper->ComparePoints(aNode, aOffset, run->mStartNode, run->mStartOffset);
+    PRInt16 comp = mHTMLEditor->mRangeHelper->ComparePoints(aNode, aOffset, run->mStartNode, run->mStartOffset);
     if (comp <= 0)
     {
       if (after)
@@ -1862,7 +1877,7 @@ nsWSRunObject::FindRun(nsIDOMNode *aNode, PRInt32 aOffset, WSFragment **outRun, 
         return res;
       }
     }
-    comp = mHTMLEditor->sRangeHelper->ComparePoints(aNode, aOffset, run->mEndNode, run->mEndOffset);
+    comp = mHTMLEditor->mRangeHelper->ComparePoints(aNode, aOffset, run->mEndNode, run->mEndOffset);
     if (comp < 0)
     {
       *outRun = run;
@@ -1906,10 +1921,14 @@ nsWSRunObject::GetCharAt(nsITextContent *aTextNode, PRInt32 aOffset)
   if (!aTextNode)
     return 0;
     
-  const nsTextFragment *textFrag = aTextNode->Text();
+  const nsTextFragment *textFrag;
+  nsresult res = aTextNode->GetText(&textFrag);
+  NS_ENSURE_SUCCESS(res, 0);
   
-  PRUint32 len = textFrag->GetLength();
-  if (aOffset < 0 || aOffset>=len) 
+  PRInt32 len = textFrag->GetLength();
+  if (!len) 
+    return 0;
+  if (aOffset>=len) 
     return 0;
     
   return textFrag->CharAt(aOffset);
@@ -1921,13 +1940,12 @@ nsWSRunObject::GetWSPointAfter(nsIDOMNode *aNode, PRInt32 aOffset, WSPoint *outP
   // Note: only to be called if aNode is not a ws node.  
   
   // binary search on wsnodes
-  PRInt32 numNodes, firstNum, curNum, lastNum;
+  PRInt32 numNodes, curNum, lastNum;
   numNodes = mNodeArray.Count();
   
   if (!numNodes) 
     return NS_OK; // do nothing if there are no nodes to search
-
-  firstNum = 0;
+  
   curNum = numNodes/2;
   lastNum = numNodes;
   PRInt16 cmp=0;
@@ -1938,31 +1956,42 @@ nsWSRunObject::GetWSPointAfter(nsIDOMNode *aNode, PRInt32 aOffset, WSPoint *outP
   // which is mongo expensive
   while (curNum != lastNum)
   {
+    PRUint32 savedCur = curNum;
     curNode = mNodeArray[curNum];
-    cmp = mHTMLEditor->sRangeHelper->ComparePoints(aNode, aOffset, curNode, 0);
+    cmp = mHTMLEditor->mRangeHelper->ComparePoints(aNode, aOffset, curNode, 0);
     if (cmp < 0)
-      lastNum = curNum;
+    {
+      if (lastNum > curNum)
+        curNum = curNum/2;
+      else
+        curNum = (curNum+lastNum)/2;
+    }
     else
-      firstNum = curNum + 1;
-    curNum = (lastNum - firstNum) / 2 + firstNum;
-    NS_ASSERTION(firstNum <= curNum && curNum <= lastNum, "Bad binary search");
+    {
+      if (lastNum > curNum)
+        curNum = (curNum+lastNum)/2;
+      else
+        curNum = (curNum+numNodes)/2;
+    }
+    lastNum = savedCur;
   }
-
-  // When the binary search is complete, we always know that the current node
-  // is the same as the end node, which is always past our range. Therefore,
-  // we've found the node immediately after the point of interest.
-  if (curNum == mNodeArray.Count()) {
-    // they asked for past our range (it's after the last node). GetCharAfter
-    // will do the work for us when we pass it the last index of the last node.
-    nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNodeArray[curNum-1]));
-    WSPoint point(textNode, textNode->TextLength(), 0);
-    return GetCharAfter(point, outPoint);
-  } else {
-    // The char after the point of interest is the first character of our range.
-    nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNodeArray[curNum]));
-    WSPoint point(textNode, 0, 0);
+  
+  nsCOMPtr<nsITextContent> textNode(do_QueryInterface(curNode));
+  
+  if (cmp < 0)
+  {
+    WSPoint point(textNode,0,0);
     return GetCharAfter(point, outPoint);
   }
+  else
+  {
+    PRInt32 len;
+    textNode->GetTextLength(&len);
+    WSPoint point(textNode,len,0);
+    return GetCharAfter(point, outPoint);
+  }
+  
+  return NS_ERROR_FAILURE;
 }
 
 nsresult 
@@ -1971,13 +2000,12 @@ nsWSRunObject::GetWSPointBefore(nsIDOMNode *aNode, PRInt32 aOffset, WSPoint *out
   // Note: only to be called if aNode is not a ws node.  
   
   // binary search on wsnodes
-  PRInt32 numNodes, firstNum, curNum, lastNum;
+  PRInt32 numNodes, curNum, lastNum;
   numNodes = mNodeArray.Count();
   
   if (!numNodes) 
     return NS_OK; // do nothing if there are no nodes to search
   
-  firstNum = 0;
   curNum = numNodes/2;
   lastNum = numNodes;
   PRInt16 cmp=0;
@@ -1988,38 +2016,48 @@ nsWSRunObject::GetWSPointBefore(nsIDOMNode *aNode, PRInt32 aOffset, WSPoint *out
   // which is mongo expensive
   while (curNum != lastNum)
   {
+    PRUint32 savedCur = curNum;
     curNode = mNodeArray[curNum];
-    cmp = mHTMLEditor->sRangeHelper->ComparePoints(aNode, aOffset, curNode, 0);
+    cmp = mHTMLEditor->mRangeHelper->ComparePoints(aNode, aOffset, curNode, 0);
     if (cmp < 0)
-      lastNum = curNum;
+    {
+      if (lastNum > curNum)
+        curNum = curNum/2;
+      else
+        curNum = (curNum+lastNum)/2;
+    }
     else
-      firstNum = curNum + 1;
-    curNum = (lastNum - firstNum) / 2 + firstNum;
-    NS_ASSERTION(firstNum <= curNum && curNum <= lastNum, "Bad binary search");
+    {
+      if (lastNum > curNum)
+        curNum = (curNum+lastNum)/2;
+      else
+        curNum = (curNum+numNodes)/2;
+    }
+    lastNum = savedCur;
   }
-
-  // When the binary search is complete, we always know that the current node
-  // is the same as the end node, which is always past our range. Therefore,
-  // we've found the node immediately after the point of interest.
-  if (curNum == mNodeArray.Count()) {
-    // get the point before the end of the last node, we can pass the length
-    // of the node into GetCharBefore, and it will return the last character.
-    nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNodeArray[curNum - 1]));
-    WSPoint point(textNode, textNode->TextLength(), 0);
-    return GetCharBefore(point, outPoint);
-  } else {
-    // we can just ask the current node for the point immediately before it,
-    // it will handle moving to the previous node (if any) and returning the
-    // appropriate character
-    nsCOMPtr<nsITextContent> textNode(do_QueryInterface(mNodeArray[curNum]));
-    WSPoint point(textNode, 0, 0);
+  
+  nsCOMPtr<nsITextContent> textNode(do_QueryInterface(curNode));
+  
+  if (cmp > 0)
+  {
+    PRInt32 len;
+    textNode->GetTextLength(&len);
+    WSPoint point(textNode,len,0);
     return GetCharBefore(point, outPoint);
   }
+  else
+  {
+    WSPoint point(textNode,0,0);
+    return GetCharBefore(point, outPoint);
+  }
+  
+  return NS_ERROR_FAILURE;
 }
 
 nsresult
 nsWSRunObject::CheckTrailingNBSPOfRun(WSFragment *aRun)
 {    
+  return NS_OK;
   // try to change an nbsp to a space, if possible, just to prevent nbsp proliferation. 
   // examine what is before and after the trailing nbsp, if any.
   if (!aRun) return NS_ERROR_NULL_POINTER;

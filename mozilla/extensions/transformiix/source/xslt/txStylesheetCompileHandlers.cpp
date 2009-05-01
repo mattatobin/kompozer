@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -41,7 +41,7 @@
 #include "txTokenizer.h"
 #include "txInstructions.h"
 #include "txAtoms.h"
-#include "txCore.h"
+#include "primitives.h"
 #include "txStringUtils.h"
 #include "txStylesheet.h"
 #include "txToplevelItems.h"
@@ -191,19 +191,9 @@ getExprAttr(txStylesheetAttr* aAttributes,
 
     rv = txExprParser::createExpr(attr->mValue, &aState,
                                   getter_Transfers(aExpr));
-    if (NS_FAILED(rv) && aState.fcp()) {
+    if (NS_FAILED(rv) && !aRequired && aState.fcp()) {
         // use default value in fcp for not required exprs
-        if (aRequired) {
-            aExpr = new txErrorExpr(
-#ifdef TX_TO_STRING
-                                    attr->mValue
-#endif
-                                    );
-            NS_ENSURE_TRUE(aExpr, NS_ERROR_OUT_OF_MEMORY);
-        }
-        else {
-            aExpr = nsnull;
-        }
+        aExpr = nsnull;
         return NS_OK;
     }
 
@@ -227,20 +217,9 @@ getAVTAttr(txStylesheetAttr* aAttributes,
     }
 
     aAVT = txExprParser::createAttributeValueTemplate(attr->mValue, &aState);
-    if (!aAVT) {
-        if (!aState.fcp()) {
-            // XXX ErrorReport: XPath parse failure
-            return NS_ERROR_XPATH_PARSE_FAILURE;
-        }
-
-        if (aRequired) {
-            aAVT = new txErrorExpr(
-#ifdef TX_TO_STRING
-                                   attr->mValue
-#endif
-                                   );
-            NS_ENSURE_TRUE(aAVT, NS_ERROR_OUT_OF_MEMORY);
-        }
+    if (!aAVT && (aRequired || !aState.fcp())) {
+        // XXX ErrorReport: XPath parse failure
+        return NS_ERROR_XPATH_PARSE_FAILURE;
     }
 
     return NS_OK;
@@ -501,8 +480,7 @@ txFnStartLREStylesheet(PRInt32 aNamespaceID,
 
     txExpandedName nullExpr;
     double prio = Double::NaN;
-
-    nsAutoPtr<txPattern> match(new txRootPattern());
+    nsAutoPtr<txPattern> match(new txRootPattern(MB_TRUE));
     NS_ENSURE_TRUE(match, NS_ERROR_OUT_OF_MEMORY);
 
     nsAutoPtr<txTemplateItem> templ(new txTemplateItem(match, nullExpr,
@@ -981,8 +959,8 @@ txFnStartStripSpace(PRInt32 aNamespaceID,
         const nsASingleFragmentString& name = tokenizer.nextToken();
         PRInt32 ns = kNameSpaceID_None;
         nsCOMPtr<nsIAtom> prefix, localName;
-        rv = XMLUtils::splitQName(name, getter_AddRefs(prefix),
-                                  getter_AddRefs(localName));
+        rv = XMLUtils::splitXMLName(name, getter_AddRefs(prefix),
+                                    getter_AddRefs(localName));
         if (NS_FAILED(rv)) {
             // check for "*" or "prefix:*"
             PRUint32 length = name.Length();
@@ -999,9 +977,9 @@ txFnStartStripSpace(PRInt32 aNamespaceID,
                 if (c[length-2] != ':') {
                     return NS_ERROR_XSLT_PARSE_FAILURE;
                 }
-                rv = XMLUtils::splitQName(Substring(name, 0, length-2), 
-                                          getter_AddRefs(prefix),
-                                          getter_AddRefs(localName));
+                rv = XMLUtils::splitXMLName(Substring(name, 0, length-2), 
+                                            getter_AddRefs(prefix),
+                                            getter_AddRefs(localName));
                 if (NS_FAILED(rv) || prefix) {
                     // bad chars or two ':'
                     return NS_ERROR_XSLT_PARSE_FAILURE;

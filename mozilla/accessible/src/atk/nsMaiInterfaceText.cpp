@@ -151,18 +151,6 @@ interfaceInitCB(AtkTextIface *aIface)
     aIface->set_caret_offset = setCaretOffsetCB;
 }
 
-
-void ConvertTexttoAsterisks(nsAccessibleWrap* accWrap, nsAString& aString)
-{
-    // convert each char to "*" when it's "password text" 
-    PRUint32 accRole;
-    accWrap->GetRole(&accRole);
-    if (NS_STATIC_CAST(AtkRole, accRole) == ATK_ROLE_PASSWORD_TEXT) {
-        for (PRUint32 i = 0; i < aString.Length(); i++)
-            aString.Replace(i, 1, NS_LITERAL_STRING("*"));
-    }
-}
-
 gchar *
 getTextCB(AtkText *aText, gint aStartOffset, gint aEndOffset)
 {
@@ -178,7 +166,6 @@ getTextCB(AtkText *aText, gint aStartOffset, gint aEndOffset)
     nsresult rv = accText->GetText(aStartOffset, aEndOffset, autoStr);
     NS_ENSURE_SUCCESS(rv, nsnull);
 
-    ConvertTexttoAsterisks(accWrap, autoStr);
     NS_ConvertUTF16toUTF8 cautoStr(autoStr);
 
     //copy and return, libspi will free it.
@@ -208,7 +195,6 @@ getTextAfterOffsetCB(AtkText *aText, gint aOffset,
 
     NS_ENSURE_SUCCESS(rv, nsnull);
 
-    ConvertTexttoAsterisks(accWrap, autoStr);
     NS_ConvertUTF16toUTF8 cautoStr(autoStr);
     return (cautoStr.get()) ? g_strdup(cautoStr.get()) : nsnull;
 }
@@ -236,7 +222,6 @@ getTextAtOffsetCB(AtkText *aText, gint aOffset,
 
     NS_ENSURE_SUCCESS(rv, nsnull);
 
-    ConvertTexttoAsterisks(accWrap, autoStr);
     NS_ConvertUTF16toUTF8 cautoStr(autoStr);
     return (cautoStr.get()) ? g_strdup(cautoStr.get()) : nsnull;
 }
@@ -257,14 +242,6 @@ getCharacterAtOffsetCB(AtkText *aText, gint aOffset)
     PRUnichar uniChar;
     nsresult rv =
         accText->GetCharacterAtOffset(aOffset, &uniChar);
-
-    // convert char to "*" when it's "password text" 
-    PRUint32 accRole;
-    accWrap->GetRole(&accRole);
-    if (NS_STATIC_CAST(AtkRole, accRole) == ATK_ROLE_PASSWORD_TEXT) {
-        uniChar = '*';
-    }
-
     return (NS_FAILED(rv)) ? 0 : NS_STATIC_CAST(gunichar, uniChar);
 }
 
@@ -291,7 +268,6 @@ getTextBeforeOffsetCB(AtkText *aText, gint aOffset,
 
     NS_ENSURE_SUCCESS(rv, nsnull);
 
-    ConvertTexttoAsterisks(accWrap, autoStr);
     NS_ConvertUTF16toUTF8 cautoStr(autoStr);
     return (cautoStr.get()) ? g_strdup(cautoStr.get()) : nsnull;
 }
@@ -358,7 +334,7 @@ getCharacterExtentsCB(AtkText *aText, gint aOffset,
     nsCOMPtr<nsIAccessibleText> accText;
     accWrap->QueryInterface(NS_GET_IID(nsIAccessibleText),
                             getter_AddRefs(accText));
-    if (!accText)
+    if (accText)
         return;
 
     PRInt32 extY = 0, extX = 0;

@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,16 +25,16 @@
  *   Alec Flett <alecf@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -45,7 +45,7 @@
 function RefreshSort()
 {
   var current_column = find_sort_column();
-  SortColumnElement(current_column);
+  SortColumn(current_column.id);
 }
 
 // set the sort direction on the currently sorted column
@@ -59,20 +59,13 @@ function SortInNewDirection(direction)
   else if (direction == "natural")
     direction = "descending";
   current_column.setAttribute("sortDirection", direction);
-  SortColumnElement(current_column);
+  SortColumn(current_column.id);
 }
 
-function SortColumn(columnId)
+function SortColumn(columnID)
 {
-  var column = document.getElementById(columnId);
-  SortColumnElement(column);
-}
-
-function SortColumnElement(column)
-{
-  var tree = column.parentNode.parentNode;
-  var col = tree.columns.getColumnFor(column);
-  tree.view.cycleHeader(col);
+  var column = document.getElementById(columnID);
+  column.parentNode.parentNode.treeBoxObject.view.cycleHeader(columnID, column);
 }
 
 // search over the columns to find the first one with an active sort
@@ -183,10 +176,7 @@ function fillViewMenu(popup)
       var column = columns[i];
       // Construct an entry for each cell in the row.
       var column_name = column.getAttribute("label");
-      var column_accesskey = column.getAttribute("accesskey");
       var item = document.createElement("menuitem");
-      if (column_accesskey)
-        item.setAttribute("accesskey", column_accesskey);
       item.setAttribute("type", "radio");
       item.setAttribute("name", "sort_column");
       if (column_name == "")

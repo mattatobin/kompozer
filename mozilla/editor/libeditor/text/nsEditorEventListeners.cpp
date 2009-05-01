@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsEditorEventListeners.h"
@@ -54,7 +55,7 @@
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
 #include "nsILookAndFeel.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #ifdef USE_HACK_REPAINT
 // for repainting hack only
 #include "nsIView.h"
@@ -349,9 +350,14 @@ nsTextEditorMouseListener::MouseClick(nsIDOMEvent* aMouseEvent)
         else
           editor->Paste(clipboard);
 
-        // Prevent the event from propagating up to be possibly handled
+        // Prevent the event from bubbling up to be possibly handled
         // again by the containing window:
-        mouseEvent->StopPropagation();
+        nsCOMPtr<nsIDOMNSEvent> nsevent(do_QueryInterface(mouseEvent));
+
+        if (nsevent) {
+          nsevent->PreventBubble();
+        }
+
         mouseEvent->PreventDefault();
 
         // We processed the event, whether drop/paste succeeded or not
@@ -509,15 +515,14 @@ nsTextEditorDragListener::DragGesture(nsIDOMEvent* aDragEvent)
 nsresult
 nsTextEditorDragListener::DragEnter(nsIDOMEvent* aDragEvent)
 {
-  if (!mCaret)
+  if (mPresShell)
   {
-    nsCOMPtr<nsIPresShell> presShell = do_QueryReferent(mPresShell);
-    if (presShell)
+    if (!mCaret)
     {
       mCaret = do_CreateInstance("@mozilla.org/layout/caret;1");
       if (mCaret)
       {
-        mCaret->Init(presShell);
+        mCaret->Init(mPresShell);
         mCaret->SetCaretReadOnly(PR_TRUE);
       }
       mCaretDrawn = PR_FALSE;
@@ -645,7 +650,11 @@ nsTextEditorDragListener::DragDrop(nsIDOMEvent* aMouseEvent)
     return NS_OK;
   }
 
-  aMouseEvent->StopPropagation();
+  //some day we want to use another way to stop this from bubbling.
+  nsCOMPtr<nsIDOMNSEvent> nsevent(do_QueryInterface(aMouseEvent));
+  if (nsevent)
+    nsevent->PreventBubble();
+
   aMouseEvent->PreventDefault();
   return mEditor->InsertFromDrop(aMouseEvent);
 }
@@ -835,24 +844,6 @@ nsTextEditorCompositionListener::HandleQueryReconversion(nsIDOMEvent* aReconvers
   return mEditor->GetReconversionString(eventReply);
 }
 
-nsresult
-nsTextEditorCompositionListener::HandleQueryCaretRect(nsIDOMEvent* aQueryCaretRectEvent)
-{
-#ifdef DEBUG_IME
-  printf("nsTextEditorCompositionListener::HandleQueryCaretRect\n");
-#endif
-  nsCOMPtr<nsIPrivateCompositionEvent> pCompositionEvent = do_QueryInterface(aQueryCaretRectEvent);
-  if (!pCompositionEvent)
-    return NS_ERROR_FAILURE;
-
-  nsQueryCaretRectEventReply* eventReply;
-  nsresult rv = pCompositionEvent->GetQueryCaretRectReply(&eventReply);
-  if (NS_FAILED(rv))
-    return rv;
-
-  return mEditor->GetQueryCaretRect(eventReply);
-}
-
 /*
  * Factory functions
  */
@@ -984,7 +975,8 @@ IsTargetFocused(nsIDOMEventTarget* aTarget)
   if (!shell)
     return PR_FALSE;
 
-  nsPresContext *presContext = shell->GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  shell->GetPresContext(getter_AddRefs(presContext));
   if (!presContext)
     return PR_FALSE;
 
@@ -1001,7 +993,6 @@ IsTargetFocused(nsIDOMEventTarget* aTarget)
 nsresult
 nsTextEditorFocusListener::Focus(nsIDOMEvent* aEvent)
 {
-  NS_ENSURE_ARG(aEvent);
   // It's possible for us to receive a focus when we're really not focused.
   // This happens, for example, when an onfocus handler that's hooked up
   // before this listener focuses something else.  In that case, all of the
@@ -1019,7 +1010,10 @@ nsTextEditorFocusListener::Focus(nsIDOMEvent* aEvent)
   // turn on selection and caret
   if (mEditor)
   {
-    aEvent->StopPropagation();
+    nsCOMPtr<nsIDOMNSEvent> nsevent(do_QueryInterface(aEvent));
+    if (nsevent) {
+      nsevent->PreventBubble();
+    }
 
     PRUint32 flags;
     mEditor->GetFlags(&flags);
@@ -1032,7 +1026,23 @@ nsTextEditorFocusListener::Focus(nsIDOMEvent* aEvent)
         editor->GetSelectionController(getter_AddRefs(selCon));
         if (selCon)
         {
-          if (! (flags & nsIPlaintextEditor::eEditorReadonlyMask)) {
+          if (! (flags & nsIPlaintextEditor::eEditorReadonlyMask))
+          { // only enable caret if the editor is not readonly
+            nsresult result;
+
+            nsCOMPtr<nsILookAndFeel> look = 
+                     do_GetService("@mozilla.org/widget/lookandfeel;1", &result);
+            if (NS_SUCCEEDED(result) && look)
+            {
+              PRInt32 pixelWidth;
+
+              if(flags & nsIPlaintextEditor::eEditorSingleLineMask)
+                look->GetMetric(nsILookAndFeel::eMetric_SingleLineCaretWidth, pixelWidth);
+              else
+                look->GetMetric(nsILookAndFeel::eMetric_MultiLineCaretWidth, pixelWidth);
+              selCon->SetCaretWidth(pixelWidth);
+            }
+
             selCon->SetCaretEnabled(PR_TRUE);
           }
 
@@ -1054,10 +1064,6 @@ nsTextEditorFocusListener::Focus(nsIDOMEvent* aEvent)
         }
       }
     }
-
-    nsCOMPtr<nsIEditorIMESupport> imeEditor = do_QueryInterface(mEditor);
-    if (imeEditor)
-      imeEditor->NotifyIMEOnFocus();
   }
   return NS_OK;
 }
@@ -1065,19 +1071,19 @@ nsTextEditorFocusListener::Focus(nsIDOMEvent* aEvent)
 nsresult
 nsTextEditorFocusListener::Blur(nsIDOMEvent* aEvent)
 {
-  NS_ENSURE_ARG(aEvent);
   // turn off selection and caret
   if (mEditor)
   {
-    aEvent->StopPropagation();
+    nsCOMPtr<nsIDOMNSEvent> nsevent(do_QueryInterface(aEvent));
+    if (nsevent) {
+      nsevent->PreventBubble();
+    }
 
     // when imeEditor exists, call ForceCompositionEnd() to tell
     // the input focus is leaving first
     nsCOMPtr<nsIEditorIMESupport> imeEditor = do_QueryInterface(mEditor);
-    if (imeEditor) {
+    if (imeEditor)
       imeEditor->ForceCompositionEnd();
-      imeEditor->NotifyIMEOnBlur();
-    }
 
     nsCOMPtr<nsIEditor>editor = do_QueryInterface(mEditor);
     if (editor)

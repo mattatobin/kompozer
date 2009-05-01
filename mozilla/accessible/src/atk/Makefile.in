@@ -43,23 +43,25 @@ include $(DEPTH)/config/autoconf.mk
 
 MODULE = accessibility
 LIBRARY_NAME = accessibility_toolkit_s
-LIBXUL_LIBRARY = 1
-
 REQUIRES	= content \
 		  docshell \
 		  dom \
 		  editor \
 		  gfx \
+		  htmlparser \
 		  intl \
 		  layout \
 		  locale \
 		  necko \
+		  plugin \
+		  pref \
 		  string \
 		  uriloader \
 		  view \
 		  webshell \
 		  widget \
 		  xpcom \
+		  xuldoc \
 		  $(NULL)
 
 CPPSRCS = \
@@ -99,8 +101,6 @@ EXPORTS = \
   nsDocAccessibleWrap.h \
   nsRootAccessibleWrap.h \
   nsTextAccessibleWrap.h \
-  nsXULMenuAccessibleWrap.h \
-  nsXULTreeAccessibleWrap.h \
   nsAccessibleText.h \
   $(NULL)
 

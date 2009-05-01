@@ -1,41 +1,38 @@
 <?xml version="1.0"?>
 
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
+<!--
+   - The contents of this file are subject to the Mozilla Public
+   - License Version 1.1 (the "License"); you may not use this file
+   - except in compliance with the License. You may obtain a copy of
+   - the License at http://www.mozilla.org/MPL/
    -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
+   - Software distributed under the License is distributed on an "AS
+   - IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+   - implied. See the License for the specific language governing
+   - rights and limitations under the License.
    -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
+   - The Original Code is this file as it was released on
+   - March 28, 2001.
    -
-   - The Original Code is this file as it was released on March 28, 2001.
-   -
-   - The Initial Developer of the Original Code is
-   - Peter Annema.
-   - Portions created by the Initial Developer are Copyright (C) 2001
-   - the Initial Developer. All Rights Reserved.
+   - The Initial Developer of the Original Code is Peter Annema.
+   - Portions created by Peter Annema are Copyright (C) 2001
+   - Peter Annema.  All Rights Reserved.
    -
    - Contributor(s):
    -   Peter Annema <disttsc@bart.nl> (Original Author of <browser>)
    -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+   - Alternatively, the contents of this file may be used under the
+   - terms of the GNU General Public License Version 2 or later (the
+   - "GPL"), in which case the provisions of the GPL are applicable
+   - instead of those above.  If you wish to allow use of your
+   - version of this file only under the terms of the GPL and not to
+   - allow others to use your version of this file under the MPL,
+   - indicate your decision by deleting the provisions above and
+   - replace them with the notice and other provisions required by
+   - the GPL.  If you do not delete the provisions above, a recipient
+   - may use your version of this file under either the MPL or the
+   - GPL.
+  -->
 
 <bindings id="browserBindings"
           xmlns="http://www.mozilla.org/xbl"
@@ -64,15 +61,8 @@
         <body>
           <![CDATA[
             var webNavigation = this.webNavigation;
-            if (webNavigation.canGoBack) {
-              try {
-                this.userTypedClear++;
-                webNavigation.goBack();
-              } finally {
-                if (this.userTypedClear)
-                  this.userTypedClear--;
-              }
-            }
+            if (webNavigation.canGoBack)
+              webNavigation.goBack();
           ]]>
         </body>
       </method>
@@ -81,15 +71,8 @@
         <body>
           <![CDATA[
             var webNavigation = this.webNavigation;
-            if (webNavigation.canGoForward) {
-              try {
-                this.userTypedClear++;
-                webNavigation.goForward();
-              } finally {
-                if (this.userTypedClear)
-                  this.userTypedClear--;
-              }
-            }
+            if (webNavigation.canGoForward)
+              webNavigation.goForward();
           ]]>
         </body>
       </method>
@@ -155,13 +138,7 @@
               catch (e) {
               }
             }
-            try {
-              this.userTypedClear++;
-              this.webNavigation.loadURI(aURI, aFlags, aReferrerURI, null, null);
-            } finally {
-              if (this.userTypedClear)
-                this.userTypedClear--;
-            }
+            this.webNavigation.loadURI(aURI, aFlags, aReferrerURI, null, null);
           ]]>
         </body>
       </method>
@@ -203,13 +180,7 @@
         <parameter name="aIndex"/>
         <body>
           <![CDATA[
-            try {
-              this.userTypedClear++;
-              this.webNavigation.gotoIndex(aIndex);
-            } finally {
-              if (this.userTypedClear)
-                this.userTypedClear--;
-            }
+            this.webNavigation.gotoIndex(aIndex);
           ]]>
         </body>
       </method>
@@ -276,7 +247,7 @@
                 readonly="true"/>
 
       <property name="contentTitle"
-                onget="return this.contentDocument.title;"
+                onget="return Components.lookupMethod(this.contentDocument, 'title').call(this.contentDocument);"
                 readonly="true"/>
 
       <field name="mPrefs" readonly="true">
@@ -331,49 +302,10 @@
         null
       </field>
 
-      <property name="securityUI"
-                onget="return this.docShell.securityUI;"
-                onset="this.docShell.securityUI = val;"/>
+      <field name="securityUI">
+        null
+      </field>
 
-      <!--
-        This field tracks the location bar state. The value that the user typed
-        in to the location bar may not be changed while this field is zero.
-        However invoking a load will temporarily increase this field to allow
-        the location bar to be updated to the new URL.
-
-        Case 1: Anchor scroll
-          The user appends the anchor to the URL. This sets the location bar
-          into typed state, and disables changes to the location bar. The user
-          then requests the scroll. loadURIWithFlags temporarily increases the
-          flag by 1 so that the anchor scroll's location change resets the
-          location bar state.
-
-        Case 2: Interrupted load
-          The user types in and submits the URL. This triggers an asynchronous
-          network load which increases the flag by 2. (The temporary increase
-          from loadURIWithFlags is not noticeable in this case.) When the load
-          is interrupted the flag returns to zero, and the location bar stays
-          in typed state.
-
-        Case 3: New load
-          This works like case 2, but as the load is not interrupted the
-          location changes while the flag is still 2 thus resetting the
-          location bar state.
-
-        Case 4: Corrected load
-          This is a combination of case 2 and case 3, except that the original
-          load is interrupted by the new load. Normally cancelling and starting
-          a new load would reset the flag to 0 and then increase it to 2 again.
-          However both actions occur as a consequence of the loadURIWithFlags
-          invocation, which adds its temporary increase in to the mix. Since
-          the new URL would have been typed in the flag would have been reset
-          before loadURIWithFlags incremented it. The interruption resets the
-          flag to 0 and increases it to 2. Although loadURIWithFlags will
-          decrement the flag it remains at 1 thus allowing the location bar
-          state to be reset when the new load changes the location.
-          This case also applies when loading into a new browser, as this
-          interrupts the default load of about:blank.
-      -->
       <field name="userTypedClear">
         1
       </field>
@@ -381,10 +313,6 @@
       <field name="_userTypedValue">
         null
       </field>
-
-      <property name="userTypedValue"
-                onget="return this._userTypedValue;"
-                onset="this.userTypedClear = 0; return this._userTypedValue = val;"/>
 
       <field name="focusedWindow">
         null
@@ -394,30 +322,14 @@
         null
       </field>
 
-      <field name="mDestroyed">
-        false
-      </field>
-
+      <property name="userTypedValue"
+                onget="return this._userTypedValue;"
+                onset="this.userTypedClear = 0; return this._userTypedValue = val;"/>
+     
       <constructor>
         <![CDATA[
-          this.init();
-        ]]>
-      </constructor>
-      
-      <destructor>
-        <![CDATA[
-          this.destroy();
-        ]]>
-      </destructor>
-
-      <!-- This is necessary because the tabbrowser constructor is called
-           before the browser constructor for the first tab in a window. -->
-      <method name="init">
-        <body>
-        <![CDATA[
           try {
-            if (!this.webNavigation.sessionHistory &&
-                !this.hasAttribute("disablehistory")) {
+            if (!this.hasAttribute("disablehistory")) {
               // wire up session history
               this.webNavigation.sessionHistory = Components.classes["@mozilla.org/browser/shistory;1"].createInstance(Components.interfaces.nsISHistory);
 
@@ -428,53 +340,38 @@
           catch (e) {
           }
           try {
-            if (!this.mDragDropHandler) {
-              this.mDragDropHandler = Components.classes["@mozilla.org:/content/content-area-dragdrop;1"].createInstance(Components.interfaces.nsIDragDropHandler);
-              this.mDragDropHandler.hookupTo(this, null);
-            }
+            this.mDragDropHandler = Components.classes["@mozilla.org:/content/content-area-dragdrop;1"].createInstance(Components.interfaces.nsIDragDropHandler);
+            this.mDragDropHandler.hookupTo(this, null);
           }
           catch (e) {
           }
           try {
             const SECUREBROWSERUI_CONTRACTID = "@mozilla.org/secure_browser_ui;1";
-            if (!this.securityUI && !this.hasAttribute("disablesecurity") &&
+            if (!this.hasAttribute("disablesecurity") &&
                 SECUREBROWSERUI_CONTRACTID in Components.classes) {
-              var securityUI = Components.classes[SECUREBROWSERUI_CONTRACTID].createInstance(Components.interfaces.nsISecureBrowserUI);
-              securityUI.init(this.contentWindow);
+              this.securityUI = Components.classes[SECUREBROWSERUI_CONTRACTID].createInstance(Components.interfaces.nsISecureBrowserUI);
+              this.securityUI.init(this.contentWindow);
             }
           }
           catch (e) {
           }
         ]]>
-        </body>
-      </method>
+      </constructor>
       
-      <!-- This is necessary because the destructor is not called
-           promptly when we are removed from a tabbrowser. This will be
-           explicitly called by tabbrowser -->
-      <method name="destroy">
-        <body>
+      <destructor>
         <![CDATA[
-          if (this.mDestroyed)
-            return;
-          this.mDestroyed = true;
-
           if (this.mDragDropHandler)
             this.mDragDropHandler.detach();
-          this.mDragDropHandler = null;
 
-          this.focusedWindow = null;
-          this.focusedElement = null;
-          this._webBrowserFind = null;
+          this.securityUI = null;
         ]]>
-        </body>
-      </method>
+      </destructor>
     </implementation>
 
     <handlers>
-      <handler event="keypress" keycode="VK_F7" group="system">
+      <handler event="keypress" keycode="VK_F7">
         <![CDATA[
-          if (event.getPreventDefault() || !event.isTrusted)
+          if (!event.isTrusted)
             return;
 
           // Toggle browse with caret mode
@@ -497,9 +394,10 @@
             var buttonPressed = promptService.confirmEx(window, 
               this.mStrBundle.GetStringFromName('browsewithcaret.checkWindowTitle'), 
               this.mStrBundle.GetStringFromName('browsewithcaret.checkLabel'),
-              (promptService.BUTTON_TITLE_YES * promptService.BUTTON_POS_0) +
-              (promptService.BUTTON_TITLE_NO * promptService.BUTTON_POS_1),
-              null, null, null, this.mStrBundle.GetStringFromName('browsewithcaret.checkMsg'),
+              (promptService.BUTTON_TITLE_OK * promptService.BUTTON_POS_0) +
+              (promptService.BUTTON_TITLE_CANCEL * promptService.BUTTON_POS_1),
+              null, null, null,
+              this.mStrBundle.GetStringFromName('browsewithcaret.checkMsg'), 
               checkValue);
             if (buttonPressed != 0)
               return;

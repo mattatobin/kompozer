@@ -103,13 +103,10 @@
       }
     }
 
-    function sendLink(aDocument)
+    function sendLink(pageUrl, pageTitle)
     {
-      if (!aDocument)
-        aDocument = window.content.document;
-
       try {
-        openComposeWindow(aDocument.URL, aDocument.title, 0, null);
+        openComposeWindow(pageUrl, pageTitle, 0, null);
       } catch(ex) { dump("Cannot Send Link: " + ex + "\n"); }
     }
 
@@ -124,18 +121,21 @@
     function sendPage(aDocument)
     {
       if (!aDocument)
-        aDocument = window.content.document;
+        aDocument = window._content.document;
         
+      var charset =  getCharsetforSave(aDocument);
+      var pageUrl = aDocument.URL;
+      var pageTitle = Components.lookupMethod(aDocument, 'title').call(aDocument);
+
       try {
-        var charset = getCharsetforSave(aDocument);
-        openComposeWindow(aDocument.URL, aDocument.title, 1, charset);
+        openComposeWindow(pageUrl, pageTitle, 1, charset);
       } catch(ex) { dump("Cannot Send Page: " + ex + "\n"); }
     }
 
     function initMailContextMenuItems(aEvent)
     {
       var shouldShowSendPage = !(gContextMenu.onTextInput || 
-                               gContextMenu.isContentSelected) && 
+                               gContextMenu.isTextSelected) && 
                                !(gContextMenu.onLink && gContextMenu.onImage) &&
                                gHasIntegratedMailClient;
       gContextMenu.showItem("context-sendpage", shouldShowSendPage);
@@ -143,11 +143,15 @@
       gContextMenu.showItem("context-sep-apps", gContextMenu.shouldShowSeparator("context-sep-apps"));
     }
       
+    var gAddedMailContextMenuPopupListener = false;
     function initMailContextMenuPopupListener(aEvent)
     {
+      // This is really lame, but we can't seem to add a bubbling listener to the DOMWindow (!)
+      if (gAddedMailContextMenuPopupListener)
+        return;
       var popup = document.getElementById("contentAreaContextMenu");
-      if (popup)
-        popup.addEventListener("popupshowing", initMailContextMenuItems, false);
+      popup.addEventListener("popupshowing", initMailContextMenuItems, false);
+      gAddedMailContextMenuPopupListener = true;
     }
 
     function hideMenuitems() {
@@ -162,7 +166,7 @@
       hideMenuitems();
     }
 
-    addEventListener("load", initOverlay, false);
+    addEventListener("load", initOverlay, true);
   ]]>
   </script>         
 
@@ -171,7 +175,9 @@
     <command id="cmd_newMessage" oncommand="goOpenNewMessage();"/>
     <command id="cmd_newCard" oncommand="openNewCardDialog()"/>
     <command id="cmd_sendPage" oncommand="sendPage();"/>
-    <command id="Browser:SendLink" oncommand="sendLink();"/>
+    <command id="Browser:SendLink"
+             oncommand="sendLink(Components.lookupMethod(window._content, 'location').call(window._content).href,
+                                 Components.lookupMethod(window._content.document, 'title').call(window._content.document));"/>
   </commandset>
   <keyset id="tasksKeys">
     <key id="key_newMessage" key="&newMessageCmd.key;" command="cmd_newMessage" modifiers="accel"/>

@@ -13,6 +13,12 @@
   color: #909090;
 }
 
+#extensionHomepage {
+  color: #0000FF;
+  text-decoration: underline !important;
+  cursor: pointer;
+}
+
 #genericAbout {
   padding: 0px 0px 10px 0px;
   min-height: 200px;
@@ -31,15 +37,15 @@
   color: #404040;
 }
 
-.indent {
-  -moz-margin-start: 6px;
+#extensionDescription, #extensionContributors, #creatorBox, #contributorsBox {
+  margin-left: 6px;
 }
 
 #extensionCreator, .contributor {
   margin: 0px;
 } 
 
-.sectionTitle {
+#extensionCreatorLabel, #extensionContributors {
   border-top: 2px solid #C0C0C0;
   padding: 2px 0px 3px 0px;
   margin-top: 3px;

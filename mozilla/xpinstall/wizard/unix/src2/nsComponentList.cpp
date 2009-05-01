@@ -1,78 +1,63 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code, 
+ * released March 31, 1998. 
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications 
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Samir Gehani <sgehani@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *     Samir Gehani <sgehani@netscape.com>
+ */
 
 #include "nsComponentList.h"
 #include "nsComponent.h"
 
 nsComponentList::nsComponentList() :
-    mHeadItem(NULL),
-    mTailItem(NULL),
-    mNextItem(NULL),
+    mHead(NULL),
+    mTail(NULL),
+    mNext(NULL),
     mLength(0)
 {
 }
 
 nsComponentList::~nsComponentList()
 {
-    nsComponentItem *currItem = mHeadItem;
-    nsComponentItem *nextItem = NULL;
+    nsComponent *curr = mHead;
+    nsComponent *next = NULL;
 
-    while (currItem)
+    while (curr)
     {
-        nextItem = currItem->mNext;
-        currItem->mComp->Release();
-        delete currItem;
-        currItem = nextItem;
+        next = NULL;
+        next = curr->GetNext();
+        curr->Release();
+        curr = next;
     }
 
-    mHeadItem = NULL;
-    mTailItem = NULL;
+    mHead = NULL;
+    mTail = NULL;
     mLength = 0;
 }
 
 nsComponent *
 nsComponentList::GetHead()
 {
-    if (mHeadItem)
+    if (mHead)
     {
-        mNextItem = mHeadItem->mNext;
-        return mHeadItem->mComp;
+        mNext = mHead->GetNext();
+        return mHead;
     }
 
     return NULL;
@@ -81,12 +66,12 @@ nsComponentList::GetHead()
 nsComponent *
 nsComponentList::GetNext()
 {
-    nsComponentItem *currItem = mNextItem;
+    nsComponent *curr = mNext;
 
-    if (mNextItem)
+    if (mNext)
     {
-        mNextItem = mNextItem->mNext;
-        return currItem->mComp;
+        mNext = mNext->GetNext();
+        return curr;        
     }
 
     return NULL;
@@ -95,8 +80,8 @@ nsComponentList::GetNext()
 nsComponent *
 nsComponentList::GetTail()
 {
-    if (mTailItem)
-        return mTailItem->mComp;
+    if (mTail)
+        return mTail;
 
     return NULL;
 }
@@ -111,16 +96,16 @@ int
 nsComponentList::GetLengthVisible()
 {
     int numVisible = 0;
-    nsComponentItem *currItem;
+    nsComponent *curr;
 
-    currItem = mHeadItem;
-    if (!currItem) return 0;
+    curr = mHead;
+    if (!curr) return 0;
 
-    while (currItem)
+    while (curr)
     {
-        if (!currItem->mComp->IsInvisible())
+        if (!curr->IsInvisible())
             numVisible++;
-        currItem = currItem->mNext;
+        curr = curr->GetNext();
     }
         
     return numVisible;
@@ -130,16 +115,23 @@ int
 nsComponentList::GetLengthSelected()
 {
     int numSelected = 0;
-    nsComponentItem *currItem;
+    nsComponent *curr;
 
-    currItem = mHeadItem;
-    if (!currItem) return 0;
+    /* NOTE:
+     * ----
+     * If copies of components are help by this list rather than pointers 
+     * then this method will return an inaccurate number.  Due to 
+     * architecture be very careful when using this method.
+     */
 
-    while (currItem)
+    curr = mHead;
+    if (!curr) return 0;
+
+    while (curr)
     {
-        if (currItem->mComp->IsSelected())
+        if (!curr->IsSelected())
             numSelected++;
-        currItem = currItem->mNext;
+        curr = curr->GetNext();
     }
         
     return numSelected;
@@ -151,25 +143,26 @@ nsComponentList::AddComponent(nsComponent *aComponent)
     if (!aComponent)
         return E_PARAM;
 
-    aComponent->AddRef();
-    nsComponentItem *newItem 
-       = (nsComponentItem *) malloc(sizeof(nsComponentItem));
-    newItem->mComp = aComponent;
-    newItem->mNext = NULL;
-    mLength++;
-    
-    if (mHeadItem)
+    // empty list: head and tail are the same -- the new comp
+    if (!mHead)
     {
-        // non-empty list: the new comp is tacked on then end
-        mTailItem->mNext = newItem;
-    }
-    else
-    {
-        // empty list: head and tail are the new comp
-        mHeadItem = newItem;
+        mHead = aComponent;
+        mHead->InitNext();
+        mTail = mHead;
+        aComponent->AddRef();
+        mLength = 1;
+        mHead->SetIndex(0);
+
+        return OK;
     }
 
-    mTailItem = newItem;
+    // non-empty list: the new comp is tacked on and tail is updated
+    mTail->SetNext(aComponent);
+    mTail = aComponent;
+    mTail->InitNext();
+    aComponent->AddRef();
+    mLength++;
+    mTail->SetIndex(mLength - 1);
 
     return OK;
 }
@@ -177,64 +170,61 @@ nsComponentList::AddComponent(nsComponent *aComponent)
 int
 nsComponentList::RemoveComponent(nsComponent *aComponent)
 {
-    nsComponentItem *currItem = mHeadItem;
-    nsComponentItem *last = NULL;
+    int err = OK;
+    nsComponent *curr = GetHead();
+    nsComponent *last = NULL;
 
     if (!aComponent)
         return E_PARAM;
 
-    while (currItem)
+    while (curr)
     {
-        if (aComponent == currItem->mComp)
+        if (aComponent == curr)
         {
             // remove and link last to next while deleting current
             if (last)
             {
-                last->mNext = currItem->mNext;
+                last->SetNext(curr->GetNext());
             }
             else
             {
-                mHeadItem = currItem->mNext;
+                mHead = curr->GetNext();
+                if (mTail == curr)
+                    mTail = NULL;
             }
-
-            if (mTailItem == currItem)
-                mTailItem = NULL;
-            if (mNextItem == currItem)
-                mNextItem = mNextItem->mNext;
 
             aComponent->Release();
             mLength--;
-
+            
             return OK;
         }
         else
         {
             // move on to next
-            last = currItem;
-            currItem = currItem->mNext;
+            last = curr;
+            curr = GetNext();
         }
     }
 
-    return E_PARAM;
+    return err;
 }
 
 nsComponent *
 nsComponentList::GetCompByIndex(int aIndex)
 {
-    nsComponentItem *currItem = mHeadItem;
+    nsComponent *comp = GetHead();
     int i;
 
     // param check
-    if (!currItem || mLength == 0) return NULL;
+    if (!comp || mLength == 0) return NULL;
 
     for (i=0; i<mLength; i++)
     { 
-        if (aIndex == currItem->mComp->GetIndex())
-        {
-            return currItem->mComp;
-        }
+        if (aIndex == comp->GetIndex())
+            return comp;
 
-        currItem = currItem->mNext;
+        comp = GetNext();
+        if (!comp) break;
     }
 
     return NULL;
@@ -243,21 +233,19 @@ nsComponentList::GetCompByIndex(int aIndex)
 nsComponent *
 nsComponentList::GetCompByArchive(char *aArchive)
 {
-    nsComponentItem *currItem = mHeadItem;
+    nsComponent *comp = GetHead();
     int i;
 
     // param check
-    if (!currItem || mLength == 0 || !aArchive) return NULL;
+    if (!comp || mLength == 0 || !aArchive) return NULL;
 
     for (i=0; i<mLength; i++)
     { 
-        if (0==strncmp(aArchive, currItem->mComp->GetArchive(), strlen(aArchive)))
-        {
-            return currItem->mComp;
-        }
+        if (0==strncmp(aArchive, comp->GetArchive(), strlen(aArchive)))
+            return comp;
 
-        currItem = currItem->mNext;
-        if (!currItem) break;
+        comp = GetNext();
+        if (!comp) break;
     }
 
     return NULL;
@@ -266,22 +254,20 @@ nsComponentList::GetCompByArchive(char *aArchive)
 nsComponent *
 nsComponentList::GetCompByShortDesc(char *aShortDesc)
 {
-    nsComponentItem *currItem = mHeadItem;
+    nsComponent *comp = GetHead();
     int i;
 
     // param check
-    if (!currItem || mLength == 0 || !aShortDesc) return NULL;
+    if (!comp || mLength == 0 || !aShortDesc) return NULL;
 
     for (i=0; i<mLength; i++)
     { 
-        if (0==strncmp(aShortDesc, currItem->mComp->GetDescShort(), 
+        if (0==strncmp(aShortDesc, comp->GetDescShort(), 
                        strlen(aShortDesc)))
-        {
-            return currItem->mComp;
-        }
+            return comp;
 
-        currItem = currItem->mNext;
-        if (!currItem) break;
+        comp = GetNext();
+        if (!comp) break;
     }
 
     return NULL;
@@ -291,20 +277,18 @@ nsComponent *
 nsComponentList::GetFirstVisible()
 {
     int i;
-    nsComponentItem *currItem = mHeadItem;
+    nsComponent *comp = GetHead();
 
     // param check
     if (mLength == 0) return NULL;
 
     for (i=0; i<mLength; i++)
     { 
-        if (!currItem->mComp->IsInvisible())
-        {
-            return currItem->mComp;
-        }
+        if (!comp->IsInvisible())
+            return comp;
 
-        currItem = currItem->mNext;
-        if (!currItem) break;
+        comp = GetNext();
+        if (!comp) break;
     }
 
     return NULL;

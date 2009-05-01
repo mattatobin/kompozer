@@ -35,16 +35,13 @@
 #include "ProfilesDlg.h"
 
 // Mozilla Includes
-#include "nsEmbedString.h"
+#include "nsString.h"
+#include "nsXPIDLString.h"
 #include "nsIRegistry.h"
 #include "nsIProfile.h"
-#include "nsServiceManagerUtils.h"
-#include "nsComponentManagerUtils.h"
-#include "nsCOMPtr.h"
-#include "nsMemory.h"
 
 // Constants
-#define kRegistryGlobalPrefsSubtreeString (nsEmbedString(L"global-prefs"))
+#define kRegistryGlobalPrefsSubtreeString (NS_LITERAL_STRING("global-prefs"))
 #define kRegistryShowProfilesAtStartup "start-show-dialog"
 
 //*****************************************************************************
@@ -78,7 +75,7 @@ nsresult CProfileMgr::StartUp()
     if (profileCount == 0)
     {
         // Make a new default profile
-        nsEmbedString newProfileName(L"default");
+        NS_NAMED_LITERAL_STRING(newProfileName, "default");
 
         rv = profileService->CreateNewProfile(newProfileName.get(), nsnull, nsnull, PR_FALSE);
         if (NS_FAILED(rv)) return rv;
@@ -102,11 +99,10 @@ nsresult CProfileMgr::StartUp()
             // GetCurrentProfile returns the profile which was last used but is not nescesarily
             // active. Call SetCurrentProfile to make it installed and active.
             
-            PRUnichar *currProfileName = nsnull;
-            rv = profileService->GetCurrentProfile(&currProfileName);
+            nsXPIDLString   currProfileName;
+            rv = profileService->GetCurrentProfile(getter_Copies(currProfileName));
             if (NS_FAILED(rv)) return rv;
             rv = profileService->SetCurrentProfile(currProfileName);
-            nsMemory::Free(currProfileName);
             if (NS_FAILED(rv)) return rv;
         }    
     }

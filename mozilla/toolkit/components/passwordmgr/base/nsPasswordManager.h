@@ -45,6 +45,7 @@
 #include "nsIFormSubmitObserver.h"
 #include "nsIWebProgressListener.h"
 #include "nsIDOMFocusListener.h"
+#include "nsIDOMLoadListener.h"
 #include "nsIStringBundle.h"
 #include "nsIPrefBranch.h"
 
@@ -57,7 +58,6 @@ class nsIStringBundle;
 class nsIComponentManager;
 class nsIContent;
 class nsIDOMWindowInternal;
-class nsIForm;
 class nsIURI;
 class nsIDOMHTMLInputElement;
 class nsIAutoCompleteResult;
@@ -69,6 +69,7 @@ class nsPasswordManager : public nsIPasswordManager,
                           public nsIFormSubmitObserver,
                           public nsIWebProgressListener,
                           public nsIDOMFocusListener,
+                          public nsIDOMLoadListener,
                           public nsSupportsWeakReference
 {
 public:
@@ -129,6 +130,13 @@ public:
   // nsIDOMEventListener
   NS_IMETHOD HandleEvent(nsIDOMEvent* aEvent);
 
+  // nsIDOMLoadListener
+  NS_IMETHOD Load(nsIDOMEvent* aEvent);
+  NS_IMETHOD Unload(nsIDOMEvent* aEvent);
+  NS_IMETHOD BeforeUnload(nsIDOMEvent* aEvent);
+  NS_IMETHOD Abort(nsIDOMEvent* aEvent);
+  NS_IMETHOD Error(nsIDOMEvent* aEvent);
+
   // Autocomplete
   PRBool AutoCompleteSearch(const nsAString& aSearchString,
                             nsIAutoCompleteResult* aPreviousResult,
@@ -136,7 +144,6 @@ public:
                             nsIAutoCompleteResult** aResult);
 
 protected:
-  void LoadPasswords();
   void WritePasswords(nsIFile* aPasswordFile);
   void AddSignonData(const nsACString& aRealm, SignonDataEntry* aEntry);
 
@@ -146,18 +153,10 @@ protected:
                                      const nsAString&  aUserField,
                                      SignonDataEntry** aResult);
 
-  nsresult FillDocument(nsIDOMDocument* aDomDoc);
+
   nsresult FillPassword(nsIDOMEvent* aEvent);
   void AttachToInput(nsIDOMHTMLInputElement* aElement);
-  static PRBool GetPasswordRealm(nsIURI* aURI, nsACString& aRealm);
-  
-  static nsresult GetActionRealm(nsIForm* aForm, nsCString& aURL);
-
-  static PRBool BadCharacterPresent(const nsAString &aString);
-  static nsresult CheckLoginValues(const nsACString &aHost,
-                                   const nsAString  &aUserField,
-                                   const nsAString  &aPassField,
-                                   const nsACString &aActionOrigin);
+  PRBool GetPasswordRealm(nsIURI* aURI, nsACString& aRealm);
 
   static PLDHashOperator PR_CALLBACK FindEntryEnumerator(const nsACString& aKey,
                                                          SignonHashEntry* aEntry,

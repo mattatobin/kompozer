@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is the TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -49,8 +49,6 @@
 #include "nsNetUtil.h"
 #include "nsIDOMNSDocument.h"
 #include "nsIParser.h"
-#include "nsICharsetAlias.h"
-#include "nsIPrincipal.h"
 
 static NS_DEFINE_CID(kXMLDocumentCID, NS_XMLDOCUMENT_CID);
 
@@ -68,7 +66,7 @@ txMozillaTextOutput::txMozillaTextOutput(nsIDOMDocumentFragment* aDest)
     aDest->GetOwnerDocument(getter_AddRefs(doc));
     NS_ASSERTION(doc, "unable to get ownerdocument");
     nsCOMPtr<nsIDOMText> textNode;
-    nsresult rv = doc->CreateTextNode(EmptyString(),
+    nsresult rv = doc->CreateTextNode(nsString(),
                                       getter_AddRefs(textNode));
     if (NS_FAILED(rv)) {
         return;
@@ -103,13 +101,11 @@ void txMozillaTextOutput::comment(const nsAString& aData)
 {
 }
 
-void txMozillaTextOutput::endDocument(nsresult aResult)
+void txMozillaTextOutput::endDocument()
 {
-    if (NS_SUCCEEDED(aResult)) {
-        nsCOMPtr<nsITransformObserver> observer = do_QueryReferent(mObserver);
-        if (observer) {
-            observer->OnTransformDone(aResult, mDocument);
-        }
+    nsCOMPtr<nsITransformObserver> observer = do_QueryReferent(mObserver);
+    if (observer) {
+        observer->OnTransformDone(NS_OK, mDocument);
     }
 }
 
@@ -153,23 +149,6 @@ void txMozillaTextOutput::createResultDocument(nsIDOMDocument* aSourceDocument,
         // Create the document
         doc = do_CreateInstance(kXMLDocumentCID, &rv);
         NS_ASSERTION(NS_SUCCEEDED(rv), "Couldn't create document");
-        nsCOMPtr<nsIDocument_MOZILLA_1_8_BRANCH3> source =
-          do_QueryInterface(aSourceDocument);
-        if (!source) {
-          return;
-        }
-        PRBool hasHadScriptObject = PR_FALSE;
-        nsIScriptGlobalObject* sgo =
-          source->GetScriptHandlingObject(hasHadScriptObject);
-        if (!sgo && hasHadScriptObject) {
-          return;
-        }
-        nsCOMPtr<nsIDocument_MOZILLA_1_8_BRANCH3> doc18 =
-          do_QueryInterface(doc);
-        if (!doc18) {
-          return;
-        }
-        doc18->SetScriptHandlingObject(sgo);
         mDocument = do_QueryInterface(doc);
     }
     else {
@@ -186,45 +165,29 @@ void txMozillaTextOutput::createResultDocument(nsIDOMDocument* aSourceDocument,
 
     nsCOMPtr<nsIDOMNSDocument> nsDoc = do_QueryInterface(mDocument);
     if (nsDoc) {
-        nsDoc->SetTitle(EmptyString());
+        nsDoc->SetTitle(nsString());
     }
 
     // Reset and set up document
+    nsCOMPtr<nsIChannel> channel;
     nsCOMPtr<nsIDocument> sourceDoc = do_QueryInterface(aSourceDocument);
-    nsIPrincipal* sourcePrincipal = sourceDoc->GetPrincipal();
-    if (!sourcePrincipal) {
-        return;
-    }
-
     nsCOMPtr<nsILoadGroup> loadGroup = sourceDoc->GetDocumentLoadGroup();
-    nsCOMPtr<nsIChannel> channel = sourceDoc->GetChannel();
-    if (!channel) {
-        // Need to synthesize one
-        if (NS_FAILED(NS_NewChannel(getter_AddRefs(channel),
-                                    sourceDoc->GetDocumentURI(),
-                                    nsnull,
-                                    loadGroup))) {
-            return;
-        }
-        channel->SetOwner(sourcePrincipal);
+    nsCOMPtr<nsIIOService> serv = do_GetService(NS_IOSERVICE_CONTRACTID);
+    if (serv) {
+        // Create a temporary channel to get nsIDocument->Reset to
+        // do the right thing. We want the output document to get
+        // much of the input document's characteristics.
+        serv->NewChannelFromURI(sourceDoc->GetDocumentURI(),
+                                getter_AddRefs(channel));
     }
-    // Copy the channel and loadgroup from the source document.
     doc->Reset(channel, loadGroup);
-    doc->SetPrincipal(sourcePrincipal);
     doc->SetBaseURI(sourceDoc->GetBaseURI());
 
     // Set the charset
     if (!mOutputFormat.mEncoding.IsEmpty()) {
-        NS_LossyConvertUTF16toASCII charset(mOutputFormat.mEncoding);
-        nsCAutoString canonicalCharset;
-        nsCOMPtr<nsICharsetAlias> calias =
-            do_GetService("@mozilla.org/intl/charsetalias;1");
-
-        if (calias &&
-            NS_SUCCEEDED(calias->GetPreferred(charset, canonicalCharset))) {
-            doc->SetDocumentCharacterSet(canonicalCharset);
-            doc->SetDocumentCharacterSetSource(kCharsetFromOtherComponent);
-        }
+        doc->SetDocumentCharacterSet(
+            NS_LossyConvertUTF16toASCII(mOutputFormat.mEncoding));
+        doc->SetDocumentCharacterSetSource(kCharsetFromOtherComponent);
     }
     else {
         doc->SetDocumentCharacterSet(sourceDoc->GetDocumentCharacterSet());
@@ -276,13 +239,9 @@ void txMozillaTextOutput::createResultDocument(nsIDOMDocument* aSourceDocument,
             return;
         }
 
-        // XXXbz what to do on failure here?
-        rv = doc->SetRootContent(rootContent);
-        if (NS_FAILED(rv)) {
-            NS_ERROR("Failed to set root content");
-            return;
-        }
-            
+        rootContent->SetDocument(doc, PR_FALSE, PR_TRUE);
+
+        doc->SetRootContent(rootContent);
 
         mDocument->CreateElementNS(XHTML_NSURI,
                                    NS_LITERAL_STRING("head"),
@@ -334,7 +293,7 @@ void txMozillaTextOutput::createResultDocument(nsIDOMDocument* aSourceDocument,
     }
 
     nsCOMPtr<nsIDOMText> textNode;
-    mDocument->CreateTextNode(EmptyString(),
+    mDocument->CreateTextNode(nsString(),
                               getter_AddRefs(textNode));
     NS_ASSERTION(textNode, "Failed to create the text node");
     if (!textNode) {

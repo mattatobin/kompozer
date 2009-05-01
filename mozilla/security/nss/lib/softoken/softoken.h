@@ -1,42 +1,39 @@
 /*
  * softoken.h - private data structures and prototypes for the softoken lib
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: softoken.h,v 1.7.30.5 2006/10/02 22:58:51 wtchang%redhat.com Exp $ */
+ * $Id: softoken.h,v 1.4 2003/10/25 00:12:34 nelsonb%netscape.com Exp $
+ */
 
 #ifndef _SOFTOKEN_H_
 #define _SOFTOKEN_H_
@@ -46,7 +43,7 @@
 #include "softoknt.h"
 #include "secoidt.h"
 
-#include "pkcs11t.h"     /* CK_RV Required for sftk_fipsPowerUpSelfTest(). */
+#include "pkcs11t.h"     /* CK_RV Required for pk11_fipsPowerUpSelfTest(). */
 
 SEC_BEGIN_PROTOS
 
@@ -81,7 +78,7 @@ extern unsigned char *RSA_FormatOneBlock(unsigned int modulusLen,
 /*
  * convenience wrappers for doing single RSA operations. They create the
  * RSA context internally and take care of the formatting
- * requirements. Blinding happens automagically within RSA_Sign and
+ * requirements. Blinding happens automagically within RSA_SignHash and
  * RSA_DecryptBlock.
  */
 extern
@@ -89,19 +86,9 @@ SECStatus RSA_Sign(NSSLOWKEYPrivateKey *key, unsigned char *output,
 		       unsigned int *outputLen, unsigned int maxOutputLen,
 		       unsigned char *input, unsigned int inputLen);
 extern
-SECStatus RSA_HashSign(SECOidTag hashOid,
-			NSSLOWKEYPrivateKey *key, unsigned char *sig,
-			unsigned int *sigLen, unsigned int maxLen,
-			unsigned char *hash, unsigned int hashLen);
-extern
 SECStatus RSA_CheckSign(NSSLOWKEYPublicKey *key, unsigned char *sign,
 			    unsigned int signLength, unsigned char *hash,
 			    unsigned int hashLength);
-extern
-SECStatus RSA_HashCheckSign(SECOidTag hashOid,
-			    NSSLOWKEYPublicKey *key, unsigned char *sig,
-			    unsigned int sigLen, unsigned char *digest,
-			    unsigned int digestLen);
 extern
 SECStatus RSA_CheckSignRecover(NSSLOWKEYPublicKey *key, unsigned char *data,
     			    unsigned int *data_len,unsigned int max_output_len, 
@@ -141,14 +128,6 @@ SECStatus RSA_DecryptRaw(NSSLOWKEYPrivateKey *key, unsigned char *output,
 			     unsigned int *output_len,
     			     unsigned int max_output_len,
 			     unsigned char *input, unsigned int input_len);
-#ifdef NSS_ENABLE_ECC
-/*
-** pepare an ECParam structure from DEREncoded params
- */
-extern SECStatus EC_FillParams(PRArenaPool *arena,
-                               const SECItem *encodedParams, ECParams *params);
-#endif
-
 
 /*
 ** Prepare a buffer for DES encryption, growing to the appropriate boundary,
@@ -170,89 +149,12 @@ extern unsigned char * DES_PadBuffer(PRArenaPool *arena, unsigned char *inbuf,
 ** Power-Up selftests required for FIPS and invoked only
 ** under PKCS #11 FIPS mode.
 */
-extern CK_RV sftk_fipsPowerUpSelfTest( void ); 
+extern CK_RV pk11_fipsPowerUpSelfTest( void ); 
 
 /*
 ** make known fixed PKCS #11 key types to their sizes in bytes
 */	
-unsigned long sftk_MapKeySize(CK_KEY_TYPE keyType);
-
-/*
-** FIPS 140-2 auditing
-*/
-extern PRBool sftk_audit_enabled;
-
-extern void sftk_LogAuditMessage(NSSAuditSeverity severity, const char *msg);
-
-extern void sftk_AuditCreateObject(CK_SESSION_HANDLE hSession,
-			CK_ATTRIBUTE_PTR pTemplate, CK_ULONG ulCount,
-			CK_OBJECT_HANDLE_PTR phObject, CK_RV rv);
-
-extern void sftk_AuditCopyObject(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hObject,
-			CK_ATTRIBUTE_PTR pTemplate, CK_ULONG ulCount,
-			CK_OBJECT_HANDLE_PTR phNewObject, CK_RV rv);
-
-extern void sftk_AuditDestroyObject(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hObject, CK_RV rv);
-
-extern void sftk_AuditGetObjectSize(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hObject, CK_ULONG_PTR pulSize,
-			CK_RV rv);
-
-extern void sftk_AuditGetAttributeValue(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hObject, CK_ATTRIBUTE_PTR pTemplate,
-			CK_ULONG ulCount, CK_RV rv);
-
-extern void sftk_AuditSetAttributeValue(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hObject, CK_ATTRIBUTE_PTR pTemplate,
-			CK_ULONG ulCount, CK_RV rv);
-
-extern void sftk_AuditCryptInit(const char *opName,
-			CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_OBJECT_HANDLE hKey, CK_RV rv);
-
-extern void sftk_AuditGenerateKey(CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_ATTRIBUTE_PTR pTemplate, CK_ULONG ulCount,
-			CK_OBJECT_HANDLE_PTR phKey, CK_RV rv);
-
-extern void sftk_AuditGenerateKeyPair(CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_ATTRIBUTE_PTR pPublicKeyTemplate,
-			CK_ULONG ulPublicKeyAttributeCount,
-			CK_ATTRIBUTE_PTR pPrivateKeyTemplate,
-			CK_ULONG ulPrivateKeyAttributeCount,
-			CK_OBJECT_HANDLE_PTR phPublicKey,
-			CK_OBJECT_HANDLE_PTR phPrivateKey, CK_RV rv);
-
-extern void sftk_AuditWrapKey(CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_OBJECT_HANDLE hWrappingKey, CK_OBJECT_HANDLE hKey,
-			CK_BYTE_PTR pWrappedKey,
-			CK_ULONG_PTR pulWrappedKeyLen, CK_RV rv);
-
-extern void sftk_AuditUnwrapKey(CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_OBJECT_HANDLE hUnwrappingKey,
-			CK_BYTE_PTR pWrappedKey, CK_ULONG ulWrappedKeyLen,
-			CK_ATTRIBUTE_PTR pTemplate, CK_ULONG ulAttributeCount,
-			CK_OBJECT_HANDLE_PTR phKey, CK_RV rv);
-
-extern void sftk_AuditDeriveKey(CK_SESSION_HANDLE hSession,
-			CK_MECHANISM_PTR pMechanism,
-			CK_OBJECT_HANDLE hBaseKey,
-			CK_ATTRIBUTE_PTR pTemplate, CK_ULONG ulAttributeCount,
-			CK_OBJECT_HANDLE_PTR phKey, CK_RV rv);
-
-extern void sftk_AuditDigestKey(CK_SESSION_HANDLE hSession,
-			CK_OBJECT_HANDLE hKey, CK_RV rv);
-
-/*
-** FIPS 140-2 Error state
-*/
-extern PRBool sftk_fatalError;
+unsigned long pk11_MapKeySize(CK_KEY_TYPE keyType);
 
 SEC_END_PROTOS
 

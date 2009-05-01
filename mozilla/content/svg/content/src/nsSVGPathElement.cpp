@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,27 +14,27 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsSVGGraphicElement.h"
 #include "nsSVGAtoms.h"
@@ -44,11 +44,6 @@
 #include "nsIDOMSVGPathSeg.h"
 #include "nsSVGPathSeg.h"
 #include "nsCOMPtr.h"
-#include "nsISVGPathFlatten.h"
-#include "nsIDocument.h"
-#include "nsIFrame.h"
-#include "nsISVGGlyphMetricsSource.h"
-#include "nsSVGPoint.h"
 
 typedef nsSVGGraphicElement nsSVGPathElementBase;
 
@@ -59,10 +54,10 @@ class nsSVGPathElement : public nsSVGPathElementBase,
 protected:
   friend nsresult NS_NewSVGPathElement(nsIContent **aResult,
                                        nsINodeInfo *aNodeInfo);
-  nsSVGPathElement(nsINodeInfo *aNodeInfo);
+  nsSVGPathElement();
   virtual ~nsSVGPathElement();
-  nsresult Init();
-
+  nsresult Init(nsINodeInfo* aNodeInfo);
+  
 public:
   // interfaces:
   
@@ -74,20 +69,31 @@ public:
   NS_FORWARD_NSIDOMNODE_NO_CLONENODE(nsSVGPathElementBase::)
   NS_FORWARD_NSIDOMELEMENT(nsSVGPathElementBase::)
   NS_FORWARD_NSIDOMSVGELEMENT(nsSVGPathElementBase::)
-
-  // nsIStyledContent interface
-  NS_IMETHODIMP_(PRBool) IsAttributeMapped(const nsIAtom* name) const;
   
 protected:
-
-  already_AddRefed<nsISVGPathFlatten> GetPathFlatten();
-
   nsCOMPtr<nsIDOMSVGPathSegList> mSegments;
 };
 
 
-NS_IMPL_NS_NEW_SVG_ELEMENT(Path)
+nsresult NS_NewSVGPathElement(nsIContent **aResult, nsINodeInfo *aNodeInfo)
+{
+  *aResult = nsnull;
+  nsSVGPathElement* it = new nsSVGPathElement();
 
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
+
+  nsresult rv = it->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+  
+  *aResult = it;
+
+  return NS_OK;
+}
 
 //----------------------------------------------------------------------
 // nsISupports methods
@@ -107,8 +113,7 @@ NS_INTERFACE_MAP_END_INHERITING(nsSVGPathElementBase)
 //----------------------------------------------------------------------
 // Implementation
 
-nsSVGPathElement::nsSVGPathElement(nsINodeInfo* aNodeInfo)
-  : nsSVGPathElementBase(aNodeInfo)
+nsSVGPathElement::nsSVGPathElement()
 {
 
 }
@@ -119,9 +124,9 @@ nsSVGPathElement::~nsSVGPathElement()
 
   
 nsresult
-nsSVGPathElement::Init()
+nsSVGPathElement::Init(nsINodeInfo* aNodeInfo)
 {
-  nsresult rv = nsSVGPathElementBase::Init();
+  nsresult rv = nsSVGPathElementBase::Init(aNodeInfo);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Create mapped properties:
@@ -132,14 +137,40 @@ nsSVGPathElement::Init()
   rv = AddMappedSVGValue(nsSVGAtoms::d, mSegments);
   NS_ENSURE_SUCCESS(rv,rv);
   
-  return rv;
+    
+  return NS_OK;
 }
 
 //----------------------------------------------------------------------
 // nsIDOMNode methods
 
+NS_IMETHODIMP
+nsSVGPathElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  *aReturn = nsnull;
+  nsSVGPathElement* it = new nsSVGPathElement();
 
-NS_IMPL_DOM_CLONENODE_WITH_INIT(nsSVGPathElement)
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
+
+  nsresult rv = it->Init(mNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+
+  rv = CopyNode(it, aDeep);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+ 
+  *aReturn = it;
+
+  return NS_OK; 
+}
 
 
 //----------------------------------------------------------------------
@@ -156,49 +187,14 @@ nsSVGPathElement::GetPathLength(nsIDOMSVGAnimatedNumber * *aPathLength)
 NS_IMETHODIMP
 nsSVGPathElement::GetTotalLength(float *_retval)
 {
-  *_retval = 0;
-  nsCOMPtr<nsISVGPathFlatten> flattener = GetPathFlatten();
-  if (!flattener)
-    return NS_ERROR_FAILURE;
-
-  nsSVGPathData *data;
-  flattener->GetFlattenedPath(&data);
-  *_retval = data->Length();
-
-  delete data;
-
-  return NS_OK;
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
-
-void
-NS_SVGFindPointOnPath(nsSVGPathData *data,
-                      float aX, float aY, float aAdvance,
-                      nsSVGCharacterPosition *aCP);
 
 /* nsIDOMSVGPoint getPointAtLength (in float distance); */
 NS_IMETHODIMP
 nsSVGPathElement::GetPointAtLength(float distance, nsIDOMSVGPoint **_retval)
 {
-  *_retval = nsnull;
-  nsCOMPtr<nsISVGPathFlatten> flattener = GetPathFlatten();
-  if (!flattener)
-    return NS_ERROR_FAILURE;
-
-  nsSVGPathData *data;
-  flattener->GetFlattenedPath(&data);
-  if (!data)
-    return NS_ERROR_OUT_OF_MEMORY;
-
-  float length = data->Length();
-  distance = PR_MAX(0,      distance);
-  distance = PR_MIN(length, distance);
-
-  nsSVGCharacterPosition cp;
-  NS_SVGFindPointOnPath(data, distance, 0, 0, &cp);
-
-  delete data;
-
-  return NS_NewSVGPoint(_retval, cp.x, cp.y);
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* unsigned long getPathSegAtLength (in float distance); */
@@ -371,50 +367,4 @@ NS_IMETHODIMP nsSVGPathElement::GetAnimatedPathSegList(nsIDOMSVGPathSegList * *a
 NS_IMETHODIMP nsSVGPathElement::GetAnimatedNormalizedPathSegList(nsIDOMSVGPathSegList * *aAnimatedNormalizedPathSegList)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-//----------------------------------------------------------------------
-// nsIStyledContent methods
-
-NS_IMETHODIMP_(PRBool)
-nsSVGPathElement::IsAttributeMapped(const nsIAtom* name) const
-{
-  static const MappedAttributeEntry* const map[] = {
-    sMarkersMap,
-  };
-  
-  return FindAttributeDependence(name, map, NS_ARRAY_LENGTH(map)) ||
-    nsSVGPathElementBase::IsAttributeMapped(name);
-}
-
-//----------------------------------------------------------------------
-// implementation helpers:
-
-already_AddRefed<nsISVGPathFlatten>
-nsSVGPathElement::GetPathFlatten()
-{
-  nsIDocument* doc = GetCurrentDoc();
-  if (!doc) {
-    NS_ERROR("no document");
-    return nsnull;
-  }
-  
-  nsIPresShell* presShell = doc->GetShellAt(0);
-  if (!presShell) {
-    NS_ERROR("no presshell");
-    return nsnull;
-  }
-
-  nsIFrame* frame;
-  presShell->GetPrimaryFrameFor(NS_STATIC_CAST(nsIStyledContent*, this), &frame);
-
-  if (!frame) {
-    NS_ERROR("no frame");
-    return nsnull;
-  }
-  
-  nsISVGPathFlatten* flattener;
-  frame->QueryInterface(NS_GET_IID(nsISVGPathFlatten),(void**)&flattener);
-  NS_ASSERTION(flattener, "wrong frame type");
-  return flattener;
 }

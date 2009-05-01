@@ -57,20 +57,7 @@ public:
 
   NS_DECL_ISUPPORTS
 
-  // nsIFilePicker (less what's in nsBaseFilePicker)
-  NS_IMETHODIMP Init(nsIDOMWindow *aParent, const nsAString &aTitle, PRInt16 aMode);
-  NS_IMETHODIMP AppendFilters(PRInt32 aFilterMask);
-  NS_IMETHODIMP AppendFilter(const nsAString& aTitle, const nsAString& aFilter);
-  NS_IMETHODIMP SetDefaultString(const nsAString& aString);
-  NS_IMETHODIMP GetDefaultString(nsAString& aString);
-  NS_IMETHODIMP SetDefaultExtension(const nsAString& aExtension);
-  NS_IMETHODIMP GetDefaultExtension(nsAString& aExtension);
-  NS_IMETHODIMP GetFilterIndex(PRInt32 *aFilterIndex);
-  NS_IMETHODIMP SetFilterIndex(PRInt32 aFilterIndex);
-  NS_IMETHODIMP GetFile(nsILocalFile **aFile);
-  NS_IMETHODIMP GetFileURL(nsIFileURL **aFileURL);
-  NS_IMETHODIMP GetFiles(nsISimpleEnumerator **aFiles);
-  NS_IMETHODIMP Show(PRInt16 *aReturn);
+  NS_DECL_NSIFILEPICKER
 
   virtual void InitNative(nsIWidget *aParent, const nsAString& aTitle, PRInt16 aMode);
 
@@ -82,6 +69,7 @@ protected:
   void ReadValuesFromFileChooser(GtkWidget *file_chooser);
 
   nsCOMPtr<nsIWidget>    mParentWidget;
+  nsCOMPtr<nsILocalFile> mDisplayDirectory;
   nsCOMArray<nsILocalFile> mFiles;
 
   PRInt16   mMode;

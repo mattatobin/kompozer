@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Ben Goodger <ben@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
  
@@ -51,7 +51,6 @@
 #include "nsIDOMEventListener.h"
 #include "nsIRDFContainerUtils.h"
 #include "nsIWebProgressListener.h"
-#include "nsIWebProgressListener2.h"
 #include "nsIXPIProgressDialog.h"
 #include "nsIURI.h"
 #include "nsIWebBrowserPersist.h"
@@ -64,8 +63,9 @@
 #include "nsIProgressDialog.h"
 #include "nsIMIMEInfo.h"
 #include "nsITimer.h"
+#ifdef XP_WIN
 #include "nsIAlertsService.h"
-#include "nsWeakReference.h"
+#endif
 
 typedef PRInt16 DownloadState;
 typedef PRInt16 DownloadType;
@@ -75,14 +75,19 @@ class nsDownload;
 
 class nsDownloadManager : public nsIDownloadManager,
                           public nsIXPInstallManagerUI,
-                          public nsIObserver,
-                          public nsSupportsWeakReference
+                          public nsIObserver
+#ifdef XP_WIN
+                          , public nsIAlertListener
+#endif
 {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSIDOWNLOADMANAGER
   NS_DECL_NSIXPINSTALLMANAGERUI
   NS_DECL_NSIOBSERVER
+#ifdef XP_WIN
+  NS_DECL_NSIALERTLISTENER
+#endif
 
   nsresult Init();
 
@@ -195,14 +200,13 @@ private:
   nsCOMPtr<nsIRDFDataSource> mInner;
 };
 
-class nsDownload : public nsIDownload_MOZILLA_1_8_BRANCH
+class nsDownload : public nsIDownload,
+                   public nsIWebProgressListener
 {
 public:
   NS_DECL_NSIWEBPROGRESSLISTENER
-  NS_DECL_NSIWEBPROGRESSLISTENER2
   NS_DECL_NSITRANSFER
   NS_DECL_NSIDOWNLOAD
-  NS_DECL_NSIDOWNLOAD_MOZILLA_1_8_BRANCH
   NS_DECL_ISUPPORTS
 
   nsDownload();
@@ -220,26 +224,15 @@ protected:
   nsresult GetDialogListener(nsIWebProgressListener** aInternalListener);
   nsresult SetDialog(nsIProgressDialog* aDialog);
   nsresult GetDialog(nsIProgressDialog** aDialog);
-  nsresult SetTempFile(nsILocalFile* aTempFile);
-  nsresult GetTempFile(nsILocalFile** aTempFile);
-  nsresult SetCancelable(nsICancelable* aCancelable);
+  nsresult SetPersist(nsIWebBrowserPersist* aPersist);
   nsresult SetTarget(nsIURI* aTarget);
-  nsresult SetDisplayName(const PRUnichar* aDisplayName);
   nsresult SetSource(nsIURI* aSource);
+  nsresult GetTransferInformation(PRInt32* aCurr, PRInt32* aMax);
   nsresult SetMIMEInfo(nsIMIMEInfo* aMIMEInfo);
   nsresult SetStartTime(PRInt64 aStartTime);
 
   void Pause(PRBool aPaused);
   PRBool IsPaused();
-
-  struct TransferInformation {
-    PRInt64 mCurrBytes, mMaxBytes;
-    TransferInformation(PRInt64 aCurr, PRInt64 aMax) :
-      mCurrBytes(aCurr),
-      mMaxBytes(aMax)
-      {}
-  };
-  TransferInformation GetTransferInformation();
 
   nsDownloadManager* mDownloadManager;
   nsCOMPtr<nsIURI> mTarget;
@@ -249,10 +242,10 @@ private:
 
   nsCOMPtr<nsIURI> mSource;
   nsCOMPtr<nsIWebProgressListener> mDialogListener;
-  nsCOMPtr<nsICancelable> mCancelable;
+  nsCOMPtr<nsIWebBrowserPersist> mPersist;
   nsCOMPtr<nsIRequest> mRequest;
   nsCOMPtr<nsIProgressDialog> mDialog;
-  nsCOMPtr<nsILocalFile> mTempFile;
+  nsCOMPtr<nsIObserver> mObserver;
   nsCOMPtr<nsIMIMEInfo> mMIMEInfo;
   
   DownloadState mDownloadState;
@@ -260,11 +253,10 @@ private:
 
   PRBool  mPaused;
   PRInt32 mPercentComplete;
-  PRUint64 mCurrBytes;
-  PRUint64 mMaxBytes;
-  PRTime mStartTime;
+  PRInt32 mCurrBytes;
+  PRInt32 mMaxBytes;
+  PRInt64 mStartTime;
   PRTime mLastUpdate;
-  double mSpeed;
 
   friend class nsDownloadManager;
 };

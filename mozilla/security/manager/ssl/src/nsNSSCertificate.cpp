@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Ian McGreer <mcgreer@netscape.com>
- *   Javier Delgadillo <javi@netscape.com>
- *   Kai Engert <kengert@redhat.com>
+ *  Ian McGreer <mcgreer@netscape.com>
+ *  Javier Delgadillo <javi@netscape.com>
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "prmem.h"
 #include "prerror.h"
@@ -49,12 +46,13 @@
 #include "nsPKCS12Blob.h"
 #include "nsPK11TokenDB.h"
 #include "nsIX509Cert.h"
-#include "nsIX509Cert3.h"
 #include "nsISMimeCert.h"
 #include "nsNSSASN1Object.h"
 #include "nsString.h"
 #include "nsXPIDLString.h"
 #include "nsReadableUtils.h"
+#include "nsIDateTimeFormat.h"
+#include "nsDateTimeFormatCID.h"
 #include "nsILocaleService.h"
 #include "nsIURI.h"
 #include "nsTime.h"
@@ -66,7 +64,6 @@
 #include "nsNSSCertHelper.h"
 #include "nsISupportsPrimitives.h"
 #include "nsUnicharUtils.h"
-#include "nsCertVerificationThread.h"
 
 #include "nspr.h"
 extern "C" {
@@ -87,13 +84,12 @@ extern PRLogModuleInfo* gPIPNSSLog;
 #endif
 
 static NS_DEFINE_CID(kNSSComponentCID, NS_NSSCOMPONENT_CID);
+static NS_DEFINE_CID(kDateTimeFormatCID, NS_DATETIMEFORMAT_CID);
 
 
 /* nsNSSCertificate */
 
-NS_IMPL_THREADSAFE_ISUPPORTS4(nsNSSCertificate, nsIX509Cert,
-                                                nsIX509Cert3,
-                                                nsIX509Cert18Branch,
+NS_IMPL_THREADSAFE_ISUPPORTS2(nsNSSCertificate, nsIX509Cert,
                                                 nsISMimeCert)
 
 nsNSSCertificate*
@@ -253,14 +249,14 @@ nsNSSCertificate::FormatUIStrings(const nsAutoString &nickname, nsAutoString &ni
     }
 
     if (NS_SUCCEEDED(x509Proxy->GetSerialNumber(temp1)) && !temp1.IsEmpty()) {
-      details.AppendLiteral("  ");
+      details.Append(NS_LITERAL_STRING("  "));
       if (NS_SUCCEEDED(nssComponent->GetPIPNSSBundleString("CertDumpSerialNo", info))) {
         details.Append(info);
-        details.AppendLiteral(": ");
+        details.Append(NS_LITERAL_STRING(": "));
       }
       details.Append(temp1);
 
-      nickWithSerial.AppendLiteral(" [");
+      nickWithSerial.Append(NS_LITERAL_STRING(" ["));
       nickWithSerial.Append(temp1);
       nickWithSerial.Append(PRUnichar(']'));
 
@@ -281,7 +277,7 @@ nsNSSCertificate::FormatUIStrings(const nsAutoString &nickname, nsAutoString &ni
       }
 
       if (validity) {
-        details.AppendLiteral("  ");
+        details.Append(NS_LITERAL_STRING("  "));
         if (NS_SUCCEEDED(nssComponent->GetPIPNSSBundleString("CertInfoValid", info))) {
           details.Append(info);
         }
@@ -310,10 +306,10 @@ nsNSSCertificate::FormatUIStrings(const nsAutoString &nickname, nsAutoString &ni
 
     PRUint32 tempInt = 0;
     if (NS_SUCCEEDED(x509Proxy->GetUsagesString(PR_FALSE, &tempInt, temp1)) && !temp1.IsEmpty()) {
-      details.AppendLiteral("  ");
+      details.Append(NS_LITERAL_STRING("  "));
       if (NS_SUCCEEDED(nssComponent->GetPIPNSSBundleString("CertInfoPurposes", info))) {
         details.Append(info);
-        details.AppendLiteral(": ");
+        details.Append(NS_LITERAL_STRING(": "));
       }
       details.Append(temp1);
       details.Append(PRUnichar('\n'));
@@ -369,8 +365,6 @@ nsNSSCertificate::GetDbKey(char * *aDbKey)
   *aDbKey = nsnull;
   key.len = NS_NSS_LONG*4+mCert->serialNumber.len+mCert->derIssuer.len;
   key.data = (unsigned char *)nsMemory::Alloc(key.len);
-  if (!key.data)
-    return NS_ERROR_OUT_OF_MEMORY;
   NS_NSS_PUT_LONG(0,key.data); // later put moduleID
   NS_NSS_PUT_LONG(0,&key.data[NS_NSS_LONG]); // later put slotID
   NS_NSS_PUT_LONG(mCert->serialNumber.len,&key.data[NS_NSS_LONG*2]);
@@ -473,7 +467,7 @@ nsNSSCertificate::GetEmailAddresses(PRUint32 *aLength, PRUnichar*** aAddresses)
   }
 
   *aAddresses = (PRUnichar **)nsMemory::Alloc(sizeof(PRUnichar *) * (*aLength));
-  if (!*aAddresses)
+  if (!aAddresses)
     return NS_ERROR_OUT_OF_MEMORY;
 
   PRUint32 iAddr;
@@ -865,12 +859,9 @@ nsNSSCertificate::GetRawDER(PRUint32 *aLength, PRUint8 **aArray)
     return NS_ERROR_NOT_AVAILABLE;
 
   if (mCert) {
-    *aArray = (PRUint8*)nsMemory::Alloc(mCert->derCert.len);
-    if (*aArray) {
-      memcpy(*aArray, mCert->derCert.data, mCert->derCert.len);
-      *aLength = mCert->derCert.len;
-      return NS_OK;
-    }
+    *aArray = (PRUint8 *)mCert->derCert.data;
+    *aLength = mCert->derCert.len;
+    return NS_OK;
   }
   *aLength = 0;
   return NS_ERROR_FAILURE;
@@ -912,56 +903,56 @@ nsNSSCertificate::VerifyForUsage(PRUint32 usage, PRUint32 *verificationResult)
 
   NS_ENSURE_ARG(verificationResult);
 
-  SECCertificateUsage nss_usage;
+  SECCertUsage nss_usage;
   
   switch (usage)
   {
     case CERT_USAGE_SSLClient:
-      nss_usage = certificateUsageSSLClient;
+      nss_usage = certUsageSSLClient;
       break;
 
     case CERT_USAGE_SSLServer:
-      nss_usage = certificateUsageSSLServer;
+      nss_usage = certUsageSSLServer;
       break;
 
     case CERT_USAGE_SSLServerWithStepUp:
-      nss_usage = certificateUsageSSLServerWithStepUp;
+      nss_usage = certUsageSSLServerWithStepUp;
       break;
 
     case CERT_USAGE_SSLCA:
-      nss_usage = certificateUsageSSLCA;
+      nss_usage = certUsageSSLCA;
       break;
 
     case CERT_USAGE_EmailSigner:
-      nss_usage = certificateUsageEmailSigner;
+      nss_usage = certUsageEmailSigner;
       break;
 
     case CERT_USAGE_EmailRecipient:
-      nss_usage = certificateUsageEmailRecipient;
+      nss_usage = certUsageEmailRecipient;
       break;
 
     case CERT_USAGE_ObjectSigner:
-      nss_usage = certificateUsageObjectSigner;
+      nss_usage = certUsageObjectSigner;
       break;
 
     case CERT_USAGE_UserCertImport:
-      nss_usage = certificateUsageUserCertImport;
+      nss_usage = certUsageUserCertImport;
       break;
 
     case CERT_USAGE_VerifyCA:
-      nss_usage = certificateUsageVerifyCA;
+      nss_usage = certUsageVerifyCA;
       break;
 
     case CERT_USAGE_ProtectedObjectSigner:
-      nss_usage = certificateUsageProtectedObjectSigner;
+      nss_usage = certUsageProtectedObjectSigner;
       break;
 
     case CERT_USAGE_StatusResponder:
-      nss_usage = certificateUsageStatusResponder;
+      nss_usage = certUsageStatusResponder;
       break;
 
     case CERT_USAGE_AnyCA:
-      nss_usage = certificateUsageAnyCA;
+      nss_usage = certUsageAnyCA;
       break;
 
     default:
@@ -970,8 +961,8 @@ nsNSSCertificate::VerifyForUsage(PRUint32 usage, PRUint32 *verificationResult)
 
   CERTCertDBHandle *defaultcertdb = CERT_GetDefaultCertDB();
 
-  if (CERT_VerifyCertificateNow(defaultcertdb, mCert, PR_TRUE, 
-                         nss_usage, NULL, NULL) == SECSuccess)
+  if (CERT_VerifyCertNow(defaultcertdb, mCert, PR_TRUE, 
+                         nss_usage, NULL) == SECSuccess)
   {
     *verificationResult = VERIFIED_OK;
   }
@@ -1040,11 +1031,8 @@ nsNSSCertificate::GetUsagesArray(PRBool ignoreOcsp,
   PRUint32 tmpCount;
   nsUsageArrayHelper uah(mCert);
   rv = uah.GetUsagesArray(suffix, ignoreOcsp, max_usages, _verified, &tmpCount, tmpUsages);
-  NS_ENSURE_SUCCESS(rv,rv);
   if (tmpCount > 0) {
     *_usages = (PRUnichar **)nsMemory::Alloc(sizeof(PRUnichar *) * tmpCount);
-    if (!*_usages)
-      return NS_ERROR_OUT_OF_MEMORY;
     for (PRUint32 i=0; i<tmpCount; i++) {
       (*_usages)[i] = tmpUsages[i];
     }
@@ -1052,30 +1040,8 @@ nsNSSCertificate::GetUsagesArray(PRBool ignoreOcsp,
     return NS_OK;
   }
   *_usages = (PRUnichar **)nsMemory::Alloc(sizeof(PRUnichar *));
-  if (!*_usages)
-    return NS_ERROR_OUT_OF_MEMORY;
   *_count = 0;
   return NS_OK;
-}
-
-NS_IMETHODIMP
-nsNSSCertificate::RequestUsagesArrayAsync(nsICertVerificationListener *aResultListener)
-{
-  if (!aResultListener)
-    return NS_ERROR_FAILURE;
-  
-  nsCertVerificationJob *job = new nsCertVerificationJob;
-  if (!job)
-    return NS_ERROR_OUT_OF_MEMORY;
-
-  job->mCert = this;
-  job->mListener = aResultListener;
-
-  nsresult rv = nsCertVerificationThread::addJob(job);
-  if (NS_FAILED(rv))
-    delete job;
-
-  return rv;
 }
 
 NS_IMETHODIMP
@@ -1094,13 +1060,396 @@ nsNSSCertificate::GetUsagesString(PRBool ignoreOcsp,
   PRUint32 tmpCount;
   nsUsageArrayHelper uah(mCert);
   rv = uah.GetUsagesArray(suffix, ignoreOcsp, max_usages, _verified, &tmpCount, tmpUsages);
-  NS_ENSURE_SUCCESS(rv,rv);
   _usages.Truncate();
   for (PRUint32 i=0; i<tmpCount; i++) {
-    if (i>0) _usages.AppendLiteral(",");
+    if (i>0) _usages.Append(NS_LITERAL_STRING(","));
     _usages.Append(tmpUsages[i]);
     nsMemory::Free(tmpUsages[i]);
   }
+  return NS_OK;
+}
+
+static nsresult
+ProcessSECAlgorithmID(SECAlgorithmID *algID,
+                      nsINSSComponent *nssComponent,
+                      nsIASN1Sequence **retSequence)
+{
+  nsCOMPtr<nsIASN1Sequence> sequence = new nsNSSASN1Sequence();
+  if (sequence == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  *retSequence = nsnull;
+  nsString text;
+  GetOIDText(&algID->algorithm, nssComponent, text);
+  if (!algID->parameters.len || algID->parameters.data[0] == nsIASN1Object::ASN1_NULL) {
+    sequence->SetDisplayValue(text);
+    sequence->SetIsValidContainer(PR_FALSE);
+  } else {
+    nsCOMPtr<nsIASN1PrintableItem> printableItem = new nsNSSASN1PrintableItem();
+    printableItem->SetDisplayValue(text);
+    nsCOMPtr<nsIMutableArray> asn1Objects;
+    sequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+    asn1Objects->AppendElement(printableItem, PR_FALSE);
+    nssComponent->GetPIPNSSBundleString("CertDumpAlgID", text);
+    printableItem->SetDisplayName(text);
+    printableItem = new nsNSSASN1PrintableItem();
+    asn1Objects->AppendElement(printableItem, PR_FALSE);
+    nssComponent->GetPIPNSSBundleString("CertDumpParams", text);
+    printableItem->SetDisplayName(text); 
+    ProcessRawBytes(&algID->parameters,text);
+    printableItem->SetDisplayValue(text);
+  }
+  *retSequence = sequence;
+  NS_ADDREF(*retSequence);
+  return NS_OK;
+}
+
+static nsresult
+ProcessTime(PRTime dispTime, const PRUnichar *displayName, 
+            nsIASN1Sequence *parentSequence)
+{
+  nsresult rv;
+  nsCOMPtr<nsIDateTimeFormat> dateFormatter =
+     do_CreateInstance(kDateTimeFormatCID, &rv);
+  if (NS_FAILED(rv)) 
+    return rv;
+
+  nsString text;
+  nsString tempString;
+
+  PRExplodedTime explodedTime;
+  PR_ExplodeTime(dispTime, PR_LocalTimeParameters, &explodedTime);
+
+  dateFormatter->FormatPRExplodedTime(nsnull, kDateFormatShort, kTimeFormatSecondsForce24Hour,
+                              &explodedTime, tempString);
+
+  text.Append(tempString);
+  text.Append(NS_LITERAL_STRING("\n("));
+
+  PRExplodedTime explodedTimeGMT;
+  PR_ExplodeTime(dispTime, PR_GMTParameters, &explodedTimeGMT);
+
+  dateFormatter->FormatPRExplodedTime(nsnull, kDateFormatShort, kTimeFormatSecondsForce24Hour,
+                              &explodedTimeGMT, tempString);
+
+  text.Append(tempString);
+  text.Append(NS_LITERAL_STRING(" GMT)"));
+
+  nsCOMPtr<nsIASN1PrintableItem> printableItem = new nsNSSASN1PrintableItem();
+  if (printableItem == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  printableItem->SetDisplayValue(text);
+  printableItem->SetDisplayName(nsDependentString(displayName));
+  nsCOMPtr<nsIMutableArray> asn1Objects;
+  parentSequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+  return NS_OK;
+}
+
+static nsresult
+ProcessSubjectPublicKeyInfo(CERTSubjectPublicKeyInfo *spki, 
+                            nsIASN1Sequence *parentSequence,
+                            nsINSSComponent *nssComponent)
+{
+  nsCOMPtr<nsIASN1Sequence> spkiSequence = new nsNSSASN1Sequence();
+
+  if (spkiSequence == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  nsString text;
+  nssComponent->GetPIPNSSBundleString("CertDumpSPKI", text);
+  spkiSequence->SetDisplayName(text);
+
+  nssComponent->GetPIPNSSBundleString("CertDumpSPKIAlg", text);
+  nsCOMPtr<nsIASN1Sequence> sequenceItem;
+  nsresult rv = ProcessSECAlgorithmID(&spki->algorithm, nssComponent,
+                                      getter_AddRefs(sequenceItem));
+  if (NS_FAILED(rv))
+    return rv;
+  sequenceItem->SetDisplayName(text);
+  nsCOMPtr<nsIMutableArray> asn1Objects;
+  spkiSequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  asn1Objects->AppendElement(sequenceItem, PR_FALSE);
+
+  // The subjectPublicKey field is encoded as a bit string.
+  // ProcessRawBytes expects the lenght to be in bytes, so 
+  // let's convert the lenght into a temporary SECItem.
+  SECItem data;
+  data.data = spki->subjectPublicKey.data;
+  data.len  = spki->subjectPublicKey.len / 8;
+  text.Truncate();
+  ProcessRawBytes(&data, text);
+  nsCOMPtr<nsIASN1PrintableItem> printableItem = new nsNSSASN1PrintableItem();
+  if (printableItem == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  printableItem->SetDisplayValue(text);
+  nssComponent->GetPIPNSSBundleString("CertDumpSubjPubKey", text);
+  printableItem->SetDisplayName(text);
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+  
+  parentSequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  asn1Objects->AppendElement(spkiSequence, PR_FALSE);
+  return NS_OK;
+}
+
+static nsresult
+ProcessExtensions(CERTCertExtension **extensions, 
+                  nsIASN1Sequence *parentSequence, 
+                  nsINSSComponent *nssComponent)
+{
+  nsCOMPtr<nsIASN1Sequence> extensionSequence = new nsNSSASN1Sequence;
+  if (extensionSequence == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  nsString text;
+  nssComponent->GetPIPNSSBundleString("CertDumpExtensions", text);
+  extensionSequence->SetDisplayName(text);
+  PRInt32 i;
+  nsresult rv;
+  nsCOMPtr<nsIASN1PrintableItem> newExtension;
+  nsCOMPtr<nsIMutableArray> asn1Objects;
+  extensionSequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  for (i=0; extensions[i] != nsnull; i++) {
+    rv = ProcessSingleExtension(extensions[i], nssComponent,
+                                getter_AddRefs(newExtension));
+    if (NS_FAILED(rv))
+      return rv;
+
+    asn1Objects->AppendElement(newExtension, PR_FALSE);
+  }
+  parentSequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  asn1Objects->AppendElement(extensionSequence, PR_FALSE);
+  return NS_OK;
+}
+
+static nsresult
+ProcessName(CERTName *name, nsINSSComponent *nssComponent, PRUnichar **value)
+{
+  CERTRDN** rdns;
+  CERTRDN** rdn;
+  CERTAVA** avas;
+  CERTAVA* ava;
+  SECItem *decodeItem = nsnull;
+  nsString finalString;
+
+  rdns = name->rdns;
+
+  nsString type;
+  nsresult rv;
+  const PRUnichar *params[2];
+  nsString avavalue;
+  nsAutoString temp;
+  CERTRDN **lastRdn;
+  lastRdn = rdns;
+
+
+  /* find last RDN */
+  lastRdn = rdns;
+  while (*lastRdn) lastRdn++;
+  // The above whille loop will put us at the last member
+  // of the array which is a NULL pointer.  So let's back
+  // up one spot so that we have the last non-NULL entry in 
+  // the array in preparation for traversing the 
+  // RDN's (Relative Distinguished Name) in reverse oder.
+  lastRdn--;
+   
+  /*
+   * Loop over name contents in _reverse_ RDN order appending to string
+   * When building the Ascii string, NSS loops over these entries in 
+   * reverse order, so I will as well.  The difference is that NSS
+   * will always place them in a one line string separated by commas,
+   * where I want each entry on a single line.  I can't just use a comma
+   * as my delimitter because it is a valid character to have in the 
+   * value portion of the AVA and could cause trouble when parsing.
+   */
+  for (rdn = lastRdn; rdn >= rdns; rdn--) {
+    avas = (*rdn)->avas;
+    while ((ava = *avas++) != 0) {
+      rv = GetOIDText(&ava->type, nssComponent, type);
+      if (NS_FAILED(rv))
+        return rv;
+
+      //This function returns a string in UTF8 format.
+      decodeItem = CERT_DecodeAVAValue(&ava->value);
+      if(!decodeItem) {
+         return NS_ERROR_FAILURE;
+      }
+      avavalue = NS_ConvertUTF8toUTF16((char*)decodeItem->data, decodeItem->len);
+
+      SECITEM_FreeItem(decodeItem, PR_TRUE);
+      params[0] = type.get();
+      params[1] = avavalue.get();
+      nssComponent->PIPBundleFormatStringFromName("AVATemplate",
+                                                  params, 2, temp);
+      finalString += temp + NS_LITERAL_STRING("\n");
+    }
+  }
+  *value = ToNewUnicode(finalString);    
+  return NS_OK;
+}
+
+nsresult
+nsNSSCertificate::CreateTBSCertificateASN1Struct(nsIASN1Sequence **retSequence,
+                                                 nsINSSComponent *nssComponent)
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  //
+  //   TBSCertificate  ::=  SEQUENCE  {
+  //        version         [0]  EXPLICIT Version DEFAULT v1,
+  //        serialNumber         CertificateSerialNumber,
+  //        signature            AlgorithmIdentifier,
+  //        issuer               Name,
+  //        validity             Validity,
+  //        subject              Name,
+  //        subjectPublicKeyInfo SubjectPublicKeyInfo,
+  //        issuerUniqueID  [1]  IMPLICIT UniqueIdentifier OPTIONAL,
+  //                             -- If present, version shall be v2 or v3
+  //        subjectUniqueID [2]  IMPLICIT UniqueIdentifier OPTIONAL,
+  //                             -- If present, version shall be v2 or v3
+  //        extensions      [3]  EXPLICIT Extensions OPTIONAL
+  //                            -- If present, version shall be v3
+  //        }
+  //
+  // This is the ASN1 structure we should be dealing with at this point.
+  // The code in this method will assert this is the structure we're dealing
+  // and then add more user friendly text for that field.
+  nsCOMPtr<nsIASN1Sequence> sequence = new nsNSSASN1Sequence();
+  if (sequence == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  nsString text;
+  nssComponent->GetPIPNSSBundleString("CertDumpCertificate", text);
+  sequence->SetDisplayName(text);
+  nsCOMPtr<nsIASN1PrintableItem> printableItem;
+  
+  nsCOMPtr<nsIMutableArray> asn1Objects;
+  sequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+
+  nsresult rv = ProcessVersion(&mCert->version, nssComponent,
+                               getter_AddRefs(printableItem));
+  if (NS_FAILED(rv))
+    return rv;
+
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+  
+  rv = ProcessSerialNumberDER(&mCert->serialNumber, nssComponent,
+                              getter_AddRefs(printableItem));
+
+  if (NS_FAILED(rv))
+    return rv;
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+
+  nsCOMPtr<nsIASN1Sequence> algID;
+  rv = ProcessSECAlgorithmID(&mCert->signature,
+                             nssComponent, getter_AddRefs(algID));
+  if (NS_FAILED(rv))
+    return rv;
+
+  nssComponent->GetPIPNSSBundleString("CertDumpSigAlg", text);
+  algID->SetDisplayName(text);
+  asn1Objects->AppendElement(algID, PR_FALSE);
+
+  nsXPIDLString value;
+  ProcessName(&mCert->issuer, nssComponent, getter_Copies(value));
+
+  printableItem = new nsNSSASN1PrintableItem();
+  if (printableItem == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  printableItem->SetDisplayValue(value);
+  nssComponent->GetPIPNSSBundleString("CertDumpIssuer", text);
+  printableItem->SetDisplayName(text);
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+  
+  nsCOMPtr<nsIASN1Sequence> validitySequence = new nsNSSASN1Sequence();
+  nssComponent->GetPIPNSSBundleString("CertDumpValidity", text);
+  validitySequence->SetDisplayName(text);
+  asn1Objects->AppendElement(validitySequence, PR_FALSE);
+  nssComponent->GetPIPNSSBundleString("CertDumpNotBefore", text);
+  nsCOMPtr<nsIX509CertValidity> validityData;
+  GetValidity(getter_AddRefs(validityData));
+  PRTime notBefore, notAfter;
+
+  validityData->GetNotBefore(&notBefore);
+  validityData->GetNotAfter(&notAfter);
+  validityData = 0;
+  rv = ProcessTime(notBefore, text.get(), validitySequence);
+  if (NS_FAILED(rv))
+    return rv;
+
+  nssComponent->GetPIPNSSBundleString("CertDumpNotAfter", text);
+  rv = ProcessTime(notAfter, text.get(), validitySequence);
+  if (NS_FAILED(rv))
+    return rv;
+
+  nssComponent->GetPIPNSSBundleString("CertDumpSubject", text);
+
+  printableItem = new nsNSSASN1PrintableItem();
+  if (printableItem == nsnull)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  printableItem->SetDisplayName(text);
+  ProcessName(&mCert->subject, nssComponent,getter_Copies(value));
+  printableItem->SetDisplayValue(value);
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+
+  rv = ProcessSubjectPublicKeyInfo(&mCert->subjectPublicKeyInfo, sequence,
+                                   nssComponent); 
+  if (NS_FAILED(rv))
+    return rv;
+ 
+  SECItem data; 
+  // Is there an issuerUniqueID?
+  if (mCert->issuerID.data != nsnull) {
+    // The issuerID is encoded as a bit string.
+    // The function ProcessRawBytes expects the
+    // length to be in bytes, so let's convert the
+    // length in a temporary SECItem
+    data.data = mCert->issuerID.data;
+    data.len  = mCert->issuerID.len / 8;
+
+    ProcessRawBytes(&data, text);
+    printableItem = new nsNSSASN1PrintableItem();
+    if (printableItem == nsnull)
+      return NS_ERROR_OUT_OF_MEMORY;
+
+    printableItem->SetDisplayValue(text);
+    nssComponent->GetPIPNSSBundleString("CertDumpIssuerUniqueID", text);
+    printableItem->SetDisplayName(text);
+    asn1Objects->AppendElement(printableItem, PR_FALSE);
+  }
+
+  if (mCert->subjectID.data) {
+    // The subjectID is encoded as a bit string.
+    // The function ProcessRawBytes expects the
+    // length to be in bytes, so let's convert the
+    // length in a temporary SECItem
+    data.data = mCert->issuerID.data;
+    data.len  = mCert->issuerID.len / 8;
+
+    ProcessRawBytes(&data, text);
+    printableItem = new nsNSSASN1PrintableItem();
+    if (printableItem == nsnull)
+      return NS_ERROR_OUT_OF_MEMORY;
+
+    printableItem->SetDisplayValue(text);
+    nssComponent->GetPIPNSSBundleString("CertDumpSubjectUniqueID", text);
+    printableItem->SetDisplayName(text);
+    asn1Objects->AppendElement(printableItem, PR_FALSE);
+
+  }
+  if (mCert->extensions) {
+    rv = ProcessExtensions(mCert->extensions, sequence, nssComponent);
+    if (NS_FAILED(rv))
+      return rv;
+  }
+  *retSequence = sequence;
+  NS_ADDREF(*retSequence);  
   return NS_OK;
 }
 
@@ -1143,6 +1492,66 @@ DumpASN1Object(nsIASN1Object *object, unsigned int level)
   }
 }
 #endif
+
+nsresult
+nsNSSCertificate::CreateASN1Struct()
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  nsCOMPtr<nsIASN1Sequence> sequence = new nsNSSASN1Sequence();
+
+  mASN1Structure = sequence; 
+  if (mASN1Structure == nsnull) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsCOMPtr<nsIMutableArray> asn1Objects;
+  sequence->GetASN1Objects(getter_AddRefs(asn1Objects));
+  nsXPIDLCString title;
+  GetWindowTitle(getter_Copies(title));
+  
+  mASN1Structure->SetDisplayName(NS_ConvertUTF8toUCS2(title));
+  // This sequence will be contain the tbsCertificate, signatureAlgorithm,
+  // and signatureValue.
+  nsresult rv;
+  nsCOMPtr<nsINSSComponent> nssComponent(do_GetService(kNSSComponentCID, &rv));
+  if (NS_FAILED(rv))
+    return rv;
+
+  rv = CreateTBSCertificateASN1Struct(getter_AddRefs(sequence),
+                                      nssComponent);
+  if (NS_FAILED(rv))
+    return rv;
+
+  asn1Objects->AppendElement(sequence, PR_FALSE);
+  nsCOMPtr<nsIASN1Sequence> algID;
+
+  rv = ProcessSECAlgorithmID(&mCert->signatureWrap.signatureAlgorithm, 
+                             nssComponent, getter_AddRefs(algID));
+  if (NS_FAILED(rv))
+    return rv;
+  nsString text;
+  nssComponent->GetPIPNSSBundleString("CertDumpSigAlg", text);
+  algID->SetDisplayName(text);
+  asn1Objects->AppendElement(algID, PR_FALSE);
+  nsCOMPtr<nsIASN1PrintableItem>printableItem = new nsNSSASN1PrintableItem();
+  nssComponent->GetPIPNSSBundleString("CertDumpCertSig", text);
+  printableItem->SetDisplayName(text);
+  // The signatureWrap is encoded as a bit string.
+  // The function ProcessRawBytes expects the
+  // length to be in bytes, so let's convert the
+  // length in a temporary SECItem
+  SECItem temp;
+  temp.data = mCert->signatureWrap.signature.data;
+  temp.len  = mCert->signatureWrap.signature.len / 8;
+  text.Truncate();
+  ProcessRawBytes(&temp,text);
+  printableItem->SetDisplayValue(text);
+  asn1Objects->AppendElement(printableItem, PR_FALSE);
+  return NS_OK;
+}
 
 /* readonly attribute nsIASN1Object ASN1Structure; */
 NS_IMETHODIMP 
@@ -1236,126 +1645,3 @@ char* nsNSSCertificate::defaultServerNickname(CERTCertificate* cert)
   return nickname;
 }
 
-#ifndef INET6_ADDRSTRLEN
-#define INET6_ADDRSTRLEN 46
-#endif
-
-// returns TRUE if SAN was used to produce names
-// return FALSE if nothing was produced
-// names => a single name or a list of names
-// nameCount => the number of names returned
-static PRBool
-GetSubjectAltNames(CERTCertificate *nssCert,
-                   nsAString &allNames,
-                   PRUint32 &nameCount)
-{
-  allNames.Truncate();
-  nameCount = 0;
-
-  PRArenaPool *san_arena = nsnull;
-  SECItem altNameExtension = {siBuffer, NULL, 0 };
-  CERTGeneralName *sanNameList = nsnull;
-
-  nsresult rv;
-  rv = CERT_FindCertExtension(nssCert, SEC_OID_X509_SUBJECT_ALT_NAME,
-                              &altNameExtension);
-  if (rv != SECSuccess)
-    return PR_FALSE;
-
-  san_arena = PORT_NewArena(DER_DEFAULT_CHUNKSIZE);
-  if (!san_arena)
-    return PR_FALSE;
-
-  sanNameList = CERT_DecodeAltNameExtension(san_arena, &altNameExtension);
-  if (!sanNameList)
-    return PR_FALSE;
-
-  SECITEM_FreeItem(&altNameExtension, PR_FALSE);
-
-  CERTGeneralName *current = sanNameList;
-  do {
-    nsAutoString name;
-    switch (current->type) {
-      case certDNSName:
-        name.AssignASCII((char*)current->name.other.data, current->name.other.len);
-        if (!allNames.IsEmpty()) {
-          allNames.Append(NS_LITERAL_STRING(" , "));
-        }
-        ++nameCount;
-        allNames.Append(name);
-        break;
-
-      case certIPAddress:
-        {
-          char buf[INET6_ADDRSTRLEN];
-          PRNetAddr addr;
-          if (current->name.other.len == 4) {
-            addr.inet.family = PR_AF_INET;
-            memcpy(&addr.inet.ip, current->name.other.data, current->name.other.len);
-            PR_NetAddrToString(&addr, buf, sizeof(buf));
-            name.AssignASCII(buf);
-          } else if (current->name.other.len == 16) {
-            addr.ipv6.family = PR_AF_INET6;
-            memcpy(&addr.ipv6.ip, current->name.other.data, current->name.other.len);
-            PR_NetAddrToString(&addr, buf, sizeof(buf));
-            name.AssignASCII(buf);
-          } else {
-            /* invalid IP address */
-          }
-          if (!name.IsEmpty()) {
-            if (!allNames.IsEmpty()) {
-              allNames.Append(NS_LITERAL_STRING(" , "));
-            }
-            ++nameCount;
-            allNames.Append(name);
-          }
-          break;
-        }
-
-      default: // all other types of names are ignored
-        break;
-    }
-    current = CERT_GetNextGeneralName(current);
-  } while (current != sanNameList); // double linked
-
-  PORT_FreeArena(san_arena, PR_FALSE);
-  return PR_TRUE;
-}
-
-NS_IMETHODIMP
-nsNSSCertificate::GetValidNames(PRUnichar **aNames, PRUint32 *aCount)
-{
-  NS_ENSURE_ARG_POINTER(aNames);
-  NS_ENSURE_ARG_POINTER(aCount);
-
-  nsNSSShutDownPreventionLock locker;
-  if (isAlreadyShutDown())
-    return NS_ERROR_NOT_AVAILABLE;
-
-  if (!mCert)
-    return NS_ERROR_NOT_AVAILABLE;
-
-  nsString names;
-  PRUint32 nameCount = 0;
-  PRBool useSAN = PR_FALSE;
-  useSAN = GetSubjectAltNames(mCert, names, nameCount);
-
-  if (!useSAN) {
-    char *certName = nsnull;
-    // currently CERT_FindNSStringExtension is not being exported by NSS.
-    // If it gets exported, enable the following line.
-    //   certName = CERT_FindNSStringExtension(mCert, SEC_OID_NS_CERT_EXT_SSL_SERVER_NAME);
-    // However, it has been discussed to treat the extension as obsolete and ignore it.
-    if (!certName)
-      certName = CERT_GetCommonName(&mCert->subject);
-    if (certName) {
-      ++nameCount;
-      names.AssignASCII(certName);
-      PORT_Free(certName);
-    }
-  }
-
-  *aNames = ToNewUnicode(names);
-  *aCount = nameCount;
-  return NS_OK;
-}

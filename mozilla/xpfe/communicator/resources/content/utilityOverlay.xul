@@ -4,7 +4,7 @@
 
 <!DOCTYPE overlay [
 
-<!ENTITY % brandDTD SYSTEM "chrome://branding/locale/brand.dtd">
+<!ENTITY % brandDTD SYSTEM "chrome://global/locale/brand.dtd">
 %brandDTD;
 <!ENTITY % globalRegionDTD SYSTEM "chrome://global-region/locale/region.dtd">
 %globalRegionDTD;
@@ -36,24 +36,18 @@
               label="&direct.label;"
               accesskey="&direct.accesskey;"
               oncommand="setNetworkStatus('0')"/>
-    <menuitem id="network-proxy-wpad"
-              type="radio"
-              name="status"
-              label="&wpad.label;"
-              accesskey="&wpad.accesskey;"
-              oncommand="setNetworkStatus('4')"/>
-    <menuitem id="network-proxy-pac"
-              type="radio"
-              name="status"
-              label="&pac.label;"
-              accesskey="&pac.accesskey;"
-              oncommand="setNetworkStatus('2')"/>
     <menuitem id="network-proxy-manual"
               type="radio"
               name="status"
               label="&manual.label;"
               accesskey="&manual.accesskey;"
               oncommand="setNetworkStatus('1')"/>
+    <menuitem id="network-proxy-pac"
+              type="radio"
+              name="status"
+              label="&pac.label;"
+              accesskey="&pac.accesskey;"
+              oncommand="setNetworkStatus('2')"/>
     <menuseparator/>
     <menuitem label="&proxy.label;"
               accesskey="&proxy.accesskey;"
@@ -172,11 +166,6 @@
             key="key_findTypeLinks"
             accesskey="&findTypeLinksCmd.accesskey;"
             command="cmd_findTypeLinks"/>
-  <menuitem id="textfieldDirection-swap" 
-            label="&bidiSwitchTextDirectionItem.label;"
-            key="key_switchTextDirection"
-            accesskey="&bidiSwitchTextDirectionItem.accesskey;"
-            command="cmd_switchTextDirection"/>
 
   <!-- These key nodes are here only for show. The real bindings come from
        XBL, in platformHTMLBindings.xml. See bugs 57078 and 71779. -->
@@ -196,10 +185,6 @@
   <key id="key_paste"
        key="&pasteCmd.key;"
        modifiers="accel"/>
-  <key id="key_switchTextDirection"
-       command="cmd_switchTextDirection"
-       key="&bidiSwitchTextDirectionItem.commandkey;"
-       modifiers="accel,shift"/>
 
   <commandset id="globalEditMenuItems"
               commandupdater="true"
@@ -225,8 +210,11 @@
   <command id="cmd_copyLink"
            oncommand="goDoCommand('cmd_copyLink')"
            disabled="false"/>
-  <command id="cmd_copyImage"
-           oncommand="goDoCommand('cmd_copyImage')"
+  <command id="cmd_copyImageLocation"
+           oncommand="goDoCommand('cmd_copyImageLocation')"
+           disabled="false"/>
+  <command id="cmd_copyImageContents"
+           oncommand="goDoCommand('cmd_copyImageContents')"
            disabled="false"/>
   <command id="cmd_undo" 
            oncommand="goDoCommand('cmd_undo')"
@@ -250,9 +238,6 @@
            disabled="true"/>
   <command id="cmd_selectAll"
            oncommand="goDoCommand('cmd_selectAll')"
-           disabled="true"/>
-  <command id="cmd_switchTextDirection"
-           oncommand="goDoCommand('cmd_switchTextDirection');"
            disabled="true"/>
   <command id="cmd_findTypeText" 
            oncommand="goDoCommand('cmd_findTypeText')"/>
@@ -285,27 +270,24 @@
   <menu id="menu_Help"
         label="&helpMenu.label;"
         accesskey="&helpMenu.accesskey;">
-<!-- Kaze: disabled because it raised an error in the image properties box
-   -       there's definitely another reason, but we don't need this anyway
-   -    <menupopup id="helpPopup">
-   -      <menuitem accesskey="&releaseCmd.accesskey;"
-   -                label="&releaseCmd.label;"
-   -                id="releaseUrl"
-   -                oncommand="openTopWin('&releaseURL;');"/>
-   -
-   -      <menuseparator id="menu_HelpAboutSeparator"/>
-   -
-   -      <menuitem class="about"
-   -                accesskey="&aboutCommPluginsCmd.accesskey;"
-   -                label="&aboutCommPluginsCmd.label;"
-   -                id="pluginInfo"
-   -                oncommand="openTopWin('about:plugins')"/>
-   -      <menuitem accesskey="&aboutCmd.accesskey;"
-   -                label="&aboutCmd.label;"
-   -                id="aboutName"
-   -                oncommand="goAboutDialog();"/>
-   -    </menupopup>
-   -->
+    <menupopup id="helpPopup">
+      <menuitem accesskey="&releaseCmd.accesskey;"
+                label="&releaseCmd.label;"
+                id="releaseUrl"
+                oncommand="openTopWin('&releaseURL;');"/>
+
+      <menuseparator id="menu_HelpAboutSeparator"/>
+
+      <menuitem class="about"
+                accesskey="&aboutCommPluginsCmd.accesskey;"
+                label="&aboutCommPluginsCmd.label;"
+                id="pluginInfo"
+                oncommand="openTopWin('about:plugins')"/>
+      <menuitem accesskey="&aboutCmd.accesskey;"
+                label="&aboutCmd.label;"
+                id="aboutName"
+                oncommand="goAboutDialog();"/>
+    </menupopup>
   </menu>
         
  <!-- Toolbar boxes -->

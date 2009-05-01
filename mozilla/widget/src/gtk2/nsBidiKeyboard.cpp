@@ -14,9 +14,9 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is mozilla.org code.
+ * The Original Code mozilla.org code.
  *
- * The Initial Developer of the Original Code is Christopher Blizzard
+ * The Initial Developer of the Original Code Christopher Blizzard
  * <blizzard@mozilla.org>.  Portions created by the Initial Developer
  * are Copyright (C) 2001 the Initial Developer. All Rights Reserved.
  *
@@ -37,7 +37,6 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsBidiKeyboard.h"
-#include <gtk/gtk.h>
 
 NS_IMPL_ISUPPORTS1(nsBidiKeyboard, nsIBidiKeyboard)
 
@@ -51,7 +50,8 @@ nsBidiKeyboard::~nsBidiKeyboard()
 
 NS_IMETHODIMP nsBidiKeyboard::IsLangRTL(PRBool *aIsRTL)
 {
-    *aIsRTL = (gdk_keymap_get_direction(NULL) == PANGO_DIRECTION_RTL);
+    *aIsRTL = PR_FALSE;
+    // XXX Insert platform specific code to determine keyboard direction
     return NS_OK;
 }
 

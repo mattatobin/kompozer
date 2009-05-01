@@ -107,7 +107,7 @@ struct ipcCommandModule
     {
         LOG(("got PING\n"));
 
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
+        IPC_SendMsg(client, new ipcmMessagePing());
     }
 
     static void
@@ -115,7 +115,7 @@ struct ipcCommandModule
     {
         LOG(("got CLIENT_HELLO\n"));
 
-        IPC_SendMsg(client, new ipcmMessageClientID(IPCM_GetRequestIndex(rawMsg), client->ID()));
+        IPC_SendMsg(client, new ipcmMessageClientID(client->ID()));
 
         //
         // NOTE: it would almost make sense for this notification to live
@@ -136,9 +136,6 @@ struct ipcCommandModule
         const char *name = msg->Name();
         if (name)
             client->AddName(name);
-
-        // TODO: send better status code (e.g., suppose name already defined for client)
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
     }
 
     static void
@@ -150,9 +147,6 @@ struct ipcCommandModule
         const char *name = msg->Name();
         if (name)
             client->DelName(name);
-
-        // TODO: send better status code (e.g., suppose name not defined for client)
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
     }
 
     static void
@@ -162,9 +156,6 @@ struct ipcCommandModule
 
         ipcMessageCast<ipcmMessageClientAddTarget> msg(rawMsg);
         client->AddTarget(msg->Target());
-
-        // TODO: send better status code (e.g., suppose target already defined for client)
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
     }
 
     static void
@@ -174,9 +165,6 @@ struct ipcCommandModule
 
         ipcMessageCast<ipcmMessageClientDelTarget> msg(rawMsg);
         client->DelTarget(msg->Target());
-
-        // TODO: send better status code (e.g., suppose target not defined for client)
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
     }
 
     static void
@@ -184,22 +172,18 @@ struct ipcCommandModule
     {
         LOG(("got QUERY_CLIENT_BY_NAME\n"));
 
-        PRUint32 requestIndex = IPCM_GetRequestIndex(rawMsg);
-
         ipcMessageCast<ipcmMessageQueryClientByName> msg(rawMsg);
-
         ipcClient *result = IPC_GetClientByName(msg->Name());
         if (result) {
             LOG(("  client exists w/ ID = %u\n", result->ID()));
-            IPC_SendMsg(client, new ipcmMessageClientID(requestIndex, result->ID()));
+            IPC_SendMsg(client, new ipcmMessageClientID(result->ID()));
         }
         else {
             LOG(("  client does not exist\n"));
-            IPC_SendMsg(client, new ipcmMessageResult(requestIndex, IPCM_ERROR_NO_CLIENT));
+            IPC_SendMsg(client, new ipcmMessageError(IPCM_ERROR_CLIENT_NOT_FOUND));
         }
     }
 
-#if 0
     static void
     OnQueryClientInfo(ipcClient *client, const ipcMessage *rawMsg)
     {
@@ -212,7 +196,6 @@ struct ipcCommandModule
             nsID **targets = BuildIDArray(result->Targets());
 
             IPC_SendMsg(client, new ipcmMessageClientInfo(result->ID(),
-                                                          msg->RequestIndex(),
                                                           (const char **) names,
                                                           (const nsID **) targets));
 
@@ -221,10 +204,9 @@ struct ipcCommandModule
         }
         else {
             LOG(("  client does not exist\n"));
-            IPC_SendMsg(client, new ipcmMessageError(IPCM_ERROR_CLIENT_NOT_FOUND, msg->RequestIndex()));
+            IPC_SendMsg(client, new ipcmMessageError(IPCM_ERROR_CLIENT_NOT_FOUND));
         }
     }
-#endif
 
     static void
     OnForward(ipcClient *client, const ipcMessage *rawMsg)
@@ -233,20 +215,14 @@ struct ipcCommandModule
 
         ipcMessageCast<ipcmMessageForward> msg(rawMsg);
 
-        ipcClient *dest = IPC_GetClientByID(msg->ClientID());
+        ipcClient *dest = IPC_GetClientByID(msg->DestClientID());
         if (!dest) {
             LOG(("  destination client not found!\n"));
-            IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_ERROR_NO_CLIENT));
             return;
         }
-        // inform client that its message will be forwarded
-        IPC_SendMsg(client, new ipcmMessageResult(IPCM_GetRequestIndex(rawMsg), IPCM_OK));
-
-        ipcMessage *newMsg = new ipcmMessageForward(IPCM_MSG_PSH_FORWARD,
-                                                    client->ID(),
-                                                    msg->InnerTarget(),
-                                                    msg->InnerData(),
-                                                    msg->InnerDataLen());
+        ipcMessage *newMsg = new ipcMessage(msg->InnerTarget(),
+                                            msg->InnerData(),
+                                            msg->InnerDataLen());
         IPC_SendMsg(dest, newMsg);
     }
 };
@@ -257,29 +233,26 @@ IPCM_HandleMsg(ipcClient *client, const ipcMessage *rawMsg)
     static ipcCommandModule::MsgHandler handlers[] =
     {
         ipcCommandModule::OnPing,
-        ipcCommandModule::OnForward,
+        NULL, // ERROR
         ipcCommandModule::OnClientHello,
+        NULL, // CLIENT_ID
+        NULL, // CLIENT_INFO
         ipcCommandModule::OnClientAddName,
         ipcCommandModule::OnClientDelName,
         ipcCommandModule::OnClientAddTarget,
         ipcCommandModule::OnClientDelTarget,
-        ipcCommandModule::OnQueryClientByName
+        ipcCommandModule::OnQueryClientByName,
+        ipcCommandModule::OnQueryClientInfo,
+        ipcCommandModule::OnForward,
     };
 
-    int type = IPCM_GetType(rawMsg);
-    LOG(("IPCM_HandleMsg [type=%x]\n", type));
+    int type = IPCM_GetMsgType(rawMsg);
+    LOG(("IPCM_HandleMsg [type=%d]\n", type));
 
-    if (!(type & IPCM_MSG_CLASS_REQ)) {
-        LOG(("not a request -- ignoring message\n"));
-        return;
+    if (type < IPCM_MSG_TYPE_UNKNOWN) {
+        if (handlers[type]) {
+            ipcCommandModule::MsgHandler handler = handlers[type];
+            handler(client, rawMsg);
+        }
     }
-
-    type &= ~IPCM_MSG_CLASS_REQ;
-    type--;
-    if (type < 0 || type >= (int) (sizeof(handlers)/sizeof(handlers[0]))) {
-        LOG(("unknown request -- ignoring message\n")); 
-        return;
-    }
-
-    (handlers[type])(client, rawMsg);
 }

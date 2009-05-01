@@ -1,6 +1,6 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: MPL 1.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
  * 1.1 (the "License"); you may not use this file except in compliance with
@@ -27,18 +27,6 @@
  *   Terry Hayes <thayes@netscape.com>
  *   Kai Engert <kaie@netscape.com>
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
  * ***** END LICENSE BLOCK ***** */
 
 #ifdef MOZ_LOGGING
@@ -62,9 +50,8 @@
 #include "nsIDocShell.h"
 #include "nsIDocumentViewer.h"
 #include "nsIDocument.h"
-#include "nsIPrincipal.h"
 #include "nsIDOMElement.h"
-#include "nsPIDOMWindow.h"
+#include "nsIDOMWindowInternal.h"
 #include "nsIContent.h"
 #include "nsIWebProgress.h"
 #include "nsIChannel.h"
@@ -79,10 +66,9 @@
 #include "nsIFormSubmitObserver.h"
 #include "nsISecurityWarningDialogs.h"
 #include "nsIProxyObjectManager.h"
-#include "nsNetUtil.h"
 #include "nsCRT.h"
 
-#define SECURITY_STRING_BUNDLE_URL "chrome://pipnss/locale/security.properties"
+#define SECURITY_STRING_BUNDLE_URL "chrome://necko/locale/security.properties"
 
 #define IS_SECURE(state) ((state & 0xFFFF) == STATE_IS_SECURE)
 
@@ -159,6 +145,12 @@ nsSecureBrowserUIImpl::nsSecureBrowserUIImpl()
 
 nsSecureBrowserUIImpl::~nsSecureBrowserUIImpl()
 {
+  nsresult rv;
+  // remove self from form post notifications:
+  nsCOMPtr<nsIObserverService> svc(do_GetService("@mozilla.org/observer-service;1", &rv));
+  if (NS_SUCCEEDED(rv)) {
+    svc->RemoveObserver(this, NS_FORMSUBMIT_SUBJECT);
+  }
   if (mTransferringRequests.ops) {
     PL_DHashTableFinish(&mTransferringRequests);
     mTransferringRequests.ops = nsnull;
@@ -178,52 +170,30 @@ NS_IMETHODIMP
 nsSecureBrowserUIImpl::Init(nsIDOMWindow *window)
 {
   PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-         ("SecureUI:%p: Init: mWindow: %p, window: %p\n", this, mWindow.get(),
-          window));
+         ("SecureUI:%p: Init\n", this));
 
-  if (!window) {
-    NS_WARNING("Null window passed to nsSecureBrowserUIImpl::Init()");
-    return NS_ERROR_INVALID_ARG;
-  }
-
-  if (mWindow) {
-    NS_WARNING("Trying to init an nsSecureBrowserUIImpl twice");
-    return NS_ERROR_ALREADY_INITIALIZED;
-  }
-  
   nsresult rv = NS_OK;
   mWindow = window;
 
   nsCOMPtr<nsIStringBundleService> service(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
   if (NS_FAILED(rv)) return rv;
   
-  // We do not need to test for mStringBundle here...
-  // Anywhere we use it, we will test before using.  Some
-  // embedded users of PSM may want to reuse our
-  // nsSecureBrowserUIImpl implementation without the
-  // bundle.
-  service->CreateBundle(SECURITY_STRING_BUNDLE_URL, getter_AddRefs(mStringBundle));
-
+  rv = service->CreateBundle(SECURITY_STRING_BUNDLE_URL,
+                             getter_AddRefs(mStringBundle));
+  if (NS_FAILED(rv)) return rv;
+  
   // hook up to the form post notifications:
   nsCOMPtr<nsIObserverService> svc(do_GetService("@mozilla.org/observer-service;1", &rv));
   if (NS_SUCCEEDED(rv)) {
     rv = svc->AddObserver(this, NS_FORMSUBMIT_SUBJECT, PR_TRUE);
   }
   
-  nsCOMPtr<nsIScriptGlobalObject> sgo(do_QueryInterface(mWindow));
-  if (!sgo) return NS_ERROR_FAILURE;
-
-  nsIDocShell *docShell = sgo->GetDocShell();
-
-  // The Docshell will own the SecureBrowserUI object
-  if (!docShell)
-    return NS_ERROR_FAILURE;
-
-  docShell->SetSecurityUI(this);
-
   /* GetWebProgress(mWindow) */
   // hook up to the webprogress notifications.
-  nsCOMPtr<nsIWebProgress> wp(do_GetInterface(docShell));
+  nsCOMPtr<nsIScriptGlobalObject> sgo(do_QueryInterface(mWindow));
+  if (!sgo) return NS_ERROR_FAILURE;
+  
+  nsCOMPtr<nsIWebProgress> wp(do_GetInterface(sgo->GetDocShell()));
   if (!wp) return NS_ERROR_FAILURE;
   /* end GetWebProgress */
   
@@ -272,12 +242,7 @@ nsSecureBrowserUIImpl::GetState(PRUint32* aState)
 NS_IMETHODIMP
 nsSecureBrowserUIImpl::GetTooltipText(nsAString& aText)
 {
-  if (mPreviousSecurityState == lis_mixed_security)
-  {
-    GetBundleString(NS_LITERAL_STRING("SecurityButtonMixedContentTooltipText").get(),
-                    aText);
-  }
-  else if (!mInfoTooltip.IsEmpty())
+  if (!mInfoTooltip.IsEmpty())
   {
     aText = mInfoTooltip;
   }
@@ -360,31 +325,10 @@ nsSecureBrowserUIImpl::Notify(nsIContent* formNode,
   nsCOMPtr<nsIDocument> document = formNode->GetDocument();
   if (!document) return NS_OK;
 
-  nsIPrincipal *principal = document->GetPrincipal();
+  nsIURI *formURL = document->GetBaseURI();
+
+  nsCOMPtr<nsIDOMWindow> postingWindow(do_QueryInterface(document->GetScriptGlobalObject()));
   
-  if (!principal)
-  {
-    *cancelSubmit = PR_TRUE;
-    return NS_OK;
-  }
-
-  nsCOMPtr<nsIURI> formURL;
-  if (NS_FAILED(principal->GetURI(getter_AddRefs(formURL))) ||
-      !formURL)
-  {
-    formURL = document->GetDocumentURI();
-  }
-
-  nsCOMPtr<nsIDOMWindow> postingWindow =
-    do_QueryInterface(document->GetWindow());
-  // We can't find this document's window, cancel it.
-  if (!postingWindow)
-  {
-    NS_WARNING("If you see this and can explain why it should be allowed, note in Bug 332324");
-    *cancelSubmit = PR_TRUE;
-    return NS_OK;
-  }
-
   PRBool isChild;
   IsChildOfDomWindow(mWindow, postingWindow, &isChild);
   
@@ -429,79 +373,6 @@ void nsSecureBrowserUIImpl::ResetStateTracking()
   PL_DHashTableInit(&mTransferringRequests, &gMapOps, nsnull,
                     sizeof(RequestHashEntry), 16);
 }
-
-nsresult
-nsSecureBrowserUIImpl::EvaluateAndUpdateSecurityState(nsIRequest *aRequest)
-{
-  nsCOMPtr<nsIChannel> channel(do_QueryInterface(aRequest));
-
-  if (!channel) {
-    mNewToplevelSecurityState = nsIWebProgressListener::STATE_IS_INSECURE;
-  } else {
-    mNewToplevelSecurityState = GetSecurityStateFromChannel(channel);
-
-    PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-           ("SecureUI:%p: OnStateChange: remember mNewToplevelSecurityState => %x\n", this,
-            mNewToplevelSecurityState));
-
-    // Get SSL Status information if possible
-    nsCOMPtr<nsISupports> info;
-    channel->GetSecurityInfo(getter_AddRefs(info));
-    nsCOMPtr<nsISSLStatusProvider> sp = do_QueryInterface(info);
-    if (sp) {
-      // Ignore result
-      sp->GetSSLStatus(getter_AddRefs(mSSLStatus));
-    }
-
-    if (info) {
-      nsCOMPtr<nsITransportSecurityInfo> secInfo(do_QueryInterface(info));
-      if (secInfo) {
-        secInfo->GetShortSecurityDescription(getter_Copies(mInfoTooltip));
-      }
-    }
-  }
-
-  // assume mNewToplevelSecurityState was set in this scope!
-  // see code that is directly above
-
-  mNewToplevelSecurityStateKnown = PR_TRUE;
-  return UpdateSecurityState(aRequest);
-}
-
-void
-nsSecureBrowserUIImpl::UpdateSubrequestMembers(nsIRequest *aRequest)
-{
-  // For wyciwyg channels in subdocuments we only update our
-  // subrequest state members.
-  PRUint32 reqState = nsIWebProgressListener::STATE_IS_INSECURE;
-  nsCOMPtr<nsIChannel> channel(do_QueryInterface(aRequest));
-
-  if (channel) {
-    reqState = GetSecurityStateFromChannel(channel);
-  }
-
-  if (reqState & STATE_IS_SECURE) {
-    if (reqState & STATE_SECURE_LOW || reqState & STATE_SECURE_MED) {
-      PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-             ("SecureUI:%p: OnStateChange: subreq LOW\n", this));
-      ++mSubRequestsLowSecurity;
-    } else {
-      PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-             ("SecureUI:%p: OnStateChange: subreq HIGH\n", this));
-      ++mSubRequestsHighSecurity;
-    }
-  } else if (reqState & STATE_IS_BROKEN) {
-    PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-           ("SecureUI:%p: OnStateChange: subreq BROKEN\n", this));
-    ++mSubRequestsBrokenSecurity;
-  } else {
-    PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-           ("SecureUI:%p: OnStateChange: subreq INSECURE\n", this));
-    ++mSubRequestsNoSecurity;
-  }
-}
-
-
 
 NS_IMETHODIMP
 nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
@@ -639,13 +510,11 @@ nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
   }
 
 #ifdef PR_LOGGING
-  if (PR_LOG_TEST(gSecureDocLog, PR_LOG_DEBUG)) {
-    nsXPIDLCString reqname;
-    aRequest->GetName(reqname);
-    PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
-           ("SecureUI:%p: %p %p OnStateChange %x %s\n", this, aWebProgress,
-            aRequest, aProgressStateFlags, reqname.get()));
-  }
+  nsXPIDLCString reqname;
+  aRequest->GetName(reqname);
+  PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+         ("SecureUI:%p: %p %p OnStateChange %x %s\n", this, aWebProgress, aRequest,
+            aProgressStateFlags, reqname.get()));
 #endif
 
   nsCOMPtr<nsIChannel> channel(do_QueryInterface(aRequest));
@@ -861,14 +730,6 @@ nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
     }
   }
 
-  if (loadFlags & nsIChannel::LOAD_RETARGETED_DOCUMENT_URI)
-  {
-    // The original consumer (this) is no longer the target of the load.
-    // Ignore any events with this flag, do not allow them to update
-    // our secure UI state.
-    return NS_OK;
-  }
-
   if (aProgressStateFlags & STATE_START
       &&
       aProgressStateFlags & STATE_IS_REQUEST
@@ -926,11 +787,50 @@ nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
 
     --mDocumentRequestsInProgress;
 
-    if (requestHasTransferedData) {
-      // Data has been transferred for the single toplevel
-      // request. Evaluate the security state.
+    {
+      PRBool MustEvaluate = PR_TRUE;
 
-      return EvaluateAndUpdateSecurityState(aRequest);
+      if (!requestHasTransferedData)
+      {
+        // No data has been transfered for the single toplevel request.
+        MustEvaluate = PR_FALSE;
+      }
+
+      if (MustEvaluate)
+      {
+        if (channel) {
+          mNewToplevelSecurityState = GetSecurityStateFromChannel(channel);
+
+          PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+                 ("SecureUI:%p: OnStateChange: remember mNewToplevelSecurityState => %x\n", this,
+                  mNewToplevelSecurityState));
+
+          // Get SSL Status information if possible
+          nsCOMPtr<nsISupports> info;
+          channel->GetSecurityInfo(getter_AddRefs(info));
+          nsCOMPtr<nsISSLStatusProvider> sp = do_QueryInterface(info);
+          if (sp) {
+            // Ignore result
+            sp->GetSSLStatus(getter_AddRefs(mSSLStatus));
+          }
+
+          if (info) {
+            nsCOMPtr<nsITransportSecurityInfo> secInfo(do_QueryInterface(info));
+            if (secInfo) {
+                secInfo->GetShortSecurityDescription(getter_Copies(mInfoTooltip));
+            }
+          }
+        }
+        else {
+          mNewToplevelSecurityState = nsIWebProgressListener::STATE_IS_INSECURE;
+        }
+
+        // assume mNewToplevelSecurityState was set in this scope!
+        // see code that is directly above
+        
+        mNewToplevelSecurityStateKnown = PR_TRUE;
+        return UpdateSecurityState(aRequest);
+      }
     }
     
     return NS_OK;
@@ -949,7 +849,39 @@ nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
 
     if (requestHasTransferedData)
     {  
-      UpdateSubrequestMembers(aRequest);
+      PRUint32 reqState = nsIWebProgressListener::STATE_IS_INSECURE;
+
+      if (channel) {
+        reqState = GetSecurityStateFromChannel(channel);
+      }
+
+      if (reqState & STATE_IS_SECURE)
+      {
+        if (reqState & STATE_SECURE_LOW || reqState & STATE_SECURE_MED)
+        {
+          PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+           ("SecureUI:%p: OnStateChange: subreq LOW\n", this));
+          ++mSubRequestsLowSecurity;
+        }
+        else
+        {
+          PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+           ("SecureUI:%p: OnStateChange: subreq HIGH\n", this));
+          ++mSubRequestsHighSecurity;
+        }
+      }
+      else if (reqState & STATE_IS_BROKEN)
+      {
+        PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+         ("SecureUI:%p: OnStateChange: subreq BROKEN\n", this));
+        ++ mSubRequestsBrokenSecurity;
+      }
+      else
+      {
+        PR_LOG(gSecureDocLog, PR_LOG_DEBUG,
+         ("SecureUI:%p: OnStateChange: subreq INSECURE\n", this));
+        ++mSubRequestsNoSecurity;
+      }
       
       // Care for the following scenario:
       // A new top level document load might have already started,
@@ -974,15 +906,18 @@ nsSecureBrowserUIImpl::OnStateChange(nsIWebProgress* aWebProgress,
 void nsSecureBrowserUIImpl::ObtainEventSink(nsIChannel *channel)
 {
   if (!mToplevelEventSink)
-    NS_QueryNotificationCallbacks(channel, mToplevelEventSink);
+  {
+    nsCOMPtr<nsIInterfaceRequestor> requestor;
+    channel->GetNotificationCallbacks(getter_AddRefs(requestor));
+    if (requestor)
+      mToplevelEventSink = do_GetInterface(requestor);
+  }
+
 }
 
 nsresult nsSecureBrowserUIImpl::UpdateSecurityState(nsIRequest* aRequest)
 {
   lockIconState newSecurityState;
-
-  PRBool showWarning = PR_FALSE;
-  lockIconState warnSecurityState;
 
   if (mNewToplevelSecurityState & STATE_IS_SECURE)
   {
@@ -1077,7 +1012,7 @@ nsresult nsSecureBrowserUIImpl::UpdateSecurityState(nsIRequest* aRequest)
       high        high
     */
 
-    showWarning = PR_TRUE;
+    PRBool showWarning = PR_TRUE;
     
     switch (mPreviousSecurityState)
     {
@@ -1100,7 +1035,25 @@ nsresult nsSecureBrowserUIImpl::UpdateSecurityState(nsIRequest* aRequest)
     
     if (showWarning)
     {
-      warnSecurityState = newSecurityState;
+      switch (newSecurityState)
+      {
+        case lis_no_security:
+        case lis_broken_security:
+          ConfirmLeavingSecure();
+          break;
+
+        case lis_mixed_security:
+          ConfirmMixedMode();
+          break;
+
+        case lis_low_security:
+          ConfirmEnteringWeak();
+          break;
+
+        case lis_high_security:
+          ConfirmEnteringSecure();
+          break;
+      }
     }
 
     mPreviousSecurityState = newSecurityState;
@@ -1155,29 +1108,6 @@ nsresult nsSecureBrowserUIImpl::UpdateSecurityState(nsIRequest* aRequest)
 
   }
 
-  if (showWarning)
-  {
-    switch (warnSecurityState)
-    {
-      case lis_no_security:
-      case lis_broken_security:
-        ConfirmLeavingSecure();
-        break;
-
-      case lis_mixed_security:
-        ConfirmMixedMode();
-        break;
-
-      case lis_low_security:
-        ConfirmEnteringWeak();
-        break;
-
-      case lis_high_security:
-        ConfirmEnteringSecure();
-        break;
-    }
-  }
-
   return NS_OK; 
 }
 
@@ -1202,44 +1132,6 @@ nsSecureBrowserUIImpl::OnLocationChange(nsIWebProgress* aWebProgress,
   }
 
   mCurrentURI = aLocation;
-
-  // If the location change does not have a corresponding request, then we
-  // assume that it does not impact the security state.
-  if (!aRequest)
-    return NS_OK;
-
-  // The location bar has changed, so we must update the security state.  The
-  // only concern with doing this here is that a page may transition from being
-  // reported as completely secure to being reported as partially secure
-  // (mixed).  This may be confusing for users, and it may bother users who
-  // like seeing security dialogs.  However, it seems prudent given that page
-  // loading may never end in some edge cases (perhaps by a site with malicious
-  // intent).
-
-  nsCOMPtr<nsIDOMWindow> windowForProgress;
-  aWebProgress->GetDOMWindow(getter_AddRefs(windowForProgress));
-
-  if (windowForProgress.get() == mWindow.get()) {
-    // For toplevel channels, update the security state right away.
-    return EvaluateAndUpdateSecurityState(aRequest);
-  }
-
-  // For channels in subdocuments we only update our subrequest state members.
-  UpdateSubrequestMembers(aRequest);
-
-  // Care for the following scenario:
-
-  // A new toplevel document load might have already started, but the security
-  // state of the new toplevel document might not yet be known.
-  // 
-  // At this point, we are learning about the security state of a sub-document.
-  // We must not update the security state based on the sub content, if the new
-  // top level state is not yet known.
-  //
-  // We skip updating the security state in this case.
-
-  if (mNewToplevelSecurityStateKnown)
-    return UpdateSecurityState(aRequest);
 
   return NS_OK;
 }
@@ -1294,23 +1186,12 @@ nsSecureBrowserUIImpl::GetSSLStatus(nsISupports** _result)
 nsresult
 nsSecureBrowserUIImpl::IsURLHTTPS(nsIURI* aURL, PRBool* value)
 {
-  *value = PR_FALSE;
+	*value = PR_FALSE;
 
-  if (!aURL)
-    return NS_OK;
+	if (!aURL)
+		return NS_OK;
 
   return aURL->SchemeIs("https", value);
-}
-
-nsresult
-nsSecureBrowserUIImpl::IsURLJavaScript(nsIURI* aURL, PRBool* value)
-{
-  *value = PR_FALSE;
-
-  if (!aURL)
-    return NS_OK;
-
-  return aURL->SchemeIs("javascript", value);
 }
 
 void
@@ -1324,9 +1205,9 @@ nsSecureBrowserUIImpl::GetBundleString(const PRUnichar* name,
       outString = ptrv;
     else
       outString.SetLength(0);
-
+    
     nsMemory::Free(ptrv);
-
+    
   } else {
     outString.SetLength(0);
   }
@@ -1335,7 +1216,7 @@ nsSecureBrowserUIImpl::GetBundleString(const PRUnichar* name,
 nsresult
 nsSecureBrowserUIImpl::CheckPost(nsIURI *formURL, nsIURI *actionURL, PRBool *okayToPost)
 {
-  PRBool formSecure, actionSecure, actionJavaScript;
+  PRBool formSecure,actionSecure;
   *okayToPost = PR_TRUE;
 
   nsresult rv = IsURLHTTPS(formURL, &formSecure);
@@ -1345,30 +1226,21 @@ nsSecureBrowserUIImpl::CheckPost(nsIURI *formURL, nsIURI *actionURL, PRBool *oka
   rv = IsURLHTTPS(actionURL, &actionSecure);
   if (NS_FAILED(rv))
     return rv;
-
-  rv = IsURLJavaScript(actionURL, &actionJavaScript);
-  if (NS_FAILED(rv))
-    return rv;
-
+  
   // If we are posting to a secure link, all is okay.
   // It doesn't matter whether the currently viewed page is secure or not,
   // because the data will be sent to a secure URL.
   if (actionSecure) {
     return NS_OK;
   }
-
-  // Action is a JavaScript call, not an actual post. That's okay too.
-  if (actionJavaScript) {
-    return NS_OK;
-  }
-
+    
   // posting to insecure webpage from a secure webpage.
   if (formSecure) {
     *okayToPost = ConfirmPostToInsecureFromSecure();
   } else {
     *okayToPost = ConfirmPostToInsecure();
   }
-
+  
   return NS_OK;
 }
 
@@ -1413,10 +1285,6 @@ NS_IMETHODIMP nsUIContext::GetInterface(const nsIID & uuid, void * *result)
 
     rv = internal->GetPrompter(&prompt);
     *result = prompt;
-  } else if (uuid.Equals(NS_GET_IID(nsIDOMWindow))) {
-    *result = mWindow;
-    NS_ADDREF ((nsISupports*) *result);
-    rv = NS_OK;
   } else {
     rv = NS_ERROR_NO_INTERFACE;
   }

@@ -43,8 +43,6 @@
 /* Data conversion between native and JavaScript types. */
 
 #include "xpcprivate.h"
-#include "nsString.h"
-#include "XPCNativeWrapper.h"
 
 //#define STRICT_CHECK_OF_UNICODE
 #ifdef STRICT_CHECK_OF_UNICODE
@@ -392,18 +390,19 @@ XPCConvert::NativeData2JS(XPCCallContext& ccx, jsval* d, const void* s,
                 
                 if(!cString->IsVoid()) 
                 {
-                    PRUint32 len;
-                    jschar *p = (jschar *)UTF8ToNewUnicode(*cString, &len);
+                    // XXX There is an extra copy happening here.  When the
+                    // UTF8String implementation lands, it should contain
+                    // a mechanism to avoid this extra copy.  Jag will change
+                    // this code to use that new mechanism when he lands the
+                    // UTF8String changes.
+                    NS_ConvertUTF8toUCS2 unicodeString(*cString);
 
-                    if(!p)
-                        return JS_FALSE;
+                    JSString* jsString = JS_NewUCStringCopyN(cx,
+                                         (jschar*)unicodeString.get(),
+                                         unicodeString.Length());
 
-                    JSString* jsString = JS_NewUCString(cx, p, len);
-
-                    if(!jsString) {
-                        nsMemory::Free(p); 
+                    if(!jsString)
                         return JS_FALSE; 
-                    }
 
                     *d = STRING_TO_JSVAL(jsString);
                 }
@@ -462,15 +461,9 @@ XPCConvert::NativeData2JS(XPCCallContext& ccx, jsval* d, const void* s,
                     }
                     // else...
                     
-                    // XXX The OBJ_IS_NOT_GLOBAL here is not really right. In
-                    // fact, this code is depending on the fact that the
-                    // global object will not have been collected, and
-                    // therefore this NativeInterface2JSObject will not end up
-                    // creating a new XPCNativeScriptableShared.
                     nsCOMPtr<nsIXPConnectJSObjectHolder> holder;
                     if(!NativeInterface2JSObject(ccx, getter_AddRefs(holder),
-                                                 iface, iid, scope, PR_TRUE,
-                                                 OBJ_IS_NOT_GLOBAL, pErr))
+                                                 iface, iid, scope, pErr))
                         return JS_FALSE;
 
                     if(holder)
@@ -478,11 +471,6 @@ XPCConvert::NativeData2JS(XPCCallContext& ccx, jsval* d, const void* s,
                         JSObject* jsobj;
                         if(NS_FAILED(holder->GetJSObject(&jsobj)))
                             return JS_FALSE;
-#ifdef DEBUG
-                        if(!JS_GetParent(ccx, jsobj))
-                            NS_ASSERTION(JS_GET_CLASS(ccx, jsobj)->flags & JSCLASS_IS_GLOBAL,
-                                         "Why did we recreate this wrapper?");
-#endif
                         *d = OBJECT_TO_JSVAL(jsobj);
                     }
                 }
@@ -676,8 +664,8 @@ XPCConvert::JSData2Native(XPCCallContext& ccx, void* d, jsval s,
         }
         case nsXPTType::T_DOMSTRING:
         {
-            static const PRUnichar EMPTY_STRING[] = { '\0' };
-            static const PRUnichar VOID_STRING[] = { 'u', 'n', 'd', 'e', 'f', 'i', 'n', 'e', 'd', '\0' };
+            static const NS_NAMED_LITERAL_STRING(sEmptyString, "");
+            static const NS_NAMED_LITERAL_STRING(sVoidString, "undefined");
 
             const PRUnichar* chars;
             JSString* str = nsnull;
@@ -688,12 +676,12 @@ XPCConvert::JSData2Native(XPCCallContext& ccx, void* d, jsval s,
             {
                 if(isDOMString) 
                 {
-                    chars  = VOID_STRING;
-                    length = NS_ARRAY_LENGTH(VOID_STRING) - 1;
+                    chars  = sVoidString.get();
+                    length = sVoidString.Length();
                 }
                 else
                 {
-                    chars = EMPTY_STRING;
+                    chars = sEmptyString.get();
                     length = 0;
                 }
             }
@@ -715,7 +703,7 @@ XPCConvert::JSData2Native(XPCCallContext& ccx, void* d, jsval s,
                 else
                 {
                     str = nsnull;
-                    chars = EMPTY_STRING;
+                    chars = sEmptyString.get();
                 }
             }
 
@@ -1020,10 +1008,7 @@ XPCConvert::NativeInterface2JSObject(XPCCallContext& ccx,
                                      nsIXPConnectJSObjectHolder** dest,
                                      nsISupports* src,
                                      const nsID* iid,
-                                     JSObject* scope,
-                                     PRBool allowNativeWrapper,
-                                     PRBool isGlobal,
-                                     nsresult* pErr)
+                                     JSObject* scope, nsresult* pErr)
 {
     NS_ASSERTION(dest, "bad param");
     NS_ASSERTION(iid, "bad param");
@@ -1049,8 +1034,6 @@ XPCConvert::NativeInterface2JSObject(XPCCallContext& ccx,
     // is this a wrapped JS object?
     if(nsXPCWrappedJSClass::IsWrappedJS(src))
     {
-        NS_ASSERTION(!isGlobal, "The global object must be native");
-
         // verify that this wrapper is for the right interface
         nsCOMPtr<nsISupports> wrapper;
         if(NS_FAILED(src->QueryInterface(*iid,(void**)getter_AddRefs(wrapper))))
@@ -1074,107 +1057,11 @@ XPCConvert::NativeInterface2JSObject(XPCCallContext& ccx,
 
         XPCWrappedNative* wrapper;
         nsresult rv = XPCWrappedNative::GetNewOrUsed(ccx, src, xpcscope,
-                                                     iface, isGlobal,
-                                                     &wrapper);
+                                                     iface, &wrapper);
         if(pErr)
             *pErr = rv;
         if(NS_SUCCEEDED(rv) && wrapper)
         {
-            if (allowNativeWrapper && wrapper->GetScope() != xpcscope)
-            {
-                // Cross scope access detected. Check if chrome code
-                // is accessing non-chrome objects, and if so, wrap
-                // the XPCWrappedNative with an XPCNativeWrapper to
-                // prevent user-defined properties from shadowing DOM
-                // properties from chrome code.
-
-                // printf("Wrapped native accessed across scope boundary\n");
-
-                JSScript* script = nsnull;
-                JSObject* callee = nsnull;
-                if(ccx.GetXPCContext()->CallerTypeIsJavaScript())
-                {
-                    // Called from JS.  We're going to hand the resulting
-                    // JSObject to said JS, so look for the script we want on
-                    // the stack.
-                    JSContext* cx = ccx;
-                    JSStackFrame* fp = cx->fp;
-                    while(fp)
-                    {
-                        script = fp->script;
-                        if(script)
-                        {
-                            callee = fp->callee;
-                            break;
-                        }
-                        fp = fp->down;
-                    }
-                }
-                else if(ccx.GetXPCContext()->CallerTypeIsNative())
-                {
-                    callee = ccx.GetCallee();
-                    if(callee && JS_ObjectIsFunction(ccx, callee))
-                    {
-                        // Called from c++, and calling out to |callee|, which
-                        // is a JS function object.  Look for the script for
-                        // this function.
-                        JSFunction* fun =
-                            (JSFunction*) JS_GetPrivate(ccx, callee);
-                        NS_ASSERTION(fun,
-                                     "Must have JSFunction for a Function "
-                                     "object");
-                        script = JS_GetFunctionScript(ccx, fun);
-                    }
-                    else
-                    {
-                        // Else we don't know whom we're calling, so don't
-                        // create XPCNativeWrappers.
-                        callee = nsnull;
-                    }
-                }
-                // else don't create XPCNativeWrappers, since we have
-                // no idea what's calling what here.
-                
-                uint32 flags = script ? JS_GetScriptFilenameFlags(script) : 0;
-                NS_ASSERTION(flags != JSFILENAME_NULL, "null script filename");
-
-                if((flags & JSFILENAME_SYSTEM) &&
-                   !JS_IsSystemObject(ccx, wrapper->GetFlatJSObject()))
-                {
-#ifdef DEBUG_XPCNativeWrapper
-                    {
-                        char *s = wrapper->ToString(ccx);
-                        printf("Content accessed from chrome, wrapping wrapper (%s) in XPCNativeWrapper\n", s);
-                        if (s)
-                            JS_smprintf_free(s);
-                    }
-#endif
-
-                    JSObject *nativeWrapper =
-                        XPCNativeWrapper::GetNewOrUsed(ccx, wrapper, callee, script);
-
-                    if (nativeWrapper)
-                    {
-                        XPCJSObjectHolder *objHolder =
-                            XPCJSObjectHolder::newHolder(ccx, nativeWrapper);
-
-                        if (objHolder)
-                        {
-                            NS_ADDREF(objHolder);
-                            NS_RELEASE(wrapper);
-
-                            *dest = objHolder;
-                            return JS_TRUE;
-                        }
-                    }
-
-                    // Out of memory or other failure that already
-                    // threw a JS exception.
-                    NS_RELEASE(wrapper);
-                    return JS_FALSE;
-                }
-            }
-
             *dest = NS_STATIC_CAST(nsIXPConnectJSObjectHolder*, wrapper);
             return JS_TRUE;
         }
@@ -1229,12 +1116,6 @@ XPCConvert::JSObject2NativeInterface(XPCCallContext& ccx,
         }
         // else...
         
-        // XXX E4X breaks the world. Don't try wrapping E4X objects!
-        // This hack can be removed (or changed accordingly) when the
-        // DOM <-> E4X bindings are complete, see bug 270553
-        if(JS_TypeOfValue(cx, OBJECT_TO_JSVAL(src)) == JSTYPE_XML)
-            return JS_FALSE;
-
         // Does the JSObject have 'nsISupportness'?
         // XXX hmm, I wonder if this matters anymore with no 
         // oldstyle DOM objects around.
@@ -1507,13 +1388,10 @@ XPCConvert::JSErrorToXPCException(XPCCallContext& ccx,
         }
         else
         {
-            bestMessage.AssignLiteral("JavaScript Error");
+            bestMessage = NS_LITERAL_STRING("JavaScript Error");
         }
 
         data = new nsScriptError();
-        if(!data)
-            return NS_ERROR_OUT_OF_MEMORY;
-
         NS_ADDREF(data);
         data->Init(bestMessage.get(),
                    NS_ConvertASCIItoUCS2(report->filename).get(),
@@ -1526,13 +1404,16 @@ XPCConvert::JSErrorToXPCException(XPCCallContext& ccx,
 
     if(data)
     {
-        nsCAutoString formattedMsg;
-        data->ToString(formattedMsg);
+        char* formattedMsg;
+        if(NS_FAILED(data->ToString(&formattedMsg)))
+            formattedMsg = nsnull;
 
         rv = ConstructException(NS_ERROR_XPC_JAVASCRIPT_ERROR_WITH_DETAILS,
-                                formattedMsg.get(), ifaceName, methodName, data,
+                                formattedMsg, ifaceName, methodName, data,
                                 exceptn);
 
+        if(formattedMsg)
+            nsMemory::Free(formattedMsg);
         NS_RELEASE(data);
     }
     else
@@ -1683,8 +1564,7 @@ XPCConvert::NativeArray2JS(XPCCallContext& ccx,
         *pErr = NS_ERROR_XPC_BAD_CONVERT_NATIVE;
 
     JSUint32 i;
-    jsval current = JSVAL_NULL;
-    AUTO_MARK_JSVAL(ccx, &current);
+    jsval current;
 
 #define POPULATE(_t)                                                         \
     PR_BEGIN_MACRO                                                           \

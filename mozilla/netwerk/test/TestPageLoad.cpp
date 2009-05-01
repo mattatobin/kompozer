@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,20 +22,19 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "TestCommon.h"
 #include "nsNetUtil.h"
 #include "nsIEventQueueService.h"
 #include "nsIServiceManager.h"
@@ -68,7 +67,7 @@ nsresult auxLoad(char *uriBuf);
 static NS_DEFINE_CID(kEventQueueServiceCID, NS_EVENTQUEUESERVICE_CID);
 static nsIEventQueue* gEventQ = nsnull;
 static PRBool gKeepRunning = PR_FALSE;
-static nsCString globalStream;
+static nsString globalStream;
 //static char urlBuf[256];
 static nsCOMPtr<nsIURI> baseURI;
 static nsCOMPtr<nsISupportsArray> uriList;
@@ -93,7 +92,7 @@ static NS_METHOD streamParse (nsIInputStream* in,
   char *tmp;
 
   if(!globalStream.IsEmpty()) {
-    globalStream.Append(fromRawSegment);
+    globalStream.AppendWithConversion(fromRawSegment);
     tmp = ToNewCString(globalStream);
     //printf("\n>>NOW:\n^^^^^\n%s\n^^^^^^^^^^^^^^", tmp);
   } else {
@@ -255,11 +254,9 @@ MyNotifications::OnStatus(nsIRequest *req, nsISupports *ctx,
 
 NS_IMETHODIMP
 MyNotifications::OnProgress(nsIRequest *req, nsISupports *ctx,
-                            PRUint64 progress, PRUint64 progressMax)
+                            PRUint32 progress, PRUint32 progressMax)
 {
-    // char buf[100];
-    // PR_snprintf(buf, sizeof(buf), "%llu/%llu\n", progress, progressMax);
-    // printf("%s", buf);
+    //printf("progress: %u/%u\n", progress, progressMax);
     return NS_OK;
 }
 
@@ -276,7 +273,7 @@ MyNotifications::OnProgress(nsIRequest *req, nsISupports *ctx,
 int getStrLine(const char *src, char *str, int ind, int max) {
   char c = src[ind];
   int i=0;
-  globalStream.AssignLiteral("\0");
+  globalStream.Assign(NS_LITERAL_STRING("\0"));
   while(c!='\n' && c!='\0' && i<max) {
     str[i] = src[ind];
     i++; ind++;
@@ -284,7 +281,7 @@ int getStrLine(const char *src, char *str, int ind, int max) {
   }
   str[i]='\0';
   if(i==max || c=='\0') {
-    globalStream.Assign(str);
+    globalStream.AssignWithConversion(str);
     //printf("\nCarryover (%d|%d):\n------------\n%s\n-------\n",i,max,str);
     return -1;
   }
@@ -348,10 +345,7 @@ nsresult auxLoad(char *uriBuf)
 //---------MAIN-----------
 
 int main(int argc, char **argv)
-{ 
-    if (test_common_init(&argc, &argv) != 0)
-        return -1;
-
+{
     nsresult rv;
 
     if (argc == 1) {

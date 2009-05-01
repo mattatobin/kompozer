@@ -75,14 +75,12 @@ function Startup()
     {
       gFiringElement = gDoc.createElementNS(NVU_NS, "comment");
       innerNode = gDoc.createComment("");
-      //imageSource = "chrome://editor/content/images/tag-PI.gif";
-      imageSource = "chrome://editor/content/images/tag-comment.gif"; // Kaze
+      imageSource = "chrome://editor/content/images/tag-PI.gif";
     }
     var image = gDoc.createElement("img");
     image.setAttribute("src", imageSource);
     gFiringElement.appendChild(image);
     gFiringElement.appendChild(innerNode);
-    gFiringElement.setAttribute("xmlns", NVU_NS); // Kaze
   }
 
   phpOrPi = gFiringElement.firstChild.nextSibling;

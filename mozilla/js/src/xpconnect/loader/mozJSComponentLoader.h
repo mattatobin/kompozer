@@ -48,54 +48,23 @@
 #include "nsIModule.h"
 #include "nsSupportsArray.h"
 #include "nsIFile.h"
-#include "nsAutoPtr.h"
-#include "nsIFastLoadService.h"
-#include "nsIObjectInputStream.h"
-#include "nsIObjectOutputStream.h"
-#include "nsITimer.h"
-#include "nsIObserver.h"
 #ifndef XPCONNECT_STANDALONE
 #include "nsIPrincipal.h"
 #endif
-
-class nsIFastLoadService;
+extern const char mozJSComponentLoaderContractID[];
+extern const char jsComponentTypeName[];
 
 /* 6bd13476-1dd2-11b2-bbef-f0ccb5fa64b6 (thanks, mozbot) */
 
 #define MOZJSCOMPONENTLOADER_CID \
   {0x6bd13476, 0x1dd2, 0x11b2, \
     { 0xbb, 0xef, 0xf0, 0xcc, 0xb5, 0xfa, 0x64, 0xb6 }}
-#define MOZJSCOMPONENTLOADER_CONTRACTID "@mozilla.org/moz/jsloader;1"
-#define MOZJSCOMPONENTLOADER_TYPE_NAME "text/javascript"
 
-// nsIFastLoadFileIO implementation for component fastload
-class nsXPCFastLoadIO : public nsIFastLoadFileIO
-{
- public:
-    NS_DECL_ISUPPORTS
-    NS_DECL_NSIFASTLOADFILEIO
+class mozJSComponentLoader : public nsIComponentLoader {
 
-    nsXPCFastLoadIO(nsIFile *file) : mFile(file) {}
-
-    void SetInputStream(nsIInputStream *stream) { mInputStream = stream; }
-    void SetOutputStream(nsIOutputStream *stream) { mOutputStream = stream; }
-
- private:
-    ~nsXPCFastLoadIO() {}
-
-    nsCOMPtr<nsIFile> mFile;
-    nsCOMPtr<nsIInputStream> mInputStream;
-    nsCOMPtr<nsIOutputStream> mOutputStream;
-};
-
-
-class mozJSComponentLoader : public nsIComponentLoader,
-                             public nsIObserver
-{
- public:
+public:
     NS_DECL_ISUPPORTS
     NS_DECL_NSICOMPONENTLOADER
-    NS_DECL_NSIOBSERVER
 
     mozJSComponentLoader();
     virtual ~mozJSComponentLoader();
@@ -105,39 +74,55 @@ class mozJSComponentLoader : public nsIComponentLoader,
     nsresult AttemptRegistration(nsIFile *component, PRBool deferred);
     nsresult UnregisterComponent(nsIFile *component);
     nsresult RegisterComponentsInDir(PRInt32 when, nsIFile *dir);
-    nsresult GlobalForLocation(const char *aLocation, nsIFile *aComponent,
-                               JSObject **aGlobal);
-    nsIModule* ModuleForLocation(const char *aLocation, nsIFile *component,
-                                 nsresult *status);
+    JSObject *GlobalForLocation(const char *aLocation, nsIFile *component);
+    nsIModule *ModuleForLocation(const char *aLocation, nsIFile *component);
     PRBool HasChanged(const char *registryLocation, nsIFile *component);
     nsresult SetRegistryInfo(const char *registryLocation, nsIFile *component);
     nsresult RemoveRegistryInfo(nsIFile *component, const char *registryLocation);
 
-    nsresult StartFastLoad(nsIFastLoadService *flSvc);
-    nsresult ReadScript(nsIFastLoadService *flSvc, const char *nativePath,
-                        nsIURI *uri, JSContext *cx, JSScript **script);
-    nsresult WriteScript(nsIFastLoadService *flSvc, JSScript *script,
-                         nsIFile *component, const char *nativePath,
-                         nsIURI *uri, JSContext *cx);
-    static void CloseFastLoad(nsITimer *timer, void *closure);
-    void CloseFastLoad();
-
     nsCOMPtr<nsIComponentManager> mCompMgr;
     nsCOMPtr<nsIComponentLoaderManager> mLoaderManager;
     nsCOMPtr<nsIJSRuntimeService> mRuntimeService;
-    nsCOMPtr<nsIFile> mFastLoadFile;
-    nsRefPtr<nsXPCFastLoadIO> mFastLoadIO;
-    nsCOMPtr<nsIObjectInputStream> mFastLoadInput;
-    nsCOMPtr<nsIObjectOutputStream> mFastLoadOutput;
-    nsCOMPtr<nsITimer> mFastLoadTimer;
 #ifndef XPCONNECT_STANDALONE
     nsCOMPtr<nsIPrincipal> mSystemPrincipal;
 #endif
     JSRuntime *mRuntime;
-    JSContext *mContext;
     PLHashTable *mModules;
     PLHashTable *mGlobals;
 
     PRBool mInitialized;
     nsSupportsArray mDeferredComponents;
+};
+
+class JSCLAutoContext
+{
+public:
+    JSCLAutoContext(JSRuntime* rt);
+    ~JSCLAutoContext();
+
+    operator JSContext*() const {return mContext;}
+    JSContext* GetContext() const {return mContext;}
+    nsresult   GetError()   const {return mError;}
+
+
+    JSCLAutoContext(); // not implemnted
+private:
+    JSContext* mContext;
+    nsresult   mError;
+    JSBool     mPopNeeded;
+    intN       mContextThread; 
+};
+
+
+class JSCLAutoErrorReporterSetter
+{
+public:
+    JSCLAutoErrorReporterSetter(JSContext* cx, JSErrorReporter reporter)
+        {mContext = cx; mOldReporter = JS_SetErrorReporter(cx, reporter);}
+    ~JSCLAutoErrorReporterSetter()
+        {JS_SetErrorReporter(mContext, mOldReporter);} 
+    JSCLAutoErrorReporterSetter(); // not implemented
+private:
+    JSContext* mContext;
+    JSErrorReporter mOldReporter;
 };

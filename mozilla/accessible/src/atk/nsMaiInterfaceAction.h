@@ -54,17 +54,17 @@ public:
     virtual const GInterfaceInfo *GetInterfaceInfo();
 
     const char *GetName() {
-        return mName.get();
+        return NS_ConvertUCS2toUTF8(mName).get(); 
     }
-    void SetName(nsAString &aString) { mName = NS_ConvertUCS2toUTF8(aString); }
+    void SetName(nsAString &aString) { mName = aString; }
 
     const char *GetKeyBinding() {
-        return mKeyBinding.get(); 
+        return NS_ConvertUCS2toUTF8(mKeyBinding).get(); 
     }
-    void SetKeyBinding(nsAString &aString) { mKeyBinding = NS_ConvertUCS2toUTF8(aString); }
+    void SetKeyBinding(nsAString &aString) { mKeyBinding = aString; }
 private:
-    nsCString mName;
-    nsCString mKeyBinding;
+    nsString mName;
+    nsString mKeyBinding;
 };
 
 #endif /* __MAI_INTERFACE_ACTION_H__ */

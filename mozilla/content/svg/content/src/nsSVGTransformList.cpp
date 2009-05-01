@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,28 +14,27 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
- *   Jonathan Watt <jonathan.watt@strath.ac.uk>
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsSVGTransformList.h"
 #include "nsSVGTransform.h"
@@ -46,13 +45,25 @@
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
 #include "nsCOMArray.h"
-#include "nsContentUtils.h"
+
+nsresult
+nsSVGTransformList::Create(const nsAString& aValue,
+                       nsISVGValue** aResult)
+{
+  *aResult = (nsISVGValue*) new nsSVGTransformList();
+  if(!*aResult) return NS_ERROR_OUT_OF_MEMORY;
+  
+  NS_ADDREF(*aResult);
+
+  (*aResult)->SetValueString(aValue);  
+  return NS_OK;
+}
 
 nsresult
 nsSVGTransformList::Create(nsIDOMSVGTransformList** aResult)
 {
-  *aResult = new nsSVGTransformList();
-  if (!*aResult) return NS_ERROR_OUT_OF_MEMORY;
+  *aResult = (nsIDOMSVGTransformList*) new nsSVGTransformList();
+  if(!*aResult) return NS_ERROR_OUT_OF_MEMORY;
   
   NS_ADDREF(*aResult);
   return NS_OK;
@@ -70,6 +81,7 @@ nsSVGTransformList::~nsSVGTransformList()
 void
 nsSVGTransformList::ReleaseTransforms()
 {
+  WillModify();
   PRInt32 count = mTransforms.Count();
   for (PRInt32 i = 0; i < count; ++i) {
     nsIDOMSVGTransform* transform = ElementAt(i);
@@ -79,6 +91,7 @@ nsSVGTransformList::ReleaseTransforms()
     NS_RELEASE(transform);
   }
   mTransforms.Clear();
+  DidModify();
 }
 
 nsIDOMSVGTransform*
@@ -87,18 +100,42 @@ nsSVGTransformList::ElementAt(PRInt32 index)
   return (nsIDOMSVGTransform*)mTransforms.ElementAt(index);
 }
 
-PRBool
+void
 nsSVGTransformList::AppendElement(nsIDOMSVGTransform* aElement)
 {
-  PRBool rv = mTransforms.AppendElement((void*)aElement);
-  if (rv) {
-    NS_ADDREF(aElement);
-    nsCOMPtr<nsISVGValue> val = do_QueryInterface(aElement);
-    if (val)
-      val->AddObserver(this);
-  }
+  WillModify();
+  NS_ADDREF(aElement);
+  mTransforms.AppendElement((void*)aElement);
+  nsCOMPtr<nsISVGValue> val = do_QueryInterface(aElement);
+  if (val)
+    val->AddObserver(this);
+  DidModify();
+}
 
-  return rv;
+void
+nsSVGTransformList::RemoveElementAt(PRInt32 index)
+{
+  WillModify();
+  nsIDOMSVGTransform* transform = ElementAt(index);
+  NS_ASSERTION(transform, "null transform");
+  nsCOMPtr<nsISVGValue> val = do_QueryInterface(transform);
+  if (val)
+    val->RemoveObserver(this);
+  mTransforms.RemoveElementAt(index);
+  NS_RELEASE(transform);
+  DidModify();
+}
+
+void
+nsSVGTransformList::InsertElementAt(nsIDOMSVGTransform* aElement, PRInt32 index)
+{
+  WillModify();
+  NS_ADDREF(aElement);
+  mTransforms.InsertElementAt((void*)aElement, index);
+  nsCOMPtr<nsISVGValue> val = do_QueryInterface(aElement);
+  if (val)
+    val->AddObserver(this);
+  DidModify();
 }
 
 //----------------------------------------------------------------------
@@ -140,6 +177,7 @@ nsSVGTransformList::SetValueString(const nsAString& aValue)
   char* args;
   const char* delimiters1 = "\x20\x9\xD\xA,(";
   const char* delimiters2 = "()";
+  const char* delimiters3 = "\x20\x9\xD\xA,";
   nsCOMArray<nsIDOMSVGTransform> xforms;
     
   while ((keyword = nsCRT::strtok(rest, delimiters1, &rest))) {
@@ -161,82 +199,123 @@ nsSVGTransformList::SetValueString(const nsAString& aValue)
     nsCOMPtr<nsIAtom> keyatom = do_GetAtom(keyword);
     
     if (keyatom == nsSVGAtoms::translate) {
-      // tx [ty=0]
-      float t[2] = { 0.f };
-      PRInt32 num_parsed = ParseParameterList(args, t, 2);
-      if (num_parsed != 1 && num_parsed != 2) {
+      char* arg1 = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg1) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
-
-      transform->SetTranslate(t[0], t[1]);
+      char* arg2 = nsCRT::strtok(args, delimiters3, &args);
+      char* end;
+      float tx = (float) PR_strtod(arg1, &end);
+      float ty = arg2 ? (float) PR_strtod(arg2, &end) : 0.0f;
+      transform->SetTranslate(tx, ty);
     }
     else if (keyatom == nsSVGAtoms::scale) { 
-      // sx [sy=sx]
-      float s[2] = { 0.f };
-      PRInt32 num_parsed = ParseParameterList(args, s, 2);
-      if (num_parsed != 1 && num_parsed != 2) {
+      char* arg1 = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg1) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
-
-      if (num_parsed == 1)
-        s[1] = s[0];
-
-      transform->SetScale(s[0], s[1]);
-    }
+      char* arg2 = nsCRT::strtok(args, delimiters3, &args);
+      char* end;
+      float sx = (float) PR_strtod(arg1, &end);
+      float sy = arg2 ? (float) PR_strtod(arg2, &end) : sx;
+      transform->SetScale(sx, sy);
+    }      
     else if (keyatom == nsSVGAtoms::rotate) {
-      // r [x0=0 y0=0]
-      float r[3] = { 0.f };
-      PRInt32 num_parsed = ParseParameterList(args, r, 3);
-      if (num_parsed != 1 && num_parsed != 3) {
+      char* arg1 = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg1) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
-
-      transform->SetRotate(r[0], r[1], r[2]);
-    }
+      char* arg2 = nsCRT::strtok(args, delimiters3, &args);
+      char* arg3 = arg2 ? nsCRT::strtok(args, delimiters3, &args) : nsnull;
+      if (arg2 && !arg3) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      char* end;
+      float angle = (float) PR_strtod(arg1, &end);
+      float cx = arg2 ? (float) PR_strtod(arg2, &end) : 0.0f;
+      float cy = arg3 ? (float) PR_strtod(arg3, &end) : 0.0f;
+      transform->SetRotate(angle, cx, cy);
+    }      
     else if (keyatom == nsSVGAtoms::skewX) {
-      // x-angle
-      float angle;
-      PRInt32 num_parsed = ParseParameterList(args, &angle, 1);
-      if (num_parsed != 1) {
+      char* arg1 = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg1) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
-
+      
+      char* end;
+      float angle = (float) PR_strtod(arg1, &end);
       transform->SetSkewX(angle);
-    }
+    }  
     else if (keyatom == nsSVGAtoms::skewY) {
-      // y-angle
-      float angle;
-      PRInt32 num_parsed = ParseParameterList(args, &angle, 1);
-      if (num_parsed != 1) {
+      char* arg1 = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg1) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
-
+      char* end;
+      float angle = (float) PR_strtod(arg1, &end);
       transform->SetSkewY(angle);
     }
     else if (keyatom == nsSVGAtoms::matrix) {
-      // a b c d e f
-      float m[6];
-      PRInt32 num_parsed = ParseParameterList(args, m, 6);
-      if (num_parsed != 6) {
+      char *arg, *end;
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
         rv = NS_ERROR_FAILURE;
         break; // parse error
       }
+      float a = (float) PR_strtod(arg, &end);
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      float b = (float) PR_strtod(arg, &end);
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      float c = (float) PR_strtod(arg, &end);
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      float d = (float) PR_strtod(arg, &end);
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      float e = (float) PR_strtod(arg, &end);
+
+      arg = nsCRT::strtok(args, delimiters3, &args);
+      if (!arg) {
+        rv = NS_ERROR_FAILURE;
+        break; // parse error
+      }
+      float f = (float) PR_strtod(arg, &end);
 
       nsCOMPtr<nsIDOMSVGMatrix> matrix;
-      NS_NewSVGMatrix(getter_AddRefs(matrix),
-                      m[0], m[1], m[2], m[3], m[4], m[5]);
+      nsSVGMatrix::Create(getter_AddRefs(matrix),
+                          a, b, c, d, e, f);
       NS_ASSERTION(matrix, "couldn't create matrix");
       transform->SetMatrix(matrix);
     }
     else { // parse error
       rv = NS_ERROR_FAILURE;
       break;
-    }
+    }    
     xforms.AppendObject(transform);
   }
 
@@ -260,54 +339,6 @@ nsSVGTransformList::SetValueString(const nsAString& aValue)
   return rv;
 }
 
-// helper for SetValueString
-// parse up to nvars comma-separated parameters into vars, returning
-// the number of variables actually provided.
-//
-// -1 will be returned if any of the arguments can't be converted to a
-// float.  The return value may be higher than nvars, if more
-// arguments were provided; no attempt is made to actually parse any
-// more arguments than nvars.
-//
-// note that this would accept ",,," and will just return 0
-// arguments found, instead of -1.  This is because the numeric
-// values can have spaces surrounding them, but the spaces can also
-// be used as delimiters.  strtok doesn't tell us what the
-// delimiter is, so we have no way to distinguish
-// ' 20,20 ' from ',,20,20,,' (or from ',,20 20,,', for that matter).
-//
-// XXX If someone knows for sure that it's not ok to mix commas and
-// spaces as delimiters, then we can scan the string for a comma,
-// and if found use a delimiter of just ",", otherwise use a set of
-// spaces (without a comma).
-PRInt32
-nsSVGTransformList::ParseParameterList(char *paramstr, float *vars, PRInt32 nvars)
-{
-  if (!paramstr)
-    return 0;
-
-  char *arg, *argend, *argrest = paramstr;
-  int num_args_found = 0;
-  float f;
-
-  const char arg_delimiters[] = "\x20\x09\x0d\x0a,";
-
-  while ((arg = nsCRT::strtok(argrest, arg_delimiters, &argrest))) {
-    if (num_args_found < nvars) {
-      f = (float) PR_strtod(arg, &argend);
-      if (arg == argend || *argend != '\0')
-        return -1;
-
-      vars[num_args_found] = f;
-    }
-
-    arg = argrest;
-    num_args_found++;
-  }
-
-  return num_args_found;
-}
-
 NS_IMETHODIMP
 nsSVGTransformList::GetValueString(nsAString& aValue)
 {
@@ -329,7 +360,7 @@ nsSVGTransformList::GetValueString(nsAString& aValue)
 
     if (++i >= count) break;
 
-    aValue.AppendLiteral(" ");
+    aValue.Append(NS_LITERAL_STRING(" "));
   }
   
   return NS_OK;
@@ -356,29 +387,16 @@ NS_IMETHODIMP nsSVGTransformList::Clear()
 }
 
 /* nsIDOMSVGTransform initialize (in nsIDOMSVGTransform newItem); */
-NS_IMETHODIMP nsSVGTransformList::Initialize(nsIDOMSVGTransform *newItem,
-                                             nsIDOMSVGTransform **_retval)
+NS_IMETHODIMP nsSVGTransformList::Initialize(nsIDOMSVGTransform *newItem, nsIDOMSVGTransform **_retval)
 {
-  *_retval = newItem;
-  if (!newItem)
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  nsSVGValueAutoNotifier autonotifier(this);
-
-  ReleaseTransforms();
-  if (!AppendElement(newItem)) {
-    *_retval = nsnull;
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  NS_ADDREF(*_retval);
-  return NS_OK;
+  Clear();
+  return AppendItem(newItem, _retval);
 }
 
 /* nsIDOMSVGTransform getItem (in unsigned long index); */
 NS_IMETHODIMP nsSVGTransformList::GetItem(PRUint32 index, nsIDOMSVGTransform **_retval)
 {
-  if (index >= NS_STATIC_CAST(PRUint32, mTransforms.Count())) {
+  if ((PRInt32)index >= mTransforms.Count()) {
     *_retval = nsnull;
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
   }
@@ -389,110 +407,45 @@ NS_IMETHODIMP nsSVGTransformList::GetItem(PRUint32 index, nsIDOMSVGTransform **_
 }
 
 /* nsIDOMSVGTransform insertItemBefore (in nsIDOMSVGTransform newItem, in unsigned long index); */
-NS_IMETHODIMP nsSVGTransformList::InsertItemBefore(nsIDOMSVGTransform *newItem,
-                                                   PRUint32 index,
-                                                   nsIDOMSVGTransform **_retval)
+NS_IMETHODIMP nsSVGTransformList::InsertItemBefore(nsIDOMSVGTransform *newItem, PRUint32 index, nsIDOMSVGTransform **_retval)
 {
-  *_retval = newItem;
-  if (!newItem)
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  nsSVGValueAutoNotifier autonotifier(this);
-
-  PRUint32 count = mTransforms.Count();
-
-  if (!mTransforms.InsertElementAt((void*)newItem, (index < count)? index: count)) {
-    *_retval = nsnull;
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  NS_ADDREF(newItem);
-  nsCOMPtr<nsISVGValue> val = do_QueryInterface(newItem);
-  if (val)
-    val->AddObserver(this);
-
-  NS_ADDREF(*_retval);
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me");
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* nsIDOMSVGTransform replaceItem (in nsIDOMSVGTransform newItem, in unsigned long index); */
-NS_IMETHODIMP nsSVGTransformList::ReplaceItem(nsIDOMSVGTransform *newItem,
-                                              PRUint32 index,
-                                              nsIDOMSVGTransform **_retval)
+NS_IMETHODIMP nsSVGTransformList::ReplaceItem(nsIDOMSVGTransform *newItem, PRUint32 index, nsIDOMSVGTransform **_retval)
 {
-  if (!newItem)
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  *_retval = nsnull;
-
-  nsSVGValueAutoNotifier autonotifier(this);
-
-  if (index >= PRUint32(mTransforms.Count()))
-    return NS_ERROR_DOM_INDEX_SIZE_ERR;
-
-  nsIDOMSVGTransform* oldItem = ElementAt(index);
-
-  if (!mTransforms.ReplaceElementAt((void*)newItem, index)) {
-    NS_NOTREACHED("removal of element failed");
-    return NS_ERROR_UNEXPECTED;
-  }
-
-  nsCOMPtr<nsISVGValue> val = do_QueryInterface(oldItem);
-  if (val)
-    val->RemoveObserver(this);
-  NS_RELEASE(oldItem);
-  val = do_QueryInterface(newItem);
-  if (val)
-    val->AddObserver(this);
-  NS_ADDREF(newItem);
-
-  *_retval = newItem;
-  NS_ADDREF(*_retval);
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me");
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* nsIDOMSVGTransform removeItem (in unsigned long index); */
 NS_IMETHODIMP nsSVGTransformList::RemoveItem(PRUint32 index, nsIDOMSVGTransform **_retval)
 {
-  nsSVGValueAutoNotifier autonotifier(this);
-
-  if (index >= NS_STATIC_CAST(PRUint32, mTransforms.Count())) {
+  if ((PRInt32)index >= mTransforms.Count()) {
     *_retval = nsnull;
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
   }
 
   *_retval = ElementAt(index);
-
-  if (!mTransforms.RemoveElementAt(index)) {
-    NS_NOTREACHED("removal of element failed");
-    *_retval = nsnull;
-    return NS_ERROR_UNEXPECTED;
-  }
-
-  nsCOMPtr<nsISVGValue> val = do_QueryInterface(*_retval);
-  if (val)
-    val->RemoveObserver(this);
-
-  // don't NS_ADDREF(*_retval)
+  NS_ADDREF(*_retval);
+  WillModify();
+  RemoveElementAt(index);
+  DidModify();
   return NS_OK;
 }
 
 /* nsIDOMSVGTransform appendItem (in nsIDOMSVGTransform newItem); */
-NS_IMETHODIMP nsSVGTransformList::AppendItem(nsIDOMSVGTransform *newItem,
-                                             nsIDOMSVGTransform **_retval)
+NS_IMETHODIMP nsSVGTransformList::AppendItem(nsIDOMSVGTransform *newItem, nsIDOMSVGTransform **_retval)
 {
+  // XXX The SVG specs state that 'if newItem is already in a list, it
+  // is removed from its previous list before it is inserted into this
+  // list'. We don't do that. Should we?
+  
   *_retval = newItem;
-  if (!newItem)
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  nsSVGValueAutoNotifier autonotifier(this);
-
-  if (!AppendElement(newItem)) {
-    *_retval = nsnull;
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
   NS_ADDREF(*_retval);
+  AppendElement(newItem);
   return NS_OK;
 }
 
@@ -501,75 +454,37 @@ NS_IMETHODIMP
 nsSVGTransformList::CreateSVGTransformFromMatrix(nsIDOMSVGMatrix *matrix,
                                                  nsIDOMSVGTransform **_retval)
 {
-  if (!matrix)
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  nsresult rv = NS_NewSVGTransform(_retval);
-  if (NS_FAILED(rv))
-    return rv;
-
-  (*_retval)->SetMatrix(matrix);
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
-/* nsIDOMSVGTransform consolidate (); */
+  /* nsIDOMSVGTransform consolidate (); */
 NS_IMETHODIMP nsSVGTransformList::Consolidate(nsIDOMSVGTransform **_retval)
 {
-  // Note we don't want WillModify/DidModify since nothing really changes
-
-  *_retval = nsnull;
-
-  PRInt32 count = mTransforms.Count();
-  if (count==0) return NS_OK;
-  if (count==1) {
-    *_retval = ElementAt(0);
-    NS_ADDREF(*_retval);
-    return NS_OK;
-  }
-
-  nsCOMPtr<nsIDOMSVGMatrix> conmatrix;
-  nsresult rv = GetConsolidationMatrix(getter_AddRefs(conmatrix));
-  if (NS_FAILED(rv))
-    return rv;
-
-  nsCOMPtr<nsIDOMSVGTransform> consolidation;
-  rv = CreateSVGTransformFromMatrix(conmatrix, getter_AddRefs(consolidation));
-  if (NS_FAILED(rv))
-    return rv;
-
-  ReleaseTransforms();
-  if (!AppendElement(consolidation))
-    return NS_ERROR_OUT_OF_MEMORY;
-
-  *_retval = consolidation;
-  NS_ADDREF(*_retval);
-  return rv;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* nsIDOMSVGMatrix getConsolidation (); */
-NS_IMETHODIMP nsSVGTransformList::GetConsolidationMatrix(nsIDOMSVGMatrix **_retval)
+NS_IMETHODIMP nsSVGTransformList::GetConsolidation(nsIDOMSVGMatrix **_retval)
 {
-  *_retval = nsnull;
   PRInt32 count = mTransforms.Count();
 
-  nsCOMPtr<nsIDOMSVGMatrix> conmatrix;
-  nsresult rv = NS_NewSVGMatrix(getter_AddRefs(conmatrix));
-  if (NS_FAILED(rv))
-    return rv;
+  nsCOMPtr<nsIDOMSVGMatrix> consolidation;
+  nsSVGMatrix::Create(getter_AddRefs(consolidation));
   
-  nsCOMPtr<nsIDOMSVGMatrix> temp1, temp2;
-
   for (PRInt32 i = 0; i < count; ++i) {
     nsIDOMSVGTransform* transform = ElementAt(i);
-    transform->GetMatrix(getter_AddRefs(temp1));
-    conmatrix->Multiply(temp1, getter_AddRefs(temp2));
-    if (!temp2)
-      return NS_ERROR_OUT_OF_MEMORY;
-    conmatrix = temp2;
+    nsCOMPtr<nsIDOMSVGMatrix> matrix;
+    transform->GetMatrix(getter_AddRefs(matrix));
+    nsCOMPtr<nsIDOMSVGMatrix> temp;
+    consolidation->Multiply(matrix, getter_AddRefs(temp));
+    consolidation = temp;
   }
 
-  *_retval = conmatrix;
+  *_retval = consolidation;
   NS_ADDREF(*_retval);
+  
   return NS_OK;
 }
 
@@ -578,17 +493,15 @@ NS_IMETHODIMP nsSVGTransformList::GetConsolidationMatrix(nsIDOMSVGMatrix **_retv
 // nsISVGValueObserver methods
 
 NS_IMETHODIMP
-nsSVGTransformList::WillModifySVGObservable(nsISVGValue* observable,
-                                            modificationType aModType)
+nsSVGTransformList::WillModifySVGObservable(nsISVGValue* observable)
 {
-  WillModify(aModType);
+  WillModify();
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsSVGTransformList::DidModifySVGObservable (nsISVGValue* observable,
-                                            modificationType aModType)
+nsSVGTransformList::DidModifySVGObservable (nsISVGValue* observable)
 {
-  DidModify(aModType);
+  DidModify();
   return NS_OK;
 }

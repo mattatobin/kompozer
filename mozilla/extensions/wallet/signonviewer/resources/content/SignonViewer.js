@@ -1,43 +1,27 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code, released March
+ * 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation. Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * Contributor(s): 
  *   Ben "Count XULula" Goodger
  *   Mike Calmus
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 /*** =================== INITIALISATION CODE =================== ***/
 
@@ -136,7 +120,7 @@ function Startup() {
 
     // change title on window
     var wind = document.getElementById("signonviewer");
-    document.title = wind.getAttribute("alttitle");
+    wind.setAttribute("title", wind.getAttribute("alttitle"));
 
     // set initial form-manager tab
     element = document.getElementById("nopreviewsTab");
@@ -225,11 +209,11 @@ var signonsTreeView = {
   getCellValue : function(row,column) {},
   getCellText : function(row,column) {
     var rv="";
-    if (column.id=="siteCol") {
+    if (column=="siteCol") {
       rv = signons[row].host;
-    } else if (column.id=="userCol") {
+    } else if (column=="userCol") {
       rv = signons[row].user;
-    } else if (column.id=="passwordCol") {
+    } else if (column=="passwordCol") {
       rv = signons[row].password;
     }
     return rv;
@@ -237,15 +221,15 @@ var signonsTreeView = {
   isSeparator : function(index) { return false; },
   isSorted : function() { return false; },
   isContainer : function(index) { return false; },
-  cycleHeader : function(column) {},
-  getRowProperties : function(row,prop) {},
-  getColumnProperties : function(column,prop) {},
-  getCellProperties : function(row,column,prop) {}
+  cycleHeader : function(aColId, aElt) {},
+  getRowProperties : function(row,column,prop) {},
+  getColumnProperties : function(column,columnElement,prop) {},
+  getCellProperties : function(row,prop) {}
  };
 var signonsTree;
 
-function Signon(id, host, user, rawuser, password) {
-  this.id = id;
+function Signon(number, host, user, rawuser, password) {
+  this.number = number;
   this.host = host;
   this.user = user;
   this.rawuser = rawuser;
@@ -288,12 +272,7 @@ function LoadSignons() {
 
       signons[count] = new Signon(count++, host, user, rawuser, password);
     } catch(e) {
-      /* The user cancelled the master password dialog */
-      if (e.result==Components.results.NS_ERROR_NOT_AVAILABLE) {
-        window.close();
-        return false;
-      }
-      /* Otherwise an entry is corrupt. Go to next element. */
+      /* An entry is corrupt. Go to next element. */
     }
   }
   signonsTreeView.rowCount = signons.length;
@@ -331,18 +310,6 @@ function DeleteSignon() {
 }
 
 function DeleteAllSignons() {
-  var prompter = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                           .getService(Components.interfaces.nsIPromptService);
-
-  // Confirm the user wants to remove all passwords
-  var dummy = { value: false };
-  if (prompter.confirmEx(window,
-                         kSignonBundle.getString("removeAllPasswordsTitle"),
-                         kSignonBundle.getString("removeAllPasswordsPrompt"),
-                         prompter.STD_YES_NO_BUTTONS + prompter.BUTTON_POS_1_DEFAULT,
-                         null, null, null, null, dummy) == 1) // 1 == "No" button
-    return;
-
   DeleteAllFromTree(signonsTree, signonsTreeView,
                         signons, deletedSignons,
                         "removeSignon", "removeAllSignons");
@@ -433,7 +400,7 @@ var rejectsTreeView = {
   getCellValue : function(row,column) {},
   getCellText : function(row,column){
     var rv="";
-    if (column.id=="rejectCol") {
+    if (column=="rejectCol") {
       rv = rejects[row].host;
     }
     return rv;
@@ -441,15 +408,15 @@ var rejectsTreeView = {
   isSeparator : function(index) {return false;},
   isSorted: function() { return false; },
   isContainer : function(index) {return false;},
-  cycleHeader : function(column) {},
-  getRowProperties : function(row,prop) {},
-  getColumnProperties : function(column,prop) {},
-  getCellProperties : function(row,column,prop) {}
+  cycleHeader : function(aColId, aElt) {},
+  getRowProperties : function(row,column,prop){},
+  getColumnProperties : function(column,columnElement,prop){},
+  getCellProperties : function(row,prop){}
  };
 var rejectsTree;
 
-function Reject(id, host) {
-  this.id = id;
+function Reject(number, host) {
+  this.number = number;
   this.host = host;
 }
 
@@ -530,7 +497,7 @@ var nopreviewsTreeView = {
   getCellValue : function(row,column) {},
   getCellText : function(row,column){
     var rv="";
-    if (column.id=="nopreviewCol") {
+    if (column=="nopreviewCol") {
       rv = nopreviews[row].host;
     }
     return rv;
@@ -538,15 +505,15 @@ var nopreviewsTreeView = {
   isSeparator : function(index) {return false;},
   isSorted: function() { return false; },
   isContainer : function(index) {return false;},
-  cycleHeader : function(column) {},
-  getRowProperties : function(row,prop) {},
-  getColumnProperties : function(column,prop) {},
-  getCellProperties : function(row,column,prop) {}
+  cycleHeader : function(aColId, aElt) {},
+  getRowProperties : function(row,column,prop){},
+  getColumnProperties : function(column,columnElement,prop){},
+  getCellProperties : function(row,prop){}
  };
 var nopreviewsTree;
 
-function Nopreview(id, host) {
-  this.id = id;
+function Nopreview(number, host) {
+  this.number = number;
   this.host = host;
 }
 
@@ -600,7 +567,7 @@ function FinalizeNopreviewDeletions() {
   var i;
   var result = "|goneP|";
   for (i=0; i<deletedNopreviews.length; i++) {
-    result += deletedNopreviews[i].id;
+    result += deletedNopreviews[i].number;
     result += ",";
   }
   result += "|";
@@ -635,7 +602,7 @@ var nocapturesTreeView = {
   getCellValue : function(row,column) {},
   getCellText : function(row,column){
     var rv="";
-    if (column.id=="nocaptureCol") {
+    if (column=="nocaptureCol") {
       rv = nocaptures[row].host;
     }
     return rv;
@@ -643,15 +610,15 @@ var nocapturesTreeView = {
   isSeparator : function(index) {return false;},
   isSorted: function() { return false; },
   isContainer : function(index) {return false;},
-  cycleHeader : function(column) {},
-  getRowProperties : function(row,prop) {},
-  getColumnProperties : function(column,prop) {},
-  getCellProperties : function(row,column,prop) {}
+  cycleHeader : function(aColId, aElt) {},
+  getRowProperties : function(row,column,prop){},
+  getColumnProperties : function(column,columnElement,prop){},
+  getCellProperties : function(row,prop){}
  };
 var nocapturesTree;
 
-function Nocapture(id, host) {
-  this.id = id;
+function Nocapture(number, host) {
+  this.number = number;
   this.host = host;
 }
 
@@ -705,7 +672,7 @@ function FinalizeNocaptureDeletions() {
   var i;
   var result = "|goneC|";
   for (i=0; i<deletedNocaptures.length; i++) {
-    result += deletedNocaptures[i].id;
+    result += deletedNocaptures[i].number;
     result += ",";
   }
   result += "|";

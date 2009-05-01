@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,8 +48,7 @@
 #include "nsIPluginStreamListener.h"
 #include "nsPluginsDir.h"
 #include "nsPluginSafety.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
+#include "nsIPref.h"
 #include "nsPluginLogging.h"
 
 #include "nsIPluginInstancePeer2.h"
@@ -63,11 +62,9 @@
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptContext.h"
 
-#include "jscntxt.h"
-
 #include "nsIXPConnect.h"
 
-#if defined(XP_MACOSX)
+#if defined(XP_MAC) || defined(XP_MACOSX)
 #include <Resources.h>
 #endif
 
@@ -94,6 +91,7 @@ enum eNPPStreamTypeInternal {
 
 ////////////////////////////////////////////////////////////////////////
 // CID's && IID's
+static NS_DEFINE_CID(kPrefServiceCID, NS_PREF_CID);
 static NS_DEFINE_IID(kCPluginManagerCID, NS_PLUGINMANAGER_CID);
 static NS_DEFINE_IID(kPluginManagerCID, NS_PLUGINMANAGER_CID);
 static NS_DEFINE_IID(kMemoryCID, NS_MEMORY_CID);
@@ -108,8 +106,7 @@ PR_BEGIN_EXTERN_C
   _requestread(NPStream *pstream, NPByteRange *rangeList);
 
   static NPError NP_EXPORT
-  _geturlnotify(NPP npp, const char* relativeURL, const char* target,
-                void* notifyData);
+  _geturlnotify(NPP npp, const char* relativeURL, const char* target, void* notifyData);
 
   static NPError NP_EXPORT
   _getvalue(NPP npp, NPNVariable variable, void *r_value);
@@ -122,7 +119,7 @@ PR_BEGIN_EXTERN_C
 
   static NPError NP_EXPORT
   _posturlnotify(NPP npp, const char* relativeURL, const char *target,
-                 uint32 len, const char *buf, NPBool file, void* notifyData);
+                    uint32 len, const char *buf, NPBool file, void* notifyData);
 
   static NPError NP_EXPORT
   _posturl(NPP npp, const char* relativeURL, const char *target, uint32 len,
@@ -171,11 +168,14 @@ PR_BEGIN_EXTERN_C
   static void NP_EXPORT
   _forceredraw(NPP npp);
 
-  static void NP_EXPORT
-  _pushpopupsenabledstate(NPP npp, NPBool enabled);
+  ////////////////////////////////////////////////////////////////////////
+  // Anything that returns a pointer needs to be _HERE_ for 68K Mac to
+  // work.
+  //
 
-  static void NP_EXPORT
-  _poppopupsenabledstate(NPP npp);
+#if defined(XP_MAC) && !defined(powerc)
+#pragma pointers_in_D0
+#endif
 
   static const char* NP_EXPORT
   _useragent(NPP npp);
@@ -195,39 +195,17 @@ PR_BEGIN_EXTERN_C
 #endif
 #endif /* OJI */
 
+#if defined(XP_MAC) && !defined(powerc)
+#pragma pointers_in_A0
+#endif
+
 PR_END_EXTERN_C
 
-#if defined(XP_MACOSX) && defined(__i386__)
+#ifdef XP_MACOSX
 
-// BROKEN_PLUGIN_HACK works around bugs in the version of the Macromedia
-// Flash Player plugin that is supplied with the initial consumer shipment
-// of Mac OS X for x86-based Macs.  The plugin is broken in at least
-// 10.4.4/x86 and 10.4.5/x86.
-#define BROKEN_PLUGIN_HACK
-
-// brokenPlugin is defined in the scope in which TV2FP is used.  It is
-// true when this ns4xPlugin object has loaded a plugin that contains the
-// bugs being worked around.
-//
-// The broken plugin returns entry points that are pointers to function
-// pointers, instead of just returning the function pointers.  These must
-// be dereferenced, or Mozilla will crash upon attempting to call an address
-// that doesn't contain code.  TV2FP is a convenient place to handle this,
-// since the macro is already present everywhere it's needed, and is otherwise
-// unused on x86.
-#define TV2FP(f) (brokenPlugin && f ? *(void**)f : (void*)f)
-#define FP2TV(f) (f)
-
-#elif defined(XP_MACOSX) && defined(__POWERPC__)
-
-#define TV2FP(tvp) _TV2FP((void *)tvp)
-
-static void*
-_TV2FP(void *tvp)
+static void* TV2FP(void *tvp)
 {
-    static uint32 glue[6] = {
-      0x3D800000, 0x618C0000, 0x800C0000, 0x804C0004, 0x7C0903A6, 0x4E800420
-    };
+    static uint32 glue[6] = { 0x3D800000, 0x618C0000, 0x800C0000, 0x804C0004, 0x7C0903A6, 0x4E800420 };
     uint32* newGlue = NULL;
 
     if (tvp != NULL) {
@@ -242,10 +220,7 @@ _TV2FP(void *tvp)
     return newGlue;
 }
 
-#define FP2TV(fp) _FP2TV((void *)fp)
-
-static void*
-_FP2TV(void *fp)
+static void* FP2TV(void *fp)
 {
     void **newGlue = NULL;
     if (fp != NULL) {
@@ -263,11 +238,12 @@ _FP2TV(void *fp)
 #define TV2FP(f) (f)
 #define FP2TV(f) (f)
 
-#endif /* XP_MACOSX && __POWERPC__ */
+#endif /* XP_MACOSX */
 
 ////////////////////////////////////////////////////////////////////////
 // Globals
 NPNetscapeFuncs ns4xPlugin::CALLBACKS;
+static nsIMemory* gMalloc = nsnull;
 
 ////////////////////////////////////////////////////////////////////////
 void
@@ -281,7 +257,7 @@ ns4xPlugin::CheckClassInitialized(void)
   // XXX It'd be nice to make this const and initialize it statically...
   CALLBACKS.size = sizeof(CALLBACKS);
   CALLBACKS.version = (NP_VERSION_MAJOR << 8) + NP_VERSION_MINOR;
-
+  
   CALLBACKS.geturl =
     NewNPN_GetURLProc(FP2TV(_geturl));
 
@@ -404,12 +380,6 @@ ns4xPlugin::CheckClassInitialized(void)
   CALLBACKS.setexception =
     NewNPN_SetExceptionProc(FP2TV(_setexception));
 
-  CALLBACKS.pushpopupsenabledstate =
-    NewNPN_PushPopupsEnabledStateProc(FP2TV(_pushpopupsenabledstate));
-
-  CALLBACKS.poppopupsenabledstate =
-    NewNPN_PopPopupsEnabledStateProc(FP2TV(_poppopupsenabledstate));
-
   initialized = TRUE;
 
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,("NPN callbacks initialized\n"));
@@ -420,20 +390,18 @@ ns4xPlugin::CheckClassInitialized(void)
 // nsISupports stuff
 NS_IMPL_ISUPPORTS2(ns4xPlugin, nsIPlugin, nsIFactory)
 
-ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary,
-                       NP_PLUGINSHUTDOWN aShutdown,
-                       nsIServiceManagerObsolete* serviceMgr)
+ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary, NP_PLUGINSHUTDOWN aShutdown, nsIServiceManagerObsolete* serviceMgr)
 {
   memset((void*) &fCallbacks, 0, sizeof(fCallbacks));
   fLibrary = nsnull;
 
 #if defined(XP_WIN) || defined(XP_OS2)
-  // On Windows (and Mac) we need to keep a direct reference to the
-  // fCallbacks and NOT just copy the struct. See Bugzilla 85334
+  // On Windows (and Mac) we need to keep a direct reference to the fCallbacks and NOT
+  // just copy the struct. See Bugzilla 85334
 
   NP_GETENTRYPOINTS pfnGetEntryPoints =
     (NP_GETENTRYPOINTS)PR_FindSymbol(aLibrary, "NP_GetEntryPoints");
-
+  
   if (!pfnGetEntryPoints)
     return;
 
@@ -442,65 +410,33 @@ ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary,
   nsresult result = pfnGetEntryPoints(&fCallbacks);
   NS_ASSERTION( NS_OK == result,"Failed to get callbacks");
 
-  NS_ASSERTION(HIBYTE(fCallbacks.version) >= NP_VERSION_MAJOR,
-               "callback version is less than NP version");
+  NS_ASSERTION(HIBYTE(fCallbacks.version) >= NP_VERSION_MAJOR, "callback version is less than NP version");
 
   fShutdownEntry = (NP_PLUGINSHUTDOWN)PR_FindSymbol(aLibrary, "NP_Shutdown");
-#elif defined(XP_MACOSX)
-#ifdef BROKEN_PLUGIN_HACK
-#warning BROKEN_PLUGIN_HACK is in use, enjoy your Flash movies!
-  // This is a private NSPR struct.  Define it here because it's necessary
-  // to restrict the hack to plugins that need it, and the only way to do
-  // that is to examine the bundle that was loaded.  I feel comfortable doing
-  // this because BROKEN_PLUGIN_HACK is a hack anyway, and it's not intended
-  // to be long-lived.
-  struct myPRLibrary {
-    char*                     name;
-    PRLibrary*                next;
-    int                       refCount;
-    const PRStaticLinkTable*  staticTable;
-    CFragConnectionID         connection;
-    CFBundleRef               bundle;
-    Ptr                       main;
-    CFMutableDictionaryRef    wrappers;
-    const struct mach_header* image;
-  };
+#elif defined(XP_MAC) && !TARGET_CARBON
+  // get the main entry point
+  NP_MAIN pfnMain = (NP_MAIN) PR_FindSymbol(aLibrary, "mainRD");
 
-  // brokenPlugin indicates whether the plugin needs to be worked around
-  // because it doesn't adhere to the API used on x86.
-  PRBool brokenPlugin = PR_FALSE;
-
-  // Identify the broken plugin by a variety of attributes.
-  // Further inspection will be done before applying any workarounds.
-  struct myPRLibrary *prLibrary = (struct myPRLibrary*) aLibrary;
-
-  if (prLibrary->name && prLibrary->bundle) {
-    CFStringRef bundleIdentifier = ::CFBundleGetIdentifier(prLibrary->bundle);
-    CFStringRef bundleShortVersion =
-      (CFStringRef) ::CFBundleGetValueForInfoDictionaryKey(prLibrary->bundle,
-                      CFSTR("CFBundleShortVersionString"));
-
-    if (!strcmp(prLibrary->name,
-                "/Library/Internet Plug-Ins/Flash Player.plugin") &&
-        ::CFBundleGetVersionNumber(prLibrary->bundle) == 0x1018011 &&
-        bundleIdentifier &&
-        ::CFStringCompare(bundleIdentifier,
-                          CFSTR("com.macromedia.Flash Player.plugin"),
-                          0) == kCFCompareEqualTo &&
-        bundleShortVersion &&
-        ::CFStringCompare(bundleShortVersion,
-                          CFSTR("8.0.17"),
-                          0) == kCFCompareEqualTo) {
-      // Macromedia Flash Player plugin, version 8.0.17, bundle version 1.0.1f17
-      brokenPlugin = PR_TRUE;
-    }
-  }
-#endif /* BROKEN_PLUGIN_HACK */
+  if(pfnMain == NULL)
+    return;
 
   // call into the entry point
-  NP_MAIN pfnMain = (NP_MAIN) PR_FindSymbol(aLibrary, "main");
+  NPError error;
+  NS_TRY_SAFE_CALL_RETURN(error, CallNPP_MainEntryProc(pfnMain, 
+                                                       &(ns4xPlugin::CALLBACKS), 
+                                                       &fCallbacks, 
+                                                       &fShutdownEntry), aLibrary, nsnull);
 
-  if (pfnMain == NULL)
+  NPP_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPP MainEntryProc called, return=%d\n",error));
+
+  if(error != NPERR_NO_ERROR || ((fCallbacks.version >> 8) < NP_VERSION_MAJOR))
+    return;
+
+#elif defined(XP_MACOSX) || (defined(XP_MAC) && TARGET_CARBON)
+  // call into the entry point
+  NP_MAIN pfnMain = (NP_MAIN) PR_FindSymbol(aLibrary, "main");
+  
+  if(pfnMain == NULL)
     return;
 
   NPP_ShutdownUPP pfnShutdown;
@@ -509,103 +445,14 @@ ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary,
   np_callbacks.size = sizeof(np_callbacks);
   NPError error;
 
-  NS_TRY_SAFE_CALL_RETURN(error,
-                          CallNPP_MainEntryProc(pfnMain,
-                                                &(ns4xPlugin::CALLBACKS),
-                                                &np_callbacks,
-                                                &pfnShutdown),
-                          aLibrary, nsnull);
+  NS_TRY_SAFE_CALL_RETURN(error, CallNPP_MainEntryProc(pfnMain, 
+                                                       &(ns4xPlugin::CALLBACKS), 
+                                                       &np_callbacks, 
+                                                       &pfnShutdown), aLibrary, nsnull);
 
-#ifdef BROKEN_PLUGIN_HACK
-  // The broken plugin has wrapped NPN callback function pointers in PPC
-  // TVector glue as though they were pointers to CFM TVectors.  When the
-  // x86 attempts to execute the PPC glue, it will of course fail.
-  //
-  // What's done here is a bit unorthodox.  I'm going to locate the
-  // TVector glue that the plugin created from ns4xPlugin::CALLBACKS by
-  // peeking into its symbol table, then I'm going to dissect the PPC
-  // machine code to get the target addresses and produce x86 machine code.
-  // The x86 code overwrites the PPC code in the plugin's jump table.
-  // The replacement code is of course executable.  I know I can do this,
-  // because the broken plugin builds its table of TVector glue based on
-  // what the sample NPAPI plugin does.
-  //
-  // Watch this.
-  if (brokenPlugin) {
-    PRUint32 glueFixed = 0;
+  NPP_PLUGIN_LOG(PLUGIN_LOG_BASIC, ("NPP MainEntryProc called: return=%d\n",error));
 
-    // Locate the table that the plugin filled with TVector glue.
-    PRUint8* pluginsGlueTable = (PRUint8*)
-      ::CFBundleGetDataPointerForName(prLibrary->bundle,
-                                      CFSTR("gNetscapeFuncsGlueTable"));
-
-    if (pluginsGlueTable) {
-      // The table contains 40 entries.  Each entry is TVector glue of 6
-      // 4-byte words (24 bytes total).  See gPluginFuncsGlueTable in
-      // mozilla/modules/plugin/samples/default/mac/npmac.cpp .  That table
-      // accomodates 23 entries, inspection in the debugger teaches that the
-      // broken plugin's table is 40 entries long.
-      for (PRUint32 i = 0 ; i < 40 ; i++) {
-        PRUint32* gluePPC = (PRUint32*) (pluginsGlueTable + 24 * i);
-
-        // Only translate entries that are actually stored as TVector glue.
-        // There are other ways to write the glue for PPC, but this is the
-        // de facto standard, and it's what the broken plugin uses.  The
-        // PPC code means:
-        //   lis   r12,        hi16(address) ; pointer to tvector embedded
-        //   ori   r12,   r12, lo16(address) ;   as immediate params in glue
-        //   lwz    r0, 0(r12)               ; get pc from tvector
-        //   lwz    r2, 4(r12)               ; get rtoc from tvector
-        //   mtctr  r0
-        //   bctr                            ; jump to new pc
-        if ( (*gluePPC    & 0xffff0000) == 0x3d800000 &&
-            (*(gluePPC+1) & 0xffff0000) == 0x618c0000 &&
-             *(gluePPC+2)               == 0x800c0000 &&
-             *(gluePPC+3)               == 0x804c0004 &&
-             *(gluePPC+4)               == 0x7c0903a6 &&
-             *(gluePPC+5)               == 0x4e800420) {
-          // Determine the actual address of the function by stripping the
-          // TVector glue.  |address| is a usable function pointer.  Making
-          // it a pointer to an 8-bit quantity keeps the math below simple.
-          PRUint8* address = (PRUint8*) ((*gluePPC) << 16 |
-                                         *(gluePPC+1) & 0xffff);
-
-          // Build an x86 JMP instruction to jump to the desired function,
-          // and replace the TVector glue with it.  Opcode 0xe9 is a
-          // jump relative to the next instruction.  Total instruction length
-          // is 5 bytes (in 32-bit operand-size mode).  If base is address
-          // 0xfece5 and the target function is at address 0xc0ffee, then
-          // the instruction placed at base, byte for byte, should be:
-          //   0xfece5: 0xe9 0x04 0x13 0xb1 0x00: jmp 0xc0ffee
-          PRUint8* glueX86 = (PRUint8*) gluePPC;
-          *glueX86 = 0xe9;
-
-          PRInt32* offset = (PRInt32*) (glueX86+1);
-          *offset = (address - (glueX86 + 5));
-
-          // PPC TVector glue is big compared to the x86 JMP.  Clean up the
-          // rest of the space in the table entry.  Opcode 0x90 is NOP,
-          // instruction length 1 byte.  This permits clean disassembly of
-          // the entire memory region corresponding to the table.
-          memset(glueX86+5, 0x90, 19);
-
-          glueFixed++;
-        }
-      }
-    }
-
-    if (!glueFixed) {
-      // This plugin wasn't broken after all.  Avoid applying the callback
-      // dereferencing workarounds (TV2FP).
-      brokenPlugin = PR_FALSE;
-    }
-  }
-#endif /* BROKEN_PLUGIN_HACK */
-
-  NPP_PLUGIN_LOG(PLUGIN_LOG_BASIC,
-                 ("NPP MainEntryProc called: return=%d\n",error));
-
-  if (error != NPERR_NO_ERROR)
+  if(error != NPERR_NO_ERROR)
     return;
 
   // version is a uint16 so cast to int to avoid an invalid
@@ -614,16 +461,14 @@ ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary,
   if ((cb_version >> 8) < NP_VERSION_MAJOR)
     return;
 
-  // wrap all plugin entry points tvectors as mach-o callable function
-  // pointers.
+  // wrap all plugin entry points tvectors as mach-o callable function pointers.
   fCallbacks.size = sizeof(fCallbacks);
   fCallbacks.version = np_callbacks.version;
   fCallbacks.newp = (NPP_NewUPP) TV2FP(np_callbacks.newp);
   fCallbacks.destroy = (NPP_DestroyUPP) TV2FP(np_callbacks.destroy);
   fCallbacks.setwindow = (NPP_SetWindowUPP) TV2FP(np_callbacks.setwindow);
   fCallbacks.newstream = (NPP_NewStreamUPP) TV2FP(np_callbacks.newstream);
-  fCallbacks.destroystream =
-    (NPP_DestroyStreamUPP) TV2FP(np_callbacks.destroystream);
+  fCallbacks.destroystream = (NPP_DestroyStreamUPP) TV2FP(np_callbacks.destroystream);
   fCallbacks.asfile = (NPP_StreamAsFileUPP) TV2FP(np_callbacks.asfile);
   fCallbacks.writeready = (NPP_WriteReadyUPP) TV2FP(np_callbacks.writeready);
   fCallbacks.write = (NPP_WriteUPP) TV2FP(np_callbacks.write);
@@ -646,41 +491,47 @@ ns4xPlugin::ns4xPlugin(NPPluginFuncs* callbacks, PRLibrary* aLibrary,
 ns4xPlugin::~ns4xPlugin(void)
 {
   //reset the callbacks list
-#if defined(XP_MACOSX) && defined(__POWERPC__)
+#if defined(XP_MACOSX)
   // release all wrapped plugin entry points.
   if (fCallbacks.newp)
-    free((void *)fCallbacks.newp);
+    free(fCallbacks.newp);
   if (fCallbacks.destroy)
-    free((void *)fCallbacks.destroy);
+    free(fCallbacks.destroy);
   if (fCallbacks.setwindow)
-    free((void *)fCallbacks.setwindow);
+    free(fCallbacks.setwindow);
   if (fCallbacks.newstream)
-    free((void *)fCallbacks.newstream);
+    free(fCallbacks.newstream);
   if (fCallbacks.asfile)
-    free((void *)fCallbacks.asfile);
+    free(fCallbacks.asfile);
   if (fCallbacks.writeready)
-    free((void *)fCallbacks.writeready);
+    free(fCallbacks.writeready);
   if (fCallbacks.write)
-    free((void *)fCallbacks.write);
+    free(fCallbacks.write);
   if (fCallbacks.print)
-    free((void *)fCallbacks.print);
+    free(fCallbacks.print);
   if (fCallbacks.event)
-    free((void *)fCallbacks.event);
+    free(fCallbacks.event);
   if (fCallbacks.urlnotify)
-    free((void *)fCallbacks.urlnotify);
+    free(fCallbacks.urlnotify);
   if (fCallbacks.getvalue)
-    free((void *)fCallbacks.getvalue);
+    free(fCallbacks.getvalue);
   if (fCallbacks.setvalue)
-    free((void *)fCallbacks.setvalue);
+    free(fCallbacks.setvalue);
 #endif
   memset((void*) &fCallbacks, 0, sizeof(fCallbacks));
 }
 
 
-#if defined(XP_MACOSX)
 ////////////////////////////////////////////////////////////////////////
-void
-ns4xPlugin::SetPluginRefNum(short aRefNum)
+void ns4xPlugin::ReleaseStatics()
+{
+  NS_IF_RELEASE(gMalloc);
+}
+
+
+#if defined(XP_MAC) || defined(XP_MACOSX)
+////////////////////////////////////////////////////////////////////////
+void ns4xPlugin::SetPluginRefNum(short aRefNum)
 {
   fPluginRefNum = aRefNum;
 }
@@ -697,10 +548,18 @@ ns4xPlugin::SetPluginRefNum(short aRefNum)
 
 nsresult
 ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
-                         const char* aFileName, const char* aFullPath,
-                         PRLibrary* aLibrary, nsIPlugin** aResult)
+                         const char* aFileName,
+                         const char* aFullPath,
+                         PRLibrary* aLibrary,
+                         nsIPlugin** aResult)
 {
   CheckClassInitialized();
+
+  // set up the MemAllocator service now because it might be used by the plugin
+  if (aServiceMgr && !gMalloc) {
+    aServiceMgr->GetService(kMemoryCID, NS_GET_IID(nsIMemory),
+                            (nsISupports**)&gMalloc);
+  }
 
 #if defined(XP_UNIX) && !defined(XP_MACOSX)
 
@@ -710,12 +569,10 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   memset((void*) &callbacks, 0, sizeof(callbacks));
   callbacks.size = sizeof(callbacks);
 
-  NP_PLUGINSHUTDOWN pfnShutdown =
-    (NP_PLUGINSHUTDOWN)PR_FindSymbol(aLibrary, "NP_Shutdown");
+  NP_PLUGINSHUTDOWN pfnShutdown = (NP_PLUGINSHUTDOWN)PR_FindSymbol(aLibrary, "NP_Shutdown");
 
   // create the new plugin handler
-  *aResult = plptr =
-    new ns4xPlugin(&callbacks, aLibrary, pfnShutdown, aServiceMgr);
+  *aResult = plptr = new ns4xPlugin(&callbacks, aLibrary, pfnShutdown, aServiceMgr);
 
   if (*aResult == NULL)
     return NS_ERROR_OUT_OF_MEMORY;
@@ -730,8 +587,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   // require that mBrowserManager be set up
   plptr->Initialize();
 
-  NP_PLUGINUNIXINIT pfnInitialize =
-    (NP_PLUGINUNIXINIT)PR_FindSymbol(aLibrary, "NP_Initialize");
+  NP_PLUGINUNIXINIT pfnInitialize = (NP_PLUGINUNIXINIT)PR_FindSymbol(aLibrary, "NP_Initialize");
 
   if (pfnInitialize == NULL)
     return NS_ERROR_UNEXPECTED; // XXX Right error?
@@ -744,9 +600,8 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
 #endif
 
 #ifdef XP_WIN
-  // Note: on Windows, we must use the fCallback because plugins may
-  // change the function table. The Shockwave installer makes changes
-  // in the table while running
+  // Note: on Windows, we must use the fCallback because plugins may change
+  // the function table. The Shockwave installer makes changes in the table while running
   *aResult = new ns4xPlugin(nsnull, aLibrary, nsnull, aServiceMgr);
 
   if (*aResult == NULL)
@@ -754,7 +609,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
 
   NS_ADDREF(*aResult);
 
-  // we must init here because the plugin may call NPN functions
+  // we must init here because the plugin may call NPN functions 
   // when we call into the NP_Initialize entry point - NPN functions
   // require that mBrowserManager be set up
   if (NS_FAILED((*aResult)->Initialize())) {
@@ -768,8 +623,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   // I don't want to break the plugins already in the field, so
   // we'll accept either name
 
-  NP_PLUGININIT pfnInitialize =
-    (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_Initialize");
+  NP_PLUGININIT pfnInitialize = (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_Initialize");
 
   if (!pfnInitialize)
     pfnInitialize = (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_PluginInit");
@@ -790,7 +644,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
 
   NS_ADDREF(*aResult);
 
-  // we must init here because the plugin may call NPN functions
+  // we must init here because the plugin may call NPN functions 
   // when we call into the NP_Initialize entry point - NPN functions
   // require that mBrowserManager be set up
   if (NS_FAILED((*aResult)->Initialize())) {
@@ -804,8 +658,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   // I don't want to break the plugins already in the field, so
   // we'll accept either name
 
-  NP_PLUGININIT pfnInitialize =
-    (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_Initialize");
+  NP_PLUGININIT pfnInitialize = (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_Initialize");
 
   if (!pfnInitialize)
     pfnInitialize = (NP_PLUGININIT)PR_FindSymbol(aLibrary, "NP_PluginInit");
@@ -813,12 +666,11 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   if (pfnInitialize == NULL)
     return NS_ERROR_UNEXPECTED; // XXX Right error?
 
-  // Fixes problem where the OS/2 native multimedia plugins weren't
-  // working on mozilla though did work on 4.x.  Problem is that they
-  // expect the current working directory to be the plugins dir.
-  // Since these plugins are no longer maintained and they represent
-  // the majority of the OS/2 plugin contingency, we'll have to make
-  // them work here.
+  //Fixes problem where the OS/2 native multimedia plugins weren't working
+  //   on mozilla though did work on 4.x.  Problem is that they expect the
+  //   current working directory to be the plugins dir.  Since these plugins
+  //   are no longer maintained and they represent the majority of the OS/2
+  //   plugin contingency, we'll have to make them work here.
 
 #define MAP_DISKNUM_TO_LETTER(n) ('A' + (n - 1))
 #define MAP_LETTER_TO_DISKNUM(c) (toupper(c)-'A'+1)
@@ -865,13 +717,13 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
     rc = DosSetCurrentDir(origPath);
     NS_ASSERTION(NO_ERROR == rc,"DosSetCurrentDir failed");
   }
-
+  
   if (!NS_SUCCEEDED(rv)) {
     return NS_ERROR_UNEXPECTED;
   }
 #endif
 
-#if defined(XP_MACOSX)
+#if defined(XP_MAC) || defined(XP_MACOSX)
   short appRefNum = ::CurResFile();
   short pluginRefNum;
 
@@ -885,7 +737,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
     return NS_ERROR_FAILURE;
 
   ns4xPlugin* plugin = new ns4xPlugin(nsnull, aLibrary, nsnull, aServiceMgr);
-  if (plugin == NULL)
+  if(plugin == NULL)
     return NS_ERROR_OUT_OF_MEMORY;
 
   ::UseResFile(appRefNum);
@@ -898,7 +750,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   }
 
   plugin->SetPluginRefNum(pluginRefNum);
-#endif  // XP_MACOSX
+#endif  // XP_MAC || XP_MACOSX
 
 #ifdef XP_BEOS
   // I just copied UNIX version.
@@ -910,12 +762,10 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   memset((void*) &callbacks, 0, sizeof(callbacks));
   callbacks.size = sizeof(callbacks);
 
-  NP_PLUGINSHUTDOWN pfnShutdown =
-    (NP_PLUGINSHUTDOWN)PR_FindSymbol(aLibrary, "NP_Shutdown");
+  NP_PLUGINSHUTDOWN pfnShutdown = (NP_PLUGINSHUTDOWN)PR_FindSymbol(aLibrary, "NP_Shutdown");
 
   // create the new plugin handler
-  *aResult = plptr =
-    new ns4xPlugin(&callbacks, aLibrary, pfnShutdown, aServiceMgr);
+  *aResult = plptr = new ns4xPlugin(&callbacks, aLibrary, pfnShutdown, aServiceMgr);
 
   if (*aResult == NULL)
     return NS_ERROR_OUT_OF_MEMORY;
@@ -927,8 +777,7 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
   // require that mBrowserManager be set up
   plptr->Initialize();
 
-  NP_PLUGINUNIXINIT pfnInitialize =
-    (NP_PLUGINUNIXINIT)PR_FindSymbol(aLibrary, "NP_Initialize");
+  NP_PLUGINUNIXINIT pfnInitialize = (NP_PLUGINUNIXINIT)PR_FindSymbol(aLibrary, "NP_Initialize");
 
   if (pfnInitialize == NULL)
     return NS_ERROR_FAILURE;
@@ -949,9 +798,9 @@ ns4xPlugin::CreatePlugin(nsIServiceManagerObsolete* aServiceMgr,
 //----------------
 //Creates a ns4xPluginInstance object.
 
-nsresult
-ns4xPlugin::CreateInstance(nsISupports *aOuter, const nsIID &aIID,
-                           void **aResult)
+nsresult ns4xPlugin::CreateInstance(nsISupports *aOuter,  
+                                    const nsIID &aIID,  
+                                    void **aResult)  
 {
   if (aResult == NULL)
     return NS_ERROR_NULL_POINTER;
@@ -962,7 +811,7 @@ ns4xPlugin::CreateInstance(nsISupports *aOuter, const nsIID &aIID,
   nsRefPtr<ns4xPluginInstance> inst =
     new ns4xPluginInstance(&fCallbacks, fLibrary);
 
-  if (!inst)
+  if (!inst) 
     return NS_ERROR_OUT_OF_MEMORY;
 
   return inst->QueryInterface(aIID, aResult);
@@ -970,18 +819,18 @@ ns4xPlugin::CreateInstance(nsISupports *aOuter, const nsIID &aIID,
 
 
 ////////////////////////////////////////////////////////////////////////
-nsresult
-ns4xPlugin::LockFactory(PRBool aLock)
-{
-  // Not implemented in simplest case.
+nsresult ns4xPlugin::LockFactory(PRBool aLock)  
+{  
+  // Not implemented in simplest case.  
   return NS_OK;
-}
+}  
 
 
 ////////////////////////////////////////////////////////////////////////
-NS_METHOD
-ns4xPlugin::CreatePluginInstance(nsISupports *aOuter, REFNSIID aIID,
-                                 const char *aPluginMIMEType, void **aResult)
+NS_METHOD ns4xPlugin::CreatePluginInstance(nsISupports *aOuter,
+                                           REFNSIID    aIID, 
+                                           const char  *aPluginMIMEType,
+                                           void        **aResult)
 {
   return CreateInstance(aOuter, aIID, aResult);
 }
@@ -1001,26 +850,24 @@ ns4xPlugin::Initialize(void)
 nsresult
 ns4xPlugin::Shutdown(void)
 {
-  NPP_PLUGIN_LOG(PLUGIN_LOG_BASIC,
-                 ("NPP Shutdown to be called: this=%p\n", this));
+  NPP_PLUGIN_LOG(PLUGIN_LOG_BASIC, ("NPP Shutdown to be called: this=%p\n",this));
 
   if (nsnull != fShutdownEntry) {
-#if defined(XP_MACOSX)
+#if defined(XP_MAC) || defined(XP_MACOSX)
     CallNPP_ShutdownProc(fShutdownEntry);
     ::CloseResFile(fPluginRefNum);
 #else
     NS_TRY_SAFE_CALL_VOID(fShutdownEntry(), fLibrary, nsnull);
 #endif
 
-#if defined(XP_MACOSX) && defined(__POWERPC__)
+#if defined(XP_MACOSX)
     // release the wrapped plugin function.
-    free((void *)fShutdownEntry);
+    free(fShutdownEntry);
 #endif
     fShutdownEntry = nsnull;
   }
 
-  PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-             ("4xPlugin Shutdown done, this=%p", this));
+  PLUGIN_LOG(PLUGIN_LOG_NORMAL,("4xPlugin Shutdown done, this=%p",this));
   return NS_OK;
 }
 
@@ -1029,14 +876,11 @@ ns4xPlugin::Shutdown(void)
 nsresult
 ns4xPlugin::GetMIMEDescription(const char* *resultingDesc)
 {
-  const char* (*npGetMIMEDescription)() =
-    (const char* (*)()) PR_FindSymbol(fLibrary, "NP_GetMIMEDescription");
+  const char* (*npGetMIMEDescription)() = (const char* (*)()) PR_FindSymbol(fLibrary, "NP_GetMIMEDescription");
 
   *resultingDesc = npGetMIMEDescription ? npGetMIMEDescription() : "";
 
-  PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-             ("ns4xPlugin::GetMIMEDescription called: this=%p, result=%s\n",
-              this, *resultingDesc));
+  PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("ns4xPlugin::GetMIMEDescription called: this=%p, result=%s\n",this, *resultingDesc));
 
   return NS_OK;
 }
@@ -1047,11 +891,10 @@ nsresult
 ns4xPlugin::GetValue(nsPluginVariable variable, void *value)
 {
   PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-  ("ns4xPlugin::GetValue called: this=%p, variable=%d\n", this, variable));
+  ("ns4xPlugin::GetValue called: this=%p, variable=%d\n",this,variable));
 
   NPError (*npGetValue)(void*, nsPluginVariable, void*) =
-    (NPError (*)(void*, nsPluginVariable, void*)) PR_FindSymbol(fLibrary,
-                                                                "NP_GetValue");
+    (NPError (*)(void*, nsPluginVariable, void*)) PR_FindSymbol(fLibrary, "NP_GetValue");
 
   if (npGetValue && NPERR_NO_ERROR == npGetValue(nsnull, variable, value)) {
     return NS_OK;
@@ -1060,24 +903,23 @@ ns4xPlugin::GetValue(nsPluginVariable variable, void *value)
   return NS_ERROR_FAILURE;
 }
 
-// Create a new NPP GET or POST (given in the type argument) url
-// stream that may have a notify callback
-NPError
-MakeNew4xStreamInternal(NPP npp, const char *relativeURL, const char *target,
-                        eNPPStreamTypeInternal type,
-                        PRBool bDoNotify = PR_FALSE,
-                        void *notifyData = nsnull, uint32 len = 0,
-                        const char *buf = nsnull, NPBool file = PR_FALSE)
+// Create a new NPP GET or POST url stream that may have a notify callback
+NPError MakeNew4xStreamInternal (NPP npp, 
+                                 const char *relativeURL, 
+                                 const char *target, 
+                                 eNPPStreamTypeInternal type,  /* GET or POST */
+                                 PRBool bDoNotify = PR_FALSE,
+                                 void *notifyData = nsnull,
+                                 uint32 len = 0, 
+                                 const char *buf = nsnull, 
+                                 NPBool file = PR_FALSE)
 {
-  if (!npp)
-    return NPERR_INVALID_INSTANCE_ERROR;
-
-  PluginDestructionGuard guard(npp);
+  if(!npp) return NPERR_INVALID_INSTANCE_ERROR;
 
   nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
 
   NS_ASSERTION(inst != NULL, "null instance");
-  if (inst == NULL)
+  if (inst == NULL) 
     return NPERR_INVALID_INSTANCE_ERROR;
 
   nsCOMPtr<nsIPluginManager> pm = do_GetService(kPluginManagerCID);
@@ -1085,21 +927,19 @@ MakeNew4xStreamInternal(NPP npp, const char *relativeURL, const char *target,
   if (!pm) return NPERR_GENERIC_ERROR;
 
   nsIPluginStreamListener* listener = nsnull;
-  if (target == nsnull)
-    ((ns4xPluginInstance*)inst)->NewNotifyStream(&listener, notifyData,
-                                                 bDoNotify, relativeURL);
+  if(target == nsnull)
+    ((ns4xPluginInstance*)inst)->NewNotifyStream(&listener, notifyData, bDoNotify, relativeURL);
 
   switch (type) {
   case eNPPStreamTypeInternal_Get:
     {
-      if (NS_FAILED(pm->GetURL(inst, relativeURL, target, listener)))
+      if(NS_FAILED(pm->GetURL(inst, relativeURL, target, listener)))
         return NPERR_GENERIC_ERROR;
       break;
     }
   case eNPPStreamTypeInternal_Post:
     {
-      if (NS_FAILED(pm->PostURL(inst, relativeURL, len, buf, file, target,
-                                listener)))
+      if(NS_FAILED(pm->PostURL(inst, relativeURL, len, buf, file, target, listener)))
         return NPERR_GENERIC_ERROR;
       break;
     }
@@ -1119,45 +959,20 @@ NPError NP_EXPORT
 _geturl(NPP npp, const char* relativeURL, const char* target)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-  ("NPN_GetURL: npp=%p, target=%s, url=%s\n", (void *)npp, target,
-   relativeURL));
+  ("NPN_GetURL: npp=%p, target=%s, url=%s\n", (void *)npp, target, relativeURL));
 
-  PluginDestructionGuard guard(npp);
-
-  // Block Adobe Acrobat from loading URLs that are not http:, https:,
-  // or ftp: URLs if the given target is null.
-  if (target == nsnull && relativeURL &&
-      (strncmp(relativeURL, "http:", 5) != 0) &&
-      (strncmp(relativeURL, "https:", 6) != 0) &&
-      (strncmp(relativeURL, "ftp:", 4) != 0)) {
-    ns4xPluginInstance *inst = (ns4xPluginInstance *) npp->ndata;
-
-    const char *name = nsPluginHostImpl::GetPluginName(inst);
-
-    if (name && strstr(name, "Adobe") && strstr(name, "Acrobat")) {
-      return NPERR_NO_ERROR;
-    }
-  }
-
-  return MakeNew4xStreamInternal (npp, relativeURL, target,
-                                  eNPPStreamTypeInternal_Get);
+  return MakeNew4xStreamInternal (npp, relativeURL, target, eNPPStreamTypeInternal_Get);
 }
 
 
 ////////////////////////////////////////////////////////////////////////
 NPError NP_EXPORT
-_geturlnotify(NPP npp, const char* relativeURL, const char* target,
-              void* notifyData)
+_geturlnotify(NPP npp, const char* relativeURL, const char* target, void* notifyData)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-    ("NPN_GetURLNotify: npp=%p, target=%s, notify=%p, url=%s\n", (void*)npp,
-     target, notifyData, relativeURL));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, 
+    ("NPN_GetURLNotify: npp=%p, target=%s, notify=%p, url=%s\n", (void*)npp, target, notifyData, relativeURL));
 
-  PluginDestructionGuard guard(npp);
-
-  return MakeNew4xStreamInternal (npp, relativeURL, target,
-                                  eNPPStreamTypeInternal_Get, PR_TRUE,
-                                  notifyData);
+  return MakeNew4xStreamInternal (npp, relativeURL, target, eNPPStreamTypeInternal_Get, PR_TRUE, notifyData);
 }
 
 
@@ -1167,16 +982,11 @@ _posturlnotify(NPP npp, const char *relativeURL, const char *target,
                uint32 len, const char *buf, NPBool file, void *notifyData)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_PostURLNotify: npp=%p, target=%s, len=%d, file=%d, "
-                  "notify=%p, url=%s, buf=%s\n",
-                  (void*)npp, target, len, file, notifyData, relativeURL,
-                  buf));
+  ("NPN_PostURLNotify: npp=%p, target=%s, len=%d, file=%d, notify=%p, url=%s, buf=%s\n",
+  (void*)npp, target, len, file, notifyData, relativeURL, buf));
 
-  PluginDestructionGuard guard(npp);
-
-  return MakeNew4xStreamInternal(npp, relativeURL, target,
-                                 eNPPStreamTypeInternal_Post, PR_TRUE,
-                                 notifyData, len, buf, file);
+  return MakeNew4xStreamInternal (npp, relativeURL, target, eNPPStreamTypeInternal_Post, 
+                                  PR_TRUE, notifyData, len, buf, file);
 }
 
 
@@ -1186,15 +996,11 @@ _posturl(NPP npp, const char *relativeURL, const char *target,
          uint32 len, const char *buf, NPBool file)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_PostURL: npp=%p, target=%s, file=%d, len=%d, url=%s, "
-                  "buf=%s\n",
-                  (void*)npp, target, file, len, relativeURL, buf));
+  ("NPN_PostURL: npp=%p, target=%s, file=%d, len=%d, url=%s, buf=%s\n",
+  (void*)npp, target, file, len, relativeURL, buf));
 
-  PluginDestructionGuard guard(npp);
-
-  return MakeNew4xStreamInternal(npp, relativeURL, target,
-                                 eNPPStreamTypeInternal_Post, PR_FALSE, nsnull,
-                                 len, buf, file);
+ return MakeNew4xStreamInternal (npp, relativeURL, target, eNPPStreamTypeInternal_Post, 
+                                 PR_FALSE, nsnull, len, buf, file);
 }
 
 
@@ -1249,24 +1055,20 @@ ns4xStreamWrapper::GetStream(nsIOutputStream* &result)
 
 ////////////////////////////////////////////////////////////////////////
 NPError NP_EXPORT
-_newstream(NPP npp, NPMIMEType type, const char* target, NPStream* *result)
+_newstream(NPP npp, NPMIMEType type, const char* window, NPStream* *result)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-  ("NPN_NewStream: npp=%p, type=%s, target=%s\n", (void*)npp,
-   (const char *)type, target));
+  ("NPN_NewStream: npp=%p, type=%s, window=%s\n", (void*)npp, (const char *)type, window));
 
   NPError err = NPERR_INVALID_INSTANCE_ERROR;
-  if (npp && npp->ndata) {
+  if(npp && npp->ndata) {
     nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
-
-    PluginDestructionGuard guard(inst);
-
     nsCOMPtr<nsIOutputStream> stream;
     nsCOMPtr<nsIPluginInstancePeer> peer;
-    if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) &&
+    if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && 
       peer &&
-      NS_SUCCEEDED(peer->NewStream((const char*) type, target,
-                                   getter_AddRefs(stream)))) {
+      NS_SUCCEEDED(peer->NewStream((const char*) type, window, getter_AddRefs(stream))))
+    {
       ns4xStreamWrapper* wrapper = new ns4xStreamWrapper(stream);
       if (wrapper) {
         (*result) = wrapper->GetNPStream();
@@ -1287,14 +1089,11 @@ int32 NP_EXPORT
 _write(NPP npp, NPStream *pstream, int32 len, void *buffer)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_Write: npp=%p, url=%s, len=%d, buffer=%s\n", (void*)npp,
-                  pstream->url, len, (char*)buffer));
+  ("NPN_Write: npp=%p, url=%s, len=%d, buffer=%s\n", (void*)npp, pstream->url, len, (char*)buffer));
 
   // negative return indicates failure to the plugin
-  if (!npp)
+  if(!npp)
     return -1;
-
-  PluginDestructionGuard guard(npp);
 
   ns4xStreamWrapper* wrapper = (ns4xStreamWrapper*) pstream->ndata;
   NS_ASSERTION(wrapper != NULL, "null stream");
@@ -1309,7 +1108,7 @@ _write(NPP npp, NPStream *pstream, int32 len, void *buffer)
   nsresult rv = stream->Write((char *)buffer, len, &count);
   NS_RELEASE(stream);
 
-  if (rv != NS_OK)
+  if(rv != NS_OK)
     return -1;
 
   return (int32)count;
@@ -1326,8 +1125,6 @@ _destroystream(NPP npp, NPStream *pstream, NPError reason)
 
   if (!npp)
     return NPERR_INVALID_INSTANCE_ERROR;
-
-  PluginDestructionGuard guard(npp);
 
   nsCOMPtr<nsIPluginStreamListener> listener =
     do_QueryInterface((nsISupports *)pstream->ndata);
@@ -1363,17 +1160,14 @@ _destroystream(NPP npp, NPStream *pstream, NPError reason)
 void NP_EXPORT
 _status(NPP npp, const char *message)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_Status: npp=%p, message=%s\n",
-                                     (void*)npp, message));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_Status: npp=%p, message=%s\n", (void*)npp, message));
 
-  if (!npp || !npp->ndata) {
+  if(!npp || !npp->ndata) {
     NS_WARNING("_status: npp or npp->ndata == 0");
     return;
   }
 
   nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
-
-  PluginDestructionGuard guard(inst);
 
   nsCOMPtr<nsIPluginInstancePeer> peer;
   if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && peer) {
@@ -1388,8 +1182,8 @@ _memfree (void *ptr)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY, ("NPN_MemFree: ptr=%p\n", ptr));
 
-  if (ptr)
-    nsMemory::Free(ptr);
+  if(ptr)
+    gMalloc->Free(ptr);
 }
 
 
@@ -1399,7 +1193,7 @@ _memflush(uint32 size)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY, ("NPN_MemFlush: size=%d\n", size));
 
-  nsMemory::HeapMinimize(PR_TRUE);
+  gMalloc->HeapMinimize(PR_TRUE);
   return 0;
 }
 
@@ -1408,8 +1202,7 @@ _memflush(uint32 size)
 void NP_EXPORT
 _reloadplugins(NPBool reloadPages)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_ReloadPlugins: reloadPages=%d\n", reloadPages));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_ReloadPlugins: reloadPages=%d\n", reloadPages));
 
   nsCOMPtr<nsIPluginManager> pm(do_GetService(kPluginManagerCID));
 
@@ -1422,18 +1215,15 @@ void NP_EXPORT
 _invalidaterect(NPP npp, NPRect *invalidRect)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_InvalidateRect: npp=%p, top=%d, left=%d, bottom=%d, "
-                  "right=%d\n", (void *)npp, invalidRect->top,
-                  invalidRect->left, invalidRect->bottom, invalidRect->right));
+  ("NPN_InvalidateRect: npp=%p, top=%d, left=%d, bottom=%d, right=%d\n",
+  (void *)npp, invalidRect->top, invalidRect->left, invalidRect->bottom, invalidRect->right));
 
-  if (!npp || !npp->ndata) {
+  if(!npp || !npp->ndata) {
     NS_WARNING("_invalidaterect: npp or npp->ndata == 0");
     return;
   }
 
   nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
-
-  PluginDestructionGuard guard(inst);
 
   nsCOMPtr<nsIPluginInstancePeer> peer;
   if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && peer) {
@@ -1451,17 +1241,14 @@ void NP_EXPORT
 _invalidateregion(NPP npp, NPRegion invalidRegion)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL,
-                 ("NPN_InvalidateRegion: npp=%p, region=%p\n", (void*)npp,
-                  (void*)invalidRegion));
+  ("NPN_InvalidateRegion: npp=%p, region=%p\n", (void*)npp, (void*)invalidRegion));
 
-  if (!npp || !npp->ndata) {
+  if(!npp || !npp->ndata) {
     NS_WARNING("_invalidateregion: npp or npp->ndata == 0");
     return;
   }
 
   nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
-
-  PluginDestructionGuard guard(inst);
 
   nsCOMPtr<nsIPluginInstancePeer> peer;
   if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && peer) {
@@ -1480,14 +1267,12 @@ _forceredraw(NPP npp)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_ForceDraw: npp=%p\n", (void*)npp));
 
-  if (!npp || !npp->ndata) {
+  if(!npp || !npp->ndata) {
     NS_WARNING("_forceredraw: npp or npp->ndata == 0");
     return;
   }
 
   nsIPluginInstance *inst = (nsIPluginInstance *) npp->ndata;
-
-  PluginDestructionGuard guard(inst);
 
   nsCOMPtr<nsIPluginInstancePeer> peer;
   if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && peer) {
@@ -1505,8 +1290,6 @@ GetJSContextFromNPP(NPP npp)
 
   ns4xPluginInstance *inst = (ns4xPluginInstance *)npp->ndata;
   NS_ENSURE_TRUE(inst, nsnull);
-
-  PluginDestructionGuard guard(inst);
 
   nsCOMPtr<nsIPluginInstancePeer> pip;
   inst->GetPeer(getter_AddRefs(pip));
@@ -1536,9 +1319,6 @@ _getwindowobject(NPP npp)
   JSContext *cx = GetJSContextFromNPP(npp);
   NS_ENSURE_TRUE(cx, nsnull);
 
-  // Using ::JS_GetGlobalObject(cx) is ok here since the window we
-  // want to return here is the outer window, *not* the inner (since
-  // we don't know what the plugin will do with it).
   return nsJSObjWrapper::GetNewOrUsed(npp, cx, ::JS_GetGlobalObject(cx));
 }
 
@@ -1678,8 +1458,6 @@ _createobject(NPP npp, NPClass* aClass)
     return nsnull;
   }
 
-  PluginDestructionGuard guard(npp);
-
   if (!aClass) {
     NS_ERROR("Null class passed to _createobject()!");
 
@@ -1700,9 +1478,6 @@ _createobject(NPP npp, NPClass* aClass)
     npobj->_class = aClass;
     npobj->referenceCount = 1;
   }
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("Created NPObject %p, NPClass %p\n", npobj, aClass));
 
   return npobj;
 }
@@ -1741,14 +1516,8 @@ _invoke(NPP npp, NPObject* npobj, NPIdentifier method, const NPVariant *args,
   if (!npp || !npobj || !npobj->_class || !npobj->_class->invoke)
     return false;
 
-  PluginDestructionGuard guard(npp);
-
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_Invoke(npp %p, npobj %p, method %p, args %d\n", npp,
-                  npobj, method, argCount));
 
   return npobj->_class->invoke(npobj, method, args, argCount, result);
 }
@@ -1762,10 +1531,6 @@ _invokeDefault(NPP npp, NPObject* npobj, const NPVariant *args,
 
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_InvokeDefault(npp %p, npobj %p, args %d\n", npp,
-                  npobj, argCount));
 
   return npobj->_class->invokeDefault(npobj, args, argCount, result);
 }
@@ -1788,11 +1553,6 @@ _evaluate(NPP npp, NPObject* npobj, NPString *script, NPVariant *result)
     return false;
   }
 
-  // Root obj and the rval (below).
-  jsval vec[] = { OBJECT_TO_JSVAL(obj), JSVAL_NULL };
-  JSAutoTempValueRooter tvr(cx, NS_ARRAY_LENGTH(vec), vec);
-  jsval *rval = &vec[1];
-
   if (result) {
     // Initialize the out param to void
     VOID_TO_NPVARIANT(*result);
@@ -1813,15 +1573,16 @@ _evaluate(NPP npp, NPObject* npobj, NPString *script, NPVariant *result)
   nsIPrincipal *principal = nsnull;
   // XXX: Get the principal from the security stack (TBD)
 
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_Evaluate(npp %p, npobj %p, script <<<%s>>>) called\n",
-                  npp, npobj, script->utf8characters));
-
+  jsval rval;
   nsresult rv = scx->EvaluateStringWithValue(utf16script, obj, principal,
-                                             nsnull, 0, nsnull, rval, nsnull);
+                                             nsnull, 0, nsnull, &rval, nsnull);
+  NS_ENSURE_SUCCESS(rv, false);
 
-  return NS_SUCCEEDED(rv) &&
-         (!result || JSValToNPVariant(npp, cx, *rval, result));
+  if (result) {
+    return JSValToNPVariant(npp, cx, rval, result);
+  }
+
+  return true;
 }
 
 bool NP_EXPORT
@@ -1833,10 +1594,6 @@ _getproperty(NPP npp, NPObject* npobj, NPIdentifier property,
 
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_GetProperty(npp %p, npobj %p, property %p) called\n",
-                  npp, npobj, property));
 
   return npobj->_class->getProperty(npobj, property, result);
 }
@@ -1851,10 +1608,6 @@ _setproperty(NPP npp, NPObject* npobj, NPIdentifier property,
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
 
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_SetProperty(npp %p, npobj %p, property %p) called\n",
-                  npp, npobj, property));
-
   return npobj->_class->setProperty(npobj, property, value);
 }
 
@@ -1866,10 +1619,6 @@ _removeproperty(NPP npp, NPObject* npobj, NPIdentifier property)
 
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_RemoveProperty(npp %p, npobj %p, property %p) called\n",
-                  npp, npobj, property));
 
   return npobj->_class->removeProperty(npobj, property);
 }
@@ -1883,10 +1632,6 @@ _hasproperty(NPP npp, NPObject* npobj, NPIdentifier propertyName)
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
 
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_HasProperty(npp %p, npobj %p, property %p) called\n",
-                  npp, npobj, propertyName));
-
   return npobj->_class->hasProperty(npobj, propertyName);
 }
 
@@ -1898,10 +1643,6 @@ _hasmethod(NPP npp, NPObject* npobj, NPIdentifier methodName)
 
   NPPExceptionAutoHolder nppExceptionHolder;
   NPPAutoPusher nppPusher(npp);
-
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY,
-                 ("NPN_HasMethod(npp %p, npobj %p, property %p) called\n",
-                  npp, npobj, methodName));
 
   return npobj->_class->hasProperty(npobj, methodName);
 }
@@ -1998,31 +1739,28 @@ NPPExceptionAutoHolder::~NPPExceptionAutoHolder()
 NPError NP_EXPORT
 _getvalue(NPP npp, NPNVariable variable, void *result)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_GetValue: npp=%p, var=%d\n",
-                                     (void*)npp, (int)variable));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_GetValue: npp=%p, var=%d\n", (void*)npp, (int)variable));
 
   nsresult res;
-
-  PluginDestructionGuard guard(npp);
 
   switch(variable) {
 #if defined(XP_UNIX) && !defined(XP_MACOSX)
   case NPNVxDisplay : {
 #ifdef MOZ_WIDGET_GTK2
-    if (npp) {
+    if(npp) {
       ns4xPluginInstance *inst = (ns4xPluginInstance *) npp->ndata;
       NPBool rtv = PR_FALSE;
       inst->GetValue((nsPluginInstanceVariable)NPPVpluginNeedsXEmbed, &rtv);
-      if (rtv) {
+      if(rtv) {
         (*(Display **)result) = GDK_DISPLAY();
         return NPERR_NO_ERROR;
       }
     }
 #endif
 #if defined(MOZ_WIDGET_GTK) || defined(MOZ_WIDGET_GTK2)
-    // adobe nppdf calls XtGetApplicationNameAndClass(display,
-    // &instance, &class) we have to init Xt toolkit before get
-    // XtDisplay just call gtk_xtbin_new(w,0) once
+    // adobe nppdf calls XtGetApplicationNameAndClass(display, &instance, &class)
+    // we have to init Xt toolkit before get XtDisplay
+    // just call gtk_xtbin_new(w,0) once
     static GtkWidget *gtkXtBinHolder = 0;
     if (!gtkXtBinHolder) {
       gtkXtBinHolder = gtk_xtbin_new(GDK_ROOT_PARENT(),0);
@@ -2035,7 +1773,7 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
     return NPERR_GENERIC_ERROR;
   }
 
-  case NPNVxtAppContext:
+  case NPNVxtAppContext: 
     return NPERR_GENERIC_ERROR;
 #endif
 
@@ -2048,9 +1786,9 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
 
     nsCOMPtr<nsIPluginInstancePeer> peer;
     if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) &&
-        peer &&
-        NS_SUCCEEDED(peer->GetValue(nsPluginInstancePeerVariable_NetscapeWindow,
-                                    result))) {
+        peer && 
+        NS_SUCCEEDED(peer->GetValue(nsPluginInstancePeerVariable_NetscapeWindow, result)))
+    {
       return NPERR_NO_ERROR;
     }
     return NPERR_GENERIC_ERROR;
@@ -2058,33 +1796,24 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
 #endif
 
   case NPNVjavascriptEnabledBool: {
-    *(NPBool*)result = PR_FALSE;
-    nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
-    if (prefs) {
+    *(NPBool*)result = PR_FALSE; 
+    nsCOMPtr<nsIPref> prefs(do_GetService(kPrefServiceCID));
+    if(prefs) {
       PRBool js = PR_FALSE;;
       res = prefs->GetBoolPref("javascript.enabled", &js);
-      if (NS_SUCCEEDED(res))
-        *(NPBool*)result = js;
+      if(NS_SUCCEEDED(res))
+        *(NPBool*)result = js; 
     }
     return NPERR_NO_ERROR;
   }
 
-  case NPNVasdEnabledBool:
-    *(NPBool*)result = FALSE;
+  case NPNVasdEnabledBool: 
+    *(NPBool*)result = FALSE; 
     return NPERR_NO_ERROR;
 
-  case NPNVisOfflineBool: {
-    PRBool offline = PR_FALSE;
-    nsCOMPtr<nsIIOService> ioservice =
-      do_GetService(NS_IOSERVICE_CONTRACTID, &res);
-    if (NS_SUCCEEDED(res))
-      res = ioservice->GetOffline(&offline);
-    if (NS_FAILED(res))
-      return NPERR_GENERIC_ERROR;
-
-    *(NPBool*)result = offline;
+  case NPNVisOfflineBool: 
+    *(NPBool*)result = FALSE; 
     return NPERR_NO_ERROR;
-  }
 
   case NPNVserviceManager: {
     nsIServiceManager * sm;
@@ -2115,16 +1844,26 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
   }
 
   case NPNVDOMWindow: {
-    ns4xPluginInstance *inst = (ns4xPluginInstance *)npp->ndata;
+    ns4xPluginInstance *inst = (ns4xPluginInstance *) npp->ndata;
     NS_ENSURE_TRUE(inst, NPERR_GENERIC_ERROR);
 
-    nsIDOMWindow *domWindow = inst->GetDOMWindow().get();
-
-    if (domWindow) {
-      // Pass over ownership of domWindow to the caller.
-      (*(nsIDOMWindow**)result) = domWindow;
-
-      return NPERR_NO_ERROR;
+    nsCOMPtr<nsIPluginInstancePeer> pip;
+    inst->GetPeer(getter_AddRefs(pip));
+    nsCOMPtr<nsPIPluginInstancePeer> pp (do_QueryInterface(pip));
+    if (pp) {
+      nsCOMPtr<nsIPluginInstanceOwner> owner;
+      pp->GetOwner(getter_AddRefs(owner));
+      if (owner) {
+        nsCOMPtr<nsIDocument> doc;
+        owner->GetDocument(getter_AddRefs(doc));
+        if (doc) {
+          nsCOMPtr<nsIDOMWindow> domWindow (do_QueryInterface(doc->GetScriptGlobalObject()));
+          if (domWindow) {
+            NS_ADDREF(*(nsIDOMWindow**)result = domWindow.get());
+            return NPERR_NO_ERROR;
+          }
+        }
+      }
     }
     return NPERR_GENERIC_ERROR;
   }
@@ -2146,9 +1885,9 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
 
   case NPNVSupportsXEmbedBool: {
 #ifdef MOZ_WIDGET_GTK2
-    *(NPBool*)result = PR_TRUE;
+    *(NPBool*)result = PR_TRUE; 
 #else
-    *(NPBool*)result = PR_FALSE;
+    *(NPBool*)result = PR_FALSE; 
 #endif
     return NPERR_NO_ERROR;
   }
@@ -2174,20 +1913,17 @@ _getvalue(NPP npp, NPNVariable variable, void *result)
 NPError NP_EXPORT
 _setvalue(NPP npp, NPPVariable variable, void *result)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_SetValue: npp=%p, var=%d\n",
-                                     (void*)npp, (int)variable));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_SetValue: npp=%p, var=%d\n", (void*)npp, (int)variable));
 
-  if (!npp)
+  if(!npp)
     return NPERR_INVALID_INSTANCE_ERROR;
 
   ns4xPluginInstance *inst = (ns4xPluginInstance *) npp->ndata;
-
+  
   NS_ASSERTION(inst != NULL, "null instance");
 
   if (inst == NULL)
     return NPERR_INVALID_INSTANCE_ERROR;
-
-  PluginDestructionGuard guard(inst);
 
   switch (variable) {
 
@@ -2203,27 +1939,20 @@ _setvalue(NPP npp, NPPVariable variable, void *result)
       NPBool bTransparent = (result != nsnull);
       return inst->SetTransparent(bTransparent);
     }
-
+        
     case NPPVjavascriptPushCallerBool:
       {
         nsresult rv;
-        nsCOMPtr<nsIJSContextStack> contextStack =
-          do_GetService("@mozilla.org/js/xpc/ContextStack;1", &rv);
+        nsCOMPtr<nsIJSContextStack> contextStack = do_GetService("@mozilla.org/js/xpc/ContextStack;1", &rv);
         if (NS_SUCCEEDED(rv)) {
           NPBool bPushCaller = (result != nsnull);
-
           if (bPushCaller) {
-            rv = NS_ERROR_FAILURE;
-
             nsCOMPtr<nsIPluginInstancePeer> peer;
             if (NS_SUCCEEDED(inst->GetPeer(getter_AddRefs(peer))) && peer) {
-              nsCOMPtr<nsIPluginInstancePeer2> peer2 =
-                do_QueryInterface(peer);
-
-              if (peer2) {
+              nsCOMPtr<nsIPluginInstancePeer2> peer2 = do_QueryInterface(peer, &rv);
+              if (NS_SUCCEEDED(rv) && peer2) {
                 JSContext *cx;
                 rv = peer2->GetJSContext(&cx);
-
                 if (NS_SUCCEEDED(rv))
                   rv = contextStack->Push(cx);
               }
@@ -2235,7 +1964,7 @@ _setvalue(NPP npp, NPPVariable variable, void *result)
         return NS_SUCCEEDED(rv) ? NPERR_NO_ERROR : NPERR_GENERIC_ERROR;
       }
       break;
-
+    
     case NPPVpluginKeepLibraryInMemory: {
       NPBool bCached = (result != nsnull);
       return inst->SetCached(bCached);
@@ -2250,36 +1979,49 @@ _setvalue(NPP npp, NPPVariable variable, void *result)
 NPError NP_EXPORT
 _requestread(NPStream *pstream, NPByteRange *rangeList)
 {
-  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_RequestRead: stream=%p\n",
-                                     (void*)pstream));
+  NPN_PLUGIN_LOG(PLUGIN_LOG_NORMAL, ("NPN_RequestRead: stream=%p\n", (void*)pstream));
 
-#ifdef PLUGIN_LOGGING
+#if PLUGIN_LOGGING
   for(NPByteRange * range = rangeList; range != nsnull; range = range->next)
-    PR_LOG(nsPluginLogging::gNPNLog,PLUGIN_LOG_NOISY,
+    PR_LOG(nsPluginLogging::gNPNLog,PLUGIN_LOG_NOISY, 
     ("%i-%i", range->offset, range->offset + range->length - 1));
 
   PR_LOG(nsPluginLogging::gNPNLog,PLUGIN_LOG_NOISY, ("\n\n"));
   PR_LogFlush();
 #endif
-
-  if (!pstream || !rangeList || !pstream->ndata)
+  
+  if(!pstream || !rangeList || !pstream->ndata)
     return NPERR_INVALID_PARAM;
-
-  ns4xPluginStreamListener * streamlistener =
-    (ns4xPluginStreamListener *)pstream->ndata;
-
+  
+  nsresult res = NS_OK;
+  
+  ns4xPluginStreamListener * streamlistener = (ns4xPluginStreamListener *)pstream->ndata;
+  
+  if(NS_FAILED(res))
+    return NPERR_GENERIC_ERROR;
+  
   nsPluginStreamType streamtype = nsPluginStreamType_Normal;
-
+  
   streamlistener->GetStreamType(&streamtype);
-
-  if (streamtype != nsPluginStreamType_Seek)
+  
+  if(streamtype != nsPluginStreamType_Seek)
     return NPERR_STREAM_NOT_SEEKABLE;
-
-  if (streamlistener->mStreamInfo)
+  
+  if(streamlistener->mStreamInfo)
     streamlistener->mStreamInfo->RequestRead((nsByteRange *)rangeList);
-
+  
   return NS_OK;
 }
+
+////////////////////////////////////////////////////////////////////////
+//
+// On 68K Mac (XXX still supported?), we need to make sure that the
+// pointers are in D0 for the following functions that return pointers.
+//
+
+#if defined(XP_MAC) && !defined(powerc)
+#pragma pointers_in_D0
+#endif
 
 ////////////////////////////////////////////////////////////////////////
 #ifdef OJI
@@ -2312,7 +2054,7 @@ void * NP_EXPORT
 _memalloc (uint32 size)
 {
   NPN_PLUGIN_LOG(PLUGIN_LOG_NOISY, ("NPN_MemAlloc: size=%d\n", size));
-  return nsMemory::Alloc(size);
+  return gMalloc->Alloc(size);
 }
 
 #ifdef OJI
@@ -2326,24 +2068,5 @@ _getJavaPeer(NPP npp)
 
 #endif /* OJI */
 
-void NP_EXPORT
-_pushpopupsenabledstate(NPP npp, NPBool enabled)
-{
-  ns4xPluginInstance *inst = (ns4xPluginInstance *)npp->ndata;
-  if (!inst)
-    return;
-
-  inst->PushPopupsEnabledState(enabled);
-}
-
-void NP_EXPORT
-_poppopupsenabledstate(NPP npp)
-{
-  ns4xPluginInstance *inst = (ns4xPluginInstance *)npp->ndata;
-  if (!inst)
-    return;
-
-  inst->PopPopupsEnabledState();
-}
 
 NPP NPPStack::sCurrentNPP = nsnull;

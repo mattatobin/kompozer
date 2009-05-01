@@ -39,7 +39,7 @@
 #include "nsIGenericFactory.h"
 
 #include "mozSpellChecker.h"
-#include "mozInlineSpellChecker.h"
+#include "mozRealTimeSpell.h"
 #include "nsTextServicesCID.h"
 #include "mozPersonalDictionary.h"
 #include "mozSpellI18NManager.h"
@@ -49,55 +49,16 @@
 0x8227F019, 0xAFC7, 0x461e,                     \
 { 0xB0, 0x30, 0x9F, 0x18, 0x5D, 0x7A, 0x0E, 0x29} }
 
-#define MOZ_INLINESPELLCHECKER_CID         \
-{ /* 9FE5D975-09BD-44aa-A01A-66402EA28657 */    \
-0x9fe5d975, 0x9bd, 0x44aa,                      \
-{ 0xa0, 0x1a, 0x66, 0x40, 0x2e, 0xa2, 0x86, 0x57} }
-
 ////////////////////////////////////////////////////////////////////////
 // Define the contructor function for the objects
 //
 // NOTE: This creates an instance of objects by using the default constructor
 //
 
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(mozSpellChecker, Init)
+NS_GENERIC_FACTORY_CONSTRUCTOR(mozSpellChecker)
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(mozPersonalDictionary, Init)
 NS_GENERIC_FACTORY_CONSTRUCTOR(mozSpellI18NManager)
-
-// This special constructor for the inline spell checker asks the inline
-// spell checker if we can create spell checking objects at all (ie, if there
-// are any dictionaries loaded) before trying to create one. The static
-// CanEnableInlineSpellChecking caches the value so this will be faster (we
-// have to run this code for every edit box we create, as well as for every
-// right click in those edit boxes).
-static NS_IMETHODIMP
-mozInlineSpellCheckerConstructor(nsISupports *aOuter, REFNSIID aIID,
-                                 void **aResult)
-{
-  if (! mozInlineSpellChecker::CanEnableInlineSpellChecking())
-    return NS_ERROR_FAILURE;
-
-  nsresult rv;
-
-  mozInlineSpellChecker* inst;
-
-  *aResult = NULL;
-  if (NULL != aOuter) {
-    rv = NS_ERROR_NO_AGGREGATION;
-    return rv;
-  }
-
-  NS_NEWXPCOM(inst, mozInlineSpellChecker);
-  if (NULL == inst) {
-    rv = NS_ERROR_OUT_OF_MEMORY;
-    return rv;
-  }
-  NS_ADDREF(inst);
-  rv = inst->QueryInterface(aIID, aResult);
-  NS_RELEASE(inst);
-
-  return rv;
-}
+NS_GENERIC_FACTORY_CONSTRUCTOR(mozRealTimeSpell)
 
 ////////////////////////////////////////////////////////////////////////
 // Define a table of CIDs implemented by this module along with other
@@ -108,7 +69,7 @@ static nsModuleComponentInfo components[] = {
   { NULL, NS_SPELLCHECKER_CID, NS_SPELLCHECKER_CONTRACTID, mozSpellCheckerConstructor },
   { NULL, MOZ_PERSONALDICTIONARY_CID, MOZ_PERSONALDICTIONARY_CONTRACTID, mozPersonalDictionaryConstructor },
   { NULL, MOZ_SPELLI18NMANAGER_CID, MOZ_SPELLI18NMANAGER_CONTRACTID, mozSpellI18NManagerConstructor },
-  { NULL, MOZ_INLINESPELLCHECKER_CID, MOZ_INLINESPELLCHECKER_CONTRACTID, mozInlineSpellCheckerConstructor }
+  { NULL, MOZ_REALTIMESPELL_CID, MOZ_REALTIMESPELL_CONTRACTID, mozRealTimeSpellConstructor }
 };
 
 ////////////////////////////////////////////////////////////////////////

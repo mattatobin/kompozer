@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT Processor.
  *
  * The Initial Developer of the Original Code is
  * Axel Hecht.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Axel Hecht <axel@pike.org>
+ *  Axel Hecht <axel@pike.org>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -37,11 +37,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "txStandaloneStylesheetCompiler.h"
-#include "TxLog.h"
 #include "txStylesheetCompiler.h"
 #include "txURIUtils.h"
-#include "expat_config.h"
-#include "expat.h"
+#include "xmlparse.h"
 
 /**
  *  Implementation of an In-Memory DOM based XML parser.  The actual XML
@@ -158,8 +156,8 @@ externalEntityRefHandler(XML_Parser aParser,
     // aParser is aUserData is the txDriver,
     // we set that in txDriver::parse
     NS_ENSURE_TRUE(aParser, XML_ERROR_NONE);
-    return ((txDriver*)aParser)->ExternalEntityRef(aContext, aBase,
-                                                   aSystemId, aPublicId);
+    return TX_DRIVER(aParser)->ExternalEntityRef(aContext, aBase,
+                                                 aSystemId, aPublicId);
 }
 
 
@@ -172,7 +170,7 @@ txDriver::parse(istream& aInputStream, const nsAString& aUri)
 {
     mErrorString.Truncate();
     if (!aInputStream) {
-        mErrorString.AppendLiteral("unable to parse xml: invalid or unopen stream encountered.");
+        mErrorString.Append(NS_LITERAL_STRING("unable to parse xml: invalid or unopen stream encountered."));
         return NS_ERROR_FAILURE;
     }
     mExpatParser = XML_ParserCreate(nsnull);
@@ -319,9 +317,9 @@ txDriver::createErrorString()
 {
     XML_Error errCode = XML_GetErrorCode(mExpatParser);
     mErrorString.AppendWithConversion(XML_ErrorString(errCode));
-    mErrorString.AppendLiteral(" at line ");
+    mErrorString.Append(NS_LITERAL_STRING(" at line "));
     mErrorString.AppendInt(XML_GetCurrentLineNumber(mExpatParser));
-    mErrorString.AppendLiteral(" in ");
+    mErrorString.Append(NS_LITERAL_STRING(" in "));
     mErrorString.Append((const PRUnichar*)XML_GetBase(mExpatParser));
 }
 
@@ -355,8 +353,7 @@ txDriver::onDoneCompiling(txStylesheetCompiler* aCompiler, nsresult aResult,
 }
 
 nsresult
-txDriver::loadURI(const nsAString& aUri, const nsAString& aReferrerUri,
-                  txStylesheetCompiler* aCompiler)
+txDriver::loadURI(const nsAString& aUri, txStylesheetCompiler* aCompiler)
 {
     nsAutoString errMsg;
     istream* xslInput = URIUtils::getInputStream(aUri, errMsg);

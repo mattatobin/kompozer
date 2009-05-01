@@ -57,20 +57,20 @@ class nsIDocument;
 class imgILoader;
 class nsIIOService;
 
-class nsImageLoadingContent : public nsIImageLoadingContent,
-                              public imgIDecoderObserver_MOZILLA_1_8_BRANCH
+class nsImageLoadingContent : public nsIImageLoadingContent
 {
   /* METHODS */
 public:
   nsImageLoadingContent();
   virtual ~nsImageLoadingContent();
 
-  NS_IMETHOD_(nsrefcnt) AddRef(void) = 0;
-  NS_IMETHOD_(nsrefcnt) Release(void) = 0;
+  /** Called on layout startup to initialize statics */
+  static void Initialize();
+  /** Called on shutdown to free statics */
+  static void Shutdown();
 
   NS_DECL_IMGICONTAINEROBSERVER
   NS_DECL_IMGIDECODEROBSERVER
-  NS_DECL_IMGIDECODEROBSERVER_MOZILLA_1_8_BRANCH
   NS_DECL_NSIIMAGELOADINGCONTENT
 
 protected:
@@ -78,36 +78,15 @@ protected:
    * ImageURIChanged is called by subclasses when the appropriate
    * attributes (eg 'src' for <img> tags) change.  The string passed
    * in is the new uri string; this consolidates the code for getting
-   * the charset, constructing URI objects, and any other incidentals
-   * into this superclass.   
+   * the charset and any other incidentals into this superclass.
    *
    * Note that this is different from the ImageURIChanged(AString)
-   * declared in nsIImageLoadingContent.idl -- because it allows
-   * control over whether loading is to be forced.
+   * declared in nsIImageLoadingContent.idl -- that takes an
+   * nsAString, this takes an nsACString.
    *
    * @param aNewURI the URI spec to be loaded (may be a relative URI)
-   * @param aForce If true, make sure to load the URI.  If false, only
-   *        load if the URI is different from the currently loaded URI.
    */
-  nsresult ImageURIChanged(const nsAString& aNewURI,
-                           PRBool aForce);
-
-  /**
-   * CancelImageRequests is called by subclasses when they want to
-   * cancel all image requests (for example when the subclass is
-   * somehow not an image anymore).
-   */
-  void CancelImageRequests();
-
-  /**
-   * Derived classes of nsImageLoadingContent MUST call
-   * DestroyImageLoadingContent from their destructor, or earlier.  It
-   * does things that cannot be done in ~nsImageLoadingContent because
-   * they rely on being able to QueryInterface to other derived classes,
-   * which cannot happen once the derived class destructor has started
-   * calling the base class destructors.
-   */
-  void DestroyImageLoadingContent();
+  nsresult ImageURIChanged(const nsACString& aNewURI);
 
 private:
   /**
@@ -134,18 +113,15 @@ private:
 
   /**
    * CancelImageRequests can be called when we want to cancel the
-   * image requests, generally due to our src changing and us wanting
-   * to start a new load.  The "current" request will be canceled only
-   * if it has not progressed far enough to know the image size yet
-   * unless aEvenIfSizeAvailable is true.
+   * image requests.  The "current" request will be canceled only if
+   * it has not progressed far enough to know the image size yet unless
+   * aEvenIfSizeAvailable is true.
    *
    * @param aReason the reason the requests are being canceled
    * @param aEvenIfSizeAvailable cancels the current load even if its size is
    *                             available
-   * @param aNewImageStatus the nsIContentPolicy status of the new image load
    */
-  void CancelImageRequests(nsresult aReason, PRBool aEvenIfSizeAvailable,
-                           PRInt16 aNewImageStatus);
+  void CancelImageRequests(nsresult aReason, PRBool aEvenIfSizeAvailable);
 
   /**
    * helper to get the document for this content (from the nodeinfo
@@ -166,7 +142,7 @@ private:
    * @param aDocument the document we belong to
    * @return the URI we want to be loading
    */
-  nsresult StringToURI(const nsAString& aSpec, nsIDocument* aDocument,
+  nsresult StringToURI(const nsACString& aSpec, nsIDocument* aDocument,
                        nsIURI** aURI);
 
   /**
@@ -175,25 +151,15 @@ private:
    * @param aEventType "load" or "error" depending on how things went
    */
   nsresult FireEvent(const nsAString& aEventType);
-  class Event;
-  friend class Event;
-
-protected:
-  /**
-   * Manage the rooting and un-rooting in nsDOMClassInfo of the content
-   * node, so that things reachable from the node are protected from
-   * garbage collection while the onload or onerror handlers (which can
-   * make it reachable again) could fire.
-   */
-  void PreserveLoadHandlers();
-  void UnpreserveLoadHandlers();
 
   /* MEMBERS */
 protected:
   nsCOMPtr<imgIRequest> mCurrentRequest;
   nsCOMPtr<imgIRequest> mPendingRequest;
-  nsCOMPtr<nsIURI>      mCurrentURI;
 
+  // Cache for the io service and image loader
+  static imgILoader* sImgLoader;
+  static nsIIOService* sIOService;
 private:
   /**
    * Typically we will have only one observer (our frame in the screen
@@ -205,14 +171,9 @@ private:
    */
   ImageObserver mObserverList;
 
-  PRInt16 mImageBlockingStatus;
-  // This counts the number of operations that we're currently doing
-  // that require us to root in nsDOMClassInfo to say that there is
-  // currently network or other activity that could trigger onload or
-  // onerror handlers.  The number of things a single node can do at
-  // once is quite limited, so a PRUint8 should be quite sufficient.
-  PRUint8 mRootRefCount;
   PRPackedBool mLoadingEnabled;
+  PRPackedBool mImageIsBlocked;
+  PRPackedBool mHaveHadObserver;
 };
 
 #endif // nsImageLoadingContent_h__

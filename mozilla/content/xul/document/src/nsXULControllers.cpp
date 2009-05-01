@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,27 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
  *   Mark Hammond <MarkH@ActiveState.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -101,8 +102,7 @@ NS_NewXULControllers(nsISupports* aOuter, REFNSIID aIID, void** aResult)
 // QueryInterface implementation for nsXULControllers
 NS_INTERFACE_MAP_BEGIN(nsXULControllers)
   NS_INTERFACE_MAP_ENTRY(nsIControllers)
-  NS_INTERFACE_MAP_ENTRY(nsISecurityCheckedComponent)
-  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIControllers)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
   NS_INTERFACE_MAP_ENTRY_CONTENT_CLASSINFO(XULControllers)
 NS_INTERFACE_MAP_END
 
@@ -294,55 +294,4 @@ nsXULControllers::GetControllerCount(PRUint32 *_retval)
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = mControllers.Count();
   return NS_OK;
-}
-
-// nsISecurityCheckedComponent implementation
-
-static char* cloneAllAccess()
-{
-  static const char allAccess[] = "AllAccess";
-  return (char*)nsMemory::Clone(allAccess, sizeof(allAccess));
-}
-
-static char* cloneUniversalXPConnect()
-{
-  static const char universalXPConnect[] = "UniversalXPConnect";
-  return (char*)nsMemory::Clone(universalXPConnect, sizeof(universalXPConnect));
-}
-
-NS_IMETHODIMP
-nsXULControllers::CanCreateWrapper(const nsIID * iid, char **_retval)
-{
-  *_retval = cloneAllAccess();
-  return *_retval ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
-}
-
-NS_IMETHODIMP
-nsXULControllers::CanCallMethod(const nsIID * iid, const PRUnichar *methodName,
-                                char **_retval)
-{
-  // OK if you're cool enough
-  *_retval = cloneUniversalXPConnect();
-  return *_retval ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
-}
-
-NS_IMETHODIMP
-nsXULControllers::CanGetProperty(const nsIID * iid,
-                                 const PRUnichar *propertyName,
-                                 char **_retval)
-{
-  // OK if you're cool enough
-  *_retval = cloneUniversalXPConnect();
-  return *_retval ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
-}
-
-
-NS_IMETHODIMP
-nsXULControllers::CanSetProperty(const nsIID * iid,
-                                 const PRUnichar *propertyName,
-                                 char **_retval)
-{
-  // OK if you're cool enough
-  *_retval = cloneUniversalXPConnect();
-  return *_retval ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }

@@ -1,41 +1,25 @@
 <?xml version="1.0"?> 
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
+<!-- The contents of this file are subject to the Netscape Public
+   - License Version 1.1 (the "License"); you may not use this file
+   - except in compliance with the License. You may obtain a copy of
+   - the License at http://www.mozilla.org/NPL/
+   - 
+   - Software distributed under the License is distributed on an "AS
+   - IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+   - implied. See the License for the specific language governing
+   - rights and limitations under the License.
+   - 
    - The Original Code is Mozilla Communicator client code, released
    - March 31, 1998.
-   -
-   - The Initial Developer of the Original Code is
-   - Netscape Communications Corporation.
-   - Portions created by the Initial Developer are Copyright (C) 1998-1999
-   - the Initial Developer. All Rights Reserved.
-   -
+   - 
+   - The Initial Developer of the Original Code is Netscape
+   - Communications Corporation. Portions created by Netscape are
+   - Copyright (C) 1998-1999 Netscape Communications Corporation. All
+   - Rights Reserved.
+   - 
    - Contributor(s):
    -   Blake Ross <blakeross@telocity.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+   -->
 <!DOCTYPE overlay SYSTEM "chrome://communicator/locale/contentAreaCommands.dtd" >
 <overlay id="contentAreaContextOverlay"
          xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
@@ -50,8 +34,8 @@
     // Global variable that caches the default search engine info
     var gDefaultEngine = null;
   </script>
-  <script type="application/x-javascript" src="chrome://global/content/inlineSpellCheckUI.js"/>
   <script type="application/x-javascript" src="chrome://communicator/content/nsContextMenu.js"/>
+  <script type="application/x-javascript" src="chrome://communicator/content/RealTimeSpell.js"/>
   <script type="application/x-javascript" src="chrome://communicator/content/contentAreaUtils.js"/>
 
   <popupset id="contentAreaContextSet">
@@ -72,14 +56,6 @@
                 oncommand="gContextMenu.allowPopupWindows();"/>
       <menuseparator id="context-sep-popup"/>
 
-      <menuitem id="spell-no-suggestions"
-                disabled="true"
-                label="&spellNoSuggestions.label;"/>
-      <menuitem id="spell-add-to-dictionary"
-                label="&spellAddToDictionary.label;"
-                accesskey="&spellAddToDictionary.accesskey;"
-                oncommand="InlineSpellCheckerUI.addToDictionary();"/>
-      <menuseparator id="spell-suggestions-separator"/>
       <menuitem id="context-openlink"
                 label="&openLinkCmd.label;"
                 accesskey="&openLinkCmd.accesskey;"
@@ -87,7 +63,7 @@
       <menuitem id="context-openlinkintab"
                 label="&openLinkCmdInTab.label;"
                 accesskey="&openLinkCmdInTab.accesskey;"
-                oncommand="gContextMenu.openLinkInTab(event.shiftKey);"/>
+                oncommand="gContextMenu.openLinkInTab();"/>
       <menuseparator id="context-sep-open"/>
       <menuitem id="context-bookmarklink"
                 label="&bookmarkLinkCmd.label;"
@@ -96,8 +72,7 @@
                                                       gContextMenu.linkText(), 
                                                       undefined, false);"/>
       <menuitem id="context-savelink"
-                valueSaveAs="&saveLinkAsCmd.label;"
-                valueSave="&saveLinkCmd.label;"
+                label="&saveLinkCmd.label;"
                 accesskey="&saveLinkCmd.accesskey;"
                 oncommand="gContextMenu.saveLink();"/>
       <menuitem id="context-copyemail"
@@ -121,11 +96,10 @@
       <menuitem id="context-copyimage"
                 label="&copyImageCmd.label;"
                 accesskey="&copyImageCmd.accesskey;"
-                command="cmd_copyImage"/>
+                command="cmd_copyImageLocation"/>
       <menuseparator id="context-sep-copyimage"/>
       <menuitem id="context-saveimage"
-                valueSaveAs="&saveImageAsCmd.label;"
-                valueSave="&saveImageCmd.label;"
+                label="&saveImageCmd.label;"
                 accesskey="&saveImageCmd.accesskey;"
                 oncommand="gContextMenu.saveImage();"/>
       <menuitem id="context-setWallpaper"
@@ -156,15 +130,26 @@
                 accesskey="&bookmarkPageCmd.accesskey;"
                 oncommand="gContextMenu.addBookmark();"/>
       <menuitem id="context-savepage"
-                valueSaveAs="&savePageAsCmd.label;"
-                valueSave="&savePageCmd.label;"
+                label="&savePageCmd.label;"
                 accesskey="&savePageCmd.accesskey;"
-                oncommand="saveDocument(window.content.document);"/>
+                oncommand="saveDocument(window._content.document);"/>
       <menuseparator id="context-sep-viewbgimage"/>
       <menuitem id="context-viewbgimage"
                 label="&viewBGImageCmd.label;"
                 accesskey="&viewBGImageCmd.accesskey;"
                 oncommand="gContextMenu.viewBGImage();"/>
+
+      <menu id="context-spellsuggestmenu" label="&spellSuggestions.label;"
+                                          accesskey="&spellSuggestions.accesskey;">
+        <menupopup id="context-spellsuggestmenupopup"
+                   onpopupshowing="RealTimeSpell.updateSuggestionsMenu(this,'context-spellsuggestmenu-add','context-spellsuggestmenu-addsep',null);"
+                   oncommand="RealTimeSpell.selectSuggestion(event.target.value);">
+          <menuitem id="context-spellsuggestmenu-add" label="&spellAddToDictionary.label;"
+                    oncommand="RealTimeSpell.addToDictionary(null,null);"/>
+          <menuseparator id="context-spellsuggestmenu-addsep"/>
+        </menupopup>
+      </menu>
+      <menuseparator id="context-sep-spellsuggestmenu"/>
       <menuitem id="context-undo"
                 label="&undoCmd.label;"
                 accesskey="&undoCmd.accesskey;"
@@ -198,7 +183,7 @@
       <menuseparator id="context-sep-selectall"/>
       <menuitem id="context-searchselect"
                 accesskey="&search.accesskey;"
-                oncommand="OpenSearch('internet', gContextMenu.searchSelected(), true, event.shiftKey);"/>
+                oncommand="OpenSearch('internet', false, gContextMenu.searchSelected(), true);"/>
       <menuseparator id="frame-sep"/>
       <menu id="frame" label="&thisFrameMenu.label;" accesskey="&thisFrameMenu.accesskey;">
         <menupopup id="frame_popup">
@@ -210,7 +195,7 @@
                     oncommand="gContextMenu.openFrame();"/>
           <menuitem label="&openFrameCmdInTab.label;"
                     accesskey="&openFrameCmdInTab.accesskey;"
-                    oncommand="gContextMenu.openFrameInTab(event.shiftKey);"/>
+                    oncommand="gContextMenu.openFrameInTab();"/>
           <menuseparator/>
           <menuitem id="context-reload-frame"
                     label="&reloadFrameCmd.label;"
@@ -221,8 +206,7 @@
                     accesskey="&bookmarkFrameCmd.accesskey;"
                     oncommand="gContextMenu.addBookmarkForFrame();"/>
           <menuitem id="saveframeas"
-                    valueSaveAs="&saveFrameAsCmd.label;"
-                    valueSave="&saveFrameCmd.label;"
+                    label="&saveFrameCmd.label;"
                     accesskey="&saveFrameCmd.accesskey;"
                     oncommand="saveDocument(gContextMenu.target.ownerDocument);"/>
           <menuseparator/>
@@ -256,36 +240,6 @@
                 label="&metadataCmd.label;"
                 accesskey="&metadataCmd.accesskey;"
                 oncommand="gContextMenu.showMetadata();"/>
-      <menuseparator id="spell-separator"/>
-      <menuitem id="spell-check-enabled"
-                label="&spellEnable.label;"
-                type="checkbox"
-                accesskey="&spellEnable.accesskey;"
-                oncommand="InlineSpellCheckerUI.toggleEnabled();"/>
-      <menuitem id="spell-add-dictionaries-main"
-                label="&spellAddDictionaries.label;"
-                accesskey="&spellAddDictionaries.accesskey;"
-                oncommand="gContextMenu.addDictionaries();"/>
-      <menu id="spell-dictionaries"
-            label="&spellDictionaries.label;"
-            accesskey="&spellDictionaries.accesskey;">
-        <menupopup id="spell-dictionaries-menu">
-          <menuseparator id="spell-language-separator"/>
-          <menuitem id="spell-add-dictionaries"
-                    label="&spellAddDictionaries.label;"
-                    accesskey="&spellAddDictionaries.accesskey;"
-                    oncommand="gContextMenu.addDictionaries();"/>
-        </menupopup>
-      </menu>
-      <menuseparator hidden="true" id="context-sep-bidi"/>
-      <menuitem hidden="true" id="context-bidi-text-direction-toggle"
-                label="&bidiSwitchTextDirectionItem.label;"
-                accesskey="&bidiSwitchTextDirectionItem.accesskey;"
-                command="cmd_switchTextDirection"/>
-      <menuitem hidden="true" id="context-bidi-page-direction-toggle"
-                label="&bidiSwitchPageDirectionItem.label;"
-                accesskey="&bidiSwitchPageDirectionItem.accesskey;"
-                oncommand="SwitchDocumentDirection(window.content);"/>
     </popup>
   </popupset>
 </overlay>

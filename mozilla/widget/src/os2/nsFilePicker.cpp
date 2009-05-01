@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 2000 Netscape Communications Corporation. All
+ * Rights Reserved.
+ * 
  * Contributor(s):
  *   Stuart Parmenter <pavlov@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 // Define so header files for openfilename are included
 #ifdef WIN32_LEAN_AND_MEAN
@@ -91,6 +75,7 @@ nsFilePicker::nsFilePicker()
   mUnicodeEncoder = nsnull;
   mUnicodeDecoder = nsnull;
   mSelectedType   = 0;
+  mDisplayDirectory = do_CreateInstance("@mozilla.org/file/local;1");
 }
 
 //-------------------------------------------------------------------------
@@ -141,8 +126,7 @@ NS_IMETHODIMP nsFilePicker::Show(PRInt16 *retval)
   if (nsnull == title)
     title = ToNewCString(mTitle);
   nsCAutoString initialDir;
-  if (mDisplayDirectory)
-    mDisplayDirectory->GetNativePath(initialDir);
+  mDisplayDirectory->GetNativePath(initialDir);
   // If no display directory, re-use the last one.
   if(initialDir.IsEmpty())
     initialDir = mLastUsedDirectory;
@@ -164,14 +148,10 @@ NS_IMETHODIMP nsFilePicker::Show(PRInt16 *retval)
     WinFileDlg(HWND_DESKTOP, mWnd, &filedlg);
     DosError(FERR_ENABLEHARDERR);
     char* tempptr = strstr(filedlg.szFullFile, "^");
-    if (tempptr)
-      *tempptr = '\0';
+    *tempptr = '\0';
     if (filedlg.lReturn == DID_OK) {
       result = PR_TRUE;
-      if (!mDisplayDirectory)
-        mDisplayDirectory = do_CreateInstance("@mozilla.org/file/local;1");
-      if (mDisplayDirectory)
-        mDisplayDirectory->InitWithNativePath(nsDependentCString(filedlg.szFullFile));
+      mDisplayDirectory->InitWithNativePath(nsDependentCString(filedlg.szFullFile));
       mFile.Assign(filedlg.szFullFile);
     }
   }
@@ -295,7 +275,7 @@ NS_IMETHODIMP nsFilePicker::Show(PRInt16 *retval)
         NS_ENSURE_SUCCESS(rv,rv);
 
         if (filedlg.papszFQFilename) {
-          for (ULONG i=0;i<filedlg.ulFQFCount;i++) {
+          for (int i=0;i<filedlg.ulFQFCount;i++) {
             nsCOMPtr<nsILocalFile> file = do_CreateInstance("@mozilla.org/file/local;1", &rv);
             NS_ENSURE_SUCCESS(rv,rv);
 
@@ -342,10 +322,9 @@ NS_IMETHODIMP nsFilePicker::Show(PRInt16 *retval)
   if (result) {
     PRInt16 returnOKorReplace = returnOK;
 
-    nsresult rv;
     // Remember last used directory.
-    nsCOMPtr<nsILocalFile> file(do_CreateInstance("@mozilla.org/file/local;1", &rv));
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsILocalFile> file(do_CreateInstance("@mozilla.org/file/local;1"));
+    NS_ENSURE_TRUE(file, NS_ERROR_FAILURE);
 
     file->InitWithNativePath(mFile);
     nsCOMPtr<nsIFile> dir;
@@ -358,10 +337,7 @@ NS_IMETHODIMP nsFilePicker::Show(PRInt16 *retval)
           PL_strncpyz(mLastUsedDirectory, newDir.get(), MAX_PATH+1);
         // Update mDisplayDirectory with this directory, also.
         // Some callers rely on this.
-        if (!mDisplayDirectory)
-           mDisplayDirectory = do_CreateInstance("@mozilla.org/file/local;1");
-        if (mDisplayDirectory)
-           mDisplayDirectory->InitWithNativePath( nsDependentCString(mLastUsedDirectory) );
+        mDisplayDirectory->InitWithNativePath( nsDependentCString(mLastUsedDirectory) );
       }
     }
 
@@ -509,6 +485,31 @@ NS_IMETHODIMP nsFilePicker::SetFilterIndex(PRInt32 aFilterIndex)
 }
 
 //-------------------------------------------------------------------------
+//
+// Set the display directory
+//
+//-------------------------------------------------------------------------
+NS_IMETHODIMP nsFilePicker::SetDisplayDirectory(nsILocalFile *aDirectory)
+{
+  mDisplayDirectory = aDirectory;
+  return NS_OK;
+}
+
+//-------------------------------------------------------------------------
+//
+// Get the display directory
+//
+//-------------------------------------------------------------------------
+NS_IMETHODIMP nsFilePicker::GetDisplayDirectory(nsILocalFile **aDirectory)
+{
+  *aDirectory = mDisplayDirectory;
+  NS_IF_ADDREF(*aDirectory);
+  return NS_OK;
+}
+
+
+
+//-------------------------------------------------------------------------
 void nsFilePicker::InitNative(nsIWidget *aParent,
                               const nsAString& aTitle,
                               PRInt16 aMode)
@@ -532,7 +533,7 @@ void nsFilePicker::GetFileSystemCharset(nsCString & fileSystemCharset)
 
     NS_ASSERTION(NS_SUCCEEDED(rv), "error getting platform charset");
 	  if (NS_FAILED(rv)) 
-		  aCharset.AssignLiteral("IBM850");
+		  aCharset.Assign(NS_LITERAL_CSTRING("IBM850"));
   }
   fileSystemCharset = aCharset;
 }
@@ -623,12 +624,9 @@ PRUnichar * nsFilePicker::ConvertFromFileSystemCharset(const char *inString)
 NS_IMETHODIMP
 nsFilePicker::AppendFilter(const nsAString& aTitle, const nsAString& aFilter)
 {
-  if (aFilter.EqualsLiteral("..apps"))
-    mFilters.AppendString(NS_LITERAL_STRING("*.exe;*.cmd;*.com;*.bat"));
-  else
-    mFilters.AppendString(aFilter);
+  mFilters.AppendString(aFilter);
   mTitles.AppendString(aTitle);
-
+  
   return NS_OK;
 }
 

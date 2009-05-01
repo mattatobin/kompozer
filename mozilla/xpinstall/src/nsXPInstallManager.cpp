@@ -1,46 +1,31 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code,
+ * released March 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Daniel Veditz <dveditz@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *     Daniel Veditz <dveditz@netscape.com>
+ *     Pierre Phaneuf <pp@ludusdesign.com>
+ */
 
 #include "nscore.h"
 #include "pratom.h"
 #include "prmem.h"
-#include "prprf.h"
-#include "nsInt64.h"
 
 #include "nsISupports.h"
 #include "nsIServiceManager.h"
@@ -54,7 +39,6 @@
 #include "nsIInputStream.h"
 #include "nsIFileStreams.h"
 #include "nsIStreamListener.h"
-#include "nsICryptoHash.h"
 
 #include "nsISoftwareUpdate.h"
 #include "nsSoftwareUpdateIIDs.h"
@@ -65,9 +49,9 @@
 #include "nsInstallResources.h"
 #include "nsIProxyObjectManager.h"
 #include "nsIWindowWatcher.h"
-#include "nsIAuthPrompt.h"
 #include "nsIWindowMediator.h"
 #include "nsIDOMWindowInternal.h"
+#include "nsPIDOMWindow.h"
 #include "nsDirectoryService.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsAppDirectoryServiceDefs.h"
@@ -84,8 +68,6 @@
 #include "nsIPrefBranch.h"
 
 #include "CertReader.h"
-
-#include "nsEmbedCID.h"
 
 static NS_DEFINE_IID(kProxyObjectManagerCID, NS_PROXYEVENT_MANAGER_CID);
 static NS_DEFINE_IID(kStringBundleServiceCID, NS_STRINGBUNDLESERVICE_CID);
@@ -121,12 +103,17 @@ nsXPInstallManager::nsXPInstallManager()
 
     // initialize mLastUpdate to the current time
     mLastUpdate = PR_Now();
+
+    nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
+    if (os)
+        os->AddObserver(this, XPI_PROGRESS_TOPIC, PR_TRUE);
 }
 
 
 nsXPInstallManager::~nsXPInstallManager()
 {
-    NS_ASSERTION(!mTriggers, "Shutdown not called, triggers still alive");
+    if (mTriggers)
+        delete mTriggers;
 }
 
 
@@ -142,17 +129,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS9( nsXPInstallManager,
                                nsISupportsWeakReference)
 
 NS_IMETHODIMP
-nsXPInstallManager::InitManagerFromChrome(const PRUnichar **aURLs,
-                                          PRUint32 aURLCount,
-                                          nsIXPIProgressDialog* aListener)
-{
-    return InitManagerWithHashes(aURLs, nsnull, aURLCount, aListener);
-}
-
-NS_IMETHODIMP
-nsXPInstallManager::InitManagerWithHashes(const PRUnichar **aURLs,
-                                          const char **aHashes,
-                                          PRUint32 aURLCount,
+nsXPInstallManager::InitManagerFromChrome(const PRUnichar **aURLs, PRUint32 aURLCount, 
                                           nsIXPIProgressDialog* aListener)
 {
     // If Software Installation is not enabled, we don't want to proceed with
@@ -169,21 +146,13 @@ nsXPInstallManager::InitManagerWithHashes(const PRUnichar **aURLs,
     if (!mTriggers)
         return NS_ERROR_OUT_OF_MEMORY;
 
-    mNeedsShutdown = PR_TRUE;
-
-    nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
-    if (os)
-        os->AddObserver(this, XPI_PROGRESS_TOPIC, PR_TRUE);
-
-    for (PRUint32 i = 0; i < aURLCount; ++i) 
+    for (PRInt32 i = 0; i < aURLCount; ++i) 
     {
-        nsXPITriggerItem* item = new nsXPITriggerItem(0, aURLs[i], nsnull,
-                                                      aHashes ? aHashes[i] : nsnull);
+        nsXPITriggerItem* item = new nsXPITriggerItem(0, aURLs[i], nsnull);
         if (!item)
         {
             delete mTriggers; // nsXPITriggerInfo frees any alloc'ed nsXPITriggerItems
             mTriggers = nsnull;
-            Shutdown();
             return NS_ERROR_OUT_OF_MEMORY;
         }
         mTriggers->Add(item);
@@ -195,14 +164,10 @@ nsXPInstallManager::InitManagerWithHashes(const PRUnichar **aURLs,
     {
         delete mTriggers;
         mTriggers = nsnull;
-        Shutdown();
         return rv;
     }
 
-    rv = Observe(aListener, XPI_PROGRESS_TOPIC, NS_LITERAL_STRING("open").get());
-    if (NS_FAILED(rv))
-        Shutdown();
-    return rv;
+    return Observe(aListener, XPI_PROGRESS_TOPIC, NS_LITERAL_STRING("open").get());
 }
 
 
@@ -218,24 +183,35 @@ nsXPInstallManager::InitManager(nsIScriptGlobalObject* aGlobalObject, nsXPITrigg
 
     nsresult rv = NS_OK;
 
-    mNeedsShutdown = PR_TRUE;
     mTriggers = aTriggers;
     mChromeType = aChromeType;
+    mNeedsShutdown = PR_TRUE;
 
     mParentWindow = do_QueryInterface(aGlobalObject);
 
-    // Start downloading initial chunks looking for signatures,
-    mOutstandingCertLoads = mTriggers->Size();
+    // Don't launch installs while page is still loading
+    PRBool isPageLoading = PR_FALSE;
+    nsCOMPtr<nsPIDOMWindow> piWindow = do_QueryInterface(mParentWindow);
+    if (piWindow)
+        piWindow->IsLoadingOrRunningTimeout(&isPageLoading);
 
-    nsXPITriggerItem *item = mTriggers->Get(--mOutstandingCertLoads);
-
-    nsCOMPtr<nsIURI> uri;
-    NS_NewURI(getter_AddRefs(uri), NS_ConvertUCS2toUTF8(item->mURL));
-    nsCOMPtr<nsIStreamListener> listener = new CertReader(uri, nsnull, this);
-    if (listener)
-        rv = NS_OpenURI(listener, nsnull, uri);
+    if (isPageLoading)
+        rv = NS_ERROR_FAILURE;
     else
-        rv = NS_ERROR_OUT_OF_MEMORY;
+    {
+        // Start downloading initial chunks looking for signatures,
+        mOutstandingCertLoads = mTriggers->Size();
+
+        nsXPITriggerItem *item = mTriggers->Get(--mOutstandingCertLoads);
+
+        nsCOMPtr<nsIURI> uri;
+        NS_NewURI(getter_AddRefs(uri), NS_ConvertUCS2toUTF8(item->mURL));
+        nsCOMPtr<nsIStreamListener> listener = new CertReader(uri, nsnull, this);
+        if (listener)
+            rv = NS_OpenURI(listener, nsnull, uri);
+        else
+            rv = NS_ERROR_OUT_OF_MEMORY;
+    }
 
     if (NS_FAILED(rv)) {
         Shutdown();
@@ -277,7 +253,7 @@ nsXPInstallManager::InitManagerInternal()
         {
             nsXPITriggerItem *item = mTriggers->Get(i);
             packageList[j++] = item->mName.get();
-            packageList[j++] = item->GetSafeURLString();
+            packageList[j++] = item->mURL.get();
             packageList[j++] = item->mIconURL.get();
             packageList[j++] = item->mCertName.get();
         }
@@ -286,35 +262,24 @@ nsXPInstallManager::InitManagerInternal()
         // Get permission to install
         //-----------------------------------------------------
 
-#ifdef ENABLE_SKIN_SIMPLE_INSTALLATION_UI
         if ( mChromeType == CHROME_SKIN )
         {
-            // We may want to enable the simple installation UI once
-            // bug 343037 is fixed
-
             // skins get a simpler/friendlier dialog
             // XXX currently not embeddable
             OKtoInstall = ConfirmChromeInstall( mParentWindow, packageList );
         }
         else
         {
-#endif
             rv = dlgSvc->ConfirmInstall( mParentWindow,
                                          packageList,
                                          numStrings,
                                          &OKtoInstall );
             if (NS_FAILED(rv))
                 OKtoInstall = PR_FALSE;
-#ifdef ENABLE_SKIN_SIMPLE_INSTALLATION_UI
         }
-#endif
 
         if (OKtoInstall)
         {
-            nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
-            if (os)
-                os->AddObserver(this, XPI_PROGRESS_TOPIC, PR_TRUE);
-
             //-----------------------------------------------------
             // Open the progress dialog
             //-----------------------------------------------------
@@ -401,7 +366,6 @@ nsXPInstallManager::ConfirmInstall(nsIDOMWindow *aParent, const PRUnichar **aPac
     return rv;
 }
 
-#ifdef ENABLE_SKIN_SIMPLE_INSTALLATION_UI
 PRBool nsXPInstallManager::ConfirmChromeInstall(nsIDOMWindowInternal* aParentWindow, const PRUnichar **aPackage)
 {
     // get the dialog strings
@@ -447,7 +411,7 @@ PRBool nsXPInstallManager::ConfirmChromeInstall(nsIDOMWindowInternal* aParentWin
 
     // confirmation dialog
     PRBool bInstall = PR_FALSE;
-    nsCOMPtr<nsIPromptService> dlgService(do_GetService(NS_PROMPTSERVICE_CONTRACTID));
+    nsCOMPtr<nsIPromptService> dlgService(do_GetService("@mozilla.org/embedcomp/prompt-service;1"));
     if (dlgService)
     {
         dlgService->Confirm(
@@ -459,7 +423,7 @@ PRBool nsXPInstallManager::ConfirmChromeInstall(nsIDOMWindowInternal* aParentWin
 
     return bInstall;
 }
-#endif
+
 
 NS_IMETHODIMP
 nsXPInstallManager::OpenProgressDialog(const PRUnichar **aPackageList, PRUint32 aCount, nsIObserver *aObserver)
@@ -570,11 +534,11 @@ NS_IMETHODIMP nsXPInstallManager::Observe( nsISupports *aSubject,
                             do_GetService(kProxyObjectManagerCID, &rv);
                 if (pmgr)
                 {
-                    pmgr->GetProxyForObject( NS_UI_THREAD_EVENTQ,
-                                             NS_GET_IID(nsIXPIProgressDialog),
-                                             dlg,
-                                             PROXY_SYNC | PROXY_ALWAYS,
-                                             getter_AddRefs(mDlg) );
+                    rv = pmgr->GetProxyForObject( NS_UI_THREAD_EVENTQ,
+                                                  NS_GET_IID(nsIXPIProgressDialog),
+                                                  dlg,
+                                                  PROXY_SYNC | PROXY_ALWAYS,
+                                                  getter_AddRefs(mDlg) );
                 }
             }
 
@@ -728,31 +692,6 @@ NS_IMETHODIMP nsXPInstallManager::DownloadNext()
                 continue;
             }
 
-            // If there was hash info in the trigger, but
-            // there wasn't a hash object created, then the
-            // algorithm used isn't known.
-
-            if (mItem->mHashFound && !mItem->mHasher)
-            {
-                // report failure
-                mTriggers->SendStatus( mItem->mURL.get(), nsInstall::INVALID_HASH_TYPE );
-                if (mDlg)
-                    mDlg->OnStateChange( i, nsIXPIProgressDialog::INSTALL_DONE,
-                                         nsInstall::INVALID_HASH_TYPE );
-                continue;
-            }
-
-            // Don't install if we can't verify the hash (if specified)
-            if (mItem->mHasher && !VerifyHash(mItem))
-            {
-                // report failure
-                mTriggers->SendStatus( mItem->mURL.get(), nsInstall::INVALID_HASH );
-                if (mDlg)
-                    mDlg->OnStateChange( i, nsIXPIProgressDialog::INSTALL_DONE,
-                                         nsInstall::INVALID_HASH );
-                continue;
-            }
-
             // We've got one to install; increment count first so we
             // don't have to worry about thread timing.
             PR_AtomicIncrement(&mNumJars);
@@ -798,45 +737,6 @@ NS_IMETHODIMP nsXPInstallManager::DownloadNext()
 }
 
 
-//-------------------------------------------------------------------
-// VerifyHash
-//
-// Returns true if the file hash matches the expected value (or if
-// the item has no hash value). False if we can't verify the hash
-// for any reason
-//
-PRBool nsXPInstallManager::VerifyHash(nsXPITriggerItem* aItem)
-{
-    NS_ASSERTION(aItem, "Null nsXPITriggerItem passed to VerifyHash");
-
-    nsresult rv;
-    if (!aItem->mHasher)
-      return PR_FALSE;
-    
-    nsCOMPtr<nsIInputStream> stream;
-    rv = NS_NewLocalFileInputStream(getter_AddRefs(stream), aItem->mFile);
-    if (NS_FAILED(rv)) return PR_FALSE;
-
-    rv = aItem->mHasher->UpdateFromStream(stream, PR_UINT32_MAX);
-    if (NS_FAILED(rv)) return PR_FALSE;
-
-    nsCAutoString binaryHash;
-    rv = aItem->mHasher->Finish(PR_FALSE, binaryHash);
-    if (NS_FAILED(rv)) return PR_FALSE;
-
-    char* hash = nsnull;
-    for (PRUint32 i=0; i < binaryHash.Length(); ++i)
-    {
-        hash = PR_sprintf_append(hash,"%.2x", (PRUint8)binaryHash[i]);
-    }
-
-    PRBool result = aItem->mHash.EqualsIgnoreCase(hash);
-
-    PR_smprintf_free(hash);
-    return result;
-}
-
-
 void nsXPInstallManager::Shutdown()
 {
     if (mDlg)
@@ -877,28 +777,7 @@ void nsXPInstallManager::Shutdown()
 
         nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
         if (os)
-        {
-            nsresult rv;
-            nsCOMPtr<nsIProxyObjectManager> pmgr =
-                        do_GetService(kProxyObjectManagerCID, &rv);
-            if (pmgr)
-            {
-                nsCOMPtr<nsIObserverService> pos;
-                rv = pmgr->GetProxyForObject( NS_UI_THREAD_EVENTQ,
-                                              NS_GET_IID(nsIObserverService),
-                                              os,
-                                              PROXY_SYNC | PROXY_ALWAYS,
-                                              getter_AddRefs(pos) );
-                if (NS_SUCCEEDED(rv))
-                    pos->RemoveObserver(this, XPI_PROGRESS_TOPIC);
-            }
-        }
-
-        if (mTriggers)
-        {
-            delete mTriggers;
-            mTriggers = nsnull;
-        }
+            os->RemoveObserver(this, XPI_PROGRESS_TOPIC);
 
         NS_RELEASE_THIS();
     }
@@ -907,8 +786,12 @@ void nsXPInstallManager::Shutdown()
 NS_IMETHODIMP
 nsXPInstallManager::LoadParams(PRUint32 aCount, const PRUnichar** aPackageList, nsIDialogParamBlock** aParams)
 {
-    nsresult rv;
-    nsCOMPtr<nsIDialogParamBlock> paramBlock = do_CreateInstance(NS_DIALOGPARAMBLOCK_CONTRACTID, &rv);
+    nsIDialogParamBlock* paramBlock = 0;
+    nsresult rv = nsComponentManager::CreateInstance(NS_DIALOGPARAMBLOCK_CONTRACTID,
+                                            nsnull,
+                                            NS_GET_IID(nsIDialogParamBlock),
+                                            (void**)&paramBlock);
+
     if (NS_SUCCEEDED(rv))
     {
         // set OK and Cancel buttons
@@ -921,7 +804,7 @@ nsXPInstallManager::LoadParams(PRUint32 aCount, const PRUnichar** aPackageList, 
             paramBlock->SetString( i, aPackageList[i] );
     }
 
-    NS_IF_ADDREF(*aParams = paramBlock);
+    *aParams = paramBlock;
     return rv;
 }
 
@@ -952,7 +835,7 @@ nsXPInstallManager::GetDestinationFile(nsString& url, nsILocalFile* *file)
             if (NS_SUCCEEDED(rv))
             { 
                 temp->AppendNative(NS_LITERAL_CSTRING("tmp.xpi"));
-                temp->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0600);
+                temp->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0644);
                 *file = temp;
                 NS_IF_ADDREF(*file);
             }
@@ -1002,18 +885,6 @@ nsXPInstallManager::OnStartRequest(nsIRequest* request, nsISupports *ctxt)
 {
     nsresult rv = NS_ERROR_FAILURE;
 
-    // If we are dealing with a HTTP request, then treat HTTP error pages as
-    // download failures.
-    nsCOMPtr<nsIHttpChannel> httpChan = do_QueryInterface(request);
-    if (httpChan) {
-        PRBool succeeded;
-        if (NS_SUCCEEDED(httpChan->GetRequestSucceeded(&succeeded)) && !succeeded) {
-            // HTTP response is not a 2xx!
-            request->Cancel(NS_BINDING_ABORTED);
-            return NS_OK;
-        }
-    }
-
     NS_ASSERTION( mItem && mItem->mFile, "XPIMgr::OnStartRequest bad state");
     if ( mItem && mItem->mFile )
     {
@@ -1022,7 +893,7 @@ nsXPInstallManager::OnStartRequest(nsIRequest* request, nsISupports *ctxt)
         rv = NS_NewLocalFileOutputStream(getter_AddRefs(mItem->mOutStream),
                                          mItem->mFile,
                                          PR_WRONLY | PR_CREATE_FILE | PR_TRUNCATE,
-                                         0600);
+                                         0664);
     }
     return rv;
 }
@@ -1101,10 +972,9 @@ nsXPInstallManager::OnDataAvailable(nsIRequest* request, nsISupports *ctxt,
                                     PRUint32 sourceOffset,
                                     PRUint32 length)
 {
-#define XPI_ODA_BUFFER_SIZE 8*1024
-    PRUint32 amt = PR_MIN(XPI_ODA_BUFFER_SIZE, length);
+    PRUint32 amt;
     nsresult err;
-    char buffer[XPI_ODA_BUFFER_SIZE];
+    char buffer[8*1024];
     PRUint32 writeCount;
 
     if (mCancelled)
@@ -1117,20 +987,19 @@ nsXPInstallManager::OnDataAvailable(nsIRequest* request, nsISupports *ctxt,
 
     do
     {
-        err = pIStream->Read(buffer, amt, &amt);
-
+        err = pIStream->Read(buffer, sizeof(buffer), &amt);
         if (amt == 0) break;
-        if (NS_FAILED(err)) return err;
-
+        if (NS_FAILED(err))
+        {
+            //printf("pIStream->Read Failed!  %d", err);
+            return err;
+        }
         err = mItem->mOutStream->Write( buffer, amt, &writeCount);
         if (NS_FAILED(err) || writeCount != amt)
         {
             return NS_ERROR_FAILURE;
         }
         length -= amt;
-
-        amt = PR_MIN(XPI_ODA_BUFFER_SIZE, length);
-
     } while (length > 0);
 
     return NS_OK;
@@ -1138,7 +1007,7 @@ nsXPInstallManager::OnDataAvailable(nsIRequest* request, nsISupports *ctxt,
 
 
 NS_IMETHODIMP
-nsXPInstallManager::OnProgress(nsIRequest* request, nsISupports *ctxt, PRUint64 aProgress, PRUint64 aProgressMax)
+nsXPInstallManager::OnProgress(nsIRequest* request, nsISupports *ctxt, PRUint32 aProgress, PRUint32 aProgressMax)
 {
     nsresult rv = NS_OK;
 
@@ -1153,8 +1022,7 @@ nsXPInstallManager::OnProgress(nsIRequest* request, nsISupports *ctxt, PRUint64 
             if (NS_FAILED(rv)) return rv;
         }
         mLastUpdate = now;
-        // XXX once channels support that, use 64-bit contentlength
-        rv = mDlg->OnProgress( mNextItem-1, aProgress, nsUint64(mContentLength) );
+        rv = mDlg->OnProgress( mNextItem-1, aProgress, mContentLength );
     }
 
     return rv;
@@ -1172,22 +1040,6 @@ nsXPInstallManager::OnStatus(nsIRequest* request, nsISupports *ctxt,
 NS_IMETHODIMP
 nsXPInstallManager::GetInterface(const nsIID & eventSinkIID, void* *_retval)
 {
-    if (eventSinkIID.Equals(NS_GET_IID(nsIAuthPrompt))) {    
-        *_retval = nsnull;
- 
-        nsresult rv;
-        nsCOMPtr<nsIWindowWatcher> ww(do_GetService(NS_WINDOWWATCHER_CONTRACTID, &rv));
-        NS_ENSURE_SUCCESS(rv, rv);
- 
-        nsCOMPtr<nsIAuthPrompt> prompt;
-        rv = ww->GetNewAuthPrompter(nsnull, getter_AddRefs(prompt));
-        NS_ENSURE_SUCCESS(rv, rv);
- 
-        nsIAuthPrompt *p = prompt.get();
-        NS_ADDREF(p);
-        *_retval = p;
-        return NS_OK;
-    }
     return QueryInterface(eventSinkIID, (void**)_retval);
 }
 

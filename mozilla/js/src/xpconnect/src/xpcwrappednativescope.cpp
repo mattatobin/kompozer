@@ -41,7 +41,6 @@
 /* Class used to manage the wrapped native objects within a JS scope. */
 
 #include "xpcprivate.h"
-#include "XPCNativeWrapper.h"
 
 /***************************************************************************/
 
@@ -121,9 +120,8 @@ XPCWrappedNativeScope::GetNewOrUsed(XPCCallContext& ccx, JSObject* aGlobal)
     else
     {
         // We need to call SetGlobal in order to refresh our cached 
-        // mPrototypeJSObject and mPrototypeJSFunction in the case where
-        // the global object is being reused (JS_ClearScope has been
-        // called).
+        // mPrototypeJSObject in the case where the global object is being 
+        // reused (JS_ClearScope has been called).
         // NOTE: We are only called by nsXPConnect::InitClasses. 
         scope->SetGlobal(ccx, aGlobal);
     }
@@ -140,8 +138,7 @@ XPCWrappedNativeScope::XPCWrappedNativeScope(XPCCallContext& ccx,
         mComponents(nsnull),
         mNext(nsnull),
         mGlobalJSObject(nsnull),
-        mPrototypeJSObject(nsnull),
-        mPrototypeJSFunction(nsnull)
+        mPrototypeJSObject(nsnull)
 {
     // add ourselves to the scopes list
     {   // scoped lock
@@ -185,7 +182,6 @@ XPCWrappedNativeScope::SetGlobal(XPCCallContext& ccx, JSObject* aGlobal)
 
         jsval val;
         jsid idObj = mRuntime->GetStringID(XPCJSRuntime::IDX_OBJECT);
-        jsid idFun = mRuntime->GetStringID(XPCJSRuntime::IDX_FUNCTION);
         jsid idProto = mRuntime->GetStringID(XPCJSRuntime::IDX_PROTOTYPE);
 
         if(OBJ_GET_PROPERTY(ccx, aGlobal, idObj, &val) &&
@@ -197,19 +193,10 @@ XPCWrappedNativeScope::SetGlobal(XPCCallContext& ccx, JSObject* aGlobal)
         }
         else
         {
-            NS_ERROR("Can't get globalObject.Object.prototype");
-        }
-
-        if(OBJ_GET_PROPERTY(ccx, aGlobal, idFun, &val) &&
-           !JSVAL_IS_PRIMITIVE(val) &&
-           OBJ_GET_PROPERTY(ccx, JSVAL_TO_OBJECT(val), idProto, &val) &&
-           !JSVAL_IS_PRIMITIVE(val))
-        {
-            mPrototypeJSFunction = JSVAL_TO_OBJECT(val);
-        }
-        else
-        {
-            NS_ERROR("Can't get globalObject.Function.prototype");
+#if defined(DEBUG_jband) || defined(DEBUG_jst)
+//            NS_ERROR("Can't get globalObject.Object.prototype");
+            NS_WARNING("Can't get globalObject.Object.prototype");
+#endif
         }
     }
 }
@@ -291,18 +278,10 @@ XPCWrappedNativeScope::FinishedMarkPhaseOfGC(JSContext* cx, XPCJSRuntime* rt)
             gDyingScopes = cur;
             cur = nsnull;
         }
-        else
+        else if(cur->mPrototypeJSObject &&
+                JS_IsAboutToBeFinalized(cx, cur->mPrototypeJSObject))
         {
-            if(cur->mPrototypeJSObject &&
-               JS_IsAboutToBeFinalized(cx, cur->mPrototypeJSObject))
-            {
-                cur->mPrototypeJSObject = nsnull;
-            }
-            if(cur->mPrototypeJSFunction &&
-               JS_IsAboutToBeFinalized(cx, cur->mPrototypeJSFunction))
-            {
-                cur->mPrototypeJSFunction = nsnull;
-            }
+            cur->mPrototypeJSObject = nsnull;
         }
         if(cur)
             prev = cur;
@@ -558,6 +537,7 @@ void DEBUG_CheckForComponentsInScope(XPCCallContext& ccx, JSObject* obj,
         return;
 
     static const char msg[] =
+    "\n"
     "XPConnect is being called on a scope without a 'Components' property!\n"
     "\n"
     "This is pretty much always bad. It usually means that native code is\n"
@@ -744,7 +724,6 @@ XPCWrappedNativeScope::DebugDump(PRInt16 depth)
         XPC_LOG_ALWAYS(("mComponents @ %x", mComponents));
         XPC_LOG_ALWAYS(("mGlobalJSObject @ %x", mGlobalJSObject));
         XPC_LOG_ALWAYS(("mPrototypeJSObject @ %x", mPrototypeJSObject));
-        XPC_LOG_ALWAYS(("mPrototypeJSFunction @ %x", mPrototypeJSFunction));
 
         XPC_LOG_ALWAYS(("mWrappedNativeMap @ %x with %d wrappers(s)", \
                          mWrappedNativeMap, \

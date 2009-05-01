@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,42 +22,36 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsCOMPtr.h"
 #include "nsIDocumentViewer.h"
 #include "nsIContent.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 
 #include "nsMenuBarX.h"         // for MenuHelpers namespace
-#include "nsMenuX.h"
 #include "nsMenuItemX.h"
-#include "nsMenuItemIcon.h"
-
-#include "nsWidgetAtoms.h"
-
 #include "nsIMenu.h"
 #include "nsIMenuBar.h"
 #include "nsIWidget.h"
 #include "nsIMenuListener.h"
+#include "nsDynamicMDEF.h"
 #include "nsINameSpaceManager.h"
+#include "nsWidgetAtoms.h"
 #include "nsIServiceManager.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
-#include "nsIPrivateDOMEvent.h"
-#include "nsIDOMEventReceiver.h"
-#include "nsIDOMDocumentEvent.h"
 
 #include "nsGUIEvent.h"
 
@@ -67,7 +61,7 @@ nsInstanceCounter   gMenuItemCounterX("nsMenuItemX");
 #endif
 
 
-NS_IMPL_ISUPPORTS5(nsMenuItemX, nsIMenuItem, nsIMenuItem_MOZILLA_1_8_BRANCH, nsIMenuListener, nsIChangeObserver, nsISupportsWeakReference)
+NS_IMPL_ISUPPORTS4(nsMenuItemX, nsIMenuItem, nsIMenuListener, nsIChangeObserver, nsISupportsWeakReference)
 
 //
 // nsMenuItemX constructor
@@ -75,9 +69,8 @@ NS_IMPL_ISUPPORTS5(nsMenuItemX, nsIMenuItem, nsIMenuItem_MOZILLA_1_8_BRANCH, nsI
 nsMenuItemX::nsMenuItemX()
 {
   mMenuParent         = nsnull;
-  mManager            = nsnull;
   mIsSeparator        = PR_FALSE;
-  mKeyEquivalent.AssignLiteral(" ");
+  mKeyEquivalent.Assign(NS_LITERAL_STRING(" "));
   mEnabled            = PR_TRUE;
   mIsChecked          = PR_FALSE;
   mMenuType           = eRegular;
@@ -92,12 +85,7 @@ nsMenuItemX::nsMenuItemX()
 //
 nsMenuItemX::~nsMenuItemX()
 {
-  if (mManager) {
-    if (mContent)
-      mManager->Unregister(mContent);
-    if (mCommandContent)
-      mManager->Unregister(mCommandContent);
-  }
+  mManager->Unregister(mContent);
 
 #if DEBUG
   --gMenuItemCounterX;
@@ -107,11 +95,11 @@ nsMenuItemX::~nsMenuItemX()
 
 NS_METHOD nsMenuItemX::Create ( nsIMenu* aParent, const nsString & aLabel, PRBool aIsSeparator,
                                 EMenuItemType aItemType, PRBool aEnabled, 
-                                nsIChangeManager* aManager, nsIDocShell* aShell, nsIContent* aNode )
+                                nsIChangeManager* aManager, nsIWebShell* aShell, nsIContent* aNode )
 {
   mContent = aNode;         // addref
   mMenuParent = aParent;    // weak
-  mDocShellWeakRef = do_GetWeakReference(aShell);
+  mWebShellWeakRef = do_GetWeakReference(aShell);
   
   mEnabled = aEnabled;
   mMenuType = aItemType;
@@ -123,28 +111,6 @@ NS_METHOD nsMenuItemX::Create ( nsIMenu* aParent, const nsString & aLabel, PRBoo
   
   mIsSeparator = aIsSeparator;
   mLabel = aLabel;
-  
-  // We need to pick up a command content node, it is highly unlikely that one
-  // won't exist. If we find one, register for changes on it.
-  nsCOMPtr<nsIDOMDocument> domDocument = do_QueryInterface(aNode->GetDocument());
-  if (domDocument) {
-    nsAutoString ourCommand;
-    aNode->GetAttr(kNameSpaceID_None, nsWidgetAtoms::command, ourCommand);
-    if (!ourCommand.IsEmpty()) {
-      nsCOMPtr<nsIDOMElement> commandElt;
-      domDocument->GetElementById(ourCommand, getter_AddRefs(commandElt));
-      if (commandElt) {
-        mCommandContent = do_QueryInterface(commandElt);
-        mManager->Register(mCommandContent, obs);
-      }
-    }
-  }
-
-  nsCOMPtr<nsIMenu_MOZILLA_1_8_BRANCH> menuParent_MOZILLA_1_8_BRANCH =
-   do_QueryInterface(mMenuParent);
-  mIcon = new nsMenuItemIcon(NS_STATIC_CAST(nsIMenuItem*, this),
-                             menuParent_MOZILLA_1_8_BRANCH, mContent);
-
   return NS_OK;
 }
 
@@ -260,7 +226,7 @@ nsEventStatus nsMenuItemX::MenuConstruct(
     const nsMenuEvent & aMenuEvent,
     nsIWidget         * aParentWindow, 
     void              * menuNode,
-    void              * aDocShell)
+    void              * aWebShell)
 {
     return nsEventStatus_eIgnore;
 }
@@ -296,54 +262,16 @@ NS_METHOD nsMenuItemX::DoCommand()
     if (mMenuType == nsIMenuItem::eCheckbox || (mMenuType == nsIMenuItem::eRadio && !mIsChecked)) {
         nsAutoString value;
         mContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::autocheck, value);
-        if (!value.EqualsLiteral("false"))
+        if (!value.Equals(NS_LITERAL_STRING("false")))
             SetChecked(!mIsChecked);
             /* the AttributeChanged code will update all the internal state */
     }
 
-    return MenuHelpersX::DispatchCommandTo(mDocShellWeakRef, mContent);
+    return MenuHelpersX::DispatchCommandTo(mWebShellWeakRef, mContent);
 }
     
-NS_IMETHODIMP nsMenuItemX::DispatchDOMEvent(const nsString &eventName, PRBool *preventDefaultCalled)
-{
-  if (!mContent)
-    return NS_ERROR_FAILURE;
-
-  // get owner document for content
-  nsCOMPtr<nsIDocument> parentDoc = mContent->GetOwnerDoc();
-  if (!parentDoc) {
-    NS_WARNING("Failed to get owner nsIDocument for menu item content");
-    return NS_ERROR_FAILURE;
-  }
-  
-  // get interface for creating DOM events from content owner document
-  nsCOMPtr<nsIDOMDocumentEvent> DOMEventFactory = do_QueryInterface(parentDoc);
-  if (!DOMEventFactory) {
-    NS_WARNING("Failed to QI parent nsIDocument to nsIDOMDocumentEvent");
-    return NS_ERROR_FAILURE;
-  }
-  
-  // create DOM event
-  nsCOMPtr<nsIDOMEvent> event;
-  DOMEventFactory->CreateEvent(NS_LITERAL_STRING("Events"), getter_AddRefs(event));
-  event->InitEvent(eventName, PR_TRUE, PR_TRUE);
-  
-  // mark DOM event as trusted
-  nsCOMPtr<nsIPrivateDOMEvent> privateEvent(do_QueryInterface(event));
-  privateEvent->SetTrusted(PR_TRUE);
-  
-  // send DOM event
-  nsCOMPtr<nsIDOMEventTarget> eventTarget = do_QueryInterface(mContent);
-  nsresult rv = eventTarget->DispatchEvent(event, preventDefaultCalled);
-  if (NS_FAILED(rv)) {
-    NS_WARNING("Failed to send DOM event via nsIDOMEventTarget");
-    return NS_ERROR_FAILURE;
-  }
-  
-  return NS_OK;
-}
    
-//-------------------------------------------------------------------------
+   //-------------------------------------------------------------------------
 NS_METHOD nsMenuItemX::GetModifiers(PRUint8 * aModifiers) 
 {
     nsresult res = NS_OK;
@@ -419,66 +347,41 @@ nsMenuItemX :: UncheckRadioSiblings(nsIContent* inCheckedContent)
 
 
 NS_IMETHODIMP
-nsMenuItemX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIContent *aContent, nsIAtom *aAttribute)
+nsMenuItemX :: AttributeChanged ( nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIAtom *aAttribute )
 {
-  if (aContent == mContent) {
-    if (aAttribute == nsWidgetAtoms::checked) {
-      // if we're a radio menu, uncheck our sibling radio items. No need to
-      // do any of this if we're just a normal check menu.
-      if (mMenuType == eRadio) {
-        nsAutoString checked;
-        mContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::checked, checked);
-        if (checked.EqualsLiteral("true")) 
-          UncheckRadioSiblings(mContent);
-      }
-      nsCOMPtr<nsIMenuListener> listener = do_QueryInterface(mMenuParent);
-      listener->SetRebuild(PR_TRUE);
-    } 
-    else if (aAttribute == nsWidgetAtoms::disabled || aAttribute == nsWidgetAtoms::hidden ||
-             aAttribute == nsWidgetAtoms::collapsed || aAttribute == nsWidgetAtoms::label )  {
-      nsCOMPtr<nsIMenuListener> listener = do_QueryInterface(mMenuParent);
-      listener->SetRebuild(PR_TRUE);
-    }
-    else if (aAttribute == nsWidgetAtoms::image) {
-      SetupIcon();
-    }
-  }
-  else if (aContent == mCommandContent &&
-           aAttribute == nsWidgetAtoms::disabled &&
-           mMenuParent && mCommandContent) {
-    nsAutoString menuItemDisabled;
-    nsAutoString commandDisabled;
-    mContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, menuItemDisabled);
-    mCommandContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, commandDisabled);
-    if (!commandDisabled.Equals(menuItemDisabled)) {
-      // The menu's disabled state needs to be updated to match the command.
-      if (commandDisabled.IsEmpty())
-        mContent->UnsetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, PR_TRUE);
-      else
-        mContent->SetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, commandDisabled, PR_TRUE);
+  if (aAttribute == nsWidgetAtoms::checked) {
+    // if we're a radio menu, uncheck our sibling radio items. No need to
+    // do any of this if we're just a normal check menu.
+    if ( mMenuType == eRadio ) {
+      nsAutoString checked;
+      mContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::checked, checked);
+      if (checked == NS_LITERAL_STRING("true") ) 
+        UncheckRadioSiblings(mContent);
     }
     
-    // we need to get our native menu item to update itself
-    nsCOMPtr<nsIMenu_MOZILLA_1_8_BRANCH> parentMenu = do_QueryInterface(mMenuParent);
-    if (parentMenu)
-      parentMenu->ChangeNativeEnabledStatusForMenuItem(this, !commandDisabled.EqualsLiteral("true"));
+    nsCOMPtr<nsIMenuListener> listener = do_QueryInterface(mMenuParent);
+    listener->SetRebuild(PR_TRUE);
+    
+  } 
+  else if (aAttribute == nsWidgetAtoms::disabled || aAttribute == nsWidgetAtoms::hidden ||
+             aAttribute == nsWidgetAtoms::collapsed || aAttribute == nsWidgetAtoms::label )  {
+    nsCOMPtr<nsIMenuListener> listener = do_QueryInterface(mMenuParent);
+    listener->SetRebuild(PR_TRUE);
   }
   
   return NS_OK;
+
 } // AttributeChanged
 
 
 NS_IMETHODIMP
 nsMenuItemX :: ContentRemoved(nsIDocument *aDocument, nsIContent *aChild, PRInt32 aIndexInContainer)
 {
-  if (aChild == mCommandContent) {
-    mManager->Unregister(mCommandContent);
-    mCommandContent = nsnull;
-  }
   
   nsCOMPtr<nsIMenuListener> listener = do_QueryInterface(mMenuParent);
   listener->SetRebuild(PR_TRUE);
   return NS_OK;
+  
 } // ContentRemoved
 
 NS_IMETHODIMP
@@ -490,12 +393,3 @@ nsMenuItemX :: ContentInserted(nsIDocument *aDocument, nsIContent *aChild, PRInt
   return NS_OK;
   
 } // ContentInserted
-
-
-NS_IMETHODIMP
-nsMenuItemX::SetupIcon()
-{
-  if (!mIcon) return NS_ERROR_OUT_OF_MEMORY;
-
-  return mIcon->SetupIcon();
-}

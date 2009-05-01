@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "plarena.h"
 
@@ -45,16 +42,11 @@
 #include "secasn1.h"
 #include "secder.h"
 #include "secoid.h"
+#include "alghmac.h"
 #include "secerr.h"
 #include "secmod.h"
 #include "pk11func.h"
 #include "secpkcs5.h"
-#include "secmodi.h"
-#include "secmodti.h"
-#include "pkcs11.h"
-#include "pk11func.h"
-#include "secitem.h"
-#include "key.h"
 
 typedef struct SEC_PKCS5PBEParameterStr SEC_PKCS5PBEParameter;
 struct SEC_PKCS5PBEParameterStr {
@@ -693,175 +685,3 @@ RSA_FormatBlock(SECItem *result, unsigned modulusLen,
     return SECFailure;
 }
 
-/****************************************************************************
- *
- * Now Do The PBE Functions Here...
- *
- ****************************************************************************/
-
-static void
-pk11_destroy_ck_pbe_params(CK_PBE_PARAMS *pbe_params)
-{
-    if (pbe_params) {
-	if (pbe_params->pPassword)
-	    PORT_ZFree(pbe_params->pPassword, pbe_params->ulPasswordLen);
-	if (pbe_params->pSalt)
-	    PORT_ZFree(pbe_params->pSalt, pbe_params->ulSaltLen);
-	PORT_ZFree(pbe_params, sizeof(CK_PBE_PARAMS));
-    }
-}
-
-SECItem * 
-PK11_CreatePBEParams(SECItem *salt, SECItem *pwd, unsigned int iterations)
-{
-    CK_PBE_PARAMS *pbe_params = NULL;
-    SECItem *paramRV = NULL;
-
-    paramRV = SECITEM_AllocItem(NULL, NULL, sizeof(CK_PBE_PARAMS));
-    if (!paramRV ) {
-	goto loser;
-    }
-    /* init paramRV->data with zeros. SECITEM_AllocItem does not do it */
-    PORT_Memset(paramRV->data, 0, sizeof(CK_PBE_PARAMS));
-
-    pbe_params = (CK_PBE_PARAMS *)paramRV->data;
-    pbe_params->pPassword = (CK_CHAR_PTR)PORT_ZAlloc(pwd->len);
-    if (!pbe_params->pPassword) {
-        goto loser;
-    }
-    PORT_Memcpy(pbe_params->pPassword, pwd->data, pwd->len);
-    pbe_params->ulPasswordLen = pwd->len;
-
-    pbe_params->pSalt = (CK_CHAR_PTR)PORT_ZAlloc(salt->len);
-    if (!pbe_params->pSalt) {
-	goto loser;
-    }
-    PORT_Memcpy(pbe_params->pSalt, salt->data, salt->len);
-    pbe_params->ulSaltLen = salt->len;
-
-    pbe_params->ulIteration = (CK_ULONG)iterations;
-    return paramRV;
-
-loser:
-    if (pbe_params)
-        pk11_destroy_ck_pbe_params(pbe_params);
-    if (paramRV) 
-    	PORT_ZFree(paramRV, sizeof(SECItem));
-    return NULL;
-}
-
-void
-PK11_DestroyPBEParams(SECItem *pItem)
-{
-    if (pItem) {
-	CK_PBE_PARAMS * params = (CK_PBE_PARAMS *)(pItem->data);
-	if (params)
-	    pk11_destroy_ck_pbe_params(params);
-	PORT_ZFree(pItem, sizeof(SECItem));
-    }
-}
-
-SECAlgorithmID *
-PK11_CreatePBEAlgorithmID(SECOidTag algorithm, int iteration, SECItem *salt)
-{
-    SECAlgorithmID *algid = NULL;
-    algid = SEC_PKCS5CreateAlgorithmID(algorithm, salt, iteration);
-    return algid;
-}
-
-PK11SymKey *
-PK11_RawPBEKeyGen(PK11SlotInfo *slot, CK_MECHANISM_TYPE type, SECItem *mech,
-			 SECItem *pwitem, PRBool faulty3DES, void *wincx)
-{
-    /* pbe stuff */
-    CK_PBE_PARAMS *pbe_params;
-    PK11SymKey *symKey;
-
-    if(faulty3DES && (type == CKM_NETSCAPE_PBE_SHA1_TRIPLE_DES_CBC)) {
-	type = CKM_NETSCAPE_PBE_SHA1_FAULTY_3DES_CBC;
-    }
-    if(mech == NULL) {
-	return NULL;
-    }
-
-    pbe_params = (CK_PBE_PARAMS *)mech->data;
-    if (!pbe_params) {
-	return NULL;
-    }
-    pbe_params->pPassword = (CK_CHAR_PTR)PORT_ZAlloc(pwitem->len);
-    if(pbe_params->pPassword != NULL) {
-	PORT_Memcpy(pbe_params->pPassword, pwitem->data, pwitem->len);
-	pbe_params->ulPasswordLen = pwitem->len;
-    } else {
-	SECITEM_ZfreeItem(mech, PR_TRUE);
-	return NULL;
-    }
-
-    symKey = PK11_TokenKeyGenWithFlags(slot, type, mech, 0, NULL,
-           CKF_SIGN|CKF_ENCRYPT|CKF_DECRYPT|CKF_UNWRAP|CKF_WRAP, 0, wincx);
-
-    PORT_ZFree(pbe_params->pPassword, pwitem->len);
-    pbe_params->pPassword = NULL;
-    pbe_params->ulPasswordLen = 0;
-    return symKey;
-}
-
-PK11SymKey *
-PK11_PBEKeyGen(PK11SlotInfo *slot, SECAlgorithmID *algid, SECItem *pwitem,
-	       					PRBool faulty3DES, void *wincx)
-{
-    /* pbe stuff */
-    CK_MECHANISM_TYPE type;
-    SECItem *mech;
-    PK11SymKey *symKey;
-
-    mech = PK11_ParamFromAlgid(algid);
-    type = PK11_AlgtagToMechanism(SECOID_FindOIDTag(&algid->algorithm));
-    if(faulty3DES && (type == CKM_NETSCAPE_PBE_SHA1_TRIPLE_DES_CBC)) {
-	type = CKM_NETSCAPE_PBE_SHA1_FAULTY_3DES_CBC;
-    }
-    if(mech == NULL) {
-	return NULL;
-    }
-    symKey = PK11_RawPBEKeyGen(slot, type, mech, pwitem, faulty3DES, wincx);
-
-    SECITEM_ZfreeItem(mech, PR_TRUE);
-    return symKey;
-}
-
-SECItem *
-PK11_GetPBEIV(SECAlgorithmID *algid, SECItem *pwitem)
-{
-    /* pbe stuff */
-    CK_MECHANISM_TYPE type;
-    SECItem *mech;
-    PK11SymKey *symKey;
-    PK11SlotInfo *slot = PK11_GetInternalSlot();
-    int iv_len = 0;
-    CK_PBE_PARAMS_PTR pPBEparams;
-    SECItem src;
-    SECItem *iv;
-
-
-    mech = PK11_ParamFromAlgid(algid);
-    type = PK11_AlgtagToMechanism(SECOID_FindOIDTag(&algid->algorithm));
-    if(mech == NULL) {
-	return NULL;
-    }
-    symKey = PK11_RawPBEKeyGen(slot, type, mech, pwitem, PR_FALSE, NULL);
-    PK11_FreeSlot(slot);
-    if (symKey == NULL) {
-	SECITEM_ZfreeItem(mech, PR_TRUE);
-	return NULL;
-    }
-    PK11_FreeSymKey(symKey);
-    pPBEparams = (CK_PBE_PARAMS_PTR)mech->data;
-    iv_len = PK11_GetIVLength(type);
-
-    src.data = (unsigned char *)pPBEparams->pInitVector;
-    src.len = iv_len;
-    iv = SECITEM_DupItem(&src);
-
-    SECITEM_ZfreeItem(mech, PR_TRUE);
-    return iv;
-}

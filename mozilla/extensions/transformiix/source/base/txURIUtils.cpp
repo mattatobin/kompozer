@@ -1,41 +1,34 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
- * The Initial Developer of the Original Code is
- * The MITRE Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is The MITRE Corporation.
+ * Portions created by MITRE are Copyright (C) 1999 The MITRE Corporation.
+ *
+ * Portions created by Keith Visco as a Non MITRE employee,
+ * (C) 1999 Keith Visco. All Rights Reserved.
  *
  * Contributor(s):
- *   Keith Visco <kvisco@ziplink.net> (Original Author)
- *   Larry Fitzpatrick, OpenText <lef@opentext.com>
+ * Keith Visco, kvisco@ziplink.net
+ *    -- original author.
+ * Larry Fitzpatrick, OpenText, lef@opentext.com
+ *   -- 19990806
+ *     -- moved initialization of constant shorts and chars from
+ *        URIUtils.cpp to here
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * Peter Van der Beken
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "txURIUtils.h"
 
@@ -236,11 +229,21 @@ PRBool URIUtils::CanCallerAccess(nsIDOMNode *aNode)
         return PR_TRUE;
     }
 
+    // Ask the securitymanager if we have "UniversalBrowserRead"
+    PRBool caps = PR_FALSE;
+    nsresult rv =
+        gTxSecurityManager->IsCapabilityEnabled("UniversalBrowserRead",
+                                                &caps);
+    NS_ENSURE_SUCCESS(rv, PR_FALSE);
+    if (caps) {
+        return PR_TRUE;
+    }
+
     // Make sure that this is a real node. We do this by first QI'ing to
     // nsIContent (which is important performance wise) and if that QI
     // fails we QI to nsIDocument. If both those QI's fail we won't let
     // the caller access this unknown node.
-    nsIPrincipal *principal = nsnull;
+    nsCOMPtr<nsIPrincipal> principal;
     nsCOMPtr<nsIContent> content = do_QueryInterface(aNode);
     nsCOMPtr<nsIAttribute> attr;
     nsCOMPtr<nsIDocument> doc;
@@ -279,7 +282,8 @@ PRBool URIUtils::CanCallerAccess(nsIDOMNode *aNode)
                 return PR_TRUE;
             }
 
-            principal = ni->GetDocumentPrincipal();
+            ni->GetDocumentPrincipal(getter_AddRefs(principal));
+
             if (!principal) {
               // we can't get to the principal so we'll give up and give the
               // caller access
@@ -305,23 +309,6 @@ PRBool URIUtils::CanCallerAccess(nsIDOMNode *aNode)
         return PR_TRUE;
     }
 
-    if (principal == systemPrincipal) {
-        // We already know the subject is NOT systemPrincipal, no point calling
-        // CheckSameOriginPrincipal since we know they don't match.
-
-        return PR_FALSE;
-    }
-
-    // Ask the securitymanager if we have "UniversalBrowserRead"
-    PRBool caps = PR_FALSE;
-    nsresult rv =
-        gTxSecurityManager->IsCapabilityEnabled("UniversalBrowserRead",
-                                                &caps);
-    NS_ENSURE_SUCCESS(rv, PR_FALSE);
-    if (caps) {
-        return PR_TRUE;
-    }
-
     rv = gTxSecurityManager->CheckSameOriginPrincipal(subjectPrincipal,
                                                       principal);
 
@@ -333,7 +320,6 @@ void
 URIUtils::ResetWithSource(nsIDocument *aNewDoc, nsIDOMNode *aSourceNode)
 {
     if (!aSourceNode) {
-        // XXXbz passing nsnull as the first arg to Reset is illegal
         aNewDoc->Reset(nsnull, nsnull);
         return;
     }
@@ -346,31 +332,21 @@ URIUtils::ResetWithSource(nsIDocument *aNewDoc, nsIDOMNode *aSourceNode)
     }
     if (!sourceDoc) {
         NS_ASSERTION(0, "no source document found");
-        // XXXbz passing nsnull as the first arg to Reset is illegal
         aNewDoc->Reset(nsnull, nsnull);
         return;
     }
 
-    nsIPrincipal* sourcePrincipal = sourceDoc->GetPrincipal();
-    if (!sourcePrincipal) {
-        return;
-    }
-
-    // Copy the channel and loadgroup from the source document.
+    nsCOMPtr<nsIChannel> channel;
     nsCOMPtr<nsILoadGroup> loadGroup = sourceDoc->GetDocumentLoadGroup();
-    nsCOMPtr<nsIChannel> channel = sourceDoc->GetChannel();
-    if (!channel) {
-        // Need to synthesize one
-        if (NS_FAILED(NS_NewChannel(getter_AddRefs(channel),
-                                    sourceDoc->GetDocumentURI(),
-                                    nsnull,
-                                    loadGroup))) {
-            return;
-        }
-        channel->SetOwner(sourcePrincipal);
+    nsCOMPtr<nsIIOService> serv = do_GetService(NS_IOSERVICE_CONTRACTID);
+    if (serv) {
+        // Create a temporary channel to get nsIDocument->Reset to
+        // do the right thing. We want the output document to get
+        // much of the input document's characteristics.
+        serv->NewChannelFromURI(sourceDoc->GetDocumentURI(),
+                                getter_AddRefs(channel));
     }
     aNewDoc->Reset(channel, loadGroup);
-    aNewDoc->SetPrincipal(sourcePrincipal);
     aNewDoc->SetBaseURI(sourceDoc->GetBaseURI());
 
     // Copy charset

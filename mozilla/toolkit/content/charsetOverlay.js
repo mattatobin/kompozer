@@ -29,11 +29,11 @@ function MailMultiplexHandler(event)
     } else if (name == 'charsetGroup') {
         var charset = node.getAttribute('id');
         charset = charset.substring('charset.'.length, charset.length)
-        MessengerSetForcedCharacterSet(charset);
+        MessengerSetDefaultCharacterSet(charset);
     } else if (name == 'charsetCustomize') {
         //do nothing - please remove this else statement, once the charset prefs moves to the pref window
     } else {
-        MessengerSetForcedCharacterSet(node.getAttribute('id'));
+        MessengerSetDefaultCharacterSet(node.getAttribute('id'));
     }
 }
 
@@ -80,7 +80,7 @@ function SelectDetector(event, doReload)
         str.data = prefvalue;
         pref.setComplexValue("intl.charset.detector",
                              Components.interfaces.nsISupportsString, str);
-        if (doReload) window.content.location.reload();
+        if (doReload) window._content.location.reload();
     }
     catch (ex) {
         dump("Failed to set the intl.charset.detector preference.\n");
@@ -126,19 +126,21 @@ function SetForcedCharset(charset)
 var gPrevCharset = null;
 function UpdateCurrentCharset()
 {
-    // extract the charset from DOM
+    var menuitem = null;
+
+    // exctract the charset from DOM
     var wnd = document.commandDispatcher.focusedWindow;
-    if ((window == wnd) || (wnd == null)) wnd = window.content;
+    if ((window == wnd) || (wnd == null)) wnd = window._content;
+    menuitem = document.getElementById('charset.' + wnd.document.characterSet);
 
-    // Uncheck previous item
-    if (gPrevCharset) {
-        var pref_item = document.getElementById('charset.' + gPrevCharset);
-        if (pref_item)
-          pref_item.setAttribute('checked', 'false');
-    }
-
-    var menuitem = document.getElementById('charset.' + wnd.document.characterSet);
     if (menuitem) {
+        // uncheck previously checked item to workaround Mac checkmark problem
+        // bug 98625
+        if (gPrevCharset) {
+            var pref_item = document.getElementById('charset.' + gPrevCharset);
+            if (pref_item)
+              pref_item.setAttribute('checked', 'false');
+        }
         menuitem.setAttribute('checked', 'true');
     }
 }
@@ -146,6 +148,8 @@ function UpdateCurrentCharset()
 function UpdateCurrentMailCharset()
 {
     var charset = msgWindow.mailCharacterSet;
+    dump("Update current mail charset: " + charset + " \n");
+
     var menuitem = document.getElementById('charset.' + charset);
 
     if (menuitem) {
@@ -211,7 +215,7 @@ var gLastBrowserCharset = null;
 
 function charsetLoadListener (event)
 {
-    var charset = window.content.document.characterSet;
+    var charset = window._content.document.characterSet;
 
     if (charset.length > 0 && (charset != gLastBrowserCharset)) {
         gCharsetMenu.SetCurrentCharset(charset);
@@ -223,7 +227,7 @@ function charsetLoadListener (event)
 
 function composercharsetLoadListener (event)
 {
-    var charset = window.content.document.characterSet;
+    var charset = window._content.document.characterSet;
 
  
     if (charset.length > 0 ) {
@@ -249,6 +253,7 @@ function mailCharsetLoadListener (event)
         if (charset.length > 0 && (charset != gLastMailCharset)) {
             gCharsetMenu.SetCurrentMailCharset(charset);
             gLastMailCharset = charset;
+            dump("mailCharsetLoadListener: " + charset + " \n");
         }
     }
 }
@@ -258,7 +263,7 @@ if (window && (wintype == "navigator:browser"))
 {
     var contentArea = window.document.getElementById("appcontent");
     if (contentArea)
-        contentArea.addEventListener("pageshow", charsetLoadListener, true);
+        contentArea.addEventListener("load", charsetLoadListener, true);
 }
 else
 {
@@ -267,14 +272,14 @@ else
     {
         var messageContent = window.document.getElementById("messagepane");
         if (messageContent)
-            messageContent.addEventListener("pageshow", mailCharsetLoadListener, true);
+            messageContent.addEventListener("load", mailCharsetLoadListener, true);
     }
     else
     if (window && arrayOfStrings[0] == "composer") 
     {
         contentArea = window.document.getElementById("appcontent");
         if (contentArea)
-            contentArea.addEventListener("pageshow", composercharsetLoadListener, true);
+            contentArea.addEventListener("load", composercharsetLoadListener, true);
     }
 
 }

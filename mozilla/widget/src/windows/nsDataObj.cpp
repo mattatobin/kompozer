@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,29 +22,20 @@
  * Contributor(s):
  *   Sean Echevarria <Sean@Beatnik.com>
  *   Blake Ross <blaker@netscape.com>
- *   Brodie Thiesfield <brofield@jellycan.com>
- *   Masayuki Nakano <masayuki@d-toybox.com>
- *   David Gardiner <david.gardiner@unisa.edu.au>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
-
-#include <ole2.h>
-#ifndef __MINGW32__
-#include <urlmon.h>
-#endif
-#include <shlobj.h>
 
 #include "nsDataObj.h"
 #include "nsClipboard.h"
@@ -66,8 +57,12 @@
 #include "nsDirectoryServiceDefs.h"
 #include "prprf.h"
 #include "nsCRT.h"
-#include "nsPrintfCString.h"
-#include "nsIStringBundle.h"
+
+#include <ole2.h>
+#ifndef __MINGW32__
+#include <urlmon.h>
+#endif
+#include <shlobj.h>
 
 #if 0
 #define PRNTDEBUG(_x) printf(_x);
@@ -84,13 +79,6 @@ ULONG nsDataObj::g_cRef = 0;
 EXTERN_C GUID CDECL CLSID_nsDataObj =
 	{ 0x1bba7640, 0xdf52, 0x11cf, { 0x82, 0x7b, 0, 0xa0, 0x24, 0x3a, 0xe5, 0x05 } };
 
-/* 
- * deliberately not using MAX_PATH. This is because on platforms < XP
- * a file created with a long filename may be mishandled by the shell
- * resulting in it not being able to be deleted or moved. 
- * See bug 250392 for more details.
- */
-#define NS_MAX_FILEDESCRIPTOR 128 + 1
 
 /*
  * Class nsDataObj
@@ -99,21 +87,16 @@ EXTERN_C GUID CDECL CLSID_nsDataObj =
 //-----------------------------------------------------
 // construction 
 //-----------------------------------------------------
-nsDataObj::nsDataObj(nsIURI * uri)
-: m_cRef(0), mTransferable(nsnull)
+nsDataObj::nsDataObj()
 {
+	m_cRef	        = 0;
+  mTransferable   = nsnull;
   mDataFlavors    = new nsVoidArray();
-  m_enumFE        = new CEnumFormatEtc(32);
- 
-  m_enumFE->AddRef();
 
-  if (uri) {
-
-    // A URI was obtained, so pass this through to the DataObject
-    // so it can create a SourceURL for CF_HTML flavour
-    uri->GetSpec(mSourceURL);
-  }
+  m_enumFE = new CEnumFormatEtc(32);
+  m_enumFE->AddRef();  
 }
+
 //-----------------------------------------------------
 // destruction
 //-----------------------------------------------------
@@ -201,14 +184,10 @@ STDMETHODIMP nsDataObj::GetData(LPFORMATETC pFE, LPSTGMEDIUM pSTM)
 
   PRUint32 dfInx = 0;
 
-  static CLIPFORMAT fileDescriptorFlavorA = ::RegisterClipboardFormat( CFSTR_FILEDESCRIPTORA ); 
-  static CLIPFORMAT fileDescriptorFlavorW = ::RegisterClipboardFormat( CFSTR_FILEDESCRIPTORW ); 
-  static CLIPFORMAT uniformResourceLocatorA = ::RegisterClipboardFormat( CFSTR_INETURLA );
-  static CLIPFORMAT uniformResourceLocatorW = ::RegisterClipboardFormat( CFSTR_INETURLW );
-#ifndef WINCE
+  static CLIPFORMAT fileDescriptorFlavor = ::RegisterClipboardFormat( CFSTR_FILEDESCRIPTOR ); 
   static CLIPFORMAT fileFlavor = ::RegisterClipboardFormat( CFSTR_FILECONTENTS ); 
+  static CLIPFORMAT UniformResourceLocator = ::RegisterClipboardFormat( CFSTR_SHELLURL );
   static CLIPFORMAT PreferredDropEffect = ::RegisterClipboardFormat( CFSTR_PREFERREDDROPEFFECT );
-#endif
 
   ULONG count;
   FORMATETC fe;
@@ -226,10 +205,9 @@ STDMETHODIMP nsDataObj::GetData(LPFORMATETC pFE, LPSTGMEDIUM pSTM)
         case CF_UNICODETEXT:
         return GetText(*df, *pFE, *pSTM);
                   
-#ifndef WINCE
         case CF_HDROP:
           return GetFile(*df, *pFE, *pSTM);
-#endif
+
         // Someone is asking for an image
         case CF_DIB:
           return GetDib(*df, *pFE, *pSTM);
@@ -241,20 +219,14 @@ STDMETHODIMP nsDataObj::GetData(LPFORMATETC pFE, LPSTGMEDIUM pSTM)
         //  return GetMetafilePict(*pFE, *pSTM);
             
         default:
-          if ( format == fileDescriptorFlavorA )
-            return GetFileDescriptor ( *pFE, *pSTM, PR_FALSE );
-          if ( format == fileDescriptorFlavorW )
-            return GetFileDescriptor ( *pFE, *pSTM, PR_TRUE);
-          if ( format == uniformResourceLocatorA )
-            return GetUniformResourceLocator( *pFE, *pSTM, PR_FALSE);
-          if ( format == uniformResourceLocatorW )
-            return GetUniformResourceLocator( *pFE, *pSTM, PR_TRUE);
-#ifndef WINCE
+          if ( format == fileDescriptorFlavor )
+            return GetFileDescriptor ( *pFE, *pSTM );
           if ( format == fileFlavor )
             return GetFileContents ( *pFE, *pSTM );
+          if ( format == UniformResourceLocator )
+            return GetUniformResourceLocator( *pFE, *pSTM );
           if ( format == PreferredDropEffect )
             return GetPreferredDropEffect( *pFE, *pSTM );
-#endif
           PRNTDEBUG2("***** nsDataObj::GetData - Unknown format %u\n", format);
           return GetText(*df, *pFE, *pSTM);
         } //switch
@@ -284,6 +256,8 @@ STDMETHODIMP nsDataObj::QueryGetData(LPFORMATETC pFE)
   PRNTDEBUG("nsDataObj::QueryGetData  ");
   PRNTDEBUG3("format: %d  Text: %d\n", pFE->cfFormat, CF_TEXT);
 
+  PRUint32 dfInx = 0;
+
   ULONG count;
   FORMATETC fe;
   m_enumFE->Reset();
@@ -310,7 +284,6 @@ STDMETHODIMP nsDataObj::GetCanonicalFormatEtc
 STDMETHODIMP nsDataObj::SetData(LPFORMATETC pFE, LPSTGMEDIUM pSTM, BOOL fRelease)
 {
   PRNTDEBUG("nsDataObj::SetData\n");
-#ifndef WINCE
   static CLIPFORMAT PerformedDropEffect = ::RegisterClipboardFormat( CFSTR_PERFORMEDDROPEFFECT );  
 
   if (pFE && pFE->cfFormat == PerformedDropEffect) {
@@ -320,7 +293,6 @@ STDMETHODIMP nsDataObj::SetData(LPFORMATETC pFE, LPSTGMEDIUM pSTM, BOOL fRelease
       mCachedTempFile = NULL;
     }
   }
-#endif
 
   if (fRelease) {
     ReleaseStgMedium(pSTM);
@@ -432,7 +404,7 @@ nsDataObj :: GetDib ( const nsACString& inFlavor, FORMATETC &, STGMEDIUM & aSTG 
 {
   PRNTDEBUG("nsDataObj::GetDib\n");
   ULONG result = E_FAIL;
-#ifndef WINCE  
+  
   
   PRUint32 len = 0;
   nsCOMPtr<nsISupports> genericDataWrapper;
@@ -462,8 +434,7 @@ nsDataObj :: GetDib ( const nsACString& inFlavor, FORMATETC &, STGMEDIUM & aSTG 
   } // if we have an image
   else  
     NS_WARNING ( "Definately not an image on clipboard" );
-
-#endif
+  
 	return ResultFromScode(result);
 }
 
@@ -474,18 +445,14 @@ nsDataObj :: GetDib ( const nsACString& inFlavor, FORMATETC &, STGMEDIUM & aSTG 
 //
 
 HRESULT 
-nsDataObj :: GetFileDescriptor ( FORMATETC& aFE, STGMEDIUM& aSTG, PRBool aIsUnicode )
+nsDataObj :: GetFileDescriptor ( FORMATETC& aFE, STGMEDIUM& aSTG )
 {
   HRESULT res = S_OK;
   
   // How we handle this depends on if we're dealing with an internet
   // shortcut, since those are done under the covers.
-  if ( IsInternetShortcut() ) {
-    if ( aIsUnicode )
-      res = GetFileDescriptorInternetShortcutW ( aFE, aSTG );
-    else
-      res = GetFileDescriptorInternetShortcutA ( aFE, aSTG );
-  } 
+  if ( IsInternetShortcut() )
+    res = GetFileDescriptorInternetShortcut ( aFE, aSTG );
   else
     NS_WARNING ( "Not yet implemented\n" );
   
@@ -511,118 +478,6 @@ nsDataObj :: GetFileContents ( FORMATETC& aFE, STGMEDIUM& aSTG )
 	
 } // GetFileContents
 
-// 
-// Given a unicode string, we ensure that it contains only characters which are valid within
-// the file system. Remove all forbidden characters from the name, and completely disallow 
-// any title that starts with a forbidden name and extension (e.g. "nul" is invalid, but 
-// "nul." and "nul.txt" are also invalid and will cause problems).
-//
-// It would seem that this is more functionality suited to being in nsILocalFile.
-//
-static void
-MangleTextToValidFilename(nsString & aText)
-{
-  static const char* forbiddenNames[] = {
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", 
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    "CON", "PRN", "AUX", "NUL", "CLOCK$"
-  };
-
-  aText.StripChars(FILE_PATH_SEPARATOR  FILE_ILLEGAL_CHARACTERS);
-  aText.CompressWhitespace(PR_TRUE, PR_TRUE);
-  PRUint32 nameLen;
-  for (size_t n = 0; n < NS_ARRAY_LENGTH(forbiddenNames); ++n) {
-    nameLen = (PRUint32) strlen(forbiddenNames[n]);
-    if (aText.EqualsIgnoreCase(forbiddenNames[n], nameLen)) {
-      // invalid name is either the entire string, or a prefix with a period
-      if (aText.Length() == nameLen || aText.CharAt(nameLen) == PRUnichar('.')) {
-        aText.Truncate();
-        break;
-      }
-    }
-  }
-}
-
-// 
-// Given a unicode string, convert it down to a valid local charset filename
-// with the supplied extension. This ensures that we do not cut MBCS characters
-// in the middle.
-//
-// It would seem that this is more functionality suited to being in nsILocalFile.
-//
-static PRBool
-CreateFilenameFromTextA(nsString & aText, const char * aExtension, 
-                         char * aFilename, PRUint32 aFilenameLen)
-{
-  // ensure that the supplied name doesn't have invalid characters. If 
-  // a valid mangled filename couldn't be created then it will leave the
-  // text empty.
-  MangleTextToValidFilename(aText);
-  if (aText.IsEmpty())
-    return PR_FALSE;
-
-  // repeatably call WideCharToMultiByte as long as the title doesn't fit in the buffer 
-  // available to us. Continually reduce the length of the source title until the MBCS
-  // version will fit in the buffer with room for the supplied extension. Doing it this
-  // way ensures that even in MBCS environments there will be a valid MBCS filename of
-  // the correct length.
-  int maxUsableFilenameLen = aFilenameLen - strlen(aExtension) - 1; // space for ext + null byte
-  int currLen, textLen = (int) NS_MIN(aText.Length(), aFilenameLen);
-  char defaultChar = '_';
-  do {
-    currLen = WideCharToMultiByte(CP_ACP, 
-      WC_COMPOSITECHECK|WC_DEFAULTCHAR,
-      aText.get(), textLen--, aFilename, maxUsableFilenameLen, &defaultChar, NULL);
-  }
-  while (currLen == 0 && textLen > 0 && GetLastError() == ERROR_INSUFFICIENT_BUFFER);
-  if (currLen > 0 && textLen > 0) {
-    strcpy(&aFilename[currLen], aExtension);
-    return PR_TRUE;
-  }
-  else {
-    // empty names aren't permitted
-    return PR_FALSE;
-  }
-}
-
-static PRBool
-CreateFilenameFromTextW(nsString & aText, const wchar_t * aExtension, 
-                         wchar_t * aFilename, PRUint32 aFilenameLen)
-{
-  // ensure that the supplied name doesn't have invalid characters. If 
-  // a valid mangled filename couldn't be created then it will leave the
-  // text empty.
-  MangleTextToValidFilename(aText);
-  if (aText.IsEmpty())
-    return PR_FALSE;
-
-  const int extensionLen = wcslen(aExtension);
-  if (aText.Length() + extensionLen + 1 > aFilenameLen)
-    aText.Truncate(aFilenameLen - extensionLen - 1);
-  wcscpy(&aFilename[0], aText.get());
-  wcscpy(&aFilename[aText.Length()], aExtension);
-  return PR_TRUE;
-}
-
-static NS_DEFINE_CID(kStringBundleServiceCID, NS_STRINGBUNDLESERVICE_CID);
-#define PAGEINFO_PROPERTIES "chrome://navigator/locale/pageInfo.properties"
-
-static PRBool
-GetLocalizedString(const PRUnichar * aName, nsXPIDLString & aString)
-{
-  nsresult rv;
-  nsCOMPtr<nsIStringBundleService> stringService = do_GetService(kStringBundleServiceCID, &rv);
-  if (NS_FAILED(rv)) 
-    return PR_FALSE;
-
-  nsCOMPtr<nsIStringBundle> stringBundle;
-  rv = stringService->CreateBundle(PAGEINFO_PROPERTIES, getter_AddRefs(stringBundle));
-  if (NS_FAILED(rv))
-    return PR_FALSE;
-
-  rv = stringBundle->GetStringFromName(aName, getter_Copies(aString));
-  return NS_SUCCEEDED(rv);
-}
 
 //
 // GetFileDescriptorInternetShortcut
@@ -631,96 +486,68 @@ GetLocalizedString(const PRUnichar * aName, nsXPIDLString & aString)
 // structures the shell is expecting.
 //
 HRESULT
-nsDataObj :: GetFileDescriptorInternetShortcutA ( FORMATETC& aFE, STGMEDIUM& aSTG )
+nsDataObj :: GetFileDescriptorInternetShortcut ( FORMATETC& aFE, STGMEDIUM& aSTG )
 {
-#ifdef WINCE
-  return E_FAIL;
-#else
-  // get the title of the shortcut
-  nsAutoString title;
-  if ( NS_FAILED(ExtractShortcutTitle(title)) )
-    return E_OUTOFMEMORY;
+  HRESULT result = S_OK;
+  
+  // setup format structure
+  FORMATETC fmetc = { 0, NULL, DVASPECT_CONTENT, 0, TYMED_HGLOBAL };
+  fmetc.cfFormat = RegisterClipboardFormat ( CFSTR_FILEDESCRIPTOR );
 
-  HGLOBAL fileGroupDescHandle = ::GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE,sizeof(FILEGROUPDESCRIPTORA));
-  if (!fileGroupDescHandle)
-    return E_OUTOFMEMORY;
+  HGLOBAL fileGroupDescHand = ::GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE,sizeof(FILEGROUPDESCRIPTOR));
+  if ( fileGroupDescHand ) {
+    LPFILEGROUPDESCRIPTOR fileGroupDesc = NS_REINTERPRET_CAST(LPFILEGROUPDESCRIPTOR, ::GlobalLock(fileGroupDescHand));
 
-  LPFILEGROUPDESCRIPTORA fileGroupDescA = NS_REINTERPRET_CAST(LPFILEGROUPDESCRIPTORA, 
-      ::GlobalLock(fileGroupDescHandle));
-  if (!fileGroupDescA) {
-    ::GlobalFree(fileGroupDescHandle);
-    return E_OUTOFMEMORY;
-  }
+    nsAutoString title;
+    if ( NS_FAILED(ExtractShortcutTitle(title)) )
+      return E_OUTOFMEMORY;
 
-  // get a valid filename in the following order: 1) from the page title, 
-  // 2) localized string for an untitled page, 3) just use "Untitled.URL"
-  if (!CreateFilenameFromTextA(title, ".URL", 
-          fileGroupDescA->fgd[0].cFileName, NS_MAX_FILEDESCRIPTOR)) {
-    nsXPIDLString untitled;
-    if (!GetLocalizedString(NS_LITERAL_STRING("noPageTitle").get(), untitled) ||
-        !CreateFilenameFromTextA(untitled, ".URL", 
-            fileGroupDescA->fgd[0].cFileName, NS_MAX_FILEDESCRIPTOR)) {
-      strcpy(fileGroupDescA->fgd[0].cFileName, "Untitled.URL");
+    char titleStr[MAX_PATH+1];
+    int lenTitleStr = WideCharToMultiByte(CP_ACP, 0, title.get(), title.Length(), titleStr, MAX_PATH, NULL, NULL);
+    if (!lenTitleStr && (GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+      // this is a very rare situation
+      int len = title.Length() - 1;
+      while ((len > 0) && (GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+        lenTitleStr = WideCharToMultiByte(CP_ACP, 0, title.get(), len--, titleStr, MAX_PATH, NULL, NULL);  
+      } 
     }
-  }
-
-  // one file in the file block
-  fileGroupDescA->cItems = 1;
-  fileGroupDescA->fgd[0].dwFlags = FD_LINKUI;
-
-  ::GlobalUnlock( fileGroupDescHandle );
-  aSTG.hGlobal = fileGroupDescHandle;
-  aSTG.tymed = TYMED_HGLOBAL;
-
-  return S_OK;
-#endif
-} // GetFileDescriptorInternetShortcutA
-
-HRESULT
-nsDataObj :: GetFileDescriptorInternetShortcutW ( FORMATETC& aFE, STGMEDIUM& aSTG )
-{
-#ifdef WINCE
-  return E_FAIL;
-#else
-  // get the title of the shortcut
-  nsAutoString title;
-  if ( NS_FAILED(ExtractShortcutTitle(title)) )
-    return E_OUTOFMEMORY;
-
-  HGLOBAL fileGroupDescHandle = ::GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE,sizeof(FILEGROUPDESCRIPTORW));
-  if (!fileGroupDescHandle)
-    return E_OUTOFMEMORY;
-
-  LPFILEGROUPDESCRIPTORW fileGroupDescW = NS_REINTERPRET_CAST(LPFILEGROUPDESCRIPTORW, 
-      ::GlobalLock(fileGroupDescHandle));
-  if (!fileGroupDescW) {
-    ::GlobalFree(fileGroupDescHandle);
-    return E_OUTOFMEMORY;
-  }
-
-  // get a valid filename in the following order: 1) from the page title, 
-  // 2) localized string for an untitled page, 3) just use "Untitled.URL"
-  if (!CreateFilenameFromTextW(title, NS_LITERAL_STRING(".URL").get(), 
-          fileGroupDescW->fgd[0].cFileName, NS_MAX_FILEDESCRIPTOR)) {
-    nsXPIDLString untitled;
-    if (!GetLocalizedString(NS_LITERAL_STRING("noPageTitle").get(), untitled) ||
-        !CreateFilenameFromTextW(untitled, NS_LITERAL_STRING(".URL").get(), 
-            fileGroupDescW->fgd[0].cFileName, NS_MAX_FILEDESCRIPTOR)) {
-      wcscpy(fileGroupDescW->fgd[0].cFileName, NS_LITERAL_STRING("Untitled.URL").get());
+    titleStr[lenTitleStr] = '\0';
+ 
+    // replace any forbidden characters with
+    // dash, a la IE
+    char* pos;
+    const char* forbiddenChars = "\\:/";
+    for (int i = 0; i < PL_strlen(forbiddenChars); ++i) {
+      while (pos = PL_strchr((const char*)titleStr, forbiddenChars[i])) {
+        *pos = '-';
+      }
     }
+
+    // one file in the file file:///c:/testcases/hellodescriptor block
+    fileGroupDesc->cItems = 1;
+    fileGroupDesc->fgd[0].dwFlags = FD_LINKUI;
+    
+    // create the filename string -- |.URL| extensions imply an internet shortcut file. Make
+    // sure the filename isn't too long as to blow out the array, and still have enough room
+    // for our .URL suffix.
+    
+    static const char* shortcutSuffix = ".URL";
+    static int suffixLen = strlen(shortcutSuffix);
+    int titleLen = strlen(titleStr);
+    int trimmedLen = titleLen > MAX_PATH - (suffixLen + 1) ? MAX_PATH - (suffixLen + 1) : titleLen;
+    titleStr[trimmedLen] = '\0';
+    sprintf(fileGroupDesc->fgd[0].cFileName, "%s%s", titleStr, shortcutSuffix);
+
+    ::GlobalUnlock ( fileGroupDescHand );
+    aSTG.hGlobal = fileGroupDescHand;
+    aSTG.tymed = TYMED_HGLOBAL;
   }
-
-  // one file in the file block
-  fileGroupDescW->cItems = 1;
-  fileGroupDescW->fgd[0].dwFlags = FD_LINKUI;
-
-  ::GlobalUnlock( fileGroupDescHandle );
-  aSTG.hGlobal = fileGroupDescHandle;
-  aSTG.tymed = TYMED_HGLOBAL;
-
-  return S_OK;
-#endif
-} // GetFileDescriptorInternetShortcutW
+  else
+    result = E_OUTOFMEMORY;
+    
+  return result;
+  
+} // GetFileDescriptorInternetShortcut
 
 
 //
@@ -732,44 +559,38 @@ nsDataObj :: GetFileDescriptorInternetShortcutW ( FORMATETC& aFE, STGMEDIUM& aST
 HRESULT
 nsDataObj :: GetFileContentsInternetShortcut ( FORMATETC& aFE, STGMEDIUM& aSTG )
 {
-#ifdef WINCE
-  return E_FAIL;
-#else
+  HRESULT result = S_OK;
+  
   nsAutoString url;
   if ( NS_FAILED(ExtractShortcutURL(url)) )
     return E_OUTOFMEMORY;
-
-  // will need to change if we ever support iDNS
-  nsCAutoString asciiUrl;
-  LossyCopyUTF16toASCII(url, asciiUrl);
+  char* urlStr = ToNewCString(url);         // need to revisit here once we implement iDNS?!?!
+  if ( !urlStr )
+    return E_OUTOFMEMORY;
     
-  static const char* shortcutFormatStr = "[InternetShortcut]\r\nURL=%s\r\n";
-  static const int formatLen = strlen(shortcutFormatStr) - 2; // don't include %s in the len
-  const int totalLen = formatLen + asciiUrl.Length(); // we don't want a null character on the end
+  // setup format structure
+  FORMATETC fmetc = { 0, NULL, DVASPECT_CONTENT, 0, TYMED_HGLOBAL };
+  fmetc.cfFormat = RegisterClipboardFormat ( CFSTR_FILECONTENTS );
 
   // create a global memory area and build up the file contents w/in it
+  static const char* shortcutFormatStr = "[InternetShortcut]\r\nURL=%s\r\n";
+  static const int formatLen = strlen(shortcutFormatStr) - 2; // don't include %s in the len
+  const int totalLen = formatLen + strlen(urlStr) + 1;
   HGLOBAL hGlobalMemory = ::GlobalAlloc(GMEM_SHARE, totalLen);
-  if ( !hGlobalMemory )
-    return E_OUTOFMEMORY;
-
-  char* contents = NS_REINTERPRET_CAST(char*, ::GlobalLock(hGlobalMemory));
-  if ( !contents ) {
-    ::GlobalFree( hGlobalMemory );
-    return E_OUTOFMEMORY;
+  if ( hGlobalMemory ) {
+    char* contents = NS_REINTERPRET_CAST(char*, ::GlobalLock(hGlobalMemory));
+    PR_snprintf( contents, totalLen, shortcutFormatStr, urlStr );
+    ::GlobalUnlock(hGlobalMemory);
+    aSTG.hGlobal = hGlobalMemory;
+    aSTG.tymed = TYMED_HGLOBAL;
   }
-    
-  //NOTE: we intentionally use the Microsoft version of snprintf here because it does NOT null 
-  // terminate strings which reach the maximum size of the buffer. Since we know that the 
-  // formatted length here is totalLen, this call to _snprintf will format the string into 
-  // the buffer without appending the null character.
-  _snprintf( contents, totalLen, shortcutFormatStr, asciiUrl.get() );
-    
-  ::GlobalUnlock(hGlobalMemory);
-  aSTG.hGlobal = hGlobalMemory;
-  aSTG.tymed = TYMED_HGLOBAL;
+  else
+    result = E_OUTOFMEMORY;
 
-  return S_OK;
-#endif  
+  nsMemory::Free ( urlStr );
+    
+  return result;
+  
 } // GetFileContentsInternetShortcut
 
 
@@ -823,7 +644,7 @@ HRESULT nsDataObj::GetPreferredDropEffect ( FORMATETC& aFE, STGMEDIUM& aSTG )
   HGLOBAL hGlobalMemory = NULL;
   hGlobalMemory = ::GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD));
   if (hGlobalMemory) {
-    DWORD* pdw = (DWORD*) GlobalLock(hGlobalMemory);
+    DWORD* pdw = (DWORD*) ::GlobalLock(hGlobalMemory);
     // The PreferredDropEffect clipboard format is only registered if a drag/drop
     // of an image happens from Mozilla to the desktop.  We want its value
     // to be DROPEFFECT_MOVE in that case so that the file is moved from the
@@ -832,7 +653,7 @@ HRESULT nsDataObj::GetPreferredDropEffect ( FORMATETC& aFE, STGMEDIUM& aSTG )
     // our IDataObject implementation doesn't implement SetData.  It adds data
     // to the data object lazily only when the drop target asks for it.
     *pdw = (DWORD) DROPEFFECT_MOVE;
-    GlobalUnlock(hGlobalMemory);
+    BOOL status = ::GlobalUnlock(hGlobalMemory);
   }
   else {
     res = E_OUTOFMEMORY;
@@ -862,6 +683,7 @@ HRESULT nsDataObj::GetText(const nsACString & aDataFlavor, FORMATETC& aFE, STGME
     return ResultFromScode(E_FAIL);
   nsPrimitiveHelpers::CreateDataFromPrimitive ( flavorStr, genericDataWrapper, &data, len );
   HGLOBAL     hGlobalMemory = NULL;
+  PSTR        pGlobalMemory = NULL;
 
   aSTG.tymed          = TYMED_HGLOBAL;
   aSTG.pUnkForRelease = NULL;
@@ -919,14 +741,14 @@ HRESULT nsDataObj::GetText(const nsACString & aDataFlavor, FORMATETC& aFE, STGME
     allocLen += sizeof(PRUnichar);
   }
 
-  hGlobalMemory = (HGLOBAL)GlobalAlloc(GMEM_MOVEABLE, allocLen);
+  hGlobalMemory = (HGLOBAL)::GlobalAlloc(GMEM_MOVEABLE, allocLen);
 
   // Copy text to Global Memory Area
   if ( hGlobalMemory ) {
-    char* dest = NS_REINTERPRET_CAST(char*, GlobalLock(hGlobalMemory));
+    char* dest = NS_REINTERPRET_CAST(char*, ::GlobalLock(hGlobalMemory));
     char* source = NS_REINTERPRET_CAST(char*, data);
     memcpy ( dest, source, allocLen );                         // copies the null as well
-    GlobalUnlock(hGlobalMemory);
+    BOOL status = ::GlobalUnlock(hGlobalMemory);
   }
   aSTG.hGlobal = hGlobalMemory;
 
@@ -968,35 +790,39 @@ HRESULT nsDataObj::GetFile(const nsACString & aDataFlavor, FORMATETC& aFE, STGME
     }
 
     // Pass the file name back to the drop target so that it can copy to the drop location
-    nsAutoString path;
-    rv = mCachedTempFile->GetPath(path);
+    nsCAutoString path;
+    rv = mCachedTempFile->GetNativePath(path);
     if (NS_FAILED(rv)) return ResultFromScode(E_FAIL);
+    const char* pFileName = path.get();
     // Two null characters are needed to terminate the file name list
     PRUint32 allocLen = path.Length() + 2;
     HGLOBAL hGlobalMemory = NULL;
     aSTG.tymed = TYMED_HGLOBAL;
-    aSTG.pUnkForRelease = NULL;
-    hGlobalMemory = GlobalAlloc(GMEM_MOVEABLE, sizeof(DROPFILES) + allocLen * sizeof(PRUnichar));
-    if (hGlobalMemory) {
-      DROPFILES* pDropFile = NS_REINTERPRET_CAST(DROPFILES*, GlobalLock(hGlobalMemory));
+    aSTG.pUnkForRelease = NULL;    
+    hGlobalMemory = ::GlobalAlloc(GMEM_MOVEABLE, sizeof(DROPFILES) + allocLen);
+    if (hGlobalMemory) {      
+      BOOL status;
+      DROPFILES* pDropFile = NS_REINTERPRET_CAST(DROPFILES*, ::GlobalLock(hGlobalMemory));
 
       // First, populate drop file structure
       pDropFile->pFiles = sizeof(DROPFILES);   // offset to start of file name char array
       pDropFile->fNC = 0;
       pDropFile->pt.x = 0;
       pDropFile->pt.y = 0;
-      pDropFile->fWide = TRUE;
-
+      pDropFile->fWide = 0;
+      
       // Copy the filename right after the DROPFILES structure
-      PRUnichar* dest = NS_REINTERPRET_CAST(PRUnichar*, NS_REINTERPRET_CAST(char*, pDropFile) + pDropFile->pFiles);
-      memcpy(dest, path.get(), (allocLen - 1) * sizeof(PRUnichar));    // copies the null character in path as well
+      char* dest = NS_REINTERPRET_CAST(char*, pDropFile);
+      dest += pDropFile->pFiles;
+      const char* source = pFileName;
+      memcpy (NS_REINTERPRET_CAST(char*, dest), source, allocLen - 1);    // copies the null character in pFileName as well
 
       // Two null characters are needed at the end of the file name.  
       // Lookup the CF_HDROP shell clipboard format for more info.
       // Add the second null character right after the first one.
-      dest[allocLen - 1] = L'\0';
+      dest[allocLen - 1] = '\0';
 
-      GlobalUnlock(hGlobalMemory);
+      status = ::GlobalUnlock(hGlobalMemory);
     }
     else {
       res = E_OUTOFMEMORY;
@@ -1073,14 +899,11 @@ void nsDataObj::AddDataFlavor(const char* aDataFlavor, LPFORMATETC aFE)
   // when the drop target calls EnumFormatEtc to enumerate through the FE list
   // We use the CF_HDROP format to copy file contents when an image is dragged
   // from Mozilla to a drop target.
-#ifndef WINCE
   if (aFE->cfFormat == CF_HDROP) {
     mDataFlavors->InsertElementAt(new nsCAutoString(aDataFlavor), 0);
     m_enumFE->InsertFEAt(aFE, 0);
   }  
-  else 
-#endif
-  {
+  else {
     mDataFlavors->AppendElement(new nsCAutoString(aDataFlavor));
     m_enumFE->AddFE(aFE);
   }
@@ -1116,7 +939,7 @@ void nsDataObj::SetTransferable(nsITransferable * aTransferable)
 nsresult
 nsDataObj :: ExtractShortcutURL ( nsString & outURL )
 {
-  NS_ASSERTION ( mTransferable, "We don't have a good transferable" );
+  NS_ASSERTION ( mTransferable, "We'd don't have a good transferable" );
   nsresult rv = NS_ERROR_FAILURE;
   
   PRUint32 len = 0;
@@ -1137,18 +960,7 @@ nsDataObj :: ExtractShortcutURL ( nsString & outURL )
         rv = NS_OK;    
       }
     }
-  } else if ( NS_SUCCEEDED(mTransferable->GetTransferData(kURLDataMime, getter_AddRefs(genericURL), &len)) ||
-              NS_SUCCEEDED(mTransferable->GetTransferData(kURLPrivateMime, getter_AddRefs(genericURL), &len)) ) {
-    nsCOMPtr<nsISupportsString> urlObject ( do_QueryInterface(genericURL) );
-    if ( urlObject ) {
-      nsAutoString url;
-      urlObject->GetData ( url );
-      outURL = url;
-
-      rv = NS_OK;    
-    }
-
-  }  // if found flavor
+  } // if found flavor
   
   return rv;
 
@@ -1206,105 +1018,69 @@ nsDataObj :: ExtractShortcutTitle ( nsString & outTitle )
 // or <BODY> tags). We'll wrap the fragment with them to make other apps
 // happy.
 //
+// This code is derived from sample code from MSDN. It's ugly, I agree.
+//
 nsresult 
 nsDataObj :: BuildPlatformHTML ( const char* inOurHTML, char** outPlatformHTML ) 
 {
   *outPlatformHTML = nsnull;
+  
+  // Create temporary buffer for HTML header... 
+  char *buf = NS_REINTERPRET_CAST(char*, nsMemory::Alloc(400 + strlen(inOurHTML)));
+  if( !buf )
+    return NS_ERROR_FAILURE;
 
-  nsDependentCString inHTMLString(inOurHTML);
-  const char* const numPlaceholder  = "00000000";
-  const char* const startHTMLPrefix = "Version:0.9\r\nStartHTML:";
-  const char* const endHTMLPrefix   = "\r\nEndHTML:";
-  const char* const startFragPrefix = "\r\nStartFragment:";
-  const char* const endFragPrefix   = "\r\nEndFragment:";
-  const char* const startSourceURLPrefix = "\r\nSourceURL:";
-  const char* const endFragTrailer  = "\r\n";
+  // Create a template string for the HTML header...
+  strcpy(buf,
+      "Version:0.9\r\n"
+      "StartHTML:00000000\r\n"
+      "EndHTML:00000000\r\n"
+      "StartFragment:00000000\r\n"
+      "EndFragment:00000000\r\n"
+      "<html><body>\r\n"
+      "<!--StartFragment -->\r\n");
 
-  // Do we already have mSourceURL from a drag?
-  if (mSourceURL.IsEmpty()) {
-    nsAutoString url;
-    ExtractShortcutURL(url);
-
-    AppendUTF16toUTF8(url, mSourceURL);
-  }
-
-  const PRInt32 kSourceURLLength    = mSourceURL.Length();
-  const PRInt32 kNumberLength       = strlen(numPlaceholder);
-
-  const PRInt32 kTotalHeaderLen     = strlen(startHTMLPrefix) +
-                                      strlen(endHTMLPrefix) +
-                                      strlen(startFragPrefix) + 
-                                      strlen(endFragPrefix) + 
-                                      strlen(endFragTrailer) +
-                                      (kSourceURLLength > 0 ? strlen(startSourceURLPrefix) : 0) +
-                                      kSourceURLLength +
-                                      (4 * kNumberLength);
-
-  NS_NAMED_LITERAL_CSTRING(htmlHeaderString, "<html><body>\r\n");
-
-  NS_NAMED_LITERAL_CSTRING(fragmentHeaderString, "<!--StartFragment-->");
-
-  nsDependentCString trailingString(
+  // Append the HTML...
+  strcat(buf, inOurHTML);
+  strcat(buf, "\r\n");
+  // Finish up the HTML format...
+  strcat(buf,
       "<!--EndFragment-->\r\n"
       "</body>\r\n"
       "</html>");
 
-  // calculate the offsets
-  PRInt32 startHTMLOffset = kTotalHeaderLen;
-  PRInt32 startFragOffset = startHTMLOffset
-                              + htmlHeaderString.Length()
-			      + fragmentHeaderString.Length();
+  // Now go back, calculate all the lengths, and write out the
+  // necessary header information. Note, wsprintf() truncates the
+  // string when you overwrite it so you follow up with code to replace
+  // the 0 appended at the end with a '\r'...
+  char *ptr = strstr(buf, "StartHTML");
+  wsprintf(ptr+10, "%08u", strstr(buf, "<html>") - buf);
+  *(ptr+10+8) = '\r';
 
-  PRInt32 endFragOffset   = startFragOffset
-                              + inHTMLString.Length();
+  ptr = strstr(buf, "EndHTML");
+  wsprintf(ptr+8, "%08u", strlen(buf));
+  *(ptr+8+8) = '\r';
 
-  PRInt32 endHTMLOffset   = endFragOffset
-                              + trailingString.Length();
+  ptr = strstr(buf, "StartFragment");
+  wsprintf(ptr+14, "%08u", strstr(buf, "<!--StartFrag") - buf);
+  *(ptr+14+8) = '\r';
 
-  // now build the final version
-  nsCString clipboardString;
-  clipboardString.SetCapacity(endHTMLOffset);
+  ptr = strstr(buf, "EndFragment");
+  wsprintf(ptr+12, "%08u", strstr(buf, "<!--EndFrag") - buf);
+  *(ptr+12+8) = '\r';
 
-  clipboardString.Append(startHTMLPrefix);
-  clipboardString.Append(nsPrintfCString("%08u", startHTMLOffset));
-
-  clipboardString.Append(endHTMLPrefix);  
-  clipboardString.Append(nsPrintfCString("%08u", endHTMLOffset));
-
-  clipboardString.Append(startFragPrefix);
-  clipboardString.Append(nsPrintfCString("%08u", startFragOffset));
-
-  clipboardString.Append(endFragPrefix);
-  clipboardString.Append(nsPrintfCString("%08u", endFragOffset));
-
-  if (kSourceURLLength > 0) {
-    clipboardString.Append(startSourceURLPrefix);
-    clipboardString.Append(mSourceURL);
-  }
-
-  clipboardString.Append(endFragTrailer);
-
-  clipboardString.Append(htmlHeaderString);
-  clipboardString.Append(fragmentHeaderString);
-  clipboardString.Append(inHTMLString);
-  clipboardString.Append(trailingString);
-
-  *outPlatformHTML = ToNewCString(clipboardString);
-  if (!*outPlatformHTML)
-    return NS_ERROR_OUT_OF_MEMORY;
+  *outPlatformHTML = buf;
 
   return NS_OK;
 }
 
 HRESULT 
-nsDataObj :: GetUniformResourceLocator( FORMATETC& aFE, STGMEDIUM& aSTG, PRBool aIsUnicode )
+nsDataObj :: GetUniformResourceLocator( FORMATETC& aFE, STGMEDIUM& aSTG )
 {
   HRESULT res = S_OK;
-  if ( IsInternetShortcut() ) {
-    if ( aIsUnicode )
-      res = ExtractUniformResourceLocatorW( aFE, aSTG );
-    else
-      res = ExtractUniformResourceLocatorA( aFE, aSTG );
+  if ( IsInternetShortcut() )  
+  {
+    res = ExtractUniformResourceLocator( aFE, aSTG );
   }
   else
     NS_WARNING ("Not yet implemented\n");
@@ -1312,58 +1088,31 @@ nsDataObj :: GetUniformResourceLocator( FORMATETC& aFE, STGMEDIUM& aSTG, PRBool 
 }
 
 HRESULT
-nsDataObj::ExtractUniformResourceLocatorA(FORMATETC& aFE, STGMEDIUM& aSTG )
+nsDataObj::ExtractUniformResourceLocator(FORMATETC& aFE, STGMEDIUM& aSTG)
 {
   HRESULT result = S_OK;
-
+  
   nsAutoString url;
   if (NS_FAILED(ExtractShortcutURL(url)))
     return E_OUTOFMEMORY;
+  NS_LossyConvertUCS2toASCII urlC(url);
 
-  NS_LossyConvertUTF16toASCII asciiUrl(url);
-  const int totalLen = asciiUrl.Length() + 1;
-  HGLOBAL hGlobalMemory = GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE, totalLen);
-  if (!hGlobalMemory)
-    return E_OUTOFMEMORY;
+  // setup format structure
+  static CLIPFORMAT UniformResourceLocator = ::RegisterClipboardFormat( CFSTR_SHELLURL );
+  FORMATETC fmetc = { UniformResourceLocator, NULL, DVASPECT_CONTENT, 0,TYMED_HGLOBAL };
 
-  char* contents = NS_REINTERPRET_CAST(char*, GlobalLock(hGlobalMemory));
-  if (!contents) {
-    GlobalFree(hGlobalMemory);
-    return E_OUTOFMEMORY;
+  // create a global memory area and build up the file contents w/in it
+  const int totalLen = urlC.Length()+1;
+
+  HGLOBAL hGlobalMemory = ::GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE, totalLen);
+
+  // Copy text to Global Memory Area
+  if ( hGlobalMemory ) {
+    char* contents = NS_REINTERPRET_CAST(char*, ::GlobalLock(hGlobalMemory));
+    memcpy(contents, urlC.get(), totalLen);
+    ::GlobalUnlock(hGlobalMemory);
+    aSTG.hGlobal = hGlobalMemory;
+    aSTG.tymed = TYMED_HGLOBAL;
   }
-
-  strcpy(contents, asciiUrl.get());
-  GlobalUnlock(hGlobalMemory);
-  aSTG.hGlobal = hGlobalMemory;
-  aSTG.tymed = TYMED_HGLOBAL;
-
-  return result;
-}
-
-HRESULT
-nsDataObj::ExtractUniformResourceLocatorW(FORMATETC& aFE, STGMEDIUM& aSTG )
-{
-  HRESULT result = S_OK;
-
-  nsAutoString url;
-  if (NS_FAILED(ExtractShortcutURL(url)))
-    return E_OUTOFMEMORY;
-
-  const int totalLen = (url.Length() + 1) * sizeof(PRUnichar);
-  HGLOBAL hGlobalMemory = GlobalAlloc(GMEM_ZEROINIT|GMEM_SHARE, totalLen);
-  if (!hGlobalMemory)
-    return E_OUTOFMEMORY;
-
-  wchar_t* contents = NS_REINTERPRET_CAST(wchar_t*, GlobalLock(hGlobalMemory));
-  if (!contents) {
-    GlobalFree(hGlobalMemory);
-    return E_OUTOFMEMORY;
-  }
-
-  wcscpy(contents, url.get());
-  GlobalUnlock(hGlobalMemory);
-  aSTG.hGlobal = hGlobalMemory;
-  aSTG.tymed = TYMED_HGLOBAL;
-
   return result;
 }

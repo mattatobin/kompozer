@@ -46,7 +46,6 @@ MODULE = ipcd
 LIBRARY_NAME = transmgr_s
 FORCE_STATIC_LIB = 1
 MODULE_NAME = ipcd
-LIBXUL_LIBRARY = 1
 
 REQUIRES	= string \
 		  xpcom \

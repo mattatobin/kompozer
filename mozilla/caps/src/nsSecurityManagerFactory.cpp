@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 /*Factory for internal browser security resource managers*/
@@ -51,8 +52,6 @@
 #include "nsXPIDLString.h"
 #include "nsCOMPtr.h"
 #include "nsIServiceManager.h"
-#include "nsString.h"
-#include "nsPrefsCID.h"
 
 ///////////////////////
 // nsSecurityNameSet //
@@ -101,30 +100,6 @@ getStringArgument(JSContext *cx, JSObject *obj, PRUint16 argNum, uintN argc, jsv
         return nsnull;
 
     return JS_GetStringBytes(str);
-}
-
-static void
-getUTF8StringArgument(JSContext *cx, JSObject *obj, PRUint16 argNum,
-                      uintN argc, jsval *argv, nsCString& aRetval)
-{
-    if (argc <= argNum || !JSVAL_IS_STRING(argv[argNum])) {
-        JS_ReportError(cx, "String argument expected");
-        aRetval.Truncate();
-        return;
-    }
-
-    /*
-     * We don't want to use JS_ValueToString because we want to be able
-     * to have an object to represent a target in subsequent versions.
-     */
-    JSString *str = JSVAL_TO_STRING(argv[argNum]);
-    if (!str) {
-        aRetval.Truncate();
-        return;
-    }
-
-    PRUnichar *data = (PRUnichar*)JS_GetStringChars(str);
-    CopyUTF16toUTF8(data, aRetval);
 }
 
 PR_STATIC_CALLBACK(JSBool)
@@ -221,10 +196,9 @@ netscape_security_setCanEnablePrivilege(JSContext *cx, JSObject *obj, uintN argc
                                         jsval *argv, jsval *rval)
 {
     if (argc < 2) return JS_FALSE;
-    nsCAutoString principalFingerprint;
-    getUTF8StringArgument(cx, obj, 0, argc, argv, principalFingerprint);
+    char *principalID = getStringArgument(cx, obj, 0, argc, argv);
     char *cap = getStringArgument(cx, obj, 1, argc, argv);
-    if (principalFingerprint.IsEmpty() || !cap)
+    if (!principalID || !cap)
         return JS_FALSE;
 
     nsresult rv;
@@ -235,7 +209,7 @@ netscape_security_setCanEnablePrivilege(JSContext *cx, JSObject *obj, uintN argc
 
     //    NS_ASSERTION(cx == GetCurrentContext(), "unexpected context");
 
-    rv = securityManager->SetCanEnableCapability(principalFingerprint, cap, 
+    rv = securityManager->SetCanEnableCapability(principalID, cap, 
                                                  nsIPrincipal::ENABLE_GRANTED);
     if (NS_FAILED(rv))
         return JS_FALSE;
@@ -246,9 +220,8 @@ PR_STATIC_CALLBACK(JSBool)
 netscape_security_invalidate(JSContext *cx, JSObject *obj, uintN argc,
                              jsval *argv, jsval *rval)
 {
-    nsCAutoString principalFingerprint;
-    getUTF8StringArgument(cx, obj, 0, argc, argv, principalFingerprint);
-    if (principalFingerprint.IsEmpty())
+    char *principalID = getStringArgument(cx, obj, 0, argc, argv);
+    if (!principalID)
         return JS_FALSE;
 
     nsresult rv;
@@ -259,7 +232,7 @@ netscape_security_invalidate(JSContext *cx, JSObject *obj, uintN argc,
 
     //    NS_ASSERTION(cx == GetCurrentContext(), "unexpected context");
 
-    rv = securityManager->SetCanEnableCapability(principalFingerprint,
+    rv = securityManager->SetCanEnableCapability(principalID,
                                                  nsPrincipal::sInvalid,
                                                  nsIPrincipal::ENABLE_GRANTED);
     if (NS_FAILED(rv))
@@ -408,20 +381,6 @@ static const nsModuleComponentInfo capsComponentInfo[] =
       nsnull,
       nsIClassInfo::MAIN_THREAD_ONLY
     },
-
-    { NS_SCRIPTSECURITYMANAGER_CLASSNAME, 
-      NS_SCRIPTSECURITYMANAGER_CID, 
-      NS_GLOBAL_PREF_SECURITY_CHECK,
-      Construct_nsIScriptSecurityManager,
-      RegisterSecurityNameSet,
-      nsnull,
-      nsnull,
-      nsnull,
-      nsnull,
-      nsnull,
-      nsIClassInfo::MAIN_THREAD_ONLY
-    },
-
 
     { NS_PRINCIPAL_CLASSNAME, 
       NS_PRINCIPAL_CID, 

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -50,10 +51,13 @@
 #include "nsIDocument.h"
 #include "nsIDocumentLoader.h"
 #include "nsCURILoader.h"
+#include "nsIWebShell.h"
 #include "nsIDOMHTMLInputElement.h"
 #include "nsIFormControl.h"
 #include "nsIDocShell.h"
 #include "nsIDOMWindowInternal.h"
+#include "nsIInterfaceRequestor.h"
+#include "nsIInterfaceRequestorUtils.h"
 #include "nsIPrompt.h"
 #include "nsIChannel.h"
 #include "nsIWindowWatcher.h"
@@ -62,7 +66,7 @@
 #include "nsUnicharUtils.h"
 #include "nsReadableUtils.h"
 #include "nsICategoryManager.h"
-#include "nsNetUtil.h"
+#include "nsComObsolete.h"
 
 // for making the leap from nsIDOMWindowInternal -> nsIPresShell
 #include "nsIScriptGlobalObject.h"
@@ -93,12 +97,12 @@ NS_IMPL_THREADSAFE_ISUPPORTS5(nsWalletlibService,
                               nsIWebProgressListener,
                               nsISupportsWeakReference)
 
-NS_IMETHODIMP nsWalletlibService::WALLET_PreEdit(nsAString& walletList) {
+NS_IMETHODIMP nsWalletlibService::WALLET_PreEdit(nsAutoString& walletList) {
   ::WLLT_PreEdit(walletList);
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWalletlibService::WALLET_PostEdit(const nsAString & walletList) {
+NS_IMETHODIMP nsWalletlibService::WALLET_PostEdit(nsAutoString walletList) {
   ::WLLT_PostEdit(walletList);
   return NS_OK;
 }
@@ -156,7 +160,7 @@ nsWalletlibService::WALLET_Prefill(PRBool quick,
   return ::WLLT_Prefill(presShell, quick, aWin);
 }
 
-NS_IMETHODIMP nsWalletlibService::WALLET_PrefillReturn(const nsAString & results){
+NS_IMETHODIMP nsWalletlibService::WALLET_PrefillReturn(nsAutoString results){
   ::WLLT_PrefillReturn(results);
   return NS_OK;
 }
@@ -172,23 +176,33 @@ NS_IMETHODIMP nsWalletlibService::WALLET_InitReencryptCallback(nsIDOMWindowInter
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWalletlibService::WALLET_GetNopreviewListForViewer(nsAString& aNopreviewList){
+NS_IMETHODIMP nsWalletlibService::SI_RemoveUser(const char *key, const PRUnichar *userName) {
+  ::SINGSIGN_RemoveUser(key, userName, PR_TRUE);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsWalletlibService::SI_StorePassword(const char *key, const PRUnichar *userName, const PRUnichar *password) {
+  ::SINGSIGN_StorePassword(key, userName, password);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsWalletlibService::WALLET_GetNopreviewListForViewer(nsAutoString& aNopreviewList){
   ::WLLT_GetNopreviewListForViewer(aNopreviewList);
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWalletlibService::WALLET_GetNocaptureListForViewer(nsAString& aNocaptureList){
+NS_IMETHODIMP nsWalletlibService::WALLET_GetNocaptureListForViewer(nsAutoString& aNocaptureList){
   ::WLLT_GetNocaptureListForViewer(aNocaptureList);
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWalletlibService::WALLET_GetPrefillListForViewer(nsAString& aPrefillList){
+NS_IMETHODIMP nsWalletlibService::WALLET_GetPrefillListForViewer(nsAutoString& aPrefillList){
   ::WLLT_GetPrefillListForViewer(aPrefillList);
   return NS_OK;
 }
 
-NS_IMETHODIMP nsWalletlibService::SI_SignonViewerReturn(const nsAString& results){
-  ::Wallet_SignonViewerReturn(results);
+NS_IMETHODIMP nsWalletlibService::SI_SignonViewerReturn(nsAutoString results){
+  ::SINGSIGN_SignonViewerReturn(results);
   return NS_OK;
 }
 
@@ -208,7 +222,7 @@ NS_IMETHODIMP nsWalletlibService::Observe(nsISupports *aSubject, const char *aTo
     if (uri) {
       nsCAutoString spec;
       if (NS_SUCCEEDED(uri->GetSpec(spec)))
-        SINGSIGN_StorePassword(spec.get(), EmptyString().get(), someData);
+        SI_StorePassword(spec.get(), nsnull, someData);
     }
   }
   else if (!nsCRT::strcmp(aTopic, "login-failed")) {
@@ -217,8 +231,9 @@ NS_IMETHODIMP nsWalletlibService::Observe(nsISupports *aSubject, const char *aTo
     nsCOMPtr<nsIURI> uri = do_QueryInterface(aSubject);
     if (uri) {
       nsCAutoString spec;
+      uri->GetSpec(spec);
       if (NS_SUCCEEDED(uri->GetSpec(spec)))
-        SINGSIGN_RemoveUserAfterLoginFailure(spec.get(), EmptyString().get(), PR_TRUE);
+        SINGSIGN_RemoveUserAfterLoginFailure(spec.get(), nsnull, PR_TRUE);
     }
   }
   return NS_OK;
@@ -230,9 +245,6 @@ NS_IMETHODIMP nsWalletlibService::Notify(nsIContent* formNode, nsIDOMWindowInter
   if (!formNode) {
     return NS_ERROR_FAILURE;
   }
-
-  NS_ENSURE_TRUE(window, NS_OK);
-
   ::WLLT_OnSubmit(formNode, window);
   return NS_OK;
 }
@@ -281,7 +293,7 @@ nsWalletlibService::UnregisterProc(nsIComponentManager *aCompMgr,
 PRBool expireMasterPassword = PR_FALSE;
 #define expireMasterPasswordPref "signon.expireMasterPassword"
 
-int PR_CALLBACK
+MODULE_PRIVATE int PR_CALLBACK
 ExpireMasterPasswordPrefChanged(const char * newpref, void * data) {
   nsresult rv;
   nsCOMPtr<nsIPref> prefs(do_GetService(NS_PREF_CONTRACTID, &rv));
@@ -303,7 +315,7 @@ nsresult nsWalletlibService::Init()
            do_GetService("@mozilla.org/observer-service;1", &rv);
   if (NS_SUCCEEDED(rv) && svc) {
     // Register as an observer of form submission
-    svc->AddObserver(this, NS_EARLYFORMSUBMIT_SUBJECT, PR_TRUE);
+    svc->AddObserver(this, NS_FORMSUBMIT_SUBJECT, PR_TRUE);
     // Register as an observer of profile changes
     svc->AddObserver(this, "profile-before-change", PR_TRUE);
     // Register as an observer for login
@@ -408,7 +420,7 @@ nsWalletlibService::OnStateChange(nsIWebProgress* aWebProgress,
                         nsAutoString type;
                         rv = inputElement->GetType(type);
                         if (NS_SUCCEEDED(rv)) {
-                          if (type.LowerCaseEqualsLiteral("password")) {
+                          if (type.Equals(NS_LITERAL_STRING("password"), nsCaseInsensitiveStringComparator())) {
                             passwordCount++;
                           }
                         }
@@ -429,8 +441,10 @@ nsWalletlibService::OnStateChange(nsIWebProgress* aWebProgress,
                         rv = inputElement->GetType(type);
                         if (NS_SUCCEEDED(rv)) {
                           if (type.IsEmpty() ||
-                              type.LowerCaseEqualsLiteral("text") ||
-                              type.LowerCaseEqualsLiteral("password")) {
+                              type.Equals(NS_LITERAL_STRING("text"),
+                                          nsCaseInsensitiveStringComparator()) ||
+                              type.Equals(NS_LITERAL_STRING("password"),
+                                          nsCaseInsensitiveStringComparator())) {
                             nsAutoString field;
                             rv = inputElement->GetName(field);
                             if (NS_SUCCEEDED(rv)) {
@@ -438,11 +452,14 @@ nsWalletlibService::OnStateChange(nsIWebProgress* aWebProgress,
                               if (nameString) {
                                 nsAutoString value;
                                 PRUnichar* valueString = NULL;
+                                nsCOMPtr<nsIInterfaceRequestor> interfaces;
                                 nsCOMPtr<nsIPrompt> prompter;
 
                                 nsCOMPtr<nsIChannel> channel = do_QueryInterface(aRequest);
                                 if (channel)
-                                  NS_QueryNotificationCallbacks(channel, prompter);
+                                  channel->GetNotificationCallbacks(getter_AddRefs(interfaces));
+                                if (interfaces)
+                                  interfaces->GetInterface(NS_GET_IID(nsIPrompt), getter_AddRefs(prompter));
                                 if (!prompter) {
                                   nsCOMPtr<nsIWindowWatcher> wwatch(do_GetService(NS_WINDOWWATCHER_CONTRACTID));
                                   if (wwatch)
@@ -534,7 +551,7 @@ nsWalletlibService::WALLET_Encrypt (const PRUnichar *text, char **crypt) {
 
 NS_IMETHODIMP
 nsWalletlibService::WALLET_Decrypt (const char *crypt, PRUnichar **text) {
-  nsAutoString cryptAutoString; cryptAutoString.AssignASCII(crypt);
+  nsAutoString cryptAutoString; cryptAutoString.AssignWithConversion(crypt);
   nsAutoString textAutoString;
   PRBool rv = ::Wallet_Decrypt(cryptAutoString, textAutoString);
   *text = ToNewUnicode(textAutoString);

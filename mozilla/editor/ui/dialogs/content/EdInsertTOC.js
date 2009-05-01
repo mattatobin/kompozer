@@ -295,8 +295,9 @@ function BuildTOC(update)
         }
         else {
           // we can keep the list itself but let's get rid of the TOC entries
-          while (toc.hasChildNodes()) 
-            toc.removeChild(toc.lastChild);
+          var nodeList = toc.childNodes, l = nodeList.length;
+          for (j = l - 1; j >= 0; --j)
+            toc.removeChild(nodeList.item(j));
         }
       }
       var commentText = "mozToc ";

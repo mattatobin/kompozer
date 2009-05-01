@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Alexey Chernyak <alexeyc@bigfoot.com> (XHTML 1.1 conversion)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -64,13 +64,11 @@ NS_IMPL_ISUPPORTS4(nsAboutCacheEntry,
 NS_IMETHODIMP
 nsAboutCacheEntry::NewChannel(nsIURI *aURI, nsIChannel **result)
 {
-    NS_ENSURE_ARG_POINTER(aURI);
     nsresult rv;
 
     nsCOMPtr<nsIChannel> chan;
     rv = NS_NewInputStreamChannel(getter_AddRefs(chan), aURI, nsnull,
-                                  NS_LITERAL_CSTRING("application/xhtml+xml"),
-                                  NS_LITERAL_CSTRING("utf-8"));
+                                  NS_LITERAL_CSTRING("application/xhtml+xml"));
     if (NS_FAILED(rv)) return rv;
 
     mStreamChannel = do_QueryInterface(chan, &rv);
@@ -101,8 +99,7 @@ nsAboutCacheEntry::OnCacheEntryAvailable(nsICacheEntryDescriptor *descriptor,
     rv = storageStream->GetOutputStream(0, getter_AddRefs(outputStream));
     if (NS_FAILED(rv)) return rv;
 
-    buffer.AssignLiteral(
-                  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    buffer.Assign("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"\n"
                   "    \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
                   "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n"
@@ -118,7 +115,7 @@ nsAboutCacheEntry::OnCacheEntryAvailable(nsICacheEntryDescriptor *descriptor,
         rv = WriteCacheEntryUnavailable(outputStream, status);
     if (NS_FAILED(rv)) return rv;
 
-    buffer.AssignLiteral("</body>\n</html>\n");
+    buffer.Assign("</body>\n</html>\n");
     outputStream->Write(buffer.get(), buffer.Length(), &n);
         
     nsCOMPtr<nsIInputStream> inStr;
@@ -345,7 +342,7 @@ nsAboutCacheEntry::AsyncOpen(nsIStreamListener *listener, nsISupports *context)
     mListener = listener;
     mListenerContext = context;
 
-    return mCacheSession->AsyncOpenCacheEntry(key, nsICache::ACCESS_READ, this);
+    return mCacheSession->AsyncOpenCacheEntry(key.get(), nsICache::ACCESS_READ, this);
 }
 
 
@@ -366,16 +363,16 @@ static void PrintTimeString(char *buf, PRUint32 bufsize, PRUint32 t_sec)
     PRExplodedTime et;
     PRTime t_usec = SecondsToPRTime(t_sec);
     PR_ExplodeTime(t_usec, PR_LocalTimeParameters, &et);
-    PR_FormatTime(buf, bufsize, "%Y-%m-%d %H:%M:%S", &et);
+    PR_FormatTime(buf, bufsize, "%c", &et);
 }
 
 #define APPEND_ROW(label, value) \
     PR_BEGIN_MACRO \
-    buffer.AppendLiteral("<tr><td><tt><b>"); \
-    buffer.AppendLiteral(label); \
-    buffer.AppendLiteral(":</b></tt></td>\n<td><pre>"); \
+    buffer.Append("<tr><td><tt><b>"); \
+    buffer.Append(label); \
+    buffer.Append(":</b></tt></td>\n<td><pre>"); \
     buffer.Append(value); \
-    buffer.AppendLiteral("</pre></td></tr>\n"); \
+    buffer.Append("</pre></td></tr>\n"); \
     PR_END_MACRO
 
 nsresult
@@ -383,17 +380,17 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
                                               nsICacheEntryDescriptor *descriptor)
 {
     nsresult rv;
-    nsCString buffer;
+    nsCAutoString buffer;
     PRUint32 n;
 
-    nsCAutoString str;
+    nsXPIDLCString str;
 
-    rv = descriptor->GetKey(str);
+    rv = descriptor->GetKey(getter_Copies(str));
     if (NS_FAILED(rv)) return rv;
+    
+    buffer.Assign("<table>");
 
-    buffer.SetCapacity(4096);
-    buffer.AssignLiteral("<table>"
-                         "<tr><td><tt><b>key:</b></tt></td><td>");
+    buffer.Append("<tr><td><tt><b>key:</b></tt></td><td>");
 
     // Test if the key is actually a URI
     nsCOMPtr<nsIURI> uri;
@@ -407,19 +404,19 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
         uri->SchemeIs("javascript", &isJS);
         uri->SchemeIs("data", &isData);
     }
-    char* escapedStr = nsEscapeHTML(str.get());
+    char* escapedStr = nsEscapeHTML(str);
     if (NS_SUCCEEDED(rv) && !(isJS || isData)) {
-        buffer.AppendLiteral("<a href=\"");
+        buffer.Append("<a href=\"");
         buffer.Append(escapedStr);
-        buffer.AppendLiteral("\">");
+        buffer.Append("\">");
         buffer.Append(escapedStr);
-        buffer.AppendLiteral("</a>");
+        buffer.Append("</a>");
         uri = 0;
     }
     else
         buffer.Append(escapedStr);
     nsMemory::Free(escapedStr);
-    buffer.AppendLiteral("</td></tr>\n");
+    buffer.Append("</td></tr>\n");
 
 
     // temp vars for reporting
@@ -478,12 +475,13 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
     if (NS_SUCCEEDED(rv)) {
         nsAutoString filePath;
         cacheFile->GetPath(filePath);
-        APPEND_ROW("file on disk", NS_ConvertUTF16toUTF8(filePath));
+        APPEND_ROW("file on disk", NS_ConvertUCS2toUTF8(filePath));
     }
     else
         APPEND_ROW("file on disk", "none");
 
     // Security Info
+    str.Adopt(0);
     nsCOMPtr<nsISupports> securityInfo;
     descriptor->GetSecurityInfo(getter_AddRefs(securityInfo));
     if (securityInfo) {
@@ -493,15 +491,15 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
                    "This document does not have any security info associated with it.");
     }
 
-    buffer.AppendLiteral("</table>\n"
-                         "<hr />\n<table>");
+    buffer.Append("</table>\n");
     // Meta Data
     // let's just look for some well known (HTTP) meta data tags, for now.
+    buffer.Append("<hr />\n<table>");
 
     // Client ID
-    nsXPIDLCString str2;
-    descriptor->GetClientID(getter_Copies(str2));
-    if (!str2.IsEmpty())  APPEND_ROW("Client", str2);
+    str.Adopt(0);
+    descriptor->GetClientID(getter_Copies(str));
+    if (str)  APPEND_ROW("Client", str);
 
 
     mBuffer = &buffer;  // make it available for VisitMetaDataElement()
@@ -509,7 +507,7 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
     mBuffer = nsnull;
     
 
-    buffer.AppendLiteral("</table>\n");
+    buffer.Append("</table>\n");
 
     outputStream->Write(buffer.get(), buffer.Length(), &n);
     return NS_OK;
@@ -520,7 +518,8 @@ nsAboutCacheEntry::WriteCacheEntryUnavailable(nsIOutputStream *outputStream,
                                               nsresult reason)
 {
     PRUint32 n;
-    NS_NAMED_LITERAL_CSTRING(buffer, "The cache entry you selected is no longer available.");
+    nsCAutoString buffer;
+    buffer.Assign("The cache entry you selected is no longer available.");
     outputStream->Write(buffer.get(), buffer.Length(), &n);
     return NS_OK;
 }
@@ -582,13 +581,13 @@ nsAboutCacheEntry::VisitMetaDataElement(const char * key,
                                         const char * value,
                                         PRBool *     keepGoing)
 {
-    mBuffer->AppendLiteral("<tr><td><tt><b>");
+    mBuffer->Append("<tr><td><tt><b>");
     mBuffer->Append(key);
-    mBuffer->AppendLiteral(":</b></tt></td>\n<td><pre>");
+    mBuffer->Append(":</b></tt></td>\n<td><pre>");
     char* escapedValue = nsEscapeHTML(value);
     mBuffer->Append(escapedValue);
     nsMemory::Free(escapedValue);
-    mBuffer->AppendLiteral("</pre></td></tr>\n");
+    mBuffer->Append("</pre></td></tr>\n");
 
     *keepGoing = PR_TRUE;
     return NS_OK;

@@ -12,16 +12,16 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -54,14 +54,7 @@ public:
     ~txResultBuffer();
 
     nsresult addTransaction(txOutputTransaction* aTransaction);
-
-    /**
-     * Flush the transactions to aHandler. Some handlers create a new handler
-     * and replace themselves with the new handler. The pointer that aHandler
-     * points to should be updated in that case.
-     */
-    nsresult flushToHandler(txAXMLEventHandler** aHandler);
-
+    nsresult flushToHandler(txAXMLEventHandler* aHandler);
     txOutputTransaction* getLastTransaction();
 
     nsString mStringValue;

@@ -20,7 +20,6 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s): David Drinan <ddrinan@netscape.com>
- *   Kai Engert <kengert@redhat.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -44,7 +43,6 @@
 #include "cms.h"
 #include "nsICMSMessageErrors.h"
 #include "nsArray.h"
-#include "nsCertVerificationThread.h"
 
 #include "prlog.h"
 #ifdef PR_LOGGING
@@ -52,11 +50,90 @@ extern PRLogModuleInfo* gPIPNSSLog;
 #endif
 
 #include "nsNSSCleaner.h"
-
 NSSCleanupAutoPtrClass(CERTCertificate, CERT_DestroyCertificate)
 
-NS_IMPL_THREADSAFE_ISUPPORTS2(nsCMSMessage, nsICMSMessage, 
-                                            nsICMSMessage2)
+NS_IMPL_THREADSAFE_ISUPPORTS1(nsHash, nsIHash)
+
+nsHash::nsHash() : m_ctxt(nsnull)
+{
+}
+
+nsHash::~nsHash()
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return;
+
+  destructorSafeDestroyNSSReference();
+  shutdown(calledFromObject);
+}
+
+void nsHash::virtualDestroyNSSReference()
+{
+  destructorSafeDestroyNSSReference();
+}
+
+void nsHash::destructorSafeDestroyNSSReference()
+{
+  if (isAlreadyShutDown())
+    return;
+
+  if (m_ctxt) {
+    HASH_Destroy(m_ctxt);
+    m_ctxt = nsnull;
+  }
+}
+
+NS_IMETHODIMP nsHash::ResultLen(PRInt16 aAlg, PRUint32 * aLen)
+{
+  *aLen = HASH_ResultLen((HASH_HashType)aAlg);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsHash::Create(PRInt16 aAlg)
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  m_ctxt = HASH_Create((HASH_HashType)aAlg);
+  if (m_ctxt == nsnull) {
+    return NS_ERROR_FAILURE;
+  }
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsHash::Begin()
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  HASH_Begin(m_ctxt);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsHash::Update(unsigned char* aBuf, PRUint32 aLen)
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  HASH_Update(m_ctxt, (const unsigned char*)aBuf, aLen);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsHash::End(unsigned char* aBuf, PRUint32* aResultLen, PRUint32 aMaxResultLen)
+{
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
+  HASH_End(m_ctxt, aBuf, aResultLen, aMaxResultLen);
+  return NS_OK;
+}
+
+NS_IMPL_THREADSAFE_ISUPPORTS1(nsCMSMessage, nsICMSMessage)
 
 nsCMSMessage::nsCMSMessage()
 {
@@ -228,6 +305,10 @@ NS_IMETHODIMP nsCMSMessage::GetEncryptionCert(nsIX509Cert **ecert)
 
 NS_IMETHODIMP nsCMSMessage::VerifyDetachedSignature(unsigned char* aDigestData, PRUint32 aDigestDataLen)
 {
+  nsNSSShutDownPreventionLock locker;
+  if (isAlreadyShutDown())
+    return NS_ERROR_NOT_AVAILABLE;
+
   if (!aDigestData || !aDigestDataLen)
     return NS_ERROR_FAILURE;
 
@@ -286,17 +367,6 @@ nsresult nsCMSMessage::CommonVerifySignature(unsigned char* aDigestData, PRUint3
   PR_ASSERT(nsigners > 0);
   si = NSS_CMSSignedData_GetSignerInfo(sigd, 0);
 
-
-  // See bug 324474. We want to make sure the signing cert is 
-  // still valid at the current time.
-  if (CERT_VerifyCertificateNow(CERT_GetDefaultCertDB(), si->cert, PR_TRUE, 
-                                certificateUsageEmailSigner,
-                                si->cmsg->pwfn_arg, NULL) != SECSuccess) {
-    PR_LOG(gPIPNSSLog, PR_LOG_DEBUG, ("nsCMSMessage::CommonVerifySignature - signing cert not trusted now\n"));
-    rv = NS_ERROR_CMS_VERIFY_UNTRUSTED;
-    goto loser;
-  }
-
   // We verify the first signer info,  only //
   if (NSS_CMSSignedData_VerifySignerInfo(sigd, 0, CERT_GetDefaultCertDB(), certUsageEmailSigner) != SECSuccess) {
     PR_LOG(gPIPNSSLog, PR_LOG_DEBUG, ("nsCMSMessage::CommonVerifySignature - unable to verify signature\n"));
@@ -306,7 +376,7 @@ nsresult nsCMSMessage::CommonVerifySignature(unsigned char* aDigestData, PRUint3
       rv = NS_ERROR_CMS_VERIFY_NOCERT;
     }
     else if(NSSCMSVS_SigningCertNotTrusted == si->verificationStatus) {
-      PR_LOG(gPIPNSSLog, PR_LOG_DEBUG, ("nsCMSMessage::CommonVerifySignature - signing cert not trusted at signing time\n"));
+      PR_LOG(gPIPNSSLog, PR_LOG_DEBUG, ("nsCMSMessage::CommonVerifySignature - signing cert not trusted\n"));
       rv = NS_ERROR_CMS_VERIFY_UNTRUSTED;
     }
     else if(NSSCMSVS_Unverified == si->verificationStatus) {
@@ -348,56 +418,6 @@ nsresult nsCMSMessage::CommonVerifySignature(unsigned char* aDigestData, PRUint3
 
   rv = NS_OK;
 loser:
-  return rv;
-}
-
-NS_IMETHODIMP nsCMSMessage::AsyncVerifySignature(
-                              nsISMimeVerificationListener *aListener)
-{
-  return CommonAsyncVerifySignature(aListener, nsnull, 0);
-}
-
-NS_IMETHODIMP nsCMSMessage::AsyncVerifyDetachedSignature(
-                              nsISMimeVerificationListener *aListener,
-                              unsigned char* aDigestData, PRUint32 aDigestDataLen)
-{
-  if (!aDigestData || !aDigestDataLen)
-    return NS_ERROR_FAILURE;
-
-  return CommonAsyncVerifySignature(aListener, aDigestData, aDigestDataLen);
-}
-
-nsresult nsCMSMessage::CommonAsyncVerifySignature(nsISMimeVerificationListener *aListener,
-                                                  unsigned char* aDigestData, PRUint32 aDigestDataLen)
-{
-  nsSMimeVerificationJob *job = new nsSMimeVerificationJob;
-  if (!job)
-    return NS_ERROR_OUT_OF_MEMORY;
-  
-  if (aDigestData)
-  {
-    job->digest_data = new unsigned char[aDigestDataLen];
-    if (!job->digest_data)
-    {
-      delete job;
-      return NS_ERROR_OUT_OF_MEMORY;
-    }
-    
-    memcpy(job->digest_data, aDigestData, aDigestDataLen);
-  }
-  else
-  {
-    job->digest_data = nsnull;
-  }
-  
-  job->digest_len = aDigestDataLen;
-  job->mMessage = this;
-  job->mListener = aListener;
-
-  nsresult rv = nsCertVerificationThread::addJob(job);
-  if (NS_FAILED(rv))
-    delete job;
-
   return rv;
 }
 

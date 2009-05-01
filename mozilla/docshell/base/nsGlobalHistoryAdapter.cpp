@@ -38,7 +38,7 @@
 #include "nsGlobalHistoryAdapter.h"
 
 #include "nsDocShellCID.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "nsIComponentRegistrar.h"
 #include "nsGlobalHistory2Adapter.h"
 #include "nsIURI.h"
@@ -139,7 +139,7 @@ NS_IMPL_ISUPPORTS1(nsGlobalHistoryAdapter, nsIGlobalHistory2)
 
 NS_IMETHODIMP
 nsGlobalHistoryAdapter::AddURI(nsIURI* aURI, PRBool aRedirect,
-                               PRBool aToplevel, nsIURI* aReferrer)
+                               PRBool aToplevel)
 {
   NS_ENSURE_ARG_POINTER(aURI);
   nsresult rv;

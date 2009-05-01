@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,8 +41,8 @@
 
 #include "nsISupports.h"
 #include "nsIRenderingContext.h"
-#include "nsRect.h"
 
+struct nsRect;
 class nsIDeviceContext;
 
 struct nsColorMap
@@ -66,16 +67,11 @@ typedef enum {
 
 #define  nsImageUpdateFlags_kColorMapChanged 0x1
 #define  nsImageUpdateFlags_kBitsChanged     0x2
-
-// The following platforms store image data rows bottom-up.
-#if defined(XP_WIN) || defined(XP_OS2) || defined(XP_MACOSX)
-#define MOZ_PLATFORM_IMAGES_BOTTOM_TO_TOP
-#endif
-
+ 
 // IID for the nsIImage interface
 #define NS_IIMAGE_IID          \
-  { 0xce91c93f, 0x532d, 0x470d, \
-      { 0xbf, 0xa3, 0xc9, 0x6e, 0x56, 0x01, 0x52, 0xa4 } }
+{ 0x0b4faaa0, 0xaa3a, 0x11d1, \
+{ 0xa8, 0x24, 0x00, 0x40, 0x95, 0x9a, 0x28, 0xc9 } }
 
 // Interface to Images
 class nsIImage : public nsISupports
@@ -163,14 +159,7 @@ public:
    * @param aFlags Used to pass in parameters for the update
    * @param aUpdateRect The rectangle to update
    */
-  virtual void ImageUpdated(nsIDeviceContext *aContext, PRUint8 aFlags, nsIntRect *aUpdateRect) = 0;
-  
-  /**
-   * Get whether this image's region is completely filled with data.
-   * @return PR_TRUE if image is complete, PR_FALSE if image is not yet 
-   *         complete or broken
-   */
-  virtual PRBool GetIsImageComplete() = 0;
+  virtual void ImageUpdated(nsIDeviceContext *aContext, PRUint8 aFlags, nsRect *aUpdateRect) = 0;
 
   /**
    * Converted this pixelmap to an optimized pixelmap for the device
@@ -197,7 +186,7 @@ public:
    * @param aHeight The destination height of the pixelmap
    * @return if TRUE, no errors
    */
-  NS_IMETHOD Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface, PRInt32 aX, PRInt32 aY, PRInt32 aWidth, PRInt32 aHeight) = 0;
+  NS_IMETHOD Draw(nsIRenderingContext &aContext, nsDrawingSurface aSurface, PRInt32 aX, PRInt32 aY, PRInt32 aWidth, PRInt32 aHeight) = 0;
 
   /**
    * BitBlit the nsIImage to a device, the source and dest can be scaled
@@ -213,13 +202,12 @@ public:
    * @param aDHeight The destination height of the pixelmap
    * @return if TRUE, no errors
    */
-  NS_IMETHOD Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface,
-                  PRInt32 aSX, PRInt32 aSY, PRInt32 aSWidth, PRInt32 aSHeight,
+  NS_IMETHOD Draw(nsIRenderingContext &aContext, nsDrawingSurface aSurface, PRInt32 aSX, PRInt32 aSY, PRInt32 aSWidth, PRInt32 aSHeight,
                   PRInt32 aDX, PRInt32 aDY, PRInt32 aDWidth, PRInt32 aDHeight) = 0;
 
 
   NS_IMETHOD DrawTile(nsIRenderingContext &aContext,
-                      nsIDrawingSurface* aSurface,
+                      nsDrawingSurface aSurface,
                       PRInt32 aSXOffset, PRInt32 aSYOffset,
                       PRInt32 aPadX, PRInt32 aPadY,
                       const nsRect &aTileRect) = 0;

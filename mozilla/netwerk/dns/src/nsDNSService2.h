@@ -34,7 +34,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "nsPIDNSService.h"
+#include "nsIDNSService.h"
 #include "nsIIDNService.h"
 #include "nsIObserver.h"
 #include "nsHostResolver.h"
@@ -42,17 +42,16 @@
 #include "nsString.h"
 #include "prlock.h"
 
-class nsDNSService : public nsPIDNSService
+class nsDNSService : public nsIDNSService
                    , public nsIObserver
 {
 public:
     NS_DECL_ISUPPORTS
-    NS_DECL_NSPIDNSSERVICE
     NS_DECL_NSIDNSSERVICE
     NS_DECL_NSIOBSERVER
 
     nsDNSService();
-    ~nsDNSService();
+    virtual ~nsDNSService();
 
 private:
     PRUint16 GetAFForLookup(const nsACString &host);

@@ -50,7 +50,7 @@
 
 #include "nsIDOMWindow.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIDocShell.h"
 #include "nsISelectionController.h"
@@ -66,7 +66,6 @@ const char * const sSelectAllString = "cmd_selectAll";
 const char * const sSelectNoneString = "cmd_selectNone";
 const char * const sCopyImageLocationString = "cmd_copyImageLocation";
 const char * const sCopyImageContentsString = "cmd_copyImageContents";
-const char * const sCopyImageString = "cmd_copyImage";
 
 const char * const sScrollTopString = "cmd_scrollTop";
 const char * const sScrollBottomString = "cmd_scrollBottom";
@@ -101,8 +100,8 @@ const char * const sSelectLineNextString = "cmd_selectLineNext";
 const char * const sSelectPagePreviousString = "cmd_selectPagePrevious";
 const char * const sSelectPageNextString = "cmd_selectPageNext";
 
-const char * const sSelectTopString = "cmd_selectTop";
-const char * const sSelectBottomString = "cmd_selectBottom";
+const char * const sSelectMoveTopString = "cmd_selectMoveTop";
+const char * const sSelectMoveBottomString = "cmd_selectMoveBottom";
 
 
 #if 0
@@ -236,7 +235,8 @@ nsSelectionCommandsBase::GetEventStateManagerForWindow(nsIDOMWindow *aWindow,
   GetPresShellFromWindow(aWindow, getter_AddRefs(presShell));
   if (presShell)
   {
-    nsPresContext *presContext = presShell->GetPresContext();
+    nsCOMPtr<nsIPresContext> presContext;
+    presShell->GetPresContext(getter_AddRefs(presContext));
     if (presContext) {
       NS_ADDREF(*aEventStateManager = presContext->EventStateManager());
       return NS_OK;
@@ -264,9 +264,8 @@ nsSelectMoveScrollCommand::DoSelectCommand(const char *aCommandName, nsIDOMWindo
 
   nsresult rv;
   // We allow the caret to be moved with arrow keys on any window for which
-  // the caret is enabled. In particular, this includes caret-browsing mode,
-  // but we refer to this mode again in the test condition for readability.
-  if (caretOn || (esm && esm->GetBrowseWithCaret()))
+  // the caret is enabled. In particular, this includes caret-browsing mode
+  if (caretOn)
     rv = DoCommandBrowseWithCaretOn(aCommandName, selCont, esm);
   else
     rv = DoCommandBrowseWithCaretOff(aCommandName, selCont);
@@ -290,28 +289,14 @@ nsSelectMoveScrollCommand::DoCommandBrowseWithCaretOn(const char *aCommandName,
     rv = aSelectionController->PageMove(PR_FALSE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sMovePageDownString))
     rv = aSelectionController->PageMove(PR_TRUE, PR_FALSE);
-  // cmd_ScrollPageUp/Down are used on Mac, and for the spacebar on all platforms.
-  // They do not move the caret in caret browsing mode.
-  else if (!nsCRT::strcmp(aCommandName, sScrollPageUpString))
-    rv = aSelectionController->ScrollPage(PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sScrollPageDownString))
-    rv = aSelectionController->ScrollPage(PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sScrollLineUpString))
     rv = aSelectionController->LineMove(PR_FALSE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sScrollLineDownString))
     rv = aSelectionController->LineMove(PR_TRUE, PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sWordPreviousString))
-    rv = aSelectionController->WordMove(PR_FALSE, PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sWordNextString))
-    rv = aSelectionController->WordMove(PR_TRUE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sScrollLeftString))
     rv = aSelectionController->CharacterMove(PR_FALSE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sScrollRightString))
     rv = aSelectionController->CharacterMove(PR_TRUE, PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sBeginLineString))
-    rv = aSelectionController->IntraLineMove(PR_FALSE, PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sEndLineString))
-    rv = aSelectionController->IntraLineMove(PR_TRUE, PR_FALSE);
 
   if (NS_SUCCEEDED(rv) && aESM)
   {
@@ -353,12 +338,6 @@ nsSelectMoveScrollCommand::DoCommandBrowseWithCaretOff(const char *aCommandName,
     rv = aSelectionController->ScrollHorizontal(PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sScrollRightString))
     rv = aSelectionController->ScrollHorizontal(PR_FALSE);
-  // cmd_beginLine/endLine with caret browsing off
-  // will act as cmd_scrollTop/Bottom
-  else if (!nsCRT::strcmp(aCommandName, sBeginLineString))
-    rv = aSelectionController->CompleteScroll(PR_FALSE);
-  else if (!nsCRT::strcmp(aCommandName, sEndLineString))
-    rv = aSelectionController->CompleteScroll(PR_TRUE);
 
   return rv;
 }
@@ -383,10 +362,18 @@ nsSelectCommand::DoSelectCommand(const char *aCommandName, nsIDOMWindow *aWindow
     rv = selCont->CharacterMove(PR_FALSE, PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sSelectCharNextString))
     rv = selCont->CharacterMove(PR_TRUE, PR_TRUE);
+  else if (!nsCRT::strcmp(aCommandName, sWordPreviousString))
+    rv = selCont->WordMove(PR_FALSE, PR_FALSE);
+  else if (!nsCRT::strcmp(aCommandName, sWordNextString))
+    rv = selCont->WordMove(PR_TRUE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sSelectWordPreviousString))
     rv = selCont->WordMove(PR_FALSE, PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sSelectWordNextString))
     rv = selCont->WordMove(PR_TRUE, PR_TRUE);
+  else if (!nsCRT::strcmp(aCommandName, sBeginLineString))
+    rv = selCont->IntraLineMove(PR_FALSE, PR_FALSE);
+  else if (!nsCRT::strcmp(aCommandName, sEndLineString))
+    rv = selCont->IntraLineMove(PR_TRUE, PR_FALSE);
   else if (!nsCRT::strcmp(aCommandName, sSelectBeginLineString))
     rv = selCont->IntraLineMove(PR_FALSE, PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sSelectEndLineString))
@@ -395,9 +382,9 @@ nsSelectCommand::DoSelectCommand(const char *aCommandName, nsIDOMWindow *aWindow
     rv = selCont->LineMove(PR_FALSE, PR_TRUE);
   else if (!nsCRT::strcmp(aCommandName, sSelectLineNextString))
     rv = selCont->LineMove(PR_TRUE, PR_TRUE);
-  else if (!nsCRT::strcmp(aCommandName, sSelectTopString))
+  else if (!nsCRT::strcmp(aCommandName, sSelectMoveTopString))
     rv = selCont->CompleteMove(PR_FALSE, PR_TRUE);
-  else if (!nsCRT::strcmp(aCommandName, sSelectBottomString))
+  else if (!nsCRT::strcmp(aCommandName, sSelectMoveBottomString))
     rv = selCont->CompleteMove(PR_TRUE, PR_TRUE);
 
   return rv;
@@ -610,14 +597,9 @@ nsresult
 nsClipboardImageCommands::DoClipboardCommand(const char *aCommandName, nsIContentViewerEdit* aEdit, nsICommandParams* aParams)
 {
   if (!nsCRT::strcmp(sCopyImageLocationString, aCommandName))
-    return aEdit->CopyImage(nsIContentViewerEdit::COPY_IMAGE_TEXT);
-  if (!nsCRT::strcmp(sCopyImageContentsString, aCommandName))
-    return aEdit->CopyImage(nsIContentViewerEdit::COPY_IMAGE_DATA);
+    return aEdit->CopyImageLocation();
 
-  PRInt32 copyFlags = nsIContentViewerEdit::COPY_IMAGE_ALL;
-  if (aParams)
-    aParams->GetLongValue("imageCopy", &copyFlags);
-  return aEdit->CopyImage(copyFlags);
+  return aEdit->CopyImageContents();
 }
 
 #if 0
@@ -942,10 +924,6 @@ nsWindowCommandRegistration::RegisterWindowCommands(
   // this set of commands is affected by the 'browse with caret' setting
   NS_REGISTER_FIRST_COMMAND(nsSelectMoveScrollCommand, sScrollTopString);
   NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sScrollBottomString);
-  NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sWordPreviousString);
-  NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sWordNextString);
-  NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sBeginLineString);
-  NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sEndLineString);
   NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sMovePageUpString);
   NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sMovePageDownString);
   NS_REGISTER_NEXT_COMMAND(nsSelectMoveScrollCommand, sScrollPageUpString);
@@ -957,8 +935,12 @@ nsWindowCommandRegistration::RegisterWindowCommands(
 
   NS_REGISTER_FIRST_COMMAND(nsSelectCommand, sSelectCharPreviousString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectCharNextString);
+  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sWordPreviousString);
+  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sWordNextString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectWordPreviousString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectWordNextString);
+  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sBeginLineString);
+  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sEndLineString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectBeginLineString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectEndLineString);
   NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectLinePreviousString);
@@ -966,16 +948,15 @@ nsWindowCommandRegistration::RegisterWindowCommands(
   // XXX these commands were never implemented. fix me.
   // NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectPagePreviousString);
   // NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectPageNextString);
-  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectTopString);
-  NS_REGISTER_LAST_COMMAND(nsSelectCommand, sSelectBottomString);
+  NS_REGISTER_NEXT_COMMAND(nsSelectCommand, sSelectMoveTopString);
+  NS_REGISTER_LAST_COMMAND(nsSelectCommand, sSelectMoveBottomString);
 
   NS_REGISTER_ONE_COMMAND(nsClipboardCopyCommand, "cmd_copy");
   NS_REGISTER_ONE_COMMAND(nsClipboardCutCommand, "cmd_cut");
   NS_REGISTER_ONE_COMMAND(nsClipboardPasteCommand, "cmd_paste");
   NS_REGISTER_ONE_COMMAND(nsClipboardCopyLinkCommand, "cmd_copyLink");
   NS_REGISTER_FIRST_COMMAND(nsClipboardImageCommands, sCopyImageLocationString);
-  NS_REGISTER_NEXT_COMMAND(nsClipboardImageCommands, sCopyImageContentsString);
-  NS_REGISTER_LAST_COMMAND(nsClipboardImageCommands, sCopyImageString);
+  NS_REGISTER_LAST_COMMAND(nsClipboardImageCommands, sCopyImageContentsString);
   NS_REGISTER_FIRST_COMMAND(nsClipboardSelectAllNoneCommands, sSelectAllString);
   NS_REGISTER_LAST_COMMAND(nsClipboardSelectAllNoneCommands, sSelectNoneString);
 

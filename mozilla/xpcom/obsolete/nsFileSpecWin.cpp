@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Masayuki Nakano <masayuki@d-toybox.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -47,7 +46,6 @@
 #include "nsError.h"
 
 #include <windows.h>
-#include <mbstring.h>
 
 #if (_MSC_VER == 1100) || defined(__GNUC__)
 #define INITGUID
@@ -59,13 +57,11 @@ DEFINE_OLEGUID(IID_IPersistFile, 0x0000010BL, 0, 0);
 #include <shellapi.h>
 #include <shlguid.h>
 
-#ifndef WINCE
 #ifdef UNICODE
 #define CreateDirectoryW  CreateDirectory
 #else
 #define CreateDirectoryA  CreateDirectory
 #endif 
-#endif
 
 //----------------------------------------------------------------------------------------
 void nsFileSpecHelpers::Canonify(nsSimpleCharString& ioPath, PRBool inMakeDirs)
@@ -293,7 +289,7 @@ PRBool nsFileSpec::IsSymlink() const
     IShellLink* psl; 
     
     PRBool isSymlink = PR_FALSE;
-#ifndef WINCE
+    
     CoInitialize(NULL);
     // Get a pointer to the IShellLink interface. 
     hres = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink, (void**)&psl); 
@@ -326,7 +322,7 @@ PRBool nsFileSpec::IsSymlink() const
     }
 
     CoUninitialize();
-#endif
+
     return isSymlink;
 }
 
@@ -336,7 +332,7 @@ nsresult nsFileSpec::ResolveSymlink(PRBool& wasSymlink)
 //----------------------------------------------------------------------------------------
 {
     wasSymlink = PR_FALSE;  // assume failure
-#ifndef WINCE
+
 	if (Exists())
 		return NS_OK;
 
@@ -403,9 +399,6 @@ nsresult nsFileSpec::ResolveSymlink(PRBool& wasSymlink)
         return NS_OK;
 
     return NS_FILE_FAILURE;
-#else
-    return NS_OK;
-#endif //WINCE
 }
 
 
@@ -414,12 +407,12 @@ nsresult nsFileSpec::ResolveSymlink(PRBool& wasSymlink)
 void nsFileSpec::GetParent(nsFileSpec& outSpec) const
 //----------------------------------------------------------------------------------------
 {
-  outSpec.mPath = mPath;
-  char* chars = (char*)outSpec.mPath;
-  chars[outSpec.mPath.Length() - 1] = '\0'; // avoid trailing separator, if any
-  unsigned char* cp = _mbsrchr((unsigned char*)chars, '\\');
-  if (cp++)
-    outSpec.mPath.SetLength(cp - (unsigned char*)chars); // truncate.
+	outSpec.mPath = mPath;
+	char* chars = (char*)outSpec.mPath;
+	chars[outSpec.mPath.Length() - 1] = '\0'; // avoid trailing separator, if any
+    char* cp = strrchr(chars, '\\');
+    if (cp++)
+	    outSpec.mPath.SetLength(cp - chars); // truncate.
 } // nsFileSpec::GetParent
 
 //----------------------------------------------------------------------------------------
@@ -520,11 +513,11 @@ void nsFileSpec::RecursiveCopy(nsFileSpec newDir) const
 
 //----------------------------------------------------------------------------------------
 nsresult
-nsFileSpec::Truncate(PRUint32 aNewFileLength) const
+nsFileSpec::Truncate(PRInt32 aNewFileLength) const
 //----------------------------------------------------------------------------------------
 {
+    DWORD status;
     HANDLE hFile;
-    LARGE_INTEGER li;
 
     // Leave it to Microsoft to open an existing file with a function
     // named "CreateFile".
@@ -539,12 +532,8 @@ nsFileSpec::Truncate(PRUint32 aNewFileLength) const
         return NS_FILE_FAILURE;
 
     // Seek to new, desired end of file
-    li.QuadPart = aNewFileLength;
-    li.LowPart = SetFilePointer(hFile,
-                                li.LowPart,
-                                &li.HighPart,
-                                FILE_BEGIN);
-    if (0xffffffff == li.LowPart && GetLastError() != NO_ERROR)
+    status = SetFilePointer(hFile, aNewFileLength, NULL, FILE_BEGIN);
+    if (status == 0xffffffff)
         goto error;
 
     // Truncate file at current cursor position
@@ -639,7 +628,6 @@ nsresult nsFileSpec::MoveToDir(const nsFileSpec& inNewParentDirectory)
 nsresult nsFileSpec::Execute(const char* inArgs ) const
 //----------------------------------------------------------------------------------------
 {    
-#ifndef WINCE
     if (!IsDirectory())
     {
         nsSimpleCharString fileNameWithArgs = "\"";
@@ -648,7 +636,6 @@ nsresult nsFileSpec::Execute(const char* inArgs ) const
         if (execResult > 31)
             return NS_OK;
     }
-#endif
     return NS_FILE_FAILURE;
 } // nsFileSpec::Execute
 
@@ -657,7 +644,6 @@ nsresult nsFileSpec::Execute(const char* inArgs ) const
 PRInt64 nsFileSpec::GetDiskSpaceAvailable() const
 //----------------------------------------------------------------------------------------
 {
-#ifndef WINCE
     PRInt64 int64;
     
     LL_I2L(int64 , LONG_MAX);
@@ -718,9 +704,6 @@ PRInt64 nsFileSpec::GetDiskSpaceAvailable() const
         nBytes = (double)dwFreeClus*(double)dwSecPerClus*(double) dwBytesPerSec;
     }
     return (PRInt64)nBytes;
-#else
-    return (PRInt64)0;
-#endif
 }
 
 

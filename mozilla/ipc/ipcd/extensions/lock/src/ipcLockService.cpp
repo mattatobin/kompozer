@@ -1,4 +1,4 @@
-/* vim:set ts=4 sw=4 sts=4 et cindent: */
+#include <stdlib.h>
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -36,48 +36,41 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include <stdlib.h>
-#include "nsDependentString.h"
-#include "nsHashKeys.h"
-#include "nsAutoPtr.h"
+#include "nsIServiceManager.h"
+#include "ipcILockNotify.h"
 #include "ipcLockService.h"
 #include "ipcLockProtocol.h"
 #include "ipcLog.h"
-#include "prthread.h"
 
+static NS_DEFINE_IID(kIPCServiceCID, IPC_SERVICE_CID);
 static const nsID kLockTargetID = IPC_LOCK_TARGETID;
 
-//-----------------------------------------------------------------------------
-
-struct ipcPendingLock
+ipcLockService::ipcLockService()
 {
-    const char *name;
-    nsresult    status;
-    PRBool      complete;
-};
+}
 
-//-----------------------------------------------------------------------------
+ipcLockService::~ipcLockService()
+{
+}
 
 nsresult
 ipcLockService::Init()
 {
-    if (PR_NewThreadPrivateIndex(&mTPIndex, nsnull) != PR_SUCCESS)
-        return NS_ERROR_OUT_OF_MEMORY;
+    nsresult rv;
 
-    // Configure OnMessageAvailable to be called on the IPC thread.  This is
-    // done to allow us to proxy OnAcquireLockComplete events to the right
-    // thread immediately even if the main thread is blocked waiting to acquire
-    // some other lock synchronously.
+    mIPCService = do_GetService(kIPCServiceCID, &rv);
+    if (NS_FAILED(rv)) return rv;
 
-    return IPC_DefineTarget(kLockTargetID, this, PR_FALSE);
+    return mIPCService->SetMessageObserver(kLockTargetID, this);
 }
 
-NS_IMPL_THREADSAFE_ISUPPORTS2(ipcLockService, ipcILockService, ipcIMessageObserver)
+NS_IMPL_ISUPPORTS1(ipcLockService, ipcILockService)
 
 NS_IMETHODIMP
-ipcLockService::AcquireLock(const char *lockName, PRBool waitIfBusy)
+ipcLockService::AcquireLock(const char *lockName, ipcILockNotify *notify, PRBool waitIfBusy)
 {
-    LOG(("ipcLockService::AcquireLock [lock=%s wait=%u]\n", lockName, waitIfBusy));
+    LOG(("ipcLockService::AcquireLock [lock=%s sync=%u wait=%u]\n",
+        lockName, notify == nsnull, waitIfBusy));
 
     ipcLockMsg msg;
     msg.opcode = IPC_LOCK_OP_ACQUIRE;
@@ -85,36 +78,23 @@ ipcLockService::AcquireLock(const char *lockName, PRBool waitIfBusy)
     msg.key = lockName;
 
     PRUint32 bufLen;
-    nsAutoPtr<PRUint8> buf( IPC_FlattenLockMsg(&msg, &bufLen) );
+    PRUint8 *buf = IPC_FlattenLockMsg(&msg, &bufLen);
     if (!buf)
         return NS_ERROR_OUT_OF_MEMORY;
 
-    ipcPendingLock pendingLock;
-    pendingLock.name = lockName;
-    pendingLock.status = 0xDEADBEEF; // something bogus
-    pendingLock.complete = PR_FALSE;
-    if (PR_SetThreadPrivate(mTPIndex, &pendingLock) != PR_SUCCESS)
-        return NS_ERROR_UNEXPECTED;
-
-    // prevent our OnMessageAvailable from being called until we explicitly ask
-    // for it to be called via IPC_WaitMessage.
-    IPC_DISABLE_MESSAGE_OBSERVER_FOR_SCOPE(kLockTargetID);
-
-    nsresult rv = IPC_SendMessage(0, kLockTargetID, buf, bufLen);
-    if (NS_SUCCEEDED(rv)) {
-        do {
-            // block the calling thread until we get a response from the daemon
-            rv = IPC_WaitMessage(0, kLockTargetID, this, PR_INTERVAL_NO_TIMEOUT);
-        }
-        while (NS_SUCCEEDED(rv) && !pendingLock.complete);
-
-        if (NS_SUCCEEDED(rv))
-            rv = pendingLock.status;
+    nsresult rv = mIPCService->SendMessage(0, kLockTargetID, buf, bufLen, (notify == nsnull));
+    free(buf);
+    if (NS_FAILED(rv)) {
+        LOG(("  SendMessage failed [rv=%x]\n", rv));
+        return rv;
     }
 
-    // we could clear the TPD, but that isn't really necessary.
+    if (notify) {
+        nsCStringKey hashKey(lockName);
+        mPendingTable.Put(&hashKey, notify);
+    }
 
-    return rv;
+    return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -132,37 +112,43 @@ ipcLockService::ReleaseLock(const char *lockName)
     if (!buf)
         return NS_ERROR_OUT_OF_MEMORY;
 
-    nsresult rv = IPC_SendMessage(0, kLockTargetID, buf, bufLen);
-    delete buf;
+    nsresult rv = mIPCService->SendMessage(0, kLockTargetID, buf, bufLen, PR_FALSE);
+    free(buf);
 
-    if (NS_FAILED(rv))
-        return rv;
-
+    if (NS_FAILED(rv)) return rv;
+    
+    nsCStringKey hashKey(lockName);
+    mPendingTable.Remove(&hashKey);
     return NS_OK;
 }
 
-// called on the same thread that called IPC_WaitMessage
 NS_IMETHODIMP
-ipcLockService::OnMessageAvailable(PRUint32 unused, const nsID &target,
-                                   const PRUint8 *data, PRUint32 dataLen)
+ipcLockService::OnMessageAvailable(const nsID &target, const PRUint8 *data, PRUint32 dataLen)
 {
     ipcLockMsg msg;
     IPC_UnflattenLockMsg(data, dataLen, &msg);
 
-    LOG(("ipcLockService::OnMessageAvailable [lock=%s opcode=%u]\n", msg.key, msg.opcode));
+    LOG(("ipcLockService::OnMessageAvailable [lock=%s opcode=%u]\n", msg.key, msg.opcode)); 
 
-    ipcPendingLock *pendingLock = (ipcPendingLock *) PR_GetThreadPrivate(mTPIndex);
-    if (strcmp(pendingLock->name, msg.key) == 0) {
-        pendingLock->complete = PR_TRUE;
-        if (msg.opcode == IPC_LOCK_OP_STATUS_ACQUIRED)
-            pendingLock->status = NS_OK;
-        else
-            pendingLock->status = NS_ERROR_FAILURE;
-        return NS_OK;
+    nsresult status;
+    if (msg.opcode == IPC_LOCK_OP_STATUS_ACQUIRED)
+        status = NS_OK;
+    else
+        status = NS_ERROR_FAILURE;
+
+    NotifyComplete(msg.key, status);
+    return NS_OK;
+}
+
+void
+ipcLockService::NotifyComplete(const char *lockName, nsresult status)
+{
+    nsCStringKey hashKey(lockName);
+    nsISupports *obj = mPendingTable.Get(&hashKey); // ADDREFS
+    if (obj) {
+        nsCOMPtr<ipcILockNotify> notify = do_QueryInterface(obj);
+        NS_RELEASE(obj);
+        if (notify)
+            notify->OnAcquireLockComplete(lockName, status);
     }
-
-    LOG(("message does not match; waiting for another...\n"));
-
-    // else, we got a message that another thread is waiting to receive.
-    return IPC_WAIT_NEXT_MESSAGE;
 }

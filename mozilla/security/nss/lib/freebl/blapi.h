@@ -1,50 +1,49 @@
 /*
  * crypto.h - public data structures and prototypes for the crypto library
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: blapi.h,v 1.23.2.2 2006/10/02 21:17:58 julien.pierre.bugs%sun.com Exp $ */
+ * $Id: blapi.h,v 1.16 2003/05/30 23:31:18 wtc%netscape.com Exp $
+ */
 
 #ifndef _BLAPI_H_
 #define _BLAPI_H_
 
 #include "blapit.h"
-#include "hasht.h"
-#include "alghmac.h"
+
 
 SEC_BEGIN_PROTOS
 
@@ -208,7 +207,7 @@ extern SECStatus EC_NewKeyFromSeed(ECParams *  params,
                            int                 seedlen);
 
 /* Validates an EC public key as described in Section 5.2.2 of
- * X9.62. Such validation prevents against small subgroup attacks
+ * X9.63. Such validation prevents against small subgroup attacks
  * when the ECDH primitive is used with the cofactor.
  */
 extern SECStatus EC_ValidatePublicKey(ECParams * params, 
@@ -268,15 +267,6 @@ extern SECStatus ECDSA_SignDigestWithSeed(ECPrivateKey        *key,
 */
 extern RC4Context *RC4_CreateContext(const unsigned char *key, int len);
 
-extern RC4Context *RC4_AllocateContext(void);
-extern SECStatus   RC4_InitContext(RC4Context *cx, 
-				   const unsigned char *key, 
-				   unsigned int keylen,
-				   const unsigned char *, 
-				   int, 
-				   unsigned int ,
-				   unsigned int );
-
 /*
 ** Destroy an RC4 encryption/decryption context.
 **	"cx" the context
@@ -334,14 +324,6 @@ extern SECStatus RC4_Decrypt(RC4Context *cx, unsigned char *output,
 extern RC2Context *RC2_CreateContext(const unsigned char *key, unsigned int len,
 				     const unsigned char *iv, int mode, 
 				     unsigned effectiveKeyLen);
-extern RC2Context *RC2_AllocateContext(void);
-extern SECStatus   RC2_InitContext(RC2Context *cx,
-				   const unsigned char *key, 
-				   unsigned int keylen,
-				   const unsigned char *iv, 
-				   int mode, 
-				   unsigned int effectiveKeyLen,
-				   unsigned int );
 
 /*
 ** Destroy an RC2 encryption/decryption context.
@@ -397,14 +379,6 @@ extern SECStatus RC2_Decrypt(RC2Context *cx, unsigned char *output,
 */
 extern RC5Context *RC5_CreateContext(const SECItem *key, unsigned int rounds,
                      unsigned int wordSize, const unsigned char *iv, int mode);
-extern RC5Context *RC5_AllocateContext(void);
-extern SECStatus   RC5_InitContext(RC5Context *cx, 
-				   const unsigned char *key, 
-				   unsigned int keylen,
-				   const unsigned char *iv, 
-				   int mode,
-				   unsigned int rounds, 
-				   unsigned int wordSize);
 
 /*
 ** Destroy an RC5 encryption/decryption context.
@@ -466,14 +440,6 @@ extern SECStatus RC5_Decrypt(RC5Context *cx, unsigned char *output,
 extern DESContext *DES_CreateContext(const unsigned char *key, 
                                      const unsigned char *iv,
 				     int mode, PRBool encrypt);
-extern DESContext *DES_AllocateContext(void);
-extern SECStatus   DES_InitContext(DESContext *cx,
-				   const unsigned char *key, 
-				   unsigned int keylen,
-				   const unsigned char *iv, 
-				   int mode,
-				   unsigned int encrypt,
-				   unsigned int );
 
 /*
 ** Destroy an DES encryption/decryption context.
@@ -532,14 +498,6 @@ extern AESContext *
 AES_CreateContext(const unsigned char *key, const unsigned char *iv, 
                   int mode, int encrypt,
                   unsigned int keylen, unsigned int blocklen);
-extern AESContext *AES_AllocateContext(void);
-extern SECStatus   AES_InitContext(AESContext *cx,
-				   const unsigned char *key, 
-				   unsigned int keylen, 
-				   const unsigned char *iv, 
-				   int mode, 
-				   unsigned int encrypt,
-				   unsigned int blocklen);
 
 /*
 ** Destroy a AES encryption/decryption context.
@@ -596,15 +554,6 @@ AES_Decrypt(AESContext *cx, unsigned char *output,
 extern AESKeyWrapContext *
 AESKeyWrap_CreateContext(const unsigned char *key, const unsigned char *iv, 
                          int encrypt, unsigned int keylen);
-extern AESKeyWrapContext * AESKeyWrap_AllocateContext(void);
-extern SECStatus  
-     AESKeyWrap_InitContext(AESKeyWrapContext *cx, 
-				   const unsigned char *key, 
-				   unsigned int keylen,
-				   const unsigned char *iv, 
-				   int ,
-				   unsigned int encrypt,
-				   unsigned int );
 
 /*
 ** Destroy a AES KeyWrap context.
@@ -700,7 +649,6 @@ extern void MD5_Update(MD5Context *cx,
 */
 extern void MD5_End(MD5Context *cx, unsigned char *digest,
 		    unsigned int *digestLen, unsigned int maxDigestLen);
-
 /*
  * Return the the size of a buffer needed to flatten the MD5 Context into
  *    "cx" the context
@@ -723,7 +671,6 @@ extern SECStatus MD5_Flatten(MD5Context *cx,unsigned char *space);
  *  returns resurected context;
  */
 extern MD5Context * MD5_Resurrect(unsigned char *space, void *arg);
-extern void MD5_Clone(MD5Context *dest, MD5Context *src);
 
 /*
 ** trace the intermediate state info of the MD5 hash.
@@ -801,7 +748,6 @@ extern SECStatus MD2_Flatten(MD2Context *cx,unsigned char *space);
  *  returns resurected context;
  */
 extern MD2Context * MD2_Resurrect(unsigned char *space, void *arg);
-extern void MD2_Clone(MD2Context *dest, MD2Context *src);
 
 /******************************************/
 /*
@@ -884,7 +830,6 @@ extern SECStatus SHA1_Flatten(SHA1Context *cx,unsigned char *space);
  *  returns resurected context;
  */
 extern SHA1Context * SHA1_Resurrect(unsigned char *space, void *arg);
-extern void SHA1_Clone(SHA1Context *dest, SHA1Context *src);
 
 /******************************************/
 
@@ -902,7 +847,6 @@ extern void SHA256_TraceState(SHA256Context *cx);
 extern unsigned int SHA256_FlattenSize(SHA256Context *cx);
 extern SECStatus SHA256_Flatten(SHA256Context *cx,unsigned char *space);
 extern SHA256Context * SHA256_Resurrect(unsigned char *space, void *arg);
-extern void SHA256_Clone(SHA256Context *dest, SHA256Context *src);
 
 /******************************************/
 
@@ -920,7 +864,6 @@ extern void SHA512_TraceState(SHA512Context *cx);
 extern unsigned int SHA512_FlattenSize(SHA512Context *cx);
 extern SECStatus SHA512_Flatten(SHA512Context *cx,unsigned char *space);
 extern SHA512Context * SHA512_Resurrect(unsigned char *space, void *arg);
-extern void SHA512_Clone(SHA512Context *dest, SHA512Context *src);
 
 /******************************************/
 
@@ -938,15 +881,6 @@ extern void SHA384_TraceState(SHA384Context *cx);
 extern unsigned int SHA384_FlattenSize(SHA384Context *cx);
 extern SECStatus SHA384_Flatten(SHA384Context *cx,unsigned char *space);
 extern SHA384Context * SHA384_Resurrect(unsigned char *space, void *arg);
-extern void SHA384_Clone(SHA384Context *dest, SHA384Context *src);
-
-/****************************************
- * implement TLS Pseudo Random Function (PRF)
- */
-
-extern SECStatus
-TLS_PRF(const SECItem *secret, const char *label, SECItem *seed, 
-         SECItem *result, PRBool isFIPS);
 
 /******************************************/
 /*
@@ -982,51 +916,6 @@ extern SECStatus RNG_GenerateGlobalRandomBytes(void *dest, size_t len);
 */
 extern void  RNG_RNGShutdown(void);
 
-extern void RNG_SystemInfoForRNG(void);
-
-/*
- * FIPS 186-2 Change Notice 1 RNG Algorithm 1, used both to
- * generate the DSA X parameter and as a generic purpose RNG.
- *
- * The following two FIPS186Change functions are needed for
- * NIST RNG Validation System.
- */
-
-/*
- * Given the seed-key and the seed, generate the random output.
- *
- * Parameters:
- *   XKEY [input/output]: the state of the RNG (seed-key)
- *   XSEEDj [input]: optional user input (seed)
- *   x_j [output]: output of the RNG
- *
- * Return value:
- * This function usually returns SECSuccess.  The only reason
- * this function returns SECFailure is that XSEEDj equals
- * XKEY, including the intermediate XKEY value between the two
- * iterations.  (This test is actually a FIPS 140-2 requirement
- * and not required for FIPS algorithm testing, but it is too
- * hard to separate from this function.)  If this function fails,
- * XKEY is not updated, but some data may have been written to
- * x_j, which should be ignored.
- */
-extern SECStatus
-FIPS186Change_GenerateX(unsigned char *XKEY,
-                        const unsigned char *XSEEDj,
-                        unsigned char *x_j);
-
-/*
- * When generating the DSA X parameter, we generate 2*GSIZE bytes
- * of random output and reduce it mod q.
- *
- * Input: w, 2*GSIZE bytes
- *        q, DSA_SUBPRIME_LEN bytes
- * Output: xj, DSA_SUBPRIME_LEN bytes
- */
-extern SECStatus
-FIPS186Change_ReduceModQForDSA(const unsigned char *w,
-                               const unsigned char *q,
-                               unsigned char *xj);
 
 /* Generate PQGParams and PQGVerify structs.
  * Length of seed and length of h both equal length of P. 
@@ -1087,8 +976,6 @@ extern SECStatus   PQG_VerifyParams(const PQGParams *params,
  */
 extern void BL_Cleanup(void);
 
-/* unload freebl shared library from memory */
-extern void BL_Unload(void);
 
 /**************************************************************************
  *  Verify a given Shared library signature                               *
@@ -1099,9 +986,6 @@ PRBool BLAPI_SHVerify(const char *name, PRFuncPtr addr);
  *  Verify Are Own Shared library signature                               *
  **************************************************************************/
 PRBool BLAPI_VerifySelf(const char *name);
-
-/*********************************************************************/
-extern const SECHashObject * HASH_GetRawHashObject(HASH_HashType hashType);
 
 SEC_END_PROTOS
 

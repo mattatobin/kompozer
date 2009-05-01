@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 /*
  * This file implements the Symkey wrapper and the PKCS context
  * Interfaces.
@@ -42,7 +39,6 @@
 #include "secmod.h"
 #include "nssilock.h"
 #include "secmodi.h"
-#include "secmodti.h"
 #include "pkcs11.h"
 #include "pk11func.h"
 #include "secitem.h"
@@ -79,9 +75,9 @@ pk11_KeyExchange(PK11SlotInfo *slot,CK_MECHANISM_TYPE type,
 {
     PK11SymKey *newSymKey = NULL;
     SECStatus rv;
-    /* performance improvement can go here --- use a generated key at startup
-     * to generate a per token wrapping key. If it exists, use it, otherwise 
-     * do a full key exchange. */
+    /* performance improvement can go here --- use a generated key to as a
+     * per startup wrapping key. If it exists, use it, otherwise do a full
+     * key exchange. */
 
     /* find a common Key Exchange algorithm */
     /* RSA */
@@ -144,11 +140,6 @@ pk11_KeyExchange(PK11SlotInfo *slot,CK_MECHANISM_TYPE type,
 	if (rv == SECSuccess) {
 	    newSymKey = PK11_PubUnwrapSymKeyWithFlagsPerm(privKey,
 			&wrapData,type,operation,symKeyLength,flags,isPerm);
-	    /* make sure we wound up where we wanted to be! */
-	    if (newSymKey && newSymKey->slot != slot) {
-		PK11_FreeSymKey(newSymKey);
-		newSymKey = NULL;
-	    }
 	}
 rsa_failed:
 	if (wrapData.data != NULL) PORT_Free(wrapData.data);
@@ -156,6 +147,82 @@ rsa_failed:
 	if (pubKey != NULL) SECKEY_DestroyPublicKey(pubKey);
 
 	return  newSymKey;
+    }
+    /* KEA */
+    if (PK11_DoesMechanism(symKey->slot, CKM_KEA_KEY_DERIVE) && 
+				PK11_DoesMechanism(slot,CKM_KEA_KEY_DERIVE)) {
+	CERTCertificate *certSource = NULL;
+	CERTCertificate *certTarget = NULL;
+	SECKEYPublicKey *pubKeySource = NULL;
+	SECKEYPublicKey *pubKeyTarget = NULL;
+	SECKEYPrivateKey *privKeySource = NULL;
+	SECKEYPrivateKey *privKeyTarget = NULL;
+	PK11SymKey *tekSource = NULL;
+	PK11SymKey *tekTarget = NULL;
+	SECItem Ra,wrap;
+
+	/* can only exchange skipjack keys */
+	if ((type != CKM_SKIPJACK_CBC64) || (isPerm)) {
+    	    PORT_SetError( SEC_ERROR_NO_MODULE );
+	    goto kea_failed;
+	}
+
+	/* find a pair of certs we can use */
+	rv = PK11_GetKEAMatchedCerts(symKey->slot,slot,&certSource,&certTarget);
+	if (rv != SECSuccess) goto kea_failed;
+
+	/* get all the key pairs */
+	pubKeyTarget = CERT_ExtractPublicKey(certSource);
+	pubKeySource = CERT_ExtractPublicKey(certTarget);
+	privKeySource = 
+		PK11_FindKeyByDERCert(symKey->slot,certSource,symKey->cx);
+	privKeyTarget = 
+		PK11_FindKeyByDERCert(slot,certTarget,symKey->cx);
+
+	if ((pubKeySource == NULL) || (pubKeyTarget == NULL) ||
+	  (privKeySource == NULL) || (privKeyTarget == NULL)) goto kea_failed;
+
+	/* generate the wrapping TEK's */
+	Ra.data = (unsigned char*)PORT_Alloc(128 /* FORTEZZA RA MAGIC */);
+	Ra.len = 128;
+	if (Ra.data == NULL) goto kea_failed;
+
+	tekSource = PK11_PubDerive(privKeySource,pubKeyTarget,PR_TRUE,&Ra,NULL,
+		CKM_SKIPJACK_WRAP, CKM_KEA_KEY_DERIVE,CKA_WRAP,0,symKey->cx);
+	tekTarget = PK11_PubDerive(privKeyTarget,pubKeySource,PR_FALSE,&Ra,NULL,
+		CKM_SKIPJACK_WRAP, CKM_KEA_KEY_DERIVE,CKA_WRAP,0,symKey->cx);
+	PORT_Free(Ra.data);
+
+	if ((tekSource == NULL) || (tekTarget == NULL)) { goto kea_failed; }
+
+	/* wrap the key out of Source into target */
+	wrap.data = (unsigned char*)PORT_Alloc(12); /* MAGIC SKIPJACK LEN */
+	wrap.len = 12;
+
+	/* paranoia to prevent infinite recursion on bugs */
+	PORT_Assert(tekSource->slot == symKey->slot);
+	if (tekSource->slot != symKey->slot) {
+    	    PORT_SetError( SEC_ERROR_NO_MODULE );
+	    goto kea_failed;
+	}
+
+	rv = PK11_WrapSymKey(CKM_SKIPJACK_WRAP,NULL,tekSource,symKey,&wrap);
+	if (rv == SECSuccess) {
+	    newSymKey = PK11_UnwrapSymKeyWithFlags(tekTarget, 
+			CKM_SKIPJACK_WRAP, NULL,
+			&wrap, type, operation, flags, symKey->size);
+	}
+	PORT_Free(wrap.data);
+kea_failed:
+	if (certSource == NULL) CERT_DestroyCertificate(certSource);
+	if (certTarget == NULL) CERT_DestroyCertificate(certTarget);
+	if (pubKeySource == NULL) SECKEY_DestroyPublicKey(pubKeySource);
+	if (pubKeyTarget == NULL) SECKEY_DestroyPublicKey(pubKeyTarget);
+	if (privKeySource == NULL) SECKEY_DestroyPrivateKey(privKeySource);
+	if (privKeyTarget == NULL) SECKEY_DestroyPrivateKey(privKeyTarget);
+	if (tekSource == NULL) PK11_FreeSymKey(tekSource);
+	if (tekTarget == NULL) PK11_FreeSymKey(tekTarget);
+	return newSymKey;
     }
     PORT_SetError( SEC_ERROR_NO_MODULE );
     return NULL;

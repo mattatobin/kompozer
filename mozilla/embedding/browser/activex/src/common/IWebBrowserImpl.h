@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,12 +14,13 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *
  *   Adam Lock <adamlock@eircom.net>
  *
  * Alternatively, the contents of this file may be used under the terms of
@@ -28,11 +29,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -42,8 +43,7 @@
 #include <mshtml.h>
 
 #include "nsIWebNavigation.h"
-#include "nsIPrefBranch.h"
-#include "nsIPrefLocalizedString.h"
+#include "nsIPref.h"
 #include "nsIDOMWindow.h"
 #include "nsIBaseWindow.h"
 #include "nsIWindowWatcher.h"
@@ -93,8 +93,8 @@ public:
     virtual nsresult GetWebNavigation(nsIWebNavigation **aWebNav) = 0;
     // Return the nsIDOMWindow object
     virtual nsresult GetDOMWindow(nsIDOMWindow **aDOMWindow) = 0;
-    // Return the nsIPrefBranch object
-    virtual nsresult GetPrefs(nsIPrefBranch **aPrefBranch) = 0;
+    // Return the nsIPref object
+    virtual nsresult GetPrefs(nsIPref **aPrefs) = 0;
     // Return the valid state of the browser
     virtual PRBool BrowserIsValid() = 0;
 
@@ -174,22 +174,15 @@ public:
         CComBSTR bstrUrl(L"http://home.netscape.com/");
 
         // Find the home page stored in prefs
-        nsCOMPtr<nsIPrefBranch> prefBranch;
-        if (NS_SUCCEEDED(GetPrefs(getter_AddRefs(prefBranch))))
+        nsCOMPtr<nsIPref> prefs;
+        if (NS_SUCCEEDED(GetPrefs(getter_AddRefs(prefs))))
         {
-            nsCOMPtr<nsIPrefLocalizedString> homePage;
-            prefBranch->GetComplexValue("browser.startup.homepage",
-                                            NS_GET_IID(nsIPrefLocalizedString),
-                                            getter_AddRefs(homePage));
-
-            if (homePage)
+            nsXPIDLString homePage;
+            nsresult rv;
+            rv = prefs->GetLocalizedUnicharPref("browser.startup.homepage", getter_Copies(homePage));
+            if (rv == NS_OK)
             {
-                nsXPIDLString homePageString;
-                nsresult rv = homePage->ToString(getter_Copies(homePageString));
-                if (NS_SUCCEEDED(rv))
-                {
-                    bstrUrl = homePageString.get();
-                }
+                bstrUrl = homePage.get();;
             }
         }
 
@@ -205,16 +198,14 @@ public:
 
         CComBSTR bstrUrl(L"http://search.netscape.com/");
 
-        //NOTE:    This code has not been implemented yet
-#if 0
         // Find the home page stored in prefs
-        nsCOMPtr<nsIPrefBranch> prefBranch;
-        if (NS_SUCCEEDED(GetPrefs(getter_AddRefs(prefBranch))))
+        nsCOMPtr<nsIPref> prefs;
+        if (NS_SUCCEEDED(GetPrefs(getter_AddRefs(prefs))))
         {
             // TODO find and navigate to the search page stored in prefs
             //      and not this hard coded address
         }
-#endif
+
         // Navigate to the search page
         Navigate(bstrUrl, NULL, NULL, NULL, NULL);
     

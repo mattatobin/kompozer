@@ -1,44 +1,29 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code,
+ * released March 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Daniel Veditz <dveditz@netscape.com>
- *   Samir Gehani <sgehani@netscape.com>
- *   Mitch Stoltz <mstoltz@netscape.com>
- *   Jeroen Dobbelaere <jeroen.dobbelaere@acunia.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *     Daniel Veditz <dveditz@netscape.com>
+ *     Samir Gehani <sgehani@netscape.com>
+ *     Mitch Stoltz <mstoltz@netscape.com>
+ *     Jeroen Dobbelaere <jeroen.dobbelaere@acunia.com>
+ */
 
 /*
  * This module implements a simple archive extractor for the PKZIP format.
@@ -556,9 +541,6 @@ PRInt32 nsZipArchive::CloseArchive()
   // Hence, destroying the Arena is like destroying all the memory
   // for all the nsZipItem in one shot. But if the ~nsZipItem is doing
   // anything more than cleaning up memory, we should start calling it.
-
-  memset(mFiles, 0, sizeof(mFiles));
-
 #else
   // delete nsZipItems in table
   nsZipItem* pItem;
@@ -689,7 +671,7 @@ PRInt32 nsZipArchive::ExtractFile(const char* zipEntry, const char* aOutname,
 #if defined(XP_UNIX)
   else
   {
-    if (item->isSymlink)
+    if (ZIFLAG_SYMLINK & item->flags)
     {
       status = ResolveSymlink(aOutname, item);
     }
@@ -840,7 +822,7 @@ PRInt32 nsZipArchive::FindFree(nsZipFind* aFind)
 PRInt32 nsZipArchive::ResolveSymlink(const char *path, nsZipItem *item)
 {
   PRInt32    status = ZIP_OK;
-  if (item->isSymlink)
+  if (item->flags & ZIFLAG_SYMLINK)
   {
     char buf[PATH_MAX+1];
     PRFileDesc * fIn = PR_Open(path, PR_RDONLY, 0000);
@@ -992,14 +974,6 @@ PRInt32 nsZipArchive::BuildFileList(PRFileDesc* aFd)
     PRUint32 namelen = xtoint(central->filename_len);
     PRUint32 extralen = xtoint(central->extrafield_len);
     PRUint32 commentlen = xtoint(central->commentfield_len);
-
-    //-- sanity check variable sizes and refuse to deal with
-    //-- anything too big: it's likely a corrupt archive
-    if (namelen > BR_BUF_SIZE || extralen > BR_BUF_SIZE || commentlen > 2*BR_BUF_SIZE) {
-      status = ZIP_ERR_CORRUPT;
-      break;
-    }
-
 #ifndef STANDALONE
     // Arena allocate the nsZipItem
     void *mem;
@@ -1015,21 +989,25 @@ PRInt32 nsZipArchive::BuildFileList(PRFileDesc* aFd)
       break;
     }
 
-    item->headerOffset = xtolong(central->localhdr_offset);
-    item->dataOffset = 0;
-    item->hasDataOffset = PR_FALSE;
+    item->offset = xtolong(central->localhdr_offset);
+    item->compression = (PRUint8)xtoint(central->method);
+#if defined(DEBUG)
+    /*
+     * Make sure our space optimization is non lossy.
+     */
+    PR_ASSERT(xtoint(central->method) == (PRUint16)item->compression);
+#endif
     item->size = xtolong(central->size);
     item->realsize = xtolong(central->orglen);
     item->crc32 = xtolong(central->crc32);
     PRUint32 external_attributes = xtolong(central->external_attributes);
     item->mode = ExtractMode(external_attributes);
-    item->isSymlink = IsSymlink(external_attributes);
+    if (IsSymlink(external_attributes))
+    {
+      item->flags |= ZIFLAG_SYMLINK;
+    }
     item->time = xtoint(central->time);
     item->date = xtoint(central->date);
-
-    PRUint16 compression = xtoint(central->method);
-    item->compression = (compression < UNSUPPORTED) ? (PRUint8)compression
-                                                    : UNSUPPORTED;
 
     pos += ZIPCENTRAL_SIZE;
 
@@ -1048,13 +1026,13 @@ PRInt32 nsZipArchive::BuildFileList(PRFileDesc* aFd)
     }
 #else
     item->name = new char[namelen + 1];
+#endif
     if (!item->name)
     {
       status = ZIP_ERR_MEMORY;
       delete item;
       break;
     }
-#endif
 
     PRUint32 leftover = (PRUint32)(bufsize - pos);
     if (leftover < namelen)
@@ -1093,18 +1071,10 @@ PRInt32 nsZipArchive::BuildFileList(PRFileDesc* aFd)
       memcpy(buf, buf+pos, leftover);
       bufsize = leftover + PR_Read(aFd, buf+leftover, bufsize-leftover);
       pos = 0;
-
-      //-- make sure we were able to read enough
-      if ((PRUint32)bufsize < (extralen + commentlen + sizeof(PRUint32)))
-      {
-        status = ZIP_ERR_CORRUPT;
-        break;
-      }
     }
     //-- set position to start of next ZipCentral record
     pos += extralen + commentlen;
 
-    // verify we're at an expected structure in the file
     PRUint32 sig = xtolong(buf+pos);
     if (sig != CENTRALSIG)
     {
@@ -1178,15 +1148,16 @@ PRInt32  nsZipArchive::SeekToItem(const nsZipItem* aItem, PRFileDesc* aFd)
   PRFileDesc* fd = aFd;
   
   //-- the first time an item is used we need to calculate its offset
-  if (!aItem->hasDataOffset)
+  if (!(aItem->flags & ZIFLAG_DATAOFFSET))
   {
+    //-- aItem->offset contains the header offset, not the data offset.
     //-- read local header to get variable length values and calculate
     //-- the real data offset
     //--
     //-- NOTE: extralen is different in central header and local header
     //--       for archives created using the Unix "zip" utility. To set
     //--       the offset accurately we need the _local_ extralen.
-    if (!ZIP_Seek(fd, aItem->headerOffset, PR_SEEK_SET))
+    if (!ZIP_Seek(fd, aItem->offset, PR_SEEK_SET))
       return ZIP_ERR_CORRUPT;
 
     ZipLocal   Local;
@@ -1197,15 +1168,14 @@ PRInt32  nsZipArchive::SeekToItem(const nsZipItem* aItem, PRFileDesc* aFd)
       return ZIP_ERR_CORRUPT;
     }
 
-    ((nsZipItem*)aItem)->dataOffset = aItem->headerOffset +
-                                      ZIPLOCAL_SIZE +
-                                      xtoint(Local.filename_len) +
-                                      xtoint(Local.extrafield_len);
-    ((nsZipItem*)aItem)->hasDataOffset = PR_TRUE;
+    ((nsZipItem*)aItem)->offset += ZIPLOCAL_SIZE +
+                                   xtoint(Local.filename_len) +
+                                   xtoint(Local.extrafield_len);
+    ((nsZipItem*)aItem)->flags |= ZIFLAG_DATAOFFSET;
   }
 
   //-- move to start of file in archive
-  if (!ZIP_Seek(fd, aItem->dataOffset, PR_SEEK_SET))
+  if (!ZIP_Seek(fd, aItem->offset, PR_SEEK_SET))
     return  ZIP_ERR_CORRUPT;
 
   return ZIP_OK;
@@ -1384,8 +1354,8 @@ PRInt32 nsZipReadState::ContinueCopy(char* aBuf,
 {
   // we still use the fields of mZs, we just use memcpy rather than inflate
 
-  if (mCurPos + aCount > mItem->size)
-    aCount = (mItem->size - mCurPos);
+  if (mCurPos + aCount > mItem->realsize)
+    aCount = (mItem->realsize - mCurPos);
 
   PR_ASSERT(mFd);
   PRInt32 bytesRead = PR_Read(mFd, aBuf, aCount);
@@ -1393,10 +1363,7 @@ PRInt32 nsZipReadState::ContinueCopy(char* aBuf,
     return ZIP_ERR_DISK;
 
   mCurPos += bytesRead;
-  if (bytesRead != aCount)
-    // either file was truncated or archive lied about size
-    return ZIP_ERR_CORRUPT;
-
+  
   *aBytesRead = bytesRead;
 
   return ZIP_OK;
@@ -1767,7 +1734,7 @@ nsZipArchive::~nsZipArchive()
 // nsZipItem constructor and destructor
 //------------------------------------------
 
-nsZipItem::nsZipItem() : name(0), headerOffset(0), dataOffset(0), next(0), hasDataOffset(0), isSymlink(0)
+nsZipItem::nsZipItem() : name(0), offset(0), next(0), flags(0)
 {
 }
 

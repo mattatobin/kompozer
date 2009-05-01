@@ -10,14 +10,8 @@
       <property name="accessible">
         <getter>
           <![CDATA[
-            try {
-              var accService = Components.classes["@mozilla.org/accessibilityService;1"]
-                                         .getService(Components.interfaces.nsIAccessibilityService);
-              return accService.createXULButtonAccessible(this);
-            }
-            catch(ex) { /* no chrome privileges */ }
-
-            return null;
+            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
+            return accService.createXULButtonAccessible(this);
           ]]>
         </getter>
       </property>
@@ -27,29 +21,17 @@
                 onset="this.setAttribute('type', val); return val;"/>
 
       <property name="dlgType"
-                onget="return this.getAttribute('dlgtype');"
-                onset="this.setAttribute('dlgtype', val); return val;"/>
+                onget="return this.getAttribute('dlgType');"
+                onset="this.setAttribute('dlgType', val); return val;"/>
 
       <property name="group"
                 onget="return this.getAttribute('group');"
                 onset="this.setAttribute('group', val); return val;"/>
 
-      <property name="open" onget="return this.hasAttribute('open');">
-        <setter><![CDATA[
-          if (this.boxObject instanceof
-              Components.interfaces.nsIMenuBoxObject) {
-            this.boxObject.openMenu(val);
-          } else {
-            // Fall back to just setting the attribute
-            if (val) {
-              this.setAttribute('open', 'true');
-            } else {
-              this.removeAttribute('open');
-            }
-          }
-          return val;
-        ]]></setter>
-      </property>
+      <property name="open"
+                onget="return this.hasAttribute('open');"
+                onset="if (val) this.setAttribute('open', 'true');
+                       else this.removeAttribute('open'); return val;"/>
 
       <property name="checked" onget="return this.hasAttribute('checked');">
         <setter><![CDATA[
@@ -139,26 +121,12 @@
       <handler event="keypress">
       <![CDATA[
         if (event.keyCode == KeyEvent.DOM_VK_UP ||
-            (event.keyCode == KeyEvent.DOM_VK_LEFT &&
-              document.defaultView.getComputedStyle(this.parentNode, "")
-                      .direction == "ltr") ||
-            (event.keyCode == KeyEvent.DOM_VK_RIGHT &&
-              document.defaultView.getComputedStyle(this.parentNode, "")
-                      .direction == "rtl")) {
-          window.document.commandDispatcher.rewindFocus();
-          return;
-        }
+            event.keyCode == KeyEvent.DOM_VK_LEFT)
+          return window.document.commandDispatcher.rewindFocus();
 
         if (event.keyCode == KeyEvent.DOM_VK_DOWN ||
-            (event.keyCode == KeyEvent.DOM_VK_RIGHT &&
-              document.defaultView.getComputedStyle(this.parentNode, "")
-                      .direction == "ltr") ||
-            (event.keyCode == KeyEvent.DOM_VK_LEFT &&
-              document.defaultView.getComputedStyle(this.parentNode, "")
-                      .direction == "rtl")) {
-          window.document.commandDispatcher.advanceFocus();
-          return;
-        }
+            event.keyCode == KeyEvent.DOM_VK_RIGHT)
+          return window.document.commandDispatcher.advanceFocus();
 
         if (event.keyCode || event.charCode <= 32 || event.altKey || 
             event.ctrlKey || event.metaKey)
@@ -190,6 +158,7 @@
           this.fireAccessKeyButton(buttonBox, charPressedLower);
       ]]>
       </handler>
+
     </handlers>
   </binding>
 
@@ -205,7 +174,7 @@
                 align="center" pack="center" flex="1">
         <children>
           <xul:image class="button-icon" xbl:inherits="src=image"/>
-          <xul:label class="button-text" xbl:inherits="value=label,accesskey,crop"/>
+          <xul:label class="button-text" xbl:inherits="value=label,accesskey,crop" flex="1"/>
         </children>
       </xul:hbox>
     </content>
@@ -224,12 +193,7 @@
         </children>
       </xul:hbox>
     </content>
-
-    <handlers>
-      <handler event="keypress" keycode="VK_RETURN" action="this.open = true;"/>
-      <handler event="keypress" key=" " action="this.open = true;"/>
-    </handlers>
-  </binding>
+  </binding>           
 
   <binding id="menu-button-base"
            extends="chrome://global/content/bindings/button.xml#button-base">

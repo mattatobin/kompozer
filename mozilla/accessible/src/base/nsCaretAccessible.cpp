@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
+ * Original Author: Aaron Leventhal (aaronl@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,7 +48,7 @@
 #include "nsIPresShell.h"
 #include "nsISelectionController.h"
 #include "nsISelectionPrivate.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "nsIViewManager.h"
 #include "nsIWidget.h"
 #include "nsRootAccessible.h"
@@ -63,7 +63,6 @@ NS_IMPL_ISUPPORTS_INHERITED2(nsCaretAccessible, nsLeafAccessible, nsIAccessibleC
 nsCaretAccessible::nsCaretAccessible(nsIDOMNode* aDocumentNode, nsIWeakReference* aShell, nsRootAccessible *aRootAccessible):
 nsLeafAccessible(aDocumentNode, aShell), mVisible(PR_TRUE), mCurrentDOMNode(nsnull), mRootAccessible(aRootAccessible)
 {
-  Init();
 }
 
 NS_IMETHODIMP nsCaretAccessible::Shutdown()
@@ -91,12 +90,13 @@ NS_IMETHODIMP nsCaretAccessible::AttachNewSelectionListener(nsIDOMNode *aCurrent
 
   // When focus moves such that the caret is part of a new frame selection
   // this removes the old selection listener and attaches a new one for the current focus
-  nsCOMPtr<nsIPresShell> presShell = 
-    nsRootAccessible::GetPresShellFor(aCurrentNode);
+  nsCOMPtr<nsIPresShell> presShell;
+  nsRootAccessible::GetEventShell(aCurrentNode, getter_AddRefs(presShell));
   if (!presShell)
     return NS_ERROR_FAILURE;
 
-  nsCOMPtr<nsIDocument> doc = presShell->GetDocument();
+  nsCOMPtr<nsIDocument> doc;
+  presShell->GetDocument(getter_AddRefs(doc));
   if (!doc)  // we also should try to QI to document instead (necessary to do when node is a document)
     doc = do_QueryInterface(aCurrentNode);
   nsCOMPtr<nsIContent> content(do_QueryInterface(aCurrentNode));
@@ -105,7 +105,8 @@ NS_IMETHODIMP nsCaretAccessible::AttachNewSelectionListener(nsIDOMNode *aCurrent
 
   nsIFrame *frame = nsnull;
   presShell->GetPrimaryFrameFor(content, &frame);
-  nsPresContext *presContext = presShell->GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  presShell->GetPresContext(getter_AddRefs(presContext));
   if (!frame || !presContext)
     return NS_ERROR_FAILURE;
 
@@ -128,14 +129,15 @@ NS_IMETHODIMP nsCaretAccessible::AttachNewSelectionListener(nsIDOMNode *aCurrent
   return selPrivate->AddSelectionListener(this);
 }
 
-NS_IMETHODIMP nsCaretAccessible::NotifySelectionChanged(nsIDOMDocument *aDoc, nsISelection *aSel, PRInt16 aReason)
+NS_IMETHODIMP nsCaretAccessible::NotifySelectionChanged(nsIDOMDocument *aDoc, nsISelection *aSel, short aReason)
 {
 #ifdef MOZ_ACCESSIBILITY_ATK
   if (nsAccessibleText::gSuppressedNotifySelectionChanged)
     return NS_OK;
 #endif    
 
-  nsCOMPtr<nsIPresShell> presShell = GetPresShellFor(mCurrentDOMNode);
+  nsCOMPtr<nsIPresShell> presShell;
+  nsRootAccessible::GetEventShell(mCurrentDOMNode, getter_AddRefs(presShell));
   nsCOMPtr<nsISelection> domSel(do_QueryReferent(mDomSelectionWeak));
   if (!presShell || domSel != aSel)
     return NS_OK;  // Only listening to selection changes in currently focused frame
@@ -158,7 +160,8 @@ NS_IMETHODIMP nsCaretAccessible::NotifySelectionChanged(nsIDOMDocument *aDoc, ns
                                       nsIAccessibleEvent::EVENT_HIDE, this, nsnull);
   }
 
-  nsPresContext *presContext = presShell->GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  presShell->GetPresContext(getter_AddRefs(presContext));
   nsIViewManager* viewManager = presShell->GetViewManager();
   if (!presContext || !viewManager)
     return NS_OK;
@@ -184,7 +187,9 @@ NS_IMETHODIMP nsCaretAccessible::NotifySelectionChanged(nsIDOMDocument *aDoc, ns
 #endif
 
 #ifndef MOZ_ACCESSIBILITY_ATK
-  mRootAccessible->FireToolkitEvent(nsIAccessibleEvent::EVENT_LOCATION_CHANGE, this, nsnull);
+  if (visible) {
+    mRootAccessible->FireToolkitEvent(nsIAccessibleEvent::EVENT_LOCATION_CHANGE, this, nsnull);
+  }
 #else
   nsCOMPtr<nsIAccessible> accessible;
   nsCOMPtr<nsIAccessibilityService> accService(do_GetService("@mozilla.org/accessibilityService;1"));
@@ -239,9 +244,8 @@ NS_IMETHODIMP nsCaretAccessible::NotifySelectionChanged(nsIDOMDocument *aDoc, ns
 /** Return the caret's bounds */
 NS_IMETHODIMP nsCaretAccessible::GetBounds(PRInt32 *x, PRInt32 *y, PRInt32 *width, PRInt32 *height)
 {
-  if (mCaretRect.IsEmpty()) {
-    return NS_ERROR_FAILURE;
-  }
+  if (!mVisible)
+    return NS_ERROR_FAILURE;  // When root accessible hasn't yet called SetCaretBounds()
   *x = mCaretRect.x;
   *y = mCaretRect.y;
   *width = mCaretRect.width;

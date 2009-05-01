@@ -20,7 +20,6 @@
  *
  * Contributor(s):
  *   Darin Fisher <darin@netscape.com>
- *   Christian Biesinger <cbiesinger@web.de>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -55,7 +54,7 @@ interface nsIStreamListener;
  * the stream will be read on a background thread utilizing the stream
  * transport service.  More details are provided below.
  */
-[scriptable, uuid(400F5468-97E7-4d2b-9C65-A82AECC7AE82)]
+[scriptable, uuid(f7dd8d87-efa7-48cc-9d94-df488df0b3f9)]
 interface nsIInputStreamPump : nsIRequest
 {
     /**
@@ -86,8 +85,8 @@ interface nsIInputStreamPump : nsIRequest
      *        if true, the input stream will be closed after it has been read.
      */
     void init(in nsIInputStream aStream,
-              in long long      aStreamPos,
-              in long long      aStreamLen,
+              in long           aStreamPos,
+              in long           aStreamLen,
               in unsigned long  aSegmentSize,
               in unsigned long  aSegmentCount,
               in boolean        aCloseWhenDone);

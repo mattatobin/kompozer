@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,27 +14,27 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsSVGLengthList.h"
 #include "nsSVGLength.h"
@@ -43,10 +43,9 @@
 #include "nsVoidArray.h"
 #include "nsDOMError.h"
 #include "nsReadableUtils.h"
-#include "nsSVGCoordCtx.h"
+#include "nsISVGViewportAxis.h"
 #include "nsCRT.h"
 #include "nsISVGValueUtils.h"
-#include "nsContentUtils.h"
 
 ////////////////////////////////////////////////////////////////////////
 // nsSVGLengthList
@@ -71,17 +70,15 @@ public:
   NS_DECL_NSIDOMSVGLENGTHLIST
 
   // nsISVGLengthList interface:
-  NS_IMETHOD SetContext(nsSVGCoordCtx* context);
+  NS_IMETHOD SetContext(nsISVGViewportAxis* context);
   
   // remainder of nsISVGValue interface:
   NS_IMETHOD SetValueString(const nsAString& aValue);
   NS_IMETHOD GetValueString(nsAString& aValue);
 
   // nsISVGValueObserver interface:
-  NS_IMETHOD WillModifySVGObservable(nsISVGValue* observable,
-                                     modificationType aModType);
-  NS_IMETHOD DidModifySVGObservable (nsISVGValue* observable,
-                                     modificationType aModType);
+  NS_IMETHOD WillModifySVGObservable(nsISVGValue* observable);
+  NS_IMETHOD DidModifySVGObservable (nsISVGValue* observable);
   
   // nsISupportsWeakReference
   // implementation inherited from nsSupportsWeakReference
@@ -96,7 +93,7 @@ protected:
   void ReleaseLengths();
   
   nsAutoVoidArray mLengths;
-  nsRefPtr<nsSVGCoordCtx> mContext;
+  nsCOMPtr<nsISVGViewportAxis> mContext;
 };
 
 
@@ -185,7 +182,7 @@ nsSVGLengthList::GetValueString(nsAString& aValue)
 
     if (++i >= count) break;
 
-    aValue.AppendLiteral(" ");
+    aValue.Append(NS_LITERAL_STRING(" "));
   }
   
   return NS_OK;
@@ -211,13 +208,8 @@ NS_IMETHODIMP nsSVGLengthList::Clear()
 }
 
 /* nsIDOMSVGLength initialize (in nsIDOMSVGLength newItem); */
-NS_IMETHODIMP nsSVGLengthList::Initialize(nsIDOMSVGLength *newItem,
-                                          nsIDOMSVGLength **_retval)
+NS_IMETHODIMP nsSVGLengthList::Initialize(nsIDOMSVGLength *newItem, nsIDOMSVGLength **_retval)
 {
-  if (!newItem) {
-    *_retval = nsnull;
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-  }
   Clear();
   return AppendItem(newItem, _retval);
 }
@@ -225,7 +217,7 @@ NS_IMETHODIMP nsSVGLengthList::Initialize(nsIDOMSVGLength *newItem,
 /* nsIDOMSVGLength getItem (in unsigned long index); */
 NS_IMETHODIMP nsSVGLengthList::GetItem(PRUint32 index, nsIDOMSVGLength **_retval)
 {
-  if (index >= NS_STATIC_CAST(PRUint32, mLengths.Count())) {
+  if ((PRInt32)index >= mLengths.Count()) {
     *_retval = nsnull;
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
   }
@@ -237,36 +229,24 @@ NS_IMETHODIMP nsSVGLengthList::GetItem(PRUint32 index, nsIDOMSVGLength **_retval
 
 /* nsIDOMSVGLength insertItemBefore (in nsIDOMSVGLength newItem, in unsigned long index); */
 NS_IMETHODIMP
-nsSVGLengthList::InsertItemBefore(nsIDOMSVGLength *newItem,
-                                  PRUint32 index,
-                                  nsIDOMSVGLength **_retval)
+nsSVGLengthList::InsertItemBefore(nsIDOMSVGLength *newItem, PRUint32 index, nsIDOMSVGLength **_retval)
 {
-  // null check when implementing - this method can be used by scripts!
-  // if (!newItem)
-  //   return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  NS_NOTYETIMPLEMENTED("nsSVGLengthList::InsertItemBefore");
+  NS_NOTYETIMPLEMENTED("write me");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* nsIDOMSVGLength replaceItem (in nsIDOMSVGLength newItem, in unsigned long index); */
 NS_IMETHODIMP
-nsSVGLengthList::ReplaceItem(nsIDOMSVGLength *newItem,
-                             PRUint32 index,
-                             nsIDOMSVGLength **_retval)
+nsSVGLengthList::ReplaceItem(nsIDOMSVGLength *newItem, PRUint32 index, nsIDOMSVGLength **_retval)
 {
-  // null check when implementing - this method can be used by scripts!
-  // if (!newItem)
-  //   return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  NS_NOTYETIMPLEMENTED("nsSVGLengthList::ReplaceItem");
+  NS_NOTYETIMPLEMENTED("write me!");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* nsIDOMSVGLengthList removeItem (in unsigned long index); */
 NS_IMETHODIMP nsSVGLengthList::RemoveItem(PRUint32 index, nsIDOMSVGLength **_retval)
 {
-  if (index >= NS_STATIC_CAST(PRUint32, mLengths.Count())) {
+  if ((PRInt32)index >= mLengths.Count()) {
     *_retval = nsnull;
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
   }
@@ -285,8 +265,9 @@ nsSVGLengthList::AppendItem(nsIDOMSVGLength *newItem, nsIDOMSVGLength **_retval)
 {
   nsCOMPtr<nsISVGLength> length = do_QueryInterface(newItem);
   if (!length) {
+    NS_ERROR("length doesn't implement required interface");
     *_retval = nsnull;
-    return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
+    return NS_ERROR_FAILURE;
   }
   AppendElement(length);
 
@@ -296,10 +277,10 @@ nsSVGLengthList::AppendItem(nsIDOMSVGLength *newItem, nsIDOMSVGLength **_retval)
 }
 
 //----------------------------------------------------------------------
-// nsISVGLengthList methods:
+// nsISVGLength methods:
 
 NS_IMETHODIMP
-nsSVGLengthList::SetContext(nsSVGCoordCtx *context)
+nsSVGLengthList::SetContext(nsISVGViewportAxis *context)
 {
   mContext = context;
 
@@ -315,18 +296,16 @@ nsSVGLengthList::SetContext(nsSVGCoordCtx *context)
 // nsISVGValueObserver methods
 
 NS_IMETHODIMP
-nsSVGLengthList::WillModifySVGObservable(nsISVGValue* observable,
-                                         modificationType aModType)
+nsSVGLengthList::WillModifySVGObservable(nsISVGValue* observable)
 {
-  WillModify(aModType);
+  WillModify();
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsSVGLengthList::DidModifySVGObservable(nsISVGValue* observable,
-                                        modificationType aModType)
+nsSVGLengthList::DidModifySVGObservable(nsISVGValue* observable)
 {
-  DidModify(aModType);
+  DidModify();
   return NS_OK;
 }
 

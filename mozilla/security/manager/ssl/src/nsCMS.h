@@ -20,7 +20,6 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s): David Drinan <ddrinan@netscape.com>
- *   Kai Engert <kengert@redhat.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -41,30 +40,45 @@
 
 #include "nsISupports.h"
 #include "nsCOMPtr.h"
-#include "nsXPIDLString.h"
 #include "nsIInterfaceRequestor.h"
+#include "nsIHash.h"
 #include "nsICMSMessage.h"
-#include "nsICMSMessage2.h"
-#include "nsIX509Cert3.h"
-#include "nsVerificationJob.h"
 #include "nsICMSEncoder.h"
 #include "nsICMSDecoder.h"
 #include "sechash.h"
 #include "cms.h"
 #include "nsNSSShutDown.h"
 
+#define NS_HASH_CLASSNAME "Hash Object"
+#define NS_HASH_CID \
+  { 0xa31a3028, 0xae28, 0x11d5, { 0xba, 0x4b, 0x00, 0x10, 0x83, 0x03, 0xb1, 0x17 } }
+
+class nsHash : public nsIHash,
+               public nsNSSShutDownObject
+{
+public:
+  NS_DECL_ISUPPORTS
+  NS_DECL_NSIHASH
+
+  nsHash();
+  virtual ~nsHash();
+
+private:
+  HASHContext * m_ctxt;
+  virtual void virtualDestroyNSSReference();
+  void destructorSafeDestroyNSSReference();
+};
+
 #define NS_CMSMESSAGE_CLASSNAME "CMS Message Object"
 #define NS_CMSMESSAGE_CID \
   { 0xa4557478, 0xae16, 0x11d5, { 0xba,0x4b,0x00,0x10,0x83,0x03,0xb1,0x17 } }
 
 class nsCMSMessage : public nsICMSMessage,
-                     public nsICMSMessage2,
                      public nsNSSShutDownObject
 {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSICMSMESSAGE
-  NS_DECL_NSICMSMESSAGE2
 
   nsCMSMessage();
   nsCMSMessage(NSSCMSMessage* aCMSMsg);
@@ -77,15 +91,10 @@ private:
   NSSCMSMessage * m_cmsMsg;
   NSSCMSSignerInfo* GetTopLevelSignerInfo();
   nsresult CommonVerifySignature(unsigned char* aDigestData, PRUint32 aDigestDataLen);
-
-  nsresult CommonAsyncVerifySignature(nsISMimeVerificationListener *aListener,
-                                      unsigned char* aDigestData, PRUint32 aDigestDataLen);
-
   virtual void virtualDestroyNSSReference();
   void destructorSafeDestroyNSSReference();
-
-friend class nsSMimeVerificationJob;
 };
+
 
 // ===============================================
 // nsCMSDecoder - implementation of nsICMSDecoder

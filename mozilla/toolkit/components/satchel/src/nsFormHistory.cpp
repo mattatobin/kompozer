@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Joe Hewitt <hewitt@netscape.com> (Original Author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -57,30 +57,17 @@
 #include "nsIDOMHTMLCollection.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsVoidArray.h"
 #include "nsCOMArray.h"
-
-static void SwapBytes(PRUnichar* aDest, const PRUnichar* aSrc, PRUint32 aLen)
-{
-  for(PRUint32 i = 0; i < aLen; i++)
-  {
-    PRUnichar aChar = *aSrc++;
-    *aDest++ = (0xff & (aChar >> 8)) | (aChar << 8);
-  }
-}
 
 #define PREF_FORMFILL_BRANCH "browser.formfill."
 #define PREF_FORMFILL_ENABLE "enable"
 
-// upper bounds on saved form data, more isn't useful.
-#define FORMFILL_NAME_MAX_LEN  1000
-#define FORMFILL_VALUE_MAX_LEN 4000
-
 static const char *kFormHistoryFileName = "formhistory.dat";
 
 NS_INTERFACE_MAP_BEGIN(nsFormHistory)
-  NS_INTERFACE_MAP_ENTRY(nsIFormHistory2)
+  NS_INTERFACE_MAP_ENTRY(nsIFormHistory)
   NS_INTERFACE_MAP_ENTRY(nsIObserver)
   NS_INTERFACE_MAP_ENTRY(nsIFormSubmitObserver)
   NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
@@ -99,32 +86,57 @@ PRBool nsFormHistory::gPrefsInitialized = PR_FALSE;
 nsFormHistory::nsFormHistory() :
   mEnv(nsnull),
   mStore(nsnull),
-  mTable(nsnull),
-  mReverseByteOrder(PR_FALSE)
+  mTable(nsnull)
 {
-  NS_ASSERTION(!gFormHistory, "nsFormHistory must be used as a service");
-  gFormHistory = this;
 }
 
 nsFormHistory::~nsFormHistory()
 {
-  NS_ASSERTION(gFormHistory == this,
-               "nsFormHistory must be used as a service");
   CloseDatabase();
-  gFormHistory = nsnull;
 }
 
 nsresult
 nsFormHistory::Init()
 {
+  gFormHistory = this;
+
   nsCOMPtr<nsIObserverService> service = do_GetService("@mozilla.org/observer-service;1");
   if (service)
-    service->AddObserver(this, NS_EARLYFORMSUBMIT_SUBJECT, PR_TRUE);
+    service->AddObserver(this, NS_FORMSUBMIT_SUBJECT, PR_TRUE);
   
   return NS_OK;
 }
 
 nsFormHistory *nsFormHistory::gFormHistory = nsnull;
+
+nsFormHistory *
+nsFormHistory::GetInstance()
+{
+  if (!gFormHistory) {
+    gFormHistory = new nsFormHistory();
+    if (!gFormHistory)
+      return nsnull;
+
+    NS_ADDREF(gFormHistory);  // addref for the global
+
+    if (NS_FAILED(gFormHistory->Init())) {
+      NS_RELEASE(gFormHistory);
+
+      return nsnull;
+    }  
+  }
+
+  NS_ADDREF(gFormHistory);   // addref for the getter
+
+  return gFormHistory;
+}
+
+
+void
+nsFormHistory::ReleaseInstance()
+{
+  NS_IF_RELEASE(gFormHistory);
+}
 
 /* static */ PRBool
 nsFormHistory::FormHistoryEnabled()
@@ -137,7 +149,7 @@ nsFormHistory::FormHistoryEnabled()
     gFormHistory->mPrefBranch->GetBoolPref(PREF_FORMFILL_ENABLE,
                                            &gFormHistoryEnabled);
 
-    nsCOMPtr<nsIPrefBranch2> branchInternal =
+    nsCOMPtr<nsIPrefBranchInternal> branchInternal =
       do_QueryInterface(gFormHistory->mPrefBranch);
     branchInternal->AddObserver(PREF_FORMFILL_ENABLE, gFormHistory, PR_TRUE);
 
@@ -149,19 +161,63 @@ nsFormHistory::FormHistoryEnabled()
 
 
 ////////////////////////////////////////////////////////////////////////
-//// nsIFormHistory2
+//// nsIFormHistory
 
 NS_IMETHODIMP
-nsFormHistory::GetHasEntries(PRBool *aHasEntries)
+nsFormHistory::GetRowCount(PRUint32 *aRowCount)
 {
   nsresult rv = OpenDatabase(); // lazily ensure that the database is open
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 rowCount;
-  mdb_err err = mTable->GetCount(mEnv, &rowCount);
+  mdb_err err = mTable->GetCount(mEnv, aRowCount);
   NS_ENSURE_TRUE(!err, NS_ERROR_FAILURE);
+  
+  return NS_OK;
+}
 
-  *aHasEntries = rowCount != 0;
+NS_IMETHODIMP
+nsFormHistory::GetEntryAt(PRUint32 aIndex, nsAString &aName, nsAString &aValue)
+{
+  nsresult rv = OpenDatabase(); // lazily ensure that the database is open
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIMdbRow> row;
+  mdb_err err = mTable->PosToRow(mEnv, aIndex, getter_AddRefs(row));
+  NS_ENSURE_TRUE(!err, NS_ERROR_FAILURE);
+  
+  GetRowValue(row, kToken_NameColumn, aName);
+  GetRowValue(row, kToken_ValueColumn, aValue);
+    
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsFormHistory::GetNameAt(PRUint32 aIndex, nsAString &aName)
+{
+  nsresult rv = OpenDatabase(); // lazily ensure that the database is open
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIMdbRow> row;
+  mdb_err err = mTable->PosToRow(mEnv, aIndex, getter_AddRefs(row));
+  NS_ENSURE_TRUE(!err, NS_ERROR_FAILURE);
+  
+  GetRowValue(row, kToken_NameColumn, aName);
+    
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsFormHistory::GetValueAt(PRUint32 aIndex, nsAString &aValue)
+{
+  nsresult rv = OpenDatabase(); // lazily ensure that the database is open
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIMdbRow> row;
+  mdb_err err = mTable->PosToRow(mEnv, aIndex, getter_AddRefs(row));
+  NS_ENSURE_TRUE(!err, NS_ERROR_FAILURE);
+  
+  GetRowValue(row, kToken_ValueColumn, aValue);
+    
   return NS_OK;
 }
 
@@ -180,6 +236,12 @@ nsFormHistory::AddEntry(const nsAString &aName, const nsAString &aValue)
 }
 
 NS_IMETHODIMP
+nsFormHistory::RemoveEntryAt(PRUint32 index)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+NS_IMETHODIMP
 nsFormHistory::EntryExists(const nsAString &aName, const nsAString &aValue, PRBool *_retval)
 {
   return EntriesExistInternal(&aName, &aValue, _retval);
@@ -192,12 +254,6 @@ nsFormHistory::NameExists(const nsAString &aName, PRBool *_retval)
 }
 
 NS_IMETHODIMP
-nsFormHistory::RemoveEntry(const nsAString &aName, const nsAString &aValue)
-{
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
 nsFormHistory::RemoveEntriesForName(const nsAString &aName)
 {
   return RemoveEntriesInternal(&aName);
@@ -207,9 +263,6 @@ NS_IMETHODIMP
 nsFormHistory::RemoveAllEntries()
 {
   nsresult rv = RemoveEntriesInternal(nsnull);
-
-  if (NS_SUCCEEDED(rv))
-    rv = InitByteOrder(PR_TRUE);
   
   rv |= Flush();
   
@@ -244,15 +297,11 @@ nsFormHistory::Notify(nsIContent* aFormNode, nsIDOMWindowInternal* aWindow, nsIU
   nsCOMPtr<nsIDOMHTMLFormElement> formElt = do_QueryInterface(aFormNode);
   NS_ENSURE_TRUE(formElt, NS_ERROR_FAILURE);
 
-  NS_NAMED_LITERAL_STRING(kAutoComplete, "autocomplete");
-  nsAutoString autocomplete;
-  formElt->GetAttribute(kAutoComplete, autocomplete);
-  if (autocomplete.LowerCaseEqualsLiteral("off"))
-    return NS_OK;
-
   nsCOMPtr<nsIDOMHTMLCollection> elts;
   formElt->GetElements(getter_AddRefs(elts));
-
+  
+  const char *textString = "text";
+  
   PRUint32 length;
   elts->GetLength(&length);
   for (PRUint32 i = 0; i < length; ++i) {
@@ -260,15 +309,10 @@ nsFormHistory::Notify(nsIContent* aFormNode, nsIDOMWindowInternal* aWindow, nsIU
     elts->Item(i, getter_AddRefs(node));
     nsCOMPtr<nsIDOMHTMLInputElement> inputElt = do_QueryInterface(node);
     if (inputElt) {
-      // Filter only inputs that are of type "text" without autocomplete="off"
+      // Filter only inputs that are of type "text"
       nsAutoString type;
       inputElt->GetType(type);
-      if (!type.LowerCaseEqualsLiteral("text"))
-        continue;
-
-      nsAutoString autocomplete;
-      inputElt->GetAttribute(kAutoComplete, autocomplete);
-      if (!autocomplete.LowerCaseEqualsLiteral("off")) {
+      if (type.EqualsIgnoreCase(textString)) {
         // If this input has a name/id and value, add it to the database
         nsAutoString value;
         inputElt->GetValue(value);
@@ -277,6 +321,7 @@ nsFormHistory::Notify(nsIContent* aFormNode, nsIDOMWindowInternal* aWindow, nsIU
           inputElt->GetName(name);
           if (name.IsEmpty())
             inputElt->GetId(name);
+          
           if (!name.IsEmpty())
             AppendRow(name, value, nsnull);
         }
@@ -317,7 +362,7 @@ SatchelErrorHook::OnErrorString(nsIMdbEnv *ev, const char *inAscii)
 NS_IMETHODIMP
 SatchelErrorHook::OnErrorYarn(nsIMdbEnv *ev, const mdbYarn* inYarn)
 {
-  printf("mork error yarn: %p\n", (void*)inYarn);
+  printf("mork error yarn: %p\n", inYarn);
   return NS_OK;
 }
 
@@ -331,7 +376,7 @@ SatchelErrorHook::OnWarningString(nsIMdbEnv *ev, const char *inAscii)
 NS_IMETHODIMP
 SatchelErrorHook::OnWarningYarn(nsIMdbEnv *ev, const mdbYarn *inYarn)
 {
-  printf("mork warning yarn: %p\n", (void*)inYarn);
+  printf("mork warning yarn: %p\n", inYarn);
   return NS_OK;
 }
 
@@ -345,7 +390,7 @@ SatchelErrorHook::OnAbortHintString(nsIMdbEnv *ev, const char *inAscii)
 NS_IMETHODIMP
 SatchelErrorHook::OnAbortHintYarn(nsIMdbEnv *ev, const mdbYarn *inYarn)
 {
-  printf("mork abort yarn: %p\n", (void*)inYarn);
+  printf("mork abort yarn: %p\n", inYarn);
   return NS_OK;
 }
 
@@ -363,7 +408,8 @@ nsFormHistory::OpenDatabase()
 
   // Get an Mdb Factory
   static NS_DEFINE_CID(kMorkCID, NS_MORK_CID);
-  nsCOMPtr<nsIMdbFactoryFactory> mdbFactory = do_CreateInstance(kMorkCID, &rv);
+  nsCOMPtr<nsIMdbFactoryFactory> mdbFactory;
+  rv = nsComponentManager::CreateInstance(kMorkCID, nsnull, NS_GET_IID(nsIMdbFactoryFactory), getter_AddRefs(mdbFactory));
   NS_ENSURE_SUCCESS(rv, rv);
   rv = mdbFactory->GetMdbFactory(getter_AddRefs(mMdbFactory));
   NS_ENSURE_SUCCESS(rv, rv);
@@ -379,22 +425,17 @@ nsFormHistory::OpenDatabase()
   historyFile->GetNativePath(filePath);
   PRBool exists = PR_TRUE;
   historyFile->Exists(&exists);
-
-  PRBool createdNew = PR_FALSE;
   
   if (!exists || NS_FAILED(rv = OpenExistingFile(filePath.get()))) {
     // If the file doesn't exist, or we fail trying to open it,
     // then make sure it is deleted and then create an empty database file
     historyFile->Remove(PR_FALSE);
     rv = CreateNewFile(filePath.get());
-    createdNew = PR_TRUE;
   }
   NS_ENSURE_SUCCESS(rv, rv);
 
   // Get the initial size of the file, needed later for Commit
   historyFile->GetFileSize(&mFileSizeOnDisk);
-
-  rv = InitByteOrder(createdNew);
 
   /* // TESTING: Add a row to the database
   nsAutoString foopy;
@@ -420,7 +461,7 @@ nsFormHistory::OpenDatabase()
     printf("ROW: %s - %s\n", ToNewCString(name), ToNewCString(value));
   } */
 
-  return rv;
+  return NS_OK;
 }
 
 nsresult
@@ -459,10 +500,6 @@ nsFormHistory::OpenExistingFile(const char *aPath)
     return NS_ERROR_FAILURE;
   }
 
-  err = mTable->GetMetaRow(mEnv, &oid, nsnull, getter_AddRefs(mMetaRow));
-  if (err)
-    NS_WARNING("Could not get meta row");
-
   if (NS_FAILED(thumbErr))
     err = thumbErr;
 
@@ -490,13 +527,6 @@ nsFormHistory::CreateNewFile(const char *aPath)
   err = mStore->NewTable(mEnv, kToken_RowScope, kToken_Kind, PR_TRUE, nsnull, &mTable);
   NS_ENSURE_TRUE(!err && mTable, NS_ERROR_FAILURE);
 
-  mdbOid oid = {kToken_RowScope, 1};
-  err = mTable->GetMetaRow(mEnv, &oid, nsnull, getter_AddRefs(mMetaRow));
-  if (err) {
-    NS_WARNING("Could not get meta row");
-    return NS_ERROR_FAILURE;
-  }
-
    // oldTable will only be set if we detected a corrupt db, and are 
    // trying to restore data from it.
   if (oldTable)
@@ -517,8 +547,6 @@ nsresult
 nsFormHistory::CloseDatabase()
 {
   Flush();
-
-  mMetaRow = nsnull;
 
   if (mTable)
     mTable->Release();
@@ -554,9 +582,6 @@ nsFormHistory::CreateTokens()
   if (err != 0) return NS_ERROR_FAILURE;
 
   err = mStore->StringToToken(mEnv, "Name", &kToken_NameColumn);
-  if (err != 0) return NS_ERROR_FAILURE;
-
-  err = mStore->StringToToken(mEnv, "ByteOrder", &kToken_ByteOrder);
   if (err != 0) return NS_ERROR_FAILURE;
 
   return NS_OK;
@@ -617,7 +642,7 @@ nsFormHistory::CopyRowsFromTable(nsIMdbTable *sourceTable)
     rowId.mOid_Id = mdb_id(-1);
 
     nsCOMPtr<nsIMdbRow> newRow;
-    mTable->NewRow(mEnv, &rowId, getter_AddRefs(newRow));
+    mdb_err err = mTable->NewRow(mEnv, &rowId, getter_AddRefs(newRow));
     newRow->SetRow(mEnv, row);
     mTable->AddRow(mEnv, newRow);
   } while (row);
@@ -630,11 +655,7 @@ nsFormHistory::AppendRow(const nsAString &aName, const nsAString &aValue, nsIMdb
   if (!mTable)
     return NS_ERROR_NOT_INITIALIZED;
 
-  if (aName.Length() > FORMFILL_NAME_MAX_LEN ||
-      aValue.Length() > FORMFILL_VALUE_MAX_LEN)
-    return NS_ERROR_INVALID_ARG;
-
-  PRBool exists = PR_TRUE;
+  PRBool exists;
   EntryExists(aName, aValue, &exists);
   if (exists)
     return NS_OK;
@@ -663,23 +684,9 @@ nsresult
 nsFormHistory::SetRowValue(nsIMdbRow *aRow, mdb_column aCol, const nsAString &aValue)
 {
   PRInt32 len = aValue.Length() * sizeof(PRUnichar);
-  PRUnichar *swapval = nsnull;
-  mdbYarn yarn = {nsnull, len, len, 0, 0, nsnull};
-  const nsPromiseFlatString& buffer = PromiseFlatString(aValue);
 
-  if (mReverseByteOrder) {
-    swapval = new PRUnichar[aValue.Length()];
-    if (!swapval)
-      return NS_ERROR_OUT_OF_MEMORY;
-    SwapBytes(swapval, buffer.get(), aValue.Length());
-    yarn.mYarn_Buf = swapval;
-  }
-  else
-    yarn.mYarn_Buf = (void*)buffer.get();
-
+  mdbYarn yarn = {(void *)ToNewUnicode(aValue), len, len, 0, 0, nsnull};
   mdb_err err = aRow->AddColumn(mEnv, aCol, &yarn);
-
-  delete swapval;
   
   return err ? NS_ERROR_FAILURE : NS_OK;
 }
@@ -697,20 +704,9 @@ nsFormHistory::GetRowValue(nsIMdbRow *aRow, mdb_column aCol, nsAString &aValue)
     return NS_OK;
   
   switch (yarn.mYarn_Form) {
-    case 0: { // unicode
-      PRUint32 len = yarn.mYarn_Fill / sizeof(PRUnichar);
-      if (mReverseByteOrder) {
-        PRUnichar *swapval = new PRUnichar[len];
-        if (!swapval)
-          return NS_ERROR_OUT_OF_MEMORY;
-        SwapBytes(swapval, (const PRUnichar*)yarn.mYarn_Buf, len);
-        aValue.Assign(swapval, len);
-        delete swapval;
-      }
-      else
-        aValue.Assign((const PRUnichar *)yarn.mYarn_Buf, len);
+    case 0: // unicode
+      aValue.Assign((const PRUnichar *)yarn.mYarn_Buf, yarn.mYarn_Fill/sizeof(PRUnichar));
       break;
-    }
     default:
       return NS_ERROR_UNEXPECTED;
   }
@@ -721,7 +717,7 @@ nsFormHistory::GetRowValue(nsIMdbRow *aRow, mdb_column aCol, nsAString &aValue)
 nsresult
 nsFormHistory::AutoCompleteSearch(const nsAString &aInputName,
                                   const nsAString &aInputValue,
-                                  nsIAutoCompleteMdbResult2 *aPrevResult,
+                                  nsIAutoCompleteMdbResult *aPrevResult,
                                   nsIAutoCompleteResult **aResult)
 {
   if (!FormHistoryEnabled())
@@ -730,7 +726,7 @@ nsFormHistory::AutoCompleteSearch(const nsAString &aInputName,
   nsresult rv = OpenDatabase(); // lazily ensure that the database is open
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIAutoCompleteMdbResult2> result;
+  nsCOMPtr<nsIAutoCompleteMdbResult> result;
   
   if (aPrevResult) {
     result = aPrevResult;
@@ -749,8 +745,7 @@ nsFormHistory::AutoCompleteSearch(const nsAString &aInputName,
 
     result->SetSearchString(aInputValue);
     result->Init(mEnv, mTable);
-    result->SetTokens(kToken_ValueColumn, nsIAutoCompleteMdbResult2::kUnicharType, nsnull, nsIAutoCompleteMdbResult2::kUnicharType);
-    result->SetReverseByteOrder(mReverseByteOrder);
+    result->SetTokens(kToken_ValueColumn, nsIAutoCompleteMdbResult::kUnicharType, nsnull, nsIAutoCompleteMdbResult::kUnicharType);
 
     // Get a cursor to iterate through all rows in the database
     nsCOMPtr<nsIMdbTableRowCursor> rowCursor;
@@ -793,7 +788,7 @@ nsFormHistory::AutoCompleteSearch(const nsAString &aInputName,
         result->AddRow(matchingRows[items[i]]);
 
         // Free up these strings we owned.
-        NS_Free(matchingValues[i]);
+        delete (PRUnichar *) matchingValues[i];
       }
 
       delete[] items;
@@ -946,75 +941,4 @@ nsFormHistory::RemoveEntriesInternal(const nsAString *aName)
 
   return (err == 0) ? NS_OK : NS_ERROR_FAILURE;
 
-}
-
-nsresult
-nsFormHistory::InitByteOrder(PRBool aForce)
-{
-  // bigEndian and littleEndian are endianness markers that are stored in
-  // the formhistory db as UTF-16.  Define them to be strings easily
-  // recognized in either endianness.
-  nsAutoString bigEndianByteOrder((PRUnichar*)"BBBB", 2);
-  nsAutoString littleEndianByteOrder((PRUnichar*)"llll", 2);
-#ifdef IS_BIG_ENDIAN
-  nsAutoString nativeByteOrder(bigEndianByteOrder);
-#else
-  nsAutoString nativeByteOrder(littleEndianByteOrder);
-#endif
-
-  nsAutoString fileByteOrder;
-  nsresult rv = NS_OK;
-
-  if (!aForce)
-    rv = GetByteOrder(fileByteOrder);
-
-  if (aForce || NS_FAILED(rv) ||
-      !(fileByteOrder.Equals(bigEndianByteOrder) ||
-        fileByteOrder.Equals(littleEndianByteOrder))) {
-#if defined(XP_MACOSX) && defined(IS_LITTLE_ENDIAN)
-    // The formhistory db did not carry endiannes information until the
-    // initial x86 Mac release.  There are a lot of users out there who
-    // will be switching from ppc versions to x86, and their unmarked
-    // formhistory files are big-endian.  On x86 Macs, unless aForce is set
-    // (indicating formhistory reset or a brand-new db), use big-endian byte
-    // ordering and turn swapping on.
-    if (aForce) {
-      mReverseByteOrder = PR_FALSE;
-      rv = SaveByteOrder(nativeByteOrder);
-    }
-    else {
-      mReverseByteOrder = PR_TRUE;
-      rv = SaveByteOrder(bigEndianByteOrder);
-    }
-#else
-    mReverseByteOrder = PR_FALSE;
-    rv = SaveByteOrder(nativeByteOrder);
-#endif
-  }
-  else
-    mReverseByteOrder = !fileByteOrder.Equals(nativeByteOrder);
-
-  return rv;
-}
-
-nsresult
-nsFormHistory::GetByteOrder(nsAString& aByteOrder)
-{
-  NS_ENSURE_SUCCESS(OpenDatabase(), NS_ERROR_FAILURE);
-
-  mdb_err err = GetRowValue(mMetaRow, kToken_ByteOrder, aByteOrder);
-  NS_ENSURE_FALSE(err, NS_ERROR_FAILURE);
-
-  return NS_OK;
-}
-
-nsresult
-nsFormHistory::SaveByteOrder(const nsAString& aByteOrder)
-{
-  NS_ENSURE_SUCCESS(OpenDatabase(), NS_ERROR_FAILURE);
-
-  mdb_err err = SetRowValue(mMetaRow, kToken_ByteOrder, aByteOrder);
-  NS_ENSURE_FALSE(err, NS_ERROR_FAILURE);
-
-  return NS_OK;
 }

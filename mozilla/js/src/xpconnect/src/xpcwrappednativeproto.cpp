@@ -90,13 +90,12 @@ XPCWrappedNativeProto::~XPCWrappedNativeProto()
 JSBool
 XPCWrappedNativeProto::Init(
                 XPCCallContext& ccx,
-                JSBool isGlobal,
                 const XPCNativeScriptableCreateInfo* scriptableCreateInfo)
 {
     if(scriptableCreateInfo && scriptableCreateInfo->GetCallback())
     {
         mScriptableInfo =
-            XPCNativeScriptableInfo::Construct(ccx, isGlobal, scriptableCreateInfo);
+            XPCNativeScriptableInfo::Construct(ccx, scriptableCreateInfo);
         if(!mScriptableInfo)
             return JS_FALSE;
     }
@@ -106,21 +105,15 @@ XPCWrappedNativeProto::Init(
                             &XPC_WN_ModsAllowed_Proto_JSClass :
                             &XPC_WN_NoMods_Proto_JSClass;
 
-    JSObject *parent = mScope->GetGlobalJSObject();
-
     mJSProtoObject = JS_NewObject(ccx, jsclazz,
                                   mScope->GetPrototypeJSObject(),
-                                  parent);
+                                  mScope->GetGlobalJSObject());
 
-    JSBool ok = mJSProtoObject && JS_SetPrivate(ccx, mJSProtoObject, this);
-
-    // Propagate the system flag from parent to child.
-    if(ok && JS_IsSystemObject(ccx, parent))
-        JS_FlagSystemObject(ccx, mJSProtoObject);
+    JSBool retval = mJSProtoObject && JS_SetPrivate(ccx, mJSProtoObject, this);
 
     DEBUG_ReportShadowedMembers(mSet, nsnull, this);
 
-    return ok;
+    return retval;
 }
 
 void
@@ -175,8 +168,7 @@ XPCWrappedNativeProto::GetNewOrUsed(XPCCallContext& ccx,
                                     XPCWrappedNativeScope* Scope,
                                     nsIClassInfo* ClassInfo,
                                     const XPCNativeScriptableCreateInfo* ScriptableCreateInfo,
-                                    JSBool ForceNoSharing,
-                                    JSBool isGlobal)
+                                    JSBool ForceNoSharing)
 {
     NS_ASSERTION(Scope, "bad param");
     NS_ASSERTION(ClassInfo, "bad param");
@@ -227,7 +219,7 @@ XPCWrappedNativeProto::GetNewOrUsed(XPCCallContext& ccx,
 
     proto = new XPCWrappedNativeProto(Scope, ClassInfo, ciFlags, set);
 
-    if(!proto || !proto->Init(ccx, isGlobal, ScriptableCreateInfo))
+    if(!proto || !proto->Init(ccx, ScriptableCreateInfo))
     {
         delete proto.get();
         return nsnull;

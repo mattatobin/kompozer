@@ -1,12 +1,5 @@
 <?xml version="1.0"?>
 
-<!DOCTYPE bindings [
-  <!ENTITY % globalDTD SYSTEM "chrome://global/locale/global.dtd">
-  %globalDTD;
-  <!ENTITY % wizardDTD SYSTEM "chrome://global/locale/wizard.dtd">
-  %wizardDTD;
-]>
-
 <bindings id="wizardBindings"
    xmlns="http://www.mozilla.org/xbl"
    xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
@@ -20,7 +13,7 @@
   
   <binding id="wizard" extends="chrome://global/content/bindings/wizard.xml#wizard-base">
     <content>
-      <xul:hbox class="wizard-header" chromedir="&locale.dir;" anonid="Header"/>
+      <xul:hbox class="wizard-header" anonid="Header"/>
       
       <xul:deck class="wizard-page-box" flex="1" anonid="Deck">
         <children includes="wizardpage"/>
@@ -31,13 +24,13 @@
     </content>
     
     <implementation>
-      <property name="title" onget="return document.title;"
-                             onset="return document.title = val;"/>
+      <property name="title" onget="return this.getAttribute('title')"
+                             onset="this.setAttribute('title', val);"/>
 
       <property name="canAdvance" onget="return this._canAdvance;"
-                                  onset="this._canAdvance=val; this._nextButton.disabled = !val;"/>
+                                  onset="this._canAdvance=val; this._nextButton.setAttribute('disabled', !val);"/>
       <property name="canRewind" onget="return this._canRewind;"
-                                 onset="this._canRewind=val; this._backButton.disabled = !val;"/>
+                                 onset="this._canRewind=val; this._backButton.setAttribute('disabled', !val);"/>
 
       <property name="pageStep" onget="return this._pageStack.length"/>
 
@@ -71,19 +64,9 @@
           if (this.onFirstPage) {
             this.canRewind = false;
             this.setAttribute("firstpage", "true");
-#ifdef XP_UNIX
-#ifndef XP_MACOSX
-            this._backButton.setAttribute('hidden', 'true');
-#endif
-#endif
           } else {
             this.canRewind = true;
             this.setAttribute("firstpage", "false");
-#ifdef XP_UNIX
-#ifndef XP_MACOSX
-            this._backButton.setAttribute('hidden', 'false');
-#endif
-#endif
           }
                     
           if (this.onLastPage) {
@@ -106,17 +89,15 @@
         </setter>
       </property>
 
-      <property name="pageIndex" onget="return this._currentPage.pageIndex;">
+      <property name="pageIndex" onget="return this._pageIndex;">
         <setter>
         <![CDATA[
           if (val < 0 || val >= this.pageCount)
-            return;
+            return this._pageIndex;
 
           var page = this.wizardPages[val];
           this._pageStack[this._pageStack.length-1] = page;
           this.currentPage = page;
-
-          return val;
         ]]>
         </setter>
       </property>
@@ -137,7 +118,7 @@
         <body>
         <![CDATA[
           var btns = this.getElementsByAttribute("dlgtype", aDlgType);
-          return btns.item(0) ? btns[0] : document.getAnonymousElementByAttribute(this._wizardButtons, "dlgtype", aDlgType);
+          return btns.length > 0 ? btns[0] : document.getAnonymousElementByAttribute(this._wizardButtons, "dlgtype", aDlgType);
         ]]>
         </body>
       </method>
@@ -156,8 +137,6 @@
       <field name="_nextFunc">(function() { document.documentElement.advance(); })</field>
       <field name="_finishFunc">(function() { document.documentElement.advance(); })</field>
       <field name="_cancelFunc">(function() { document.documentElement.cancel(); })</field>
-      <field name="_extra1Func">(function() { document.documentElement.extra1(); })</field>
-      <field name="_extra2Func">(function() { document.documentElement.extra2(); })</field>
 
       <field name="_closeHandler">(function(event) {
         if (document.documentElement.cancel())
@@ -171,19 +150,13 @@
         
         this._pageStack = [];
         
-        try {
-          // need to create string bundle manually instead of using <xul:stringbundle/>
-          // see bug 63370 for details
-          var localeService = Components.classes["@mozilla.org/intl/nslocaleservice;1"]
-                                .getService(Components.interfaces.nsILocaleService);
-          var stringBundleService = Components.classes["@mozilla.org/intl/stringbundle;1"]
-                                      .getService(Components.interfaces.nsIStringBundleService);
-          var bundleURL = "chrome://global/locale/wizard.properties";
-          this._bundle = stringBundleService.createBundle(bundleURL);
-        } catch (e) {
-          // This fails in remote XUL, which has to provide titles for all pages
-          // see bug 142502
-        }
+        // need to create string bundle manually instead of using <xul:stringbundle/>
+        // see bug 63370 for details
+        var localeService = Components.classes["@mozilla.org/intl/nslocaleservice;1"]
+                              .getService(Components.interfaces.nsILocaleService);
+        var stringBundleService = Components.classes["@mozilla.org/intl/stringbundle;1"].getService(Components.interfaces.nsIStringBundleService);
+        var bundleURL = "chrome://global/locale/wizard.properties";
+        this._bundle = stringBundleService.createBundle(bundleURL, localeService.getApplicationLocale());
         
         // get anonymous content references
         this._wizardHeader = document.getAnonymousElementByAttribute(this, "anonid", "Header");
@@ -194,8 +167,6 @@
         this._initWizardButton("next");
         this._initWizardButton("finish");
         this._initWizardButton("cancel");
-        this._initWizardButton("extra1");
-        this._initWizardButton("extra2");
         
         this._initPages();
         
@@ -213,21 +184,7 @@
         <parameter name="aPageId"/>
         <body><![CDATA[
           var els = this.getElementsByAttribute("pageid", aPageId);
-          return els.item(0);
-        ]]></body>
-      </method>
-      
-      <method name="extra1">
-        <body><![CDATA[
-          if (this.currentPage) 
-            this._fireEvent(this.currentPage, "extra1");
-        ]]></body>
-      </method>
-
-      <method name="extra2">
-        <body><![CDATA[
-          if (this.currentPage) 
-            this._fireEvent(this.currentPage, "extra2");
+          return els.length > 0 ? els[0] : null;
         ]]></body>
       </method>
 
@@ -312,7 +269,6 @@
 
           window.close();
           window.setTimeout(function() {window.close();}, 1);
-          return false;
         ]]></body>
       </method>
       
@@ -372,6 +328,7 @@
          var btn = document.getAnonymousElementByAttribute(this._wizardButtons, "dlgtype", aName);
          if (btn) {
            btn.addEventListener("command", this["_"+aName+"Func"], false);
+           btn.setAttribute("label", this._bundle.GetStringFromName("button-"+aName));
            this["_"+aName+"Button"] = btn;
          }
          return btn;
@@ -381,13 +338,13 @@
       <method name="_adjustWizardHeader">
         <body><![CDATA[
           var label = this.currentPage.getAttribute("label");
-          if (!label && this.onFirstPage && this._bundle)
+          if (!label && this.onFirstPage)
 #ifdef XP_MACOSX
             label = this._bundle.GetStringFromName("default-first-title-mac");
 #else
             label = this._bundle.formatStringFromName("default-first-title", [this.title], 1);
 #endif
-          else if (!label && this.onLastPage && this._bundle)
+          else if (!label && this.onLastPage)
 #ifdef XP_MACOSX
             label = this._bundle.GetStringFromName("default-last-title-mac");
 #else
@@ -399,10 +356,12 @@
       </method>
 
       <method name="_hitEnter">
-        <parameter name="evt"/>
         <body>
         <![CDATA[
-          if (!evt.getPreventDefault())
+          // if a button is focused, dispatch its command instead 
+          // of advancing the wizard
+          var focused = document.commandDispatcher.focusedElement;
+          if (!(focused && focused.localName == "button" && focused.hasAttribute("dlgtype")))
             this.advance();
         ]]>
         </body>
@@ -414,7 +373,7 @@
         <body>
         <![CDATA[
           var event = document.createEvent("Events");
-          event.initEvent(aType, true, true);
+          event.initEvent(aType, false, true);
           
           // handle dom event handlers
           var noCancel = aTarget.dispatchEvent(event);
@@ -436,14 +395,9 @@
     </implementation>
 
     <handlers>
-      <handler event="keypress" keycode="VK_ENTER"
-               group="system" action="this._hitEnter(event)"/>
-      <handler event="keypress" keycode="VK_RETURN"
-               group="system" action="this._hitEnter(event)"/>
-      <handler event="keypress" keycode="VK_ESCAPE" group="system">
-        if (!event.getPreventDefault())
-          this.cancel();
-      </handler>
+      <handler event="keypress" keycode="VK_ENTER" action="this._hitEnter()"/>
+      <handler event="keypress" keycode="VK_RETURN" action="this._hitEnter()"/>
+      <handler event="keypress" keycode="VK_ESCAPE" action="this.cancel();"/>
     </handlers>
   </binding>
 
@@ -482,20 +436,14 @@
     <content>
       <xul:vbox flex="1">
         <xul:hbox class="wizard-buttons-btm">
-          <xul:button class="wizard-button" dlgtype="extra1" hidden="true"/>
-          <xul:button class="wizard-button" dlgtype="extra2" hidden="true"/>
-          <xul:button label="&button-cancel-mac.label;" class="wizard-button" dlgtype="cancel"/>        
+          <xul:button class="wizard-button" dlgtype="cancel"/>        
           <xul:spacer flex="1"/>
-          <xul:button label="&button-back-mac.label;" accesskey="&button-back-mac.accesskey;"
-                      class="wizard-button wizard-nav-button" dlgtype="back"/>
+          <xul:button class="wizard-button wizard-nav-button" dlgtype="back"/>
           <xul:hbox class="wizard-label-box" align="center">
             <xul:label class="wizard-page-label" xbl:inherits="value=pagestep"/>
           </xul:hbox>
-          <xul:button label="&button-next-mac.label;" accesskey="&button-next-mac.accesskey;"
-                      class="wizard-button wizard-nav-button" dlgtype="next"
-                      default="true" xbl:inherits="hidden=lastpage" />
-          <xul:button label="&button-finish-mac.label;" class="wizard-button"
-                      dlgtype="finish" default="true" xbl:inherits="hidden=hidefinishbutton" />
+          <xul:button class="wizard-button wizard-nav-button" dlgtype="next" default="true" xbl:inherits="hidden=lastpage" /> 
+          <xul:button class="wizard-button" dlgtype="finish" default="true" xbl:inherits="hidden=hidefinishbutton" />
         </xul:hbox>
       </xul:vbox>
     </content>
@@ -529,43 +477,17 @@
       <xul:vbox class="wizard-buttons-box-1" flex="1">
         <xul:separator class="wizard-buttons-separator groove"/>
         <xul:hbox class="wizard-buttons-box-2">
-          <xul:button class="wizard-button" dlgtype="extra1" hidden="true"/>
-          <xul:button class="wizard-button" dlgtype="extra2" hidden="true"/>
-          <xul:spacer flex="1" anonid="spacer"/>
-#ifdef XP_UNIX
-          <xul:button label="&button-cancel-unix.label;" class="wizard-button"
-                      dlgtype="cancel" icon="cancel"/>
-          <xul:spacer style="width: 24px"/>
-          <xul:button label="&button-back-unix.label;" accesskey="&button-back-unix.accesskey;"
-                      class="wizard-button" dlgtype="back" icon="go-back"/>
+          <xul:spacer flex="1"/>
+          <xul:button class="wizard-button" dlgtype="back"/>
           <xul:deck class="wizard-next-deck" anonid="WizardButtonDeck">
             <xul:hbox>
-              <xul:button label="&button-finish-unix.label;" class="wizard-button"
-                          dlgtype="finish" default="true" flex="1"/> 
+              <xul:button class="wizard-button" dlgtype="finish" default="true" flex="1"/> 
             </xul:hbox>
             <xul:hbox>
-              <xul:button label="&button-next-unix.label;" accesskey="&button-next-unix.accesskey;"
-                          class="wizard-button" dlgtype="next" icon="go-forward" 
-                          default="true" flex="1"/> 
+              <xul:button class="wizard-button" dlgtype="next" default="true" flex="1"/> 
             </xul:hbox>
           </xul:deck>
-#else
-          <xul:button label="&button-back-win.label;" accesskey="&button-back-win.accesskey;"
-                      class="wizard-button" dlgtype="back" icon="go-back"/>
-          <xul:deck class="wizard-next-deck" anonid="WizardButtonDeck">
-            <xul:hbox>
-              <xul:button label="&button-finish-win.label;" class="wizard-button"
-                          dlgtype="finish" default="true" flex="1"/> 
-            </xul:hbox>
-            <xul:hbox>
-              <xul:button label="&button-next-win.label;" accesskey="&button-next-win.accesskey;"
-                          class="wizard-button" dlgtype="next" icon="go-forward" 
-                          default="true" flex="1"/> 
-            </xul:hbox>
-          </xul:deck>
-          <xul:button label="&button-cancel-win.label;" class="wizard-button"
-                      dlgtype="cancel" icon="cancel"/> 
-#endif
+          <xul:button class="wizard-button" dlgtype="cancel"/> 
         </xul:hbox>
       </xul:vbox>
     </content>

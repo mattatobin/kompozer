@@ -60,11 +60,8 @@
     <grippy/>
   </splitter>
 
-  <tree id="olStyleProps"
-        class="plain"
-        flex="1"
-        persist="height"
-        contextmenu="ppStylePropsContext">
+  <tree id="olStyleProps" class="plain" flex="1" persist="height"
+            context="ppStylePropsContext">
     <treecols>
       <treecol id="olcPropPriority" label="&styleRulePropPriority.label;" class="treecol-image"/>
       <splitter class="tree-splitter"/>

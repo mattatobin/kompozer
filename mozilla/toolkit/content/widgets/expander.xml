@@ -12,7 +12,7 @@
       <xul:hbox align="center">
         <xul:button type="disclosure" class="expanderButton" anonid="disclosure" xbl:inherits="disabled" mousethrough="always"/>
         <xul:label class="header expanderButton" anonid="label" xbl:inherits="value=label,disabled" mousethrough="always" flex="1"/>
-        <xul:button anonid="clear-button" xbl:inherits="label=clearlabel,disabled=cleardisabled,hidden=clearhidden" mousethrough="always" icon="clear"/>
+        <xul:button anonid="clear-button" xbl:inherits="label=clearlabel,disabled=cleardisabled,hidden=clearhidden" mousethrough="always"/>
       </xul:hbox>
       <xul:vbox flex="1" anonid="settings" class="settingsContainer" collapsed="true" xbl:inherits="align">
         <children/>
@@ -59,7 +59,7 @@
             break;
           case "clear-button":
             var event = document.createEvent("Events");
-            event.initEvent("clear", true, true);
+            event.initEvent("clear", false, true);
             this.dispatchEvent(event);
             break;
           }

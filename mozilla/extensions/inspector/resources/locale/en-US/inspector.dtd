@@ -59,5 +59,3 @@
 <!ENTITY browserPanel.label "Browser">
 
 <!ENTITY inspectNewWindow.label "Inspect in New Window">
-
-<!ENTITY closeCmd.key "W">

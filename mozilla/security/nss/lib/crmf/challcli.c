@@ -1,39 +1,36 @@
 /* -*- Mode: C; tab-width: 8 -*-*/
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "cmmf.h"
 #include "cmmfi.h"
@@ -122,12 +119,13 @@ CMMF_POPODecKeyChallContDecryptChallenge(CMMFPOPODecKeyChallContent *inChalCont,
 {
     CMMFChallenge  *challenge;
     SECItem        *decryptedRand=NULL;
-    PRArenaPool    *poolp  = NULL;
     SECAlgorithmID *owf;
+    PK11SlotInfo   *slot;
+    PK11SymKey     *symKey = NULL;
     SECStatus       rv     = SECFailure;
-    SECOidTag       tag;
     CMMFRand        randStr;
     SECItem         hashItem;
+    SECOidTag       tag;
     unsigned char   hash[HASH_LENGTH_MAX]; 
 
     PORT_Assert(inChalCont != NULL && inPrivKey != NULL);
@@ -135,26 +133,34 @@ CMMF_POPODecKeyChallContDecryptChallenge(CMMFPOPODecKeyChallContent *inChalCont,
 	|| inPrivKey == NULL){
         return SECFailure;
     }
-
-    poolp = PORT_NewArena(CRMF_DEFAULT_ARENA_SIZE);
-    if (poolp == NULL) {
-        goto loser;
-    }
-
     challenge = inChalCont->challenges[inIndex];
-    decryptedRand = SECITEM_AllocItem(poolp, NULL, challenge->challenge.len);
+    decryptedRand = PORT_ZNew(SECItem);
     if (decryptedRand == NULL) {
         goto loser;
     }
-    rv = PK11_PrivDecryptPKCS1(inPrivKey, decryptedRand->data, 
-    			&decryptedRand->len, decryptedRand->len, 
-			challenge->challenge.data, challenge->challenge.len);
-    if (rv != SECSuccess) {
+    decryptedRand->data = 
+        PORT_NewArray(unsigned char, challenge->challenge.len);
+    if (decryptedRand->data == NULL) {
         goto loser;
     }
-
-    rv = SEC_ASN1DecodeItem(poolp, &randStr, CMMFRandTemplate,
+    slot = inPrivKey->pkcs11Slot;
+    symKey = PK11_PubUnwrapSymKey(inPrivKey, &challenge->challenge, 
+				  CKM_RSA_PKCS, CKA_VALUE, 0);
+    if (symKey == NULL) {
+      rv = SECFailure;
+      goto loser;
+    }
+    rv = PK11_ExtractKeyValue(symKey);
+    if (rv != SECSuccess) {
+      goto loser;
+    }
+    decryptedRand = PK11_GetKeyData(symKey);
+    rv = SEC_ASN1DecodeItem(NULL, &randStr, CMMFRandTemplate,
 			    decryptedRand); 
+    /* The decryptedRand returned points to a member within the symKey 
+     * structure, so we don't want to free it. Let the symKey destruction 
+     * function deal with freeing that memory.
+     */
     if (rv != SECSuccess) {
         goto loser;
     }
@@ -181,7 +187,6 @@ CMMF_POPODecKeyChallContDecryptChallenge(CMMFPOPODecKeyChallContent *inChalCont,
         /* The hash for the data we decrypted doesn't match the hash provided
 	 * in the challenge.  Bail out.
 	 */
-	PORT_SetError(SEC_ERROR_BAD_DATA);
         rv = SECFailure;
 	goto loser;
     }
@@ -194,7 +199,6 @@ CMMF_POPODecKeyChallContDecryptChallenge(CMMFPOPODecKeyChallContent *inChalCont,
         /* The hash for the data we decrypted doesn't match the hash provided
 	 * in the challenge.  Bail out.
 	 */
-	PORT_SetError(SEC_ERROR_BAD_DATA);
         rv = SECFailure;
 	goto loser;
     }
@@ -202,8 +206,8 @@ CMMF_POPODecKeyChallContDecryptChallenge(CMMFPOPODecKeyChallContent *inChalCont,
     rv = SECITEM_CopyItem(inChalCont->poolp, &challenge->randomNumber,
 			  &randStr.integer);
  loser:
-    if (poolp) {
-    	PORT_FreeArena(poolp, PR_FALSE);
+    if (symKey != NULL) {
+        PK11_FreeSymKey(symKey);
     }
     return rv;
 }
@@ -259,10 +263,7 @@ CMMF_EncodePOPODecKeyRespContent(long                     *inDecodedRand,
 	if (currItem == NULL) {
 	    goto loser;
 	}
-	currItem = SEC_ASN1EncodeInteger(poolp, currItem, inDecodedRand[i]);
-	if (currItem == NULL) {
-	    goto loser;
-	}
+	SEC_ASN1EncodeInteger(poolp, currItem,inDecodedRand[i]);
     }
     rv = cmmf_user_encode(response, inCallback, inArg,
 			  CMMFPOPODecKeyRespContentTemplate);

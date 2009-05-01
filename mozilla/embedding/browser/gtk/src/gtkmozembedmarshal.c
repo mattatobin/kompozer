@@ -35,8 +35,8 @@
 #define g_marshal_value_peek_ulong(v)    (v)->data[0].v_ulong
 #define g_marshal_value_peek_int64(v)    (v)->data[0].v_int64
 #define g_marshal_value_peek_uint64(v)   (v)->data[0].v_uint64
-#define g_marshal_value_peek_enum(v)     (v)->data[0].v_long
-#define g_marshal_value_peek_flags(v)    (v)->data[0].v_ulong
+#define g_marshal_value_peek_enum(v)     (v)->data[0].v_int
+#define g_marshal_value_peek_flags(v)    (v)->data[0].v_uint
 #define g_marshal_value_peek_float(v)    (v)->data[0].v_float
 #define g_marshal_value_peek_double(v)   (v)->data[0].v_double
 #define g_marshal_value_peek_string(v)   (v)->data[0].v_pointer
@@ -47,60 +47,21 @@
 #endif /* !G_ENABLE_DEBUG */
 
 
-/* BOOL:STRING (types.txt:1) */
+/* NONE:POINTER,INT,INT (/dev/stdin:1) */
 void
-gtkmozembed_BOOLEAN__STRING (GClosure     *closure,
-                             GValue       *return_value,
-                             guint         n_param_values,
-                             const GValue *param_values,
-                             gpointer      invocation_hint,
-                             gpointer      marshal_data)
+gtkmozembed_VOID__POINTER_INT_INT (GClosure     *closure,
+                                   GValue       *return_value,
+                                   guint         n_param_values,
+                                   const GValue *param_values,
+                                   gpointer      invocation_hint,
+                                   gpointer      marshal_data)
 {
-  typedef gboolean (*GMarshalFunc_BOOLEAN__STRING) (gpointer     data1,
-                                                    gpointer     arg_1,
-                                                    gpointer     data2);
-  register GMarshalFunc_BOOLEAN__STRING callback;
-  register GCClosure *cc = (GCClosure*) closure;
-  register gpointer data1, data2;
-  gboolean v_return;
-
-  g_return_if_fail (return_value != NULL);
-  g_return_if_fail (n_param_values == 2);
-
-  if (G_CCLOSURE_SWAP_DATA (closure))
-    {
-      data1 = closure->data;
-      data2 = g_value_peek_pointer (param_values + 0);
-    }
-  else
-    {
-      data1 = g_value_peek_pointer (param_values + 0);
-      data2 = closure->data;
-    }
-  callback = (GMarshalFunc_BOOLEAN__STRING) (marshal_data ? marshal_data : cc->callback);
-
-  v_return = callback (data1,
-                       g_marshal_value_peek_string (param_values + 1),
-                       data2);
-
-  g_value_set_boolean (return_value, v_return);
-}
-
-/* VOID:STRING,INT,INT (types.txt:2) */
-void
-gtkmozembed_VOID__STRING_INT_INT (GClosure     *closure,
-                                  GValue       *return_value,
-                                  guint         n_param_values,
-                                  const GValue *param_values,
-                                  gpointer      invocation_hint,
-                                  gpointer      marshal_data)
-{
-  typedef void (*GMarshalFunc_VOID__STRING_INT_INT) (gpointer     data1,
-                                                     gpointer     arg_1,
-                                                     gint         arg_2,
-                                                     gint         arg_3,
-                                                     gpointer     data2);
-  register GMarshalFunc_VOID__STRING_INT_INT callback;
+  typedef void (*GMarshalFunc_VOID__POINTER_INT_INT) (gpointer     data1,
+                                                      gpointer     arg_1,
+                                                      gint         arg_2,
+                                                      gint         arg_3,
+                                                      gpointer     data2);
+  register GMarshalFunc_VOID__POINTER_INT_INT callback;
   register GCClosure *cc = (GCClosure*) closure;
   register gpointer data1, data2;
 
@@ -116,16 +77,16 @@ gtkmozembed_VOID__STRING_INT_INT (GClosure     *closure,
       data1 = g_value_peek_pointer (param_values + 0);
       data2 = closure->data;
     }
-  callback = (GMarshalFunc_VOID__STRING_INT_INT) (marshal_data ? marshal_data : cc->callback);
+  callback = (GMarshalFunc_VOID__POINTER_INT_INT) (marshal_data ? marshal_data : cc->callback);
 
   callback (data1,
-            g_marshal_value_peek_string (param_values + 1),
+            g_marshal_value_peek_pointer (param_values + 1),
             g_marshal_value_peek_int (param_values + 2),
             g_marshal_value_peek_int (param_values + 3),
             data2);
 }
 
-/* VOID:INT,UINT (types.txt:3) */
+/* NONE:INT,UINT (/dev/stdin:2) */
 void
 gtkmozembed_VOID__INT_UINT (GClosure     *closure,
                             GValue       *return_value,
@@ -162,21 +123,21 @@ gtkmozembed_VOID__INT_UINT (GClosure     *closure,
             data2);
 }
 
-/* VOID:STRING,INT,UINT (types.txt:4) */
+/* NONE:POINTER,INT,UINT (/dev/stdin:3) */
 void
-gtkmozembed_VOID__STRING_INT_UINT (GClosure     *closure,
-                                   GValue       *return_value,
-                                   guint         n_param_values,
-                                   const GValue *param_values,
-                                   gpointer      invocation_hint,
-                                   gpointer      marshal_data)
+gtkmozembed_VOID__POINTER_INT_UINT (GClosure     *closure,
+                                    GValue       *return_value,
+                                    guint         n_param_values,
+                                    const GValue *param_values,
+                                    gpointer      invocation_hint,
+                                    gpointer      marshal_data)
 {
-  typedef void (*GMarshalFunc_VOID__STRING_INT_UINT) (gpointer     data1,
-                                                      gpointer     arg_1,
-                                                      gint         arg_2,
-                                                      guint        arg_3,
-                                                      gpointer     data2);
-  register GMarshalFunc_VOID__STRING_INT_UINT callback;
+  typedef void (*GMarshalFunc_VOID__POINTER_INT_UINT) (gpointer     data1,
+                                                       gpointer     arg_1,
+                                                       gint         arg_2,
+                                                       guint        arg_3,
+                                                       gpointer     data2);
+  register GMarshalFunc_VOID__POINTER_INT_UINT callback;
   register GCClosure *cc = (GCClosure*) closure;
   register gpointer data1, data2;
 
@@ -192,16 +153,16 @@ gtkmozembed_VOID__STRING_INT_UINT (GClosure     *closure,
       data1 = g_value_peek_pointer (param_values + 0);
       data2 = closure->data;
     }
-  callback = (GMarshalFunc_VOID__STRING_INT_UINT) (marshal_data ? marshal_data : cc->callback);
+  callback = (GMarshalFunc_VOID__POINTER_INT_UINT) (marshal_data ? marshal_data : cc->callback);
 
   callback (data1,
-            g_marshal_value_peek_string (param_values + 1),
+            g_marshal_value_peek_pointer (param_values + 1),
             g_marshal_value_peek_int (param_values + 2),
             g_marshal_value_peek_uint (param_values + 3),
             data2);
 }
 
-/* VOID:POINTER,INT,POINTER (types.txt:5) */
+/* NONE:POINTER,INT,POINTER (/dev/stdin:4) */
 void
 gtkmozembed_VOID__POINTER_INT_POINTER (GClosure     *closure,
                                        GValue       *return_value,

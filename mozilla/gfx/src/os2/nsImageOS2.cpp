@@ -1,38 +1,22 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+/*
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+ * License for the specific language governing rights and limitations
+ * under the License.
  *
  * The Original Code is the Mozilla OS/2 libraries.
  *
- * The Initial Developer of the Original Code is
- * John Fairhurst, <john_fairhurst@iname.com>.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is John Fairhurst,
+ * <john_fairhurst@iname.com>.  Portions created by John Fairhurst are
+ * Copyright (C) 1999 John Fairhurst. All Rights Reserved.
  *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * Contributor(s): 
+ *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * This Original Code has been modified by IBM Corporation. Modifications made by IBM 
  * described herein are Copyright (c) International Business Machines Corporation, 2000.
@@ -44,7 +28,6 @@
 
 #include "nsGfxDefs.h"
 #include <stdlib.h>
-#include <new> // for new(std::nothrow)
 
 #include "nsImageOS2.h"
 #include "nsRenderingContextOS2.h"
@@ -141,9 +124,7 @@ nsresult nsImageOS2::Init( PRInt32 aWidth, PRInt32 aHeight, PRInt32 aDepth,
    // Work out size of bitmap to allocate
    mRowBytes = RASWIDTH(aWidth,aDepth);
 
-   mImageBits = new(std::nothrow) PRUint8 [aHeight * mRowBytes];
-   if (!mImageBits) 
-     return NS_ERROR_OUT_OF_MEMORY;
+   mImageBits = new PRUint8 [ aHeight * mRowBytes ];
 
    // Set up bitmapinfo header
    int cols = -1;
@@ -188,11 +169,7 @@ nsresult nsImageOS2::Init( PRInt32 aWidth, PRInt32 aHeight, PRInt32 aDepth,
       // 32-bit align each row
       mARowBytes = RASWIDTH (aWidth, mAlphaDepth);
 
-      mAlphaBits = new(std::nothrow) PRUint8 [aHeight * mARowBytes];
-      if (!mAlphaBits) {
-        // deallocation is done in ::CleanUp() from the destructor
-        return NS_ERROR_OUT_OF_MEMORY;
-      }
+      mAlphaBits = new PRUint8 [ aHeight * mARowBytes];
    }
 
    return NS_OK;
@@ -255,17 +232,6 @@ void nsImageOS2::ImageUpdated( nsIDeviceContext *aContext,
    }
 }
 
-/** ---------------------------------------------------
- *  See documentation in nsIImage.h
- */
-PRBool nsImageOS2::GetIsImageComplete() {
-  return mInfo &&
-         mDecodedRect.x == 0 &&
-         mDecodedRect.y == 0 &&
-         mDecodedRect.width == (PRInt32)mInfo->cx &&
-         mDecodedRect.height == (PRInt32)mInfo->cy;
-}
-
 void nsImageOS2::BuildBlenderLookup (void)
 {
   for (int y = 0 ; y < 256 ; y++)
@@ -276,7 +242,7 @@ void nsImageOS2::BuildBlenderLookup (void)
 }
 
 nsresult nsImageOS2::Draw( nsIRenderingContext &aContext,
-                           nsIDrawingSurface* aSurface,
+                           nsDrawingSurface aSurface,
                            PRInt32 aX, PRInt32 aY,
                            PRInt32 aWidth, PRInt32 aHeight)
 {
@@ -311,7 +277,7 @@ void nsImageOS2 :: DrawComposited24(unsigned char *aBits,
 }
 
 NS_IMETHODIMP 
-nsImageOS2 :: Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface,
+nsImageOS2 :: Draw(nsIRenderingContext &aContext, nsDrawingSurface aSurface,
                   PRInt32 aSX, PRInt32 aSY, PRInt32 aSWidth, PRInt32 aSHeight,
                   PRInt32 aDX, PRInt32 aDY, PRInt32 aDWidth, PRInt32 aDHeight)
 {
@@ -555,7 +521,7 @@ nsImageOS2 :: Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface,
 
             if( pRawBitData )
             {
-              LONG rc = GFX (::GpiQueryBitmapBits (MemPS, 0, bihMem.cy, (PBYTE)pRawBitData, (PBITMAPINFO2)&bihDirect), GPI_ALTERROR);
+              ULONG rc = GFX (::GpiQueryBitmapBits (MemPS, 0, bihMem.cy, (PBYTE)pRawBitData, (PBITMAPINFO2)&bihDirect), GPI_ALTERROR);
 
               if( rc != GPI_ALTERROR )
               {
@@ -688,16 +654,16 @@ nsImageOS2::BuildTile (HPS hpsTile, PRUint8* pImageBits, PBITMAPINFO2 pBitmapInf
                        {mDecodedRect.XMost (), mDecodedRect.YMost ()} };         // SUR - ex
 
    // Scale up
-   aptl[0].x = (LONG)(aptl[0].x * scale);
-   aptl[0].y = (LONG)(aptl[0].y * scale);
-   aptl[1].x = (LONG)(mDecodedRect.XMost() * scale) - 1;
-   aptl[1].y = (LONG)(mDecodedRect.YMost() * scale) - 1;
+   aptl[0].x *= scale;
+   aptl[0].y *= scale;
+   aptl[1].x = (mDecodedRect.XMost() * scale) - 1;
+   aptl[1].y = (mDecodedRect.YMost() * scale) - 1;
    
    // Draw bitmap once into temporary PS
    GFX (::GpiDrawBits (hpsTile, (PBYTE)pImageBits, pBitmapInfo, 4, aptl, ROP_SRCCOPY, BBO_IGNORE), GPI_ERROR);
 
-   PRInt32 DestWidth  = (PRInt32)(mInfo->cx * scale);
-   PRInt32 DestHeight = (PRInt32)(mInfo->cy * scale);
+   PRInt32 DestWidth  = mInfo->cx * scale;
+   PRInt32 DestHeight = mInfo->cy * scale;
 
    // Copy bitmap horizontally, doubling each time
    if (DestWidth > 0) {
@@ -731,7 +697,7 @@ nsImageOS2::BuildTile (HPS hpsTile, PRUint8* pImageBits, PBITMAPINFO2 pBitmapInf
  *  @update 3/16/00 dwc
  */
 NS_IMETHODIMP nsImageOS2::DrawTile(nsIRenderingContext &aContext,
-                                   nsIDrawingSurface* aSurface,
+                                   nsDrawingSurface aSurface,
                                    PRInt32 aSXOffset, PRInt32 aSYOffset,
                                    PRInt32 aPadX, PRInt32 aPadY,
                                    const nsRect &aTileRect)
@@ -747,6 +713,7 @@ NS_IMETHODIMP nsImageOS2::DrawTile(nsIRenderingContext &aContext,
    // Get the scale - if greater than 1 then do slow tile which
    nsIDeviceContext *theDeviceContext;
    float scale;
+   PRBool doSlowTile = PR_FALSE;
    aContext.GetDeviceContext(theDeviceContext);
    theDeviceContext->GetCanonicalPixelScale(scale);
 
@@ -885,9 +852,9 @@ NS_IMETHODIMP nsImageOS2::DrawTile(nsIRenderingContext &aContext,
       nscoord ScaledTileWidth = PR_MAX(PRInt32(ImageWidth*scale), 1);
       nscoord ScaledTileHeight = PR_MAX(PRInt32(ImageHeight*scale), 1);
 
-      for (PRInt32 y = y0; y < y1; y += (PRInt32)(ScaledTileHeight + aPadY * scale))
+      for (PRInt32 y = y0; y < y1; y += ScaledTileHeight + aPadY * scale)
       {
-        for (PRInt32 x = x0; x < x1;  x += (PRInt32)(ScaledTileWidth + aPadX * scale))
+        for (PRInt32 x = x0; x < x1;  x += ScaledTileWidth + aPadX * scale)
         {
           Draw(aContext, aSurface,
                0, 0, PR_MIN(ValidRect.width, x1 - x), PR_MIN(ValidRect.height, y1 - y),
@@ -921,7 +888,7 @@ NS_IMETHODIMP nsImageOS2::UpdateImageBits( HPS aPS )
   rawInfo.cBitCount = mInfo->cBitCount;
 
   int RawDataSize = mInfo->cy * RASWIDTH (mInfo->cx, mInfo->cBitCount);
-  PRUint8* pRawBitData = new(std::nothrow) PRUint8 [RawDataSize];
+  PRUint8* pRawBitData = new PRUint8 [RawDataSize];
 
   if (pRawBitData)
   {

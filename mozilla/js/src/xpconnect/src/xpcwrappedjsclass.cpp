@@ -243,14 +243,7 @@ nsXPCWrappedJSClass::CallQueryInterfaceOnJSObject(XPCCallContext& ccx,
     if(!OBJ_GET_PROPERTY(cx, jsobj, funid, &fun) || JSVAL_IS_PRIMITIVE(fun))
         return nsnull;
 
-    // protect fun so that we're sure it's alive when we call it
-    AUTO_MARK_JSVAL(ccx, fun);
-
     // Ensure that we are asking for a scriptable interface.
-    // NB:  It's important for security that this check is here rather
-    // than later, since it prevents untrusted objects from implementing
-    // some interfaces in JS and aggregating a trusted object to
-    // implement intentionally (for security) unscriptable interfaces.
     // We so often ask for nsISupports that we can short-circuit the test...
     if(!aIID.Equals(NS_GET_IID(nsISupports)))
     {
@@ -520,7 +513,7 @@ nsXPCWrappedJSClass::DelegatedQueryInterface(nsXPCWrappedJS* self,
 
 #ifdef XPC_IDISPATCH_SUPPORT
     // If IDispatch is enabled and we're QI'ing to IDispatch
-    if(nsXPConnect::IsIDispatchEnabled() && aIID.Equals(NSID_IDISPATCH))
+    else if(nsXPConnect::IsIDispatchEnabled() && aIID.Equals(NSID_IDISPATCH))
     {
         return XPCIDispatchExtension::IDispatchQIWrappedJS(self, aInstancePtr);
     }
@@ -590,76 +583,11 @@ nsXPCWrappedJSClass::DelegatedQueryInterface(nsXPCWrappedJS* self,
 
     // else we do the more expensive stuff...
 
-#ifndef XPCONNECT_STANDALONE
-    // Before calling out, ensure that we're not about to claim to implement
-    // nsISecurityCheckedComponent for an untrusted object. Doing so causes
-    // problems. See bug 352882.
-
-    if(aIID.Equals(NS_GET_IID(nsISecurityCheckedComponent)))
-    {
-        // XXX This code checks to see if the given object has chrome (also
-        // known as system) principals. It really wants to do a
-        // UniversalXPConnect type check.
-
-        nsXPConnect *xpc = nsXPConnect::GetXPConnect();
-        nsCOMPtr<nsIScriptSecurityManager> secMan =
-            do_QueryInterface(xpc->GetDefaultSecurityManager());
-        if(!secMan)
-        {
-            *aInstancePtr = nsnull;
-            return NS_NOINTERFACE;
-        }
-        nsCOMPtr<nsIPrincipal> objPrin;
-        nsresult rv = secMan->GetObjectPrincipal(ccx, self->GetJSObject(),
-                                                 getter_AddRefs(objPrin));
-        if(NS_SUCCEEDED(rv))
-        {
-            nsCOMPtr<nsIPrincipal> systemPrin;
-            rv = secMan->GetSystemPrincipal(getter_AddRefs(systemPrin));
-            if(systemPrin != objPrin)
-                rv = NS_NOINTERFACE;
-        }
-
-        if(NS_FAILED(rv))
-        {
-            *aInstancePtr = nsnull;
-            return rv;
-        }
-    }
-#endif
-
     // check if the JSObject claims to implement this interface
-    JSObject* jsobj = CallQueryInterfaceOnJSObject(ccx, self->GetJSObject(),
-                                                   aIID);
-    if(jsobj)
-    {
-        // protect jsobj until it is actually attached
-        AUTO_MARK_JSVAL(ccx, OBJECT_TO_JSVAL(jsobj));
-
-        // We can't use XPConvert::JSObject2NativeInterface() here
-        // since that can find a XPCWrappedNative directly on the
-        // proto chain, and we don't want that here. We need to find
-        // the actual JS object that claimed it supports the interface
-        // we're looking for or we'll potentially bypass security
-        // checks etc by calling directly through to a native found on
-        // the prototype chain.
-        //
-        // Instead, simply do the nsXPCWrappedJS part of
-        // XPConvert::JSObject2NativeInterface() here to make sure we
-        // get a new (or used) nsXPCWrappedJS.
-        nsXPCWrappedJS* wrapper;
-        nsresult rv = nsXPCWrappedJS::GetNewOrUsed(ccx, jsobj, aIID, nsnull,
-                                                   &wrapper);
-        if(NS_SUCCEEDED(rv) && wrapper)
-        {
-            // We need to go through the QueryInterface logic to make
-            // this return the right thing for the various 'special'
-            // interfaces; e.g.  nsIPropertyBag.
-            rv = wrapper->QueryInterface(aIID, aInstancePtr);
-            NS_RELEASE(wrapper);
-            return rv;
-        }
-    }
+    JSObject* jsobj = CallQueryInterfaceOnJSObject(ccx, self->GetJSObject(), aIID);
+    if(jsobj && XPCConvert::JSObject2NativeInterface(ccx, aInstancePtr, jsobj,
+                                                     &aIID, nsnull, nsnull))
+        return NS_OK;
 
     // else...
     // no can do
@@ -1041,10 +969,6 @@ nsXPCWrappedJSClass::CallMethod(nsXPCWrappedJS* wrapper, uint16 methodIndex,
     JSContext* cx;
     JSObject* thisObj;
 
-    // Make sure not to set the callee on ccx until after we've gone through
-    // the whole nsIXPCFunctionThisTranslator bit.  That code uses ccx to
-    // convert natives to JSObjects, but we do NOT plan to pass those JSObjects
-    // to our real callee.
     XPCCallContext ccx(NATIVE_CALLER);
     if(ccx.IsValid())
     {
@@ -1180,8 +1104,7 @@ nsXPCWrappedJSClass::CallMethod(nsXPCWrappedJS* wrapper, uint16 methodIndex,
                                 JSBool ok =
                                   XPCConvert::NativeInterface2JSObject(ccx,
                                         getter_AddRefs(holder), newThis,
-                                        newWrapperIID, obj, PR_FALSE, PR_FALSE,
-                                        nsnull);
+                                        newWrapperIID, obj, nsnull);
                                 if(newWrapperIID != &NS_GET_IID(nsISupports))
                                     nsMemory::Free(newWrapperIID);
                                 if(!ok ||
@@ -1195,7 +1118,7 @@ nsXPCWrappedJSClass::CallMethod(nsXPCWrappedJS* wrapper, uint16 methodIndex,
                 }
             }
         }
-        else if(!JS_GetMethod(cx, obj, name, &thisObj, &fval))
+        else if(!JS_GetProperty(cx, obj, name, &fval))
         {
             // XXX We really want to factor out the error reporting better and
             // specifically report the failure to find a function with this name.
@@ -1236,8 +1159,7 @@ nsXPCWrappedJSClass::CallMethod(nsXPCWrappedJS* wrapper, uint16 methodIndex,
         nsXPTType datum_type;
         JSUint32 array_count;
         PRBool isArray = type.IsArray();
-        jsval val = JSVAL_NULL;
-        AUTO_MARK_JSVAL(ccx, &val);
+        jsval val;
         PRBool isSizedString = isArray ?
                 JS_FALSE :
                 type.TagPart() == nsXPTType::T_PSTRING_SIZE_IS ||
@@ -1281,39 +1203,6 @@ nsXPCWrappedJSClass::CallMethod(nsXPCWrappedJS* wrapper, uint16 methodIndex,
                                           i, GET_LENGTH, nativeParams,
                                           &array_count))
                     goto pre_call_clean_up;
-            }
-
-            // Figure out what our callee is
-            if(info->IsGetter() || info->IsSetter())
-            {
-                // Pull the getter or setter off of |obj|
-                uintN attrs;
-                JSBool found;
-                JSPropertyOp getter;
-                JSPropertyOp setter;
-                JSBool ok =
-                    JS_GetPropertyAttrsGetterAndSetter(cx, obj, name,
-                                                       &attrs, &found,
-                                                       &getter, &setter);
-                if(ok)
-                {
-                    if(info->IsGetter() && (attrs & JSPROP_GETTER))
-                    {
-                        // JSPROP_GETTER means the getter is actually a
-                        // function object.
-                        ccx.SetCallee((JSObject*)getter);
-                    }
-                    else if(info->IsSetter() && (attrs & JSPROP_SETTER))
-                    {
-                        // JSPROP_SETTER means the setter is actually a
-                        // function object.
-                        ccx.SetCallee((JSObject*)setter);
-                    }
-                }
-            }
-            else if(JSVAL_IS_OBJECT(fval))
-            {
-                ccx.SetCallee(JSVAL_TO_OBJECT(fval));
             }
 
             if(isArray)
@@ -1417,9 +1306,6 @@ pre_call_clean_up:
 
     // Make sure "this" doesn't get deleted during this call.
     nsCOMPtr<nsIXPCWrappedJSClass> kungFuDeathGrip(this);
-
-    result = JSVAL_NULL;
-    AUTO_MARK_JSVAL(ccx, &result);
 
     if(!readyToDoTheCall)
         goto done;

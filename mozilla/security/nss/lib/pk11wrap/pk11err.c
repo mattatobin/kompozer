@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 /* 
  * this file maps PKCS11 Errors into SECErrors
  *  This is an information reducing process, since most errors are reflected
@@ -95,8 +92,8 @@ PK11_MapError(CK_RV rv) {
 	MAPERROR(CKR_OPERATION_ACTIVE, SEC_ERROR_LIBRARY_FAILURE)
 	MAPERROR(CKR_OPERATION_NOT_INITIALIZED,SEC_ERROR_LIBRARY_FAILURE )
 	MAPERROR(CKR_PIN_INCORRECT, SEC_ERROR_BAD_PASSWORD)
-	MAPERROR(CKR_PIN_INVALID, SEC_ERROR_INVALID_PASSWORD)
-	MAPERROR(CKR_PIN_LEN_RANGE, SEC_ERROR_INVALID_PASSWORD)
+	MAPERROR(CKR_PIN_INVALID, SEC_ERROR_BAD_PASSWORD)
+	MAPERROR(CKR_PIN_LEN_RANGE, SEC_ERROR_BAD_PASSWORD)
 	MAPERROR(CKR_SESSION_CLOSED, SEC_ERROR_LIBRARY_FAILURE)
 	MAPERROR(CKR_SESSION_COUNT, SEC_ERROR_NO_MEMORY) /* XXXX? */
 	MAPERROR(CKR_SESSION_HANDLE_INVALID, SEC_ERROR_BAD_DATA)
@@ -113,7 +110,7 @@ PK11_MapError(CK_RV rv) {
 	MAPERROR(CKR_UNWRAPPING_KEY_SIZE_RANGE, SEC_ERROR_INVALID_KEY)
 	MAPERROR(CKR_UNWRAPPING_KEY_TYPE_INCONSISTENT, SEC_ERROR_INVALID_KEY)
 	MAPERROR(CKR_USER_ALREADY_LOGGED_IN, 0)
-	MAPERROR(CKR_USER_NOT_LOGGED_IN, SEC_ERROR_TOKEN_NOT_LOGGED_IN)
+	MAPERROR(CKR_USER_NOT_LOGGED_IN, SEC_ERROR_LIBRARY_FAILURE) /* XXXX */
 	MAPERROR(CKR_USER_PIN_NOT_INITIALIZED, SEC_ERROR_NO_TOKEN)
 	MAPERROR(CKR_USER_TYPE_INVALID, SEC_ERROR_LIBRARY_FAILURE)
 	MAPERROR(CKR_WRAPPED_KEY_INVALID, SEC_ERROR_INVALID_KEY)
@@ -122,9 +119,7 @@ PK11_MapError(CK_RV rv) {
 	MAPERROR(CKR_WRAPPING_KEY_SIZE_RANGE, SEC_ERROR_INVALID_KEY)
 	MAPERROR(CKR_WRAPPING_KEY_TYPE_INCONSISTENT, SEC_ERROR_INVALID_KEY)
 	MAPERROR(CKR_VENDOR_DEFINED, SEC_ERROR_LIBRARY_FAILURE)
-	MAPERROR(CKR_NETSCAPE_CERTDB_FAILED, SEC_ERROR_BAD_DATABASE)
-	MAPERROR(CKR_NETSCAPE_KEYDB_FAILED, SEC_ERROR_BAD_DATABASE)
-	MAPERROR(CKR_CANT_LOCK, SEC_ERROR_INCOMPATIBLE_PKCS11)
+
 
 #ifdef PK11_ERROR_USE_ARRAY 
 };

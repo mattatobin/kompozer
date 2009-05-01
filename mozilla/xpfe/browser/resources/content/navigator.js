@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,20 +25,20 @@
  *   Dean Tessman <dean_tessman@hotmail.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
-const REMOTESERVICE_CONTRACTID = "@mozilla.org/toolkit/remote-service;1";
+const XREMOTESERVICE_CONTRACTID = "@mozilla.org/browser/xremoteservice;1";
 const XUL_NAMESPACE = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 var gURLBar = null;
 var gProxyButton = null;
@@ -115,8 +115,8 @@ const gTabStripPrefListener =
     if (topic != "nsPref:changed")
       return;
 
-    if (gBrowser.tabContainer.childNodes.length == 1 && window.toolbar.visible) {
-      var stripVisibility = !pref.getBoolPref(prefName);
+    var stripVisibility = !pref.getBoolPref(prefName);
+    if (gBrowser.tabContainer.childNodes.length == 1) {
       gBrowser.setStripVisibilityTo(stripVisibility);
       pref.setBoolPref("browser.tabs.forceHide", false);
     }
@@ -212,7 +212,7 @@ const gPopupPrefListener =
 function addPrefListener(observer)
 {
   try {
-    var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
+    var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
     pbi.addObserver(observer.domain, observer, false);
   } catch(ex) {
     dump("Failed to observe prefs: " + ex + "\n");
@@ -222,7 +222,7 @@ function addPrefListener(observer)
 function removePrefListener(observer)
 {
   try {
-    var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
+    var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
     pbi.removeObserver(observer.domain, observer);
   } catch(ex) {
     dump("Failed to remove pref observer: " + ex + "\n");
@@ -248,10 +248,10 @@ function removePopupPermListener(observer)
 * one listener that calls all real handlers.
 */
 
-function pageShowEventHandlers(event)
+function loadEventHandlers(event)
 {
   // Filter out events that are not about the document load we are interested in
-  if (event.originalTarget == content.document) {
+  if (event.originalTarget == _content.document) {
     UpdateBookmarksLastVisitedDate(event);
     UpdateInternetSearchResults(event);
     checkForDirectoryListing();
@@ -265,22 +265,19 @@ function pageShowEventHandlers(event)
  **/
 function getContentAreaFrameCount()
 {
-  var saveFrameItem = document.getElementById("saveframe");
+  var saveFrameItem = document.getElementById("savepage");
   if (!content || !content.frames.length || !isContentFrame(document.commandDispatcher.focusedWindow))
     saveFrameItem.setAttribute("hidden", "true");
-  else {
-    var autoDownload = pref.getBoolPref("browser.download.autoDownload");
-    goSetMenuValue("saveframe", autoDownload ? "valueSave" : "valueSaveAs");
+  else
     saveFrameItem.removeAttribute("hidden");
-  }
 }
 
 // When a content area frame is focused, update the focused frame URL
 function contentAreaFrameFocus()
 {
-  const focusedWindow = document.commandDispatcher.focusedWindow;
-  if (focusedWindow && focusedWindow.top == window.content) {
-    gFocusedURL = focusedWindow.location.href;
+  var focusedWindow = document.commandDispatcher.focusedWindow;
+  if (isContentFrame(focusedWindow)) {
+    gFocusedURL = Components.lookupMethod(focusedWindow, 'location').call(focusedWindow).href;
     gFocusedDocument = focusedWindow.document;
   }
 }
@@ -311,13 +308,13 @@ function UpdateBookmarksLastVisitedDate(event)
       gBookmarksService = Components.classes["@mozilla.org/browser/bookmarks-service;1"]
                                     .getService(Components.interfaces.nsIBookmarksService);
 
-    gBookmarksService.updateLastVisitedDate(url, content.document.characterSet);
+    gBookmarksService.updateLastVisitedDate(url, _content.document.characterSet);
   }
 }
 
 function HandleBookmarkIcon(iconURL, addFlag)
 {
-  var url = content.document.documentURI;
+  var url = getWebNavigation().currentURI.spec
   if (url) {
     // update URL with new icon reference
     if (!gBookmarksService)
@@ -331,13 +328,26 @@ function HandleBookmarkIcon(iconURL, addFlag)
 function UpdateInternetSearchResults(event)
 {
   var url = getWebNavigation().currentURI.spec;
-  if (url && isSearchPanelOpen())
-  {
-    if (!gSearchService)
-      gSearchService = Components.classes["@mozilla.org/rdf/datasource;1?name=internetsearch"]
-                                     .getService(Components.interfaces.nsIInternetSearchService);
+  if (url) {
+    try {
+      var autoOpenSearchPanel = 
+        pref.getBoolPref("browser.search.opensidebarsearchpanel");
 
-    gSearchService.FindInternetSearchResults(url);
+      if (autoOpenSearchPanel || isSearchPanelOpen())
+      {
+        if (!gSearchService)
+          gSearchService = Components.classes["@mozilla.org/rdf/datasource;1?name=internetsearch"]
+                                         .getService(Components.interfaces.nsIInternetSearchService);
+
+        var searchInProgressFlag = gSearchService.FindInternetSearchResults(url);
+
+        if (searchInProgressFlag) {
+          if (autoOpenSearchPanel)
+            RevealSearchPanel();
+        }
+      }
+    } catch (ex) {
+    }
   }
 }
 
@@ -369,7 +379,6 @@ function UpdateBackForwardButtons()
 {
   var backBroadcaster = document.getElementById("canGoBack");
   var forwardBroadcaster = document.getElementById("canGoForward");
-  var upBroadcaster = document.getElementById("canGoUp");
   var browser = getBrowser();
 
   // Avoid setting attributes on broadcasters if the value hasn't changed!
@@ -379,7 +388,6 @@ function UpdateBackForwardButtons()
 
   var backDisabled = backBroadcaster.hasAttribute("disabled");
   var forwardDisabled = forwardBroadcaster.hasAttribute("disabled");
-  var upDisabled = upBroadcaster.hasAttribute("disabled");
   if (backDisabled == browser.canGoBack) {
     if (backDisabled)
       backBroadcaster.removeAttribute("disabled");
@@ -391,12 +399,6 @@ function UpdateBackForwardButtons()
       forwardBroadcaster.removeAttribute("disabled");
     else
       forwardBroadcaster.setAttribute("disabled", true);
-  }
-  if (upDisabled != !browser.currentURI.spec.replace(/[#?].*$/, "").match(/\/[^\/]+\/./)) {
-    if (upDisabled)
-      upBroadcaster.removeAttribute("disabled");
-    else
-      upBroadcaster.setAttribute("disabled", true);
   }
 }
 
@@ -424,62 +426,6 @@ const gTabOpenObserver = {
     delayedOpenTab(data);
   }
 };
-
-const nsIBrowserDOMWindow = Components.interfaces.nsIBrowserDOMWindow;
-const nsIInterfaceRequestor = Components.interfaces.nsIInterfaceRequestor;
-
-function nsBrowserAccess() {
-}
-
-nsBrowserAccess.prototype = {
-  openURI: function openURI(aURI, aOpener, aWhere, aContext) {
-    var loadflags = aContext == nsIBrowserDOMWindow.OPEN_EXTERNAL ?
-                    nsIWebNavigation.LOAD_FLAGS_FROM_EXTERNAL :
-                    nsIWebNavigation.LOAD_FLAGS_NONE;
-
-    if (aWhere == nsIBrowserDOMWindow.OPEN_DEFAULTWINDOW)
-      if (aContext == nsIBrowserDOMWindow.OPEN_EXTERNAL)
-        aWhere = pref.getIntPref("browser.link.open_external");
-      else
-        aWhere = pref.getIntPref("browser.link.open_newwindow");
-    var uri = aURI ? aURI.spec : "about:blank";
-    var referrer = aOpener ? aOpener.QueryInterface(nsIInterfaceRequestor)
-                                    .getInterface(nsIWebNavigation)
-                                    .currentURI : null;
-    switch (aWhere) {
-      case nsIBrowserDOMWindow.OPEN_NEWWINDOW:
-        return window.openDialog(getBrowserURL(), "_blank", "all,dialog=no",
-                                 uri, null, referrer);
-      case nsIBrowserDOMWindow.OPEN_NEWTAB:
-        var newTab = gBrowser.addTab("about:blank", null, null,
-                                     !pref.getBoolPref("browser.tabs.loadDivertedInBackground"));
-        var browser = gBrowser.getBrowserForTab(newTab);
-        try {
-          browser.loadURIWithFlags(uri, loadflags, referrer);
-        } catch (e) {}
-        return browser.contentWindow;
-      default:
-        if (!aOpener) {
-          gBrowser.loadURIWithFlags(uri, loadflags);
-          return content;
-        }
-        aOpener = aOpener.top;
-        try {
-          aOpener.QueryInterface(nsIInterfaceRequestor)
-                 .getInterface(nsIWebNavigation)
-                 .loadURI(uri, loadflags, referrer, null, null);
-        } catch (e) {}
-        return aOpener;
-    }
-  },
-  isTabContentWindow: function isTabContentWindow(aWindow) {
-    var browsers = gBrowser.browsers;
-    for (var i = 0; browsers.item(i); i++)
-      if (browsers[i].contentWindow == aWindow)
-        return true;
-    return false;
-  }
-}
 
 function Startup()
 {
@@ -551,7 +497,7 @@ function Startup()
   // (rjc note: not the entire window, otherwise we'll get sidebar pane loads too!)
   //  so we'll be notified when onloads complete.
   var contentArea = document.getElementById("appcontent");
-  contentArea.addEventListener("pageshow", pageShowEventHandlers, true);
+  contentArea.addEventListener("load", loadEventHandlers, true);
   contentArea.addEventListener("focus", contentAreaFrameFocus, true);
 
   var turboMode = false;
@@ -569,6 +515,34 @@ function Startup()
   }
 
   //initConsoleListener();
+
+  // XXXjag work-around for bug 113076
+  // there's another bug where we throw an exception when getting
+  // sessionHistory if it is null, which I'm exploiting here to
+  // detect the situation described in bug 113076.
+  // The same problem caused bug 139522, also worked around below.
+  try {
+    getBrowser().sessionHistory;
+  } catch (e) {
+    /* Session history might not be available,
+       so we wrap access to it in a try block */
+    try {
+      // sessionHistory wasn't set from the browser's constructor
+      // so we'll just have to set it here.
+
+      // Wire up session and global history before any possible
+      // progress notifications for back/forward button updating
+      webNavigation.sessionHistory = Components.classes["@mozilla.org/browser/shistory;1"]
+                                               .createInstance(Components.interfaces.nsISHistory);
+
+      // enable global history
+      getBrowser().docShell.QueryInterface(Components.interfaces.nsIDocShellHistory).useGlobalHistory = true;
+    } catch (e) {}
+
+    const selectedBrowser = getBrowser().selectedBrowser;
+    if (selectedBrowser.securityUI)
+      selectedBrowser.securityUI.init(selectedBrowser.contentWindow);
+  }
 
   // hook up UI through progress listener
   getBrowser().addProgressListener(window.XULBrowserWindow, Components.interfaces.nsIWebProgress.NOTIFY_ALL);
@@ -625,16 +599,10 @@ function Startup()
     if (/^\s*$/.test(uriToLoad))
       uriToLoad = "about:blank";
 
-    var browser = getBrowser();
-    browser.popupDomain = null;
-    browser.popups = [];
-
     if (uriToLoad != "about:blank") {
       gURLBar.value = uriToLoad;
-      browser.userTypedValue = uriToLoad;
-      if ("arguments" in window && window.arguments.length >= 4) {
-        loadURI(uriToLoad, window.arguments[2], window.arguments[3]);
-      } else if ("arguments" in window && window.arguments.length == 3) {
+      getBrowser().userTypedValue = uriToLoad;
+      if ("arguments" in window && window.arguments.length >= 3) {
         loadURI(uriToLoad, window.arguments[2]);
       } else {
         loadURI(uriToLoad);
@@ -663,20 +631,17 @@ function Startup()
     if ("arguments" in window && uriToLoad == "about:blank" && !navBar.hidden && window.locationbar.visible)
       setTimeout(WindowFocusTimerCallback, 0, gURLBar);
     else
-      setTimeout(WindowFocusTimerCallback, 0, content);
+      setTimeout(WindowFocusTimerCallback, 0, _content);
 
     // Perform default browser checking (after window opens).
     setTimeout( checkForDefaultBrowser, 0 );
 
-    // hook up browser access support
-    window.browserDOMWindow = new nsBrowserAccess();
-
     // hook up remote support
-    if (REMOTESERVICE_CONTRACTID in Components.classes) {
-      var remoteService =
-        Components.classes[REMOTESERVICE_CONTRACTID]
-                  .getService(Components.interfaces.nsIRemoteService);
-      remoteService.registerWindow(window);
+    if (XREMOTESERVICE_CONTRACTID in Components.classes) {
+      var remoteService;
+      remoteService = Components.classes[XREMOTESERVICE_CONTRACTID]
+                                .getService(Components.interfaces.nsIXRemoteService);
+      remoteService.addBrowserInstance(window);
 
       var observerService = Components.classes["@mozilla.org/observer-service;1"]
         .getService(Components.interfaces.nsIObserverService);
@@ -686,22 +651,14 @@ function Startup()
   
   // called when we go into full screen, even if it is 
   // initiated by a web page script
-  addEventListener("fullscreen", onFullScreen, true);
+  addEventListener("fullscreen", onFullScreen, false);
 
-  addEventListener("PopupWindow", onPopupWindow, true);
-  addEventListener("DOMPopupBlocked", onPopupBlocked, true);
+  addEventListener("PopupWindow", onPopupWindow, false);
+  addEventListener("DOMPopupBlocked", onPopupBlocked, false);
 
   // does clicking on the urlbar select its contents?
   gClickSelectsAll = pref.getBoolPref("browser.urlbar.clickSelectsAll");
   gClickAtEndSelects = pref.getBoolPref("browser.urlbar.clickAtEndSelects");
-
-  // BiDi UI
-  gShowBiDi = isBidiEnabled();
-  if (gShowBiDi) {
-    document.getElementById("documentDirection-swap").hidden = false;
-    document.getElementById("textfieldDirection-separator").hidden = false;
-    document.getElementById("textfieldDirection-swap").hidden = false;
-  }
 
   // now load bookmarks after a delay
   setTimeout(LoadBookmarksCallback, 0);
@@ -762,14 +719,16 @@ function BrowserFlushBookmarksAndHistory()
 function Shutdown()
 {
   // remove remote support
-  if (REMOTESERVICE_CONTRACTID in Components.classes) {
+  if (XREMOTESERVICE_CONTRACTID in Components.classes) {
+    var remoteService;
+    remoteService = Components.classes[XREMOTESERVICE_CONTRACTID]
+                              .getService(Components.interfaces.nsIXRemoteService);
+    remoteService.removeBrowserInstance(window);
+
     var observerService = Components.classes["@mozilla.org/observer-service;1"]
       .getService(Components.interfaces.nsIObserverService);
     observerService.removeObserver(gTabOpenObserver, "open-new-tab-request", false);
   }
-
-  // shut down browser access support
-  window.browserDOMWindow = null;
 
   try {
     getBrowser().removeProgressListener(window.XULBrowserWindow);
@@ -870,14 +829,7 @@ function BrowserHandleBackspace()
   }
   
   if (!typeAhead || !typeAhead.backOneChar()) {
-    switch (pref.getIntPref("browser.backspace_action")) {
-    case 0:
-      BrowserBack();
-      break;
-    case 1:
-      goDoCommand("cmd_scrollPageUp");
-      break;
-    }
+    BrowserBack();
   }
 }
 
@@ -888,23 +840,6 @@ function BrowserForward()
   }
   catch(ex) {
   }
-}
-
-function BrowserUp()
-{
-  loadURI(getBrowser().currentURI.spec.replace(/[#?].*$/, "").replace(/\/[^\/]*.$/, "/"));
-}
-
-function BrowserHandleShiftBackspace()
-{
-  switch (pref.getIntPref("browser.backspace_action")) {
-  case 0:
-    BrowserForward();
-    break;
-  case 1:
-    goDoCommand("cmd_scrollPageDown");
-    break;
-  } 
 }
 
 function SetGroupHistory(popupMenu, direction)
@@ -962,38 +897,19 @@ function BrowserReloadSkipCache()
   return BrowserReloadWithFlags(reloadFlags);
 }
 
-function BrowserHome(aEvent)
+function BrowserHome()
 {
-  var tab;
   var homePage = getHomePage();
-  var target = !gBrowser ? "window": !aEvent ? "current" : BookmarksUtils.getBrowserTargetFromEvent(aEvent);
-
   if (homePage.length == 1) {
-    switch (target) {
-    case "current":
-      loadURI(homePage[0]);
-      break;
-    case "tab":
-      tab = gBrowser.addTab(homePage[0]);
-      if (!BookmarksUtils.shouldLoadTabInBackground(aEvent))
-        gBrowser.selectedTab = tab;
-      break;
-    case "window":
-      openDialog(getBrowserURL(), "_blank", "chrome,all,dialog=no", homePage[0]);
-    }
+    loadURI(homePage[0]);
   } else {
-    if (target == "window")
-      openDialog(getBrowserURL(), "_blank", "chrome,all,dialog=no", homePage.join("\n"));
-    else {
-      var URIs = [];
-      for (var i in homePage)
-        URIs.push({URI: homePage[i]});
+    var URIs = [];
+    for (var i in homePage)
+      URIs.push({URI: homePage[i]});
 
-      tab = gBrowser.loadGroup(URIs);
-      
-      if (!BookmarksUtils.shouldLoadTabInBackground(aEvent))
-        gBrowser.selectedTab = tab;
-    }
+    var tab = gBrowser.loadGroup(URIs);
+    if (!pref.getBoolPref("browser.tabs.loadInBackground"))
+      gBrowser.selectedTab = tab;
   }
 }
 
@@ -1011,11 +927,10 @@ function addGroupmarkAs()
   BookmarksUtils.addBookmarkForTabBrowser(gBrowser, true);
 }
 
-function updateGroupmarkCommand()
+function updateGroupmarkMenuitem(id)
 {
-  const disabled = (!gBrowser || gBrowser.browsers.length == 1);
-  document.getElementById("Browser:AddGroupmarkAs")
-          .setAttribute("disabled", disabled);
+  const disabled = gBrowser.browsers.length == 1;
+  document.getElementById(id).setAttribute("disabled", disabled);
 }
 
 function readRDFString(aDS,aRes,aProp)
@@ -1023,6 +938,7 @@ function readRDFString(aDS,aRes,aProp)
   var n = aDS.GetTarget(aRes, aProp, true);
   return n ? n.QueryInterface(Components.interfaces.nsIRDFLiteral).Value : "";
 }
+
 
 function ensureDefaultEnginePrefs(aRDF,aDS) 
 {
@@ -1080,7 +996,7 @@ function QualifySearchTerm()
   return "";
 }
 
-function OpenSearch(tabName, searchStr, newWindowOrTabFlag, reverseBackgroundPref)
+function OpenSearch(tabName, forceDialogFlag, searchStr, newWindowFlag)
 {
   //This function needs to be split up someday.
 
@@ -1115,39 +1031,54 @@ function OpenSearch(tabName, searchStr, newWindowOrTabFlag, reverseBackgroundPre
     if (forceAsURL) {
        BrowserLoadURL()
     } else {
-      if (searchStr) {
-        var escapedSearchStr = encodeURIComponent(searchStr);
-        defaultSearchURL += escapedSearchStr;
-        var searchDS = Components.classes["@mozilla.org/rdf/datasource;1?name=internetsearch"]
-                                 .getService(Components.interfaces.nsIInternetSearchService);
+      var searchMode = 0;
+      try {
+        searchMode = pref.getIntPref("browser.search.powermode");
+      } catch(ex) {
+      }
 
-        searchDS.RememberLastSearchText(escapedSearchStr);
-        try {
-          var searchEngineURI = pref.getCharPref("browser.search.defaultengine");
-          if (searchEngineURI) {          
-            var searchURL = getSearchUrl("actionButton");
-            if (searchURL) {
-              defaultSearchURL = searchURL + escapedSearchStr; 
-            } else {
-              searchURL = searchDS.GetInternetSearchURL(searchEngineURI, escapedSearchStr, 0, 0, {value:0});
-              if (searchURL)
-                defaultSearchURL = searchURL;
-            }
-          }
-        } catch (ex) {
+      if (forceDialogFlag || searchMode == 1) {
+        // Use a single search dialog
+        var windowManager = Components.classes["@mozilla.org/appshell/window-mediator;1"]
+                                      .getService(Components.interfaces.nsIWindowMediator);
+
+        var searchWindow = windowManager.getMostRecentWindow("search:window");
+        if (!searchWindow) {
+          openDialog("chrome://communicator/content/search/search.xul", "SearchWindow", "dialog=no,close,chrome,resizable", tabName, searchStr);
+        } else {
+          // Already had one, focus it and load the page
+          searchWindow.focus();
+
+          if ("loadPage" in searchWindow)
+            searchWindow.loadPage(tabName, searchStr);
         }
+      } else {
+        if (searchStr) {
+          var escapedSearchStr = encodeURIComponent(searchStr);
+          defaultSearchURL += escapedSearchStr;
+          var searchDS = Components.classes["@mozilla.org/rdf/datasource;1?name=internetsearch"]
+                                   .getService(Components.interfaces.nsIInternetSearchService);
 
-        if (!newWindowOrTabFlag)
-          loadURI(defaultSearchURL);
-        else if (!pref.getBoolPref("browser.search.opentabforcontextsearch"))
-          window.open(defaultSearchURL, "_blank");
-        else {
-          var newTab = gBrowser.addTab(defaultSearchURL);
-          var loadInBackground = pref.getBoolPref("browser.tabs.loadInBackground");
-          if (reverseBackgroundPref)
-            loadInBackground = !loadInBackground;
-          if (!loadInBackground)
-            gBrowser.selectedTab = newTab;
+          searchDS.RememberLastSearchText(escapedSearchStr);
+          try {
+            var searchEngineURI = pref.getCharPref("browser.search.defaultengine");
+            if (searchEngineURI) {          
+              var searchURL = getSearchUrl("actionButton");
+              if (searchURL) {
+                defaultSearchURL = searchURL + escapedSearchStr; 
+              } else {
+                searchURL = searchDS.GetInternetSearchURL(searchEngineURI, escapedSearchStr, 0, 0, {value:0});
+                if (searchURL)
+                  defaultSearchURL = searchURL;
+              }
+            }
+          } catch (ex) {
+          }
+
+          if (!newWindowFlag)
+            loadURI(defaultSearchURL);
+          else
+            window.open(defaultSearchURL, "_blank");
         }
       }
     }
@@ -1160,57 +1091,9 @@ function OpenSearch(tabName, searchStr, newWindowOrTabFlag, reverseBackgroundPre
 
 function RevealSearchPanel()
 {
-  // first lets check if the search panel will be shown at all
-  // by checking the sidebar datasource to see if there is an entry
-  // for the search panel, and if it is excluded for navigator or not
-  
-  var searchPanelExists = false;
-  
-  if (document.getElementById("urn:sidebar:panel:search")) {
-    var myPanel = document.getElementById("urn:sidebar:panel:search");
-    var panel = sidebarObj.panels.get_panel_from_header_node(myPanel);
-
-    searchPanelExists = !panel.is_excluded();
-  } else if (sidebarObj.never_built) {
-
-    try{
-      var datasource = RDF.GetDataSourceBlocking(sidebarObj.datasource_uri);
-      var aboutValue = RDF.GetResource("urn:sidebar:panel:search");
-
-      // check if the panel is even in the list by checking for its content
-      var contentProp = RDF.GetResource("http://home.netscape.com/NC-rdf#content");
-      var content = datasource.GetTarget(aboutValue, contentProp, true);
-     
-      if (content instanceof Components.interfaces.nsIRDFLiteral){
-        // the search panel entry exists, now check if it is excluded
-        // for navigator
-        var excludeProp = RDF.GetResource("http://home.netscape.com/NC-rdf#exclude");
-        var exclude = datasource.GetTarget(aboutValue, excludeProp, true);
-
-        if (exclude instanceof Components.interfaces.nsIRDFLiteral) {
-          searchPanelExists = (exclude.Value.indexOf("navigator:browser") < 0);
-        } else {
-          // panel exists and no exclude set
-          searchPanelExists = true;
-        }
-      }
-    } catch(e){
-      searchPanelExists = false;
-    }
-  }
-
-  if (searchPanelExists) {
-    // make sure the sidebar is open, else SidebarSelectPanel() will fail
-    if (sidebar_is_hidden())
-      SidebarShowHide();
-  
-    if (sidebar_is_collapsed())
-      SidebarExpandCollapse();
-
-    var searchPanel = document.getElementById("urn:sidebar:panel:search");
-    if (searchPanel)
-      SidebarSelectPanel(searchPanel, true, true); // lives in sidebarOverlay.js      
-  }
+  var searchPanel = document.getElementById("urn:sidebar:panel:search");
+  if (searchPanel)
+    SidebarSelectPanel(searchPanel, true, true); // lives in sidebarOverlay.js
 }
 
 function isSearchPanelOpen()
@@ -1228,7 +1111,7 @@ function BrowserSearchInternet()
     if (searchEngineURI) {          
       var searchRoot = getSearchUrl("searchForm");
       if (searchRoot) {
-        openTopWin(searchRoot);
+        loadURI(searchRoot);
         return;
       } else {
         // Get a search URL and guess that the front page of the site has a search form.
@@ -1236,9 +1119,9 @@ function BrowserSearchInternet()
                                  .getService(Components.interfaces.nsIInternetSearchService);
         var searchURL = searchDS.GetInternetSearchURL(searchEngineURI, "ABC", 0, 0, {value:0});
         if (searchURL) {
-          searchRoot = searchURL.match(/^[^:]+:\/\/[^?/]+/i);
+          searchRoot = searchURL.match(/[a-z]+:\/\/[a-z.-]+/);
           if (searchRoot) {
-            openTopWin(searchRoot + "/");
+            loadURI(searchRoot + "/");
             return;
           }
         }
@@ -1248,7 +1131,7 @@ function BrowserSearchInternet()
   }
 
   // Fallback if the stuff above fails: use the hard-coded search engine
-  openTopWin(gNavigatorRegionBundle.getString("otherSearchURL"));
+  loadURI(gNavigatorRegionBundle.getString("otherSearchURL"));
 }
 
 
@@ -1257,25 +1140,7 @@ function BrowserSearchInternet()
 function BrowserOpenWindow()
 {
   //opens a window where users can select a web location to open
-  var params = { browser: window, action: null, url: "" };
-  openDialog("chrome://communicator/content/openLocation.xul", "_blank", "chrome,modal,titlebar", params);
-  var url = getShortcutOrURI(params.url);
-  switch (params.action) {
-    case "0": // current window
-      loadURI(url, null, nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-      break;
-    case "1": // new window
-      openDialog(getBrowserURL(), "_blank", "all,dialog=no", url, null, null,
-                 nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-      break;
-    case "2": // edit
-      editPage(url);
-      break;
-    case "3": // new tab
-      gBrowser.selectedTab = gBrowser.addTab(url, null, null, false,
-               nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-      break;
-  }
+  openDialog("chrome://communicator/content/openLocation.xul", "_blank", "chrome,modal,titlebar", window);
 }
 
 function BrowserOpenTab()
@@ -1296,8 +1161,7 @@ function BrowserOpenTab()
           uriToLoad = "about:blank";
           break;
         case 1:
-          uriToLoad = pref.getComplexValue("browser.startup.homepage",
-                                           Components.interfaces.nsIPrefLocalizedString).data;
+          uriToLoad = pref.getCharPref("browser.startup.homepage");
           break;
         case 2:
           uriToLoad = getWebNavigation().currentURI.spec;
@@ -1314,6 +1178,22 @@ function BrowserOpenTab()
     else
       setTimeout("content.focus();", 0);
   }
+}
+
+/* Called from the openLocation dialog. This allows that dialog to instruct
+   its opener to open a new window and then step completely out of the way.
+   Anything less byzantine is causing horrible crashes, rather believably,
+   though oddly only on Linux. */
+function delayedOpenWindow(chrome,flags,url)
+{
+  setTimeout("openDialog('"+chrome+"','_blank','"+flags+"','"+url+"')", 10);
+}
+
+/* Required because the tab needs time to set up its content viewers and get the load of
+   the URI kicked off before becoming the active content area. */
+function delayedOpenTab(url)
+{
+  setTimeout(function(aTabElt) { getBrowser().selectedTab = aTabElt; }, 0, getBrowser().addTab(url));
 }
 
 /* Show file picker dialog configured for opening a file, and return 
@@ -1350,7 +1230,7 @@ function selectFileToOpen(label, prefRoot)
     pref.setIntPref(filterIndexPref, fp.filterIndex);
     pref.setComplexValue(lastDirPref,
                          Components.interfaces.nsILocalFile,
-                         fp.file.parent);
+                         fp.file.parent.nsILocalFile);
     fileURL = fp.fileURL;
   }
 
@@ -1372,18 +1252,14 @@ function BrowserEditBookmarks()
 function updateCloseItems()
 {
   var browser = getBrowser();
-  if (browser && browser.getStripVisibility()) {
+  if (browser.getStripVisibility()) {
+    document.getElementById('menu_close').setAttribute('label', gNavigatorBundle.getString('tabs.closeTab'));
+    document.getElementById('menu_closeWindow').hidden = false;
     document.getElementById('menu_closeOtherTabs').hidden = false;
-    if (browser.tabContainer.childNodes.length > 1) {
-      document.getElementById('menu_close').setAttribute('label', gNavigatorBundle.getString('tabs.closeTab'));
+    if (browser.tabContainer.childNodes.length > 1)
       document.getElementById('cmd_closeOtherTabs').removeAttribute('disabled');
-      document.getElementById('menu_closeWindow').hidden = false;
-    }
-    else {
-      document.getElementById('menu_close').setAttribute('label', gNavigatorBundle.getString('tabs.close'));
+    else
       document.getElementById('cmd_closeOtherTabs').setAttribute('disabled', 'true');
-      document.getElementById('menu_closeWindow').hidden = true;
-    }
   } else {
     document.getElementById('menu_close').setAttribute('label', gNavigatorBundle.getString('tabs.close'));
     document.getElementById('menu_closeWindow').hidden = true;
@@ -1440,10 +1316,10 @@ function BrowserCloseWindow()
   window.close();
 }
 
-function loadURI(uri, referrer, flags)
+function loadURI(uri, referrer)
 {
   try {
-    getBrowser().loadURIWithFlags(uri, flags, referrer);
+    getBrowser().loadURI(uri, referrer);
   } catch (e) {
   }
 }
@@ -1451,10 +1327,6 @@ function loadURI(uri, referrer, flags)
 function BrowserLoadURL(aTriggeringEvent)
 {
   var url = gURLBar.value;
-
-  // Remove leading and trailing spaces first
-  url = url.replace(/^\s+/, '').replace(/\s+$/, '');
-
   if (url.match(/^view-source:/)) {
     BrowserViewSourceOfURL(url.replace(/^view-source:/, ""), null, null);
   } else {
@@ -1496,8 +1368,7 @@ function BrowserLoadURL(aTriggeringEvent)
 
       if (openTab) {
         // Open link in new tab
-        var t = browser.addTab(url, null, null, false,
-                        nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
+        var t = browser.addTab(url);
 
         // Focus new tab unless shift is pressed
         if (!shiftPressed) {
@@ -1506,11 +1377,10 @@ function BrowserLoadURL(aTriggeringEvent)
         }
       } else {
         // Open a new window with the URL
-        var newWin = openDialog(getBrowserURL(), "_blank", "all,dialog=no", url,
-            null, null, nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
+        var newWin = openDialog(getBrowserURL(), "_blank", "all,dialog=no", url);
         // Reset url in the urlbar, copied from handleURLBarRevert()
         var oldURL = browser.currentURI.spec;
-        if (oldURL != "about:blank" || content.opener) {
+        if (oldURL != "about:blank") {
           gURLBar.value = oldURL;
           SetPageProxyState("valid", null);
         } else
@@ -1544,7 +1414,7 @@ function BrowserLoadURL(aTriggeringEvent)
     } else {
       // No modifier was pressed, load the URL normally and
       // focus the content area
-      loadURI(url, null, nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
+      loadURI(url);
       content.focus();
     }
   }
@@ -1567,32 +1437,11 @@ function getShortcutOrURI(url)
         var cmd = url.substr(0, aOffset);
         var text = url.substr(aOffset+1);
         shortcutURL = gBookmarksService.resolveKeyword(cmd);
-        // Bug 123006 : %s replace and URI escape, %S replace with raw value
         if (shortcutURL && text) {
-          var encodedText = null; 
-          var charset = "";
-          const re = /^(.*)\&mozcharset=([a-zA-Z][_\-a-zA-Z0-9]+)\s*$/; 
-          var matches = shortcutURL.match(re);
-          if (matches) {
-             shortcutURL = matches[1];
-             charset = matches[2];
-          }
-          else if (/%s/.test(shortcutURL)) {
-            try {
-              charset = BMSVC.getLastCharset(shortcutURL);
-            } catch (ex) {
-            }
-          }
-
-          if (charset)
-            encodedText = escape(convertFromUnicode(charset, text)); 
-          else  // default case: charset=UTF-8
-            encodedText = encodeURIComponent(text);
-
-          if (encodedText && /%[sS]/.test(shortcutURL))
-            shortcutURL = shortcutURL.replace(/%s/g, encodedText)
-                                     .replace(/%S/g, text);
-          else 
+          aOffset = shortcutURL.indexOf("%s");
+          if (aOffset >= 0)
+            shortcutURL = shortcutURL.substr(0, aOffset) + text + shortcutURL.substr(aOffset+2);
+          else
             shortcutURL = null;
         }
       }
@@ -1640,6 +1489,18 @@ function readFromClipboard()
   return url;
 }
 
+function OpenMessenger()
+{
+  open("chrome://messenger/content/messenger.xul", "_blank",
+    "chrome,extrachrome,menubar,resizable,status,toolbar");
+}
+
+function OpenAddressbook()
+{
+  open("chrome://messenger/content/addressbook/addressbook.xul", "_blank",
+    "chrome,extrachrome,menubar,resizable,status,toolbar");
+}
+
 function BrowserViewSourceOfDocument(aDocument)
 {
   var docCharset;
@@ -1655,12 +1516,12 @@ function BrowserViewSourceOfDocument(aDocument)
       var ifRequestor;
 
       // Get the DOMWindow for the requested document.  If the DOMWindow
-      // cannot be found, then just use the content window...
+      // cannot be found, then just use the _content window...
       //
       // XXX:  This is a bit of a hack...
       win = aDocument.defaultView;
       if (win == window) {
-        win = content;
+        win = _content;
       }
       ifRequestor = win.QueryInterface(Components.interfaces.nsIInterfaceRequestor);
 
@@ -1696,12 +1557,13 @@ function BrowserViewSourceOfURL(url, charset, pageCookie)
 }
 
 // doc=null for regular page info, doc=owner document for frame info.
-function BrowserPageInfo(doc, initialTab)
+function BrowserPageInfo(doc, tab)
 {
   window.openDialog("chrome://navigator/content/pageInfo.xul",
                     "_blank",
                     "chrome,dialog=no",
-                    {doc: doc, initialTab: initialTab});
+                    doc,
+                    tab);
 }
 
 function hiddenWindowStartup()
@@ -1710,43 +1572,19 @@ function hiddenWindowStartup()
   window.focus();
 
   // Disable menus which are not appropriate
-  var disabledItems = ['cmd_newNavigatorTab', 'cmd_close', 'Browser:SendPage',
-                       'Browser:EditPage', 'Browser:SavePage', 'cmd_printSetup',
+  var disabledItems = ['cmd_close', 'Browser:SendPage', 'Browser:EditPage',
+                       'cmd_printSetup', /*'Browser:PrintPreview',*/
                        'Browser:Print', 'canGoBack', 'canGoForward',
-                       'Browser:AddBookmark', 'Browser:AddBookmarkAs',
+                       'Browser:Home', 'Browser:AddBookmark',
+                       'Browser:AddBookmarkAs', 'Browser:AddGroupmarkAs',
                        'cmd_undo', 'cmd_redo', 'cmd_cut', 'cmd_copy',
                        'cmd_paste', 'cmd_delete', 'cmd_selectAll',
-                       'cmd_findTypeText', 'cmd_findTypeLinks', 'Browser:Find',
-                       'Browser:FindAgain', 'Browser:FindPrev', 'menu_Toolbars',
-                       'menuitem_reload', 'menu_UseStyleSheet', 'charsetMenu',
-                       'View:PageSource', 'View:PageInfo', 'menu_translate',
-                       'BlockCookies', 'UseCookiesDefault',
-                       'AllowSessionCookies', 'AllowCookies', 'BlockImages',
-                       'UseImagesDefault', 'AllowImages', 'AllowPopups',
-                       'menu_textZoom', 'cmd_minimizeWindow', 'cmd_zoomWindow'];
-  var broadcaster;
-
+                       'menu_textZoom'];
   for (var id in disabledItems) {
-    broadcaster = document.getElementById(disabledItems[id]);
+    var broadcaster = document.getElementById(disabledItems[id]);
     if (broadcaster)
       broadcaster.setAttribute("disabled", "true");
   }
-
-  // also hide the window list separator
-  var separator = document.getElementById("sep-window-list");
-  if (separator)
-    separator.setAttribute("hidden", "true");
-
-  // Get the preferences service
-  var prefService = Components.classes["@mozilla.org/preferences-service;1"]
-                              .getService(Components.interfaces.nsIPrefService);
-  pref = prefService.getBranch(null);
-
-  // init string bundles
-  gNavigatorBundle = document.getElementById("bundle_navigator");
-  gNavigatorRegionBundle = document.getElementById("bundle_navigator_region");
-  gBrandRegionBundle = document.getElementById("bundle_brand_region");
-  gBrandBundle = document.getElementById("bundle_brand");
 
   // now load bookmarks after a delay
   setTimeout(hiddenWindowLoadBookmarksCallback, 0);
@@ -1798,7 +1636,7 @@ function traceDocument()
 {
   // keep the chrome document out of the dump.
   leakDetector.markObject(document, true);
-  leakDetector.traceObject(content, leakDetector.verbose);
+  leakDetector.traceObject(_content, leakDetector.verbose);
   leakDetector.markObject(document, false);
 }
 
@@ -1891,9 +1729,9 @@ function postURLToNativeWidget()
 
 function checkForDirectoryListing()
 {
-  if ( "HTTPIndex" in content &&
-       content.HTTPIndex instanceof Components.interfaces.nsIHTTPIndex ) {
-    content.defaultCharacterset = getMarkupDocumentViewer().defaultCharacterSet;
+  if ( "HTTPIndex" in _content &&
+       _content.HTTPIndex instanceof Components.interfaces.nsIHTTPIndex ) {
+    _content.defaultCharacterset = getMarkupDocumentViewer().defaultCharacterSet;
   }
 }
 
@@ -1929,7 +1767,7 @@ function stylesheetFillPopup(menuPopup)
   while (itemPersistentOnly.nextSibling)
     menuPopup.removeChild(itemPersistentOnly.nextSibling);
 
-  var styleSheets = getAllStyleSheets(window.content);
+  var styleSheets = getAllStyleSheets(window._content);
   var currentStyleSheets = [];
   var styleDisabled = getMarkupDocumentViewer().authorStyleDisabled;
   var altStyleSelected = false;
@@ -1961,7 +1799,7 @@ function stylesheetFillPopup(menuPopup)
   }
   menuPopup.firstChild.setAttribute("checked", styleDisabled);
   itemPersistentOnly.setAttribute("checked", !altStyleSelected && !styleDisabled);
-  itemPersistentOnly.hidden = (window.content.document.preferredStylesheetSet) ? true : false;
+  itemPersistentOnly.hidden = (window._content.document.preferredStylesheetSet) ? true : false;
 }
 
 function stylesheetInFrame(frame, title) {
@@ -2008,7 +1846,7 @@ function applyTheme(themeName)
     return;
 
   var chromeRegistry = Components.classes["@mozilla.org/chrome/chrome-registry;1"]
-    .getService(Components.interfaces.nsIChromeRegistrySea);
+    .getService(Components.interfaces.nsIXULChromeRegistry);
 
   var oldTheme = false;
   try {
@@ -2053,10 +1891,10 @@ function applyTheme(themeName)
  pref.setComplexValue("general.skins.selectedSkin", Components.interfaces.nsISupportsString, str);
  
  // shut down quicklaunch so the next launch will have the new skin
- var appStartup = Components.classes["@mozilla.org/toolkit/app-startup;1"]
-   .getService(Components.interfaces.nsIAppStartup);
+ var appShell = Components.classes['@mozilla.org/appshell/appShellService;1'].getService();
+ appShell = appShell.QueryInterface(Components.interfaces.nsIAppShellService);
  try {
-   appStartup.nativeAppSupport.isServerMode = false;
+   appShell.nativeAppSupport.isServerMode = false;
  }
  catch(ex) {
  }
@@ -2071,7 +1909,7 @@ function applyTheme(themeName)
 
 function getNewThemes()
 {
-  openTopWin(gBrandRegionBundle.getString("getNewThemesURL"));
+  loadURI(gBrandRegionBundle.getString("getNewThemesURL"));
 }
 
 function URLBarFocusHandler(aEvent)
@@ -2149,7 +1987,7 @@ function handleURLBarRevert()
   // don't revert to last valid url unless page is NOT loading
   // and user is NOT key-scrolling through autocomplete list
   if (!throbberElement.hasAttribute("busy") && !isScrolling) {
-    if (url != "about:blank" || content.opener) {
+    if (url != "about:blank") {
       gURLBar.value = url;
       gURLBar.select();
       SetPageProxyState("valid", null); // XXX Build a URI and pass it in here.
@@ -2167,8 +2005,8 @@ function handleURLBarRevert()
 
 function handleURLBarCommand(aUserAction, aTriggeringEvent)
 {
-  try {
-    addToUrlbarHistory(gURLBar.value);
+  try { 
+    addToUrlbarHistory();
   } catch (ex) {
     // Things may go wrong when adding url to session history,
     // but don't let that interfere with the loading of the url.
@@ -2308,8 +2146,7 @@ function onFullScreen()
   FullScreen.toggle();
 }
 
-function onPopupWindow(aEvent)
-{
+function onPopupWindow(aEvent) {
   var firstPopup = pref.getBoolPref("privacy.popups.first_popup");
   var blockingEnabled = pref.getBoolPref("dom.disable_open_during_load");
   if (blockingEnabled) {
@@ -2340,15 +2177,14 @@ function onPopupWindow(aEvent)
       }
     }
     if (showDialog) {
-      window.openDialog("chrome://communicator/content/permissions/aboutPopups.xul", "",
+      window.openDialog("chrome://communicator/content/aboutPopups.xul", "",
                         "chrome,centerscreen,dependent", true);
       pref.setBoolPref("privacy.popups.first_popup", false);
     }
   }
 }
 
-function onPopupBlocked(aEvent)
-{
+function onPopupBlocked(aEvent) {
   var playSound = pref.getBoolPref("privacy.popups.sound_enabled");
 
   if (playSound) {
@@ -2383,31 +2219,11 @@ function onPopupBlocked(aEvent)
         var popupIcon = document.getElementById("popupIcon");
         popupIcon.hidden = false;
       }
-      // Check for duplicates, remove the old occurence of this url,
-      // to update the features, and put it at the end of the list.
-      for (var i = 0; i < browser.popups.length; ++i) {
-        if (browser.popups[i].url.equals(aEvent.popupWindowURI)) {
-          browser.popups.splice(i, 1);
-          break;
-        }
-      }
-      // Limit the length of the menu to some reasonable size.
-      // We only add one item every time, so no need for more complex stuff.
-      if (browser.popups.length >= 100) {
-        browser.popups.shift();
-      }
-      var popup = {url: aEvent.popupWindowURI,
-                   features: aEvent.popupWindowFeatures,
-                   name: "", // not supported on 1.8
-                   reqDoc: aEvent.requestingWindow.document,
-                   reqWin: aEvent.requestingWindow};
-      browser.popups.push(popup);
     }
   }
 }
 
-function getBrowserForDocument(doc)
-{
+function getBrowserForDocument(doc) {  
   var browsers = getBrowser().browsers;
   for (var i = 0; i < browsers.length; i++) {
     if (browsers[i].contentDocument == doc)
@@ -2416,8 +2232,7 @@ function getBrowserForDocument(doc)
   return null;
 }
 
-function StatusbarViewPopupManager()
-{
+function StatusbarViewPopupManager() {
   var hostPort = "";
   try {
     hostPort = getBrowser().selectedBrowser.currentURI.hostPort;
@@ -2425,52 +2240,8 @@ function StatusbarViewPopupManager()
   catch(ex) { }
   
   // open whitelist with site prefilled to unblock
-  viewPopups(hostPort);
-}
-
-function popupBlockerMenuShowing(event)
-{
-  var separator = document.getElementById("popupMenuSeparator");
-
-  if (separator)
-    separator.hidden = !createShowPopupsMenu(event.target);
-}
-
-function createShowPopupsMenu(parent)
-{
-  while (parent.lastChild && ("popup" in parent.lastChild))
-    parent.removeChild(parent.lastChild);
-
-  var browser = getBrowser();
-
-  if (!browser)
-    return false;
-
-  var popups = browser.selectedBrowser.popups;
-
-  if (popups.length == 0)
-    return false;
-
-  for (var i = 0; i < popups.length; i++) {
-    var popup = popups[i];
-    var menuitem = document.createElement("menuitem");
-    var str = gNavigatorBundle.getFormattedString('popupMenuShow',
-                                                  [popup.url.spec]);
-    menuitem.setAttribute("label", str);
-    menuitem.popup = popup;
-    parent.appendChild(menuitem);
-  }
-
-  return true;
-}
-
-function popupBlockerMenuCommand(target) {
-  if (!("popup" in target))
-    return;
-  var popup = target.popup;
-  var reqWin = popup.reqWin;
-  if (reqWin.document == popup.reqDoc)
-    reqWin.open(popup.url.spec, popup.name, popup.features);
+  window.openDialog("chrome://communicator/content/popupManager.xul", "",
+                      "chrome,resizable=yes", hostPort);
 }
 
 function toHistory()
@@ -2482,7 +2253,7 @@ function checkTheme()
 {
   var theSkinKids = document.getElementById("theme");
   var chromeRegistry = Components.classes["@mozilla.org/chrome/chrome-registry;1"]
-    .getService(Components.interfaces.nsIChromeRegistrySea);
+    .getService(Components.interfaces.nsIXULChromeRegistry);
   for (var i = 0; i < theSkinKids.childNodes.length; ++i) {
     var child = theSkinKids.childNodes[i];
     var id=child.getAttribute("id");
@@ -2520,7 +2291,9 @@ function maybeInitPopupContext()
       // return our opener's URI
       const IOS = Components.classes["@mozilla.org/network/io-service;1"]
                   .getService(CI.nsIIOService);
-      return IOS.newURI(window.content.opener.location.href, null, null);
+      var spec = Components.lookupMethod(window.content.opener, "location")
+                 .call();
+      return IOS.newURI(spec, null, null);
     }
   } catch(e) {
   }
@@ -2616,7 +2389,7 @@ function uploadFile(fileURL)
   var persist = Components.classes["@mozilla.org/embedding/browser/nsWebBrowserPersist;1"]
                           .createInstance(CI.nsIWebBrowserPersist);
 
-  dialog.init(fileURL, targetURI, leafName, null, Date.now()*1000, null, persist);
+  dialog.init(fileURL, targetURI, leafName, null, Date.now()*1000, persist);
   dialog.open(window);
 
   persist.progressListener = dialog;
@@ -2644,52 +2417,4 @@ function updateFileUploadItem()
     item.removeAttribute('disabled');
   else
     item.setAttribute('disabled', 'true');
-}
-
-function isBidiEnabled()
-{
-  var rv = false;
-
-  var systemLocale;
-  try {
-    var localeService = Components.classes["@mozilla.org/intl/nslocaleservice;1"]
-                                  .getService(Components.interfaces.nsILocaleService);
-    systemLocale = localeService.getSystemLocale().getCategory("NSILOCALE_CTYPE");
-    rv = /^(he|ar|syr|fa|ur)-/.test(systemLocale);
-  } catch (e) {}
-
-  if (!rv) {
-    // check the overriding pref
-    rv = pref.getBoolPref("bidi.browser.ui");
-  }
-
-  return rv;
-}
-
-function SwitchDocumentDirection(aWindow)
-{
-  aWindow.document.dir = (aWindow.document.dir == "ltr" ? "rtl" : "ltr");
-
-  for (var run = 0; run < aWindow.frames.length; run++)
-    SwitchDocumentDirection(aWindow.frames[run]);
-}
-
-function updateSavePageItems()
-{
-  var autoDownload = pref.getBoolPref("browser.download.autoDownload");
-  goSetMenuValue("savepage", autoDownload ? "valueSave" : "valueSaveAs");
-}
-
-function convertFromUnicode(charset, str)
-{
-  try {
-    var unicodeConverter = Components
-       .classes["@mozilla.org/intl/scriptableunicodeconverter"]
-       .createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-    unicodeConverter.charset = charset;
-    str = unicodeConverter.ConvertFromUnicode(str);
-    return str + unicodeConverter.Finish();
-  } catch(ex) {
-    return null; 
-  }
 }

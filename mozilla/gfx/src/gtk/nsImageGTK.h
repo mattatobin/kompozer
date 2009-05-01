@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,24 +45,13 @@
 #include <X11/Xutil.h>
 #include <gdk/gdk.h>
 #include "nsRegion.h"
-#ifdef MOZ_WIDGET_GTK2
-#include "nsIGdkPixbufImage.h"
-#endif
 
-class nsDrawingSurfaceGTK;
-
-class nsImageGTK :
-#ifdef MOZ_WIDGET_GTK2
-                   public nsIGdkPixbufImage
-#else
-                   public nsIImage
-#endif
+class nsImageGTK : public nsIImage
 {
 public:
   nsImageGTK();
   virtual ~nsImageGTK();
 
-  static void Startup();
   static void Shutdown();
 
   NS_DECL_ISUPPORTS
@@ -80,11 +70,11 @@ public:
   virtual nsColorMap* GetColorMap();
 
   NS_IMETHOD Draw(nsIRenderingContext &aContext,
-                  nsIDrawingSurface* aSurface,
+                  nsDrawingSurface aSurface,
                   PRInt32 aX, PRInt32 aY,
                   PRInt32 aWidth, PRInt32 aHeight);
   NS_IMETHOD Draw(nsIRenderingContext &aContext,
-                  nsIDrawingSurface* aSurface,
+                  nsDrawingSurface aSurface,
                   PRInt32 aSX, PRInt32 aSY, PRInt32 aSWidth, PRInt32 aSHeight,
                   PRInt32 aDX, PRInt32 aDY, PRInt32 aDWidth, PRInt32 aDHeight);
 
@@ -92,7 +82,7 @@ public:
                          nscoord aDWidth, nscoord aDHeight);
 
   NS_IMETHOD DrawTile(nsIRenderingContext &aContext,
-                      nsIDrawingSurface* aSurface,
+                      nsDrawingSurface aSurface,
                       PRInt32 aSXOffset, PRInt32 aSYOffset,
                       PRInt32 aPadX, PRInt32 aPadY,
                       const nsRect &aTileRect);
@@ -100,14 +90,13 @@ public:
   void UpdateCachedImage();
   virtual void ImageUpdated(nsIDeviceContext *aContext,
                             PRUint8 aFlags, nsRect *aUpdateRect);
-  virtual PRBool      GetIsImageComplete();
   virtual nsresult    Init(PRInt32 aWidth, PRInt32 aHeight,
                            PRInt32 aDepth,
                            nsMaskRequirements aMaskRequirements);
 
   virtual nsresult    Optimize(nsIDeviceContext* aContext);
 
-  virtual PRBool      GetHasAlphaMask()     { return mAlphaBits != nsnull || mAlphaPixmap != nsnull; }
+  virtual PRBool      GetHasAlphaMask()     { return mAlphaBits != nsnull; }        
   virtual PRUint8*    GetAlphaBits();
   virtual PRInt32     GetAlphaLineStride();
 
@@ -126,9 +115,6 @@ public:
   NS_IMETHOD   LockImagePixels(PRBool aMaskPixels);
   NS_IMETHOD   UnlockImagePixels(PRBool aMaskPixels);    
 
-#ifdef MOZ_WIDGET_GTK2
-  NS_IMETHOD_(GdkPixbuf*) GetGdkPixbuf();
-#endif
 
 private:
   /**
@@ -171,14 +157,14 @@ private:
                              unsigned width, unsigned height,
                              XImage *ximage, unsigned char *readData, unsigned char *srcData);
   inline void DrawComposited(nsIRenderingContext &aContext,
-                             nsIDrawingSurface* aSurface,
+                             nsDrawingSurface aSurface,
                              PRInt32 srcWidth, PRInt32 srcHeight,
                              PRInt32 dstWidth, PRInt32 dstHeight,
                              PRInt32 dstOrigX, PRInt32 dstOrigY,
                              PRInt32 aDX, PRInt32 aDY,
                              PRInt32 aDWidth, PRInt32 aDHeight);
   inline void DrawCompositeTile(nsIRenderingContext &aContext,
-                                nsIDrawingSurface* aSurface,
+                                nsDrawingSurface aSurface,
                                 PRInt32 aSX, PRInt32 aSY,
                                 PRInt32 aSWidth, PRInt32 aSHeight,
                                 PRInt32 aDX, PRInt32 aDY,
@@ -188,9 +174,6 @@ private:
                          const nsRect &destRect, const nsRect &clipRect, PRBool useClip);
   inline void CreateOffscreenPixmap(PRInt32 aWidth, PRInt32 aHeight);
   inline void SetupGCForAlpha(GdkGC *aGC, PRInt32 aX, PRInt32 aY);
-
-  void SlowTile(nsDrawingSurfaceGTK *aSurface, const nsRect &aTileRect,
-                PRInt32 aSXOffset, PRInt32 aSYOffset, const nsRect& aRect, PRBool aIsValid);
 
   PRUint8      *mImageBits;
   GdkPixmap    *mImagePixmap;

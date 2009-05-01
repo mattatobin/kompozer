@@ -109,9 +109,7 @@ typedef short JCOEF;
 
 #if defined(XP_WIN32) && defined(_M_IX86) && !defined(__GNUC__)
 #define HAVE_MMX_INTEL_MNEMONICS 
-
-/* SSE2 code appears broken for some cpus (bug 247437) */
-/* #define HAVE_SSE2_INTEL_MNEMONICS */
+#define HAVE_SSE2_INTEL_MNEMONICS 
 #endif
 
 /* Compressed datastreams are represented as arrays of JOCTET.
@@ -310,7 +308,7 @@ typedef unsigned char boolean;
 /* Capability options common to encoder and decoder: */
 
 #define DCT_ISLOW_SUPPORTED	/* slow but accurate integer algorithm */
-#undef  DCT_IFAST_SUPPORTED	/* faster, less accurate integer method */
+#define DCT_IFAST_SUPPORTED	/* faster, less accurate integer method */
 #undef  DCT_FLOAT_SUPPORTED	/* floating-point: accurate, fast on fast HW */
 
 /* Encoder capability options: */

@@ -26,19 +26,20 @@
  *
  * Contributor(s):
  *   Mike Judge <mjudge@netscape.com>
- *   Chak Nanga <chak@netscape.com>
+ *   Chak Nanga <chak@netscape.com> 
  *
  * ***** END LICENSE BLOCK ***** */
 
 #ifndef _EDITORFRM_H_
 #define _EDITORFRM_H_
 
-class nsICommandParams;
-class nsIEditor;
-class nsIHTMLEditor;
-
+#include "nsICommandParams.h"
 #include "nsIEditingSession.h"
 #include "nsICommandManager.h"
+#include "nsIScriptGlobalObject.h"
+#include "nsISimpleEnumerator.h"
+#include "nsIEditor.h"
+#include "nsIHTMLEditor.h"
 
 class CEditorFrame : public CBrowserFrame
 {    
@@ -111,7 +112,7 @@ private:
     NS_METHOD ExecuteNoParam(const char *aCommand);
     NS_METHOD MakeCommandParams(const char *aCommand,nsICommandParams **aParams);
     NS_METHOD ExecuteAttribParam(const char *aCommand, const char *aAttribute);
-    NS_METHOD GetAttributeParamValue(const char *aCommand, nsEmbedCString &aValue);
+    NS_METHOD GetAttributeParamValue(const char *aCommand, nsCString &aValue);
 
     void UpdateStyleToolBarBtn(const char *aCommand, CCmdUI* pCmdUI);
 

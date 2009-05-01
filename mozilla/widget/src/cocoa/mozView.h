@@ -52,41 +52,15 @@ class nsIWidget;
 @protocol mozView
 
   // access the nsIWidget associated with this view. DOES NOT ADDREF.
-- (nsIWidget*)widget;
+- (nsIWidget*) widget;
 
   // access the native cocoa window (NSWindow) that this view
   // is in. It's necessary for a gecko NSView to keep track of the
   // window because |-window| returns nil when the view has been
   // removed from the view hierarchy (as is the case when it's hidden, 
   // since you can't just hide a view, that would make too much sense).
-- (NSWindow*)getNativeWindow;
-- (void)setNativeWindow:(NSWindow*)aWindow;
-
-  // return a context menu for this view
-- (NSMenu*)getContextMenu;
-
-  // Allows callers to do a delayed invalidate (e.g., if an invalidate
-  // happens during drawing)
-- (void)setNeedsPendingDisplay;
-- (void)setNeedsPendingDisplayInRect:(NSRect)invalidRect;
-
-  // called when our corresponding Gecko view goes away
-- (void)widgetDestroyed;
+- (NSWindow*) getNativeWindow;
+- (void) setNativeWindow: (NSWindow*)aWindow;
 
 @end
 
-
-// 
-// An informal protocol implemented by the NSWindow of the host application.
-// 
-// It's used to prevent re-entrant calls to -makeKeyAndOrderFront: when gecko
-// focus/activate events propagate out to the embedder's
-// nsIEmbeddingSiteWindow::SetFocus implementation.
-// 
-
-@interface NSObject(mozWindow)
-
-- (BOOL)suppressMakeKeyFront;
-- (void)setSuppressMakeKeyFront:(BOOL)inSuppress;
-
-@end

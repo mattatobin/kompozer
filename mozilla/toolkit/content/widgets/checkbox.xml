@@ -24,14 +24,8 @@
       <property name="accessible">
         <getter>
           <![CDATA[
-            try {
-              var accService = Components.classes["@mozilla.org/accessibilityService;1"]
-                                         .getService(Components.interfaces.nsIAccessibilityService);
-              return accService.createXULCheckboxAccessible(this);
-            }
-            catch(ex) { /* no chrome privileges */ }
-
-            return null;
+            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
+            return accService.createXULCheckboxAccessible(this);
           ]]>
         </getter>
       </property>
@@ -40,14 +34,14 @@
         <parameter name="aValue"/>
         <body>
         <![CDATA[
-          var change = (aValue != (this.getAttributeNS('', 'checked') == 'true'));
-          if (aValue)
-            this.setAttributeNS('', 'checked', 'true');
-          else
-            this.removeAttributeNS('', 'checked');
+          var change = (aValue != (this.getAttribute('checked') == 'true'));
+          if (aValue) 
+            this.setAttribute('checked', 'true');
+          else 
+            this.removeAttribute('checked');
           if (change) {
             var event = document.createEvent('Events');
-            event.initEvent('CheckboxStateChange', true, true);
+            event.initEvent('CheckboxStateChange', false, true);
             this.dispatchEvent(event);
           }
           return aValue;

@@ -1,50 +1,50 @@
 /*
  * loader.h - load platform dependent DSO containing freebl implementation.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: loader.h,v 1.17.2.1 2006/02/01 21:24:45 wtchang%redhat.com Exp $ */
+ * $Id: loader.h,v 1.10 2003/10/17 13:45:33 ian.mcgreer%sun.com Exp $
+ */
 
 #ifndef _LOADER_H_
 #define _LOADER_H_ 1
 
 #include "blapi.h"
 
-#define FREEBL_VERSION 0x0309
+#define FREEBL_VERSION 0x0307
 
 struct FREEBLVectorStr {
 
@@ -377,87 +377,6 @@ struct FREEBLVectorStr {
 
   /* Version 3.007 came to here */
 
- SECStatus (* p_AES_InitContext)(AESContext *cx,
-				 const unsigned char *key, 
-				 unsigned int keylen, 
-				 const unsigned char *iv, 
-				 int mode, 
-				 unsigned int encrypt,
-				 unsigned int blocklen);
- SECStatus (* p_AESKeyWrap_InitContext)(AESKeyWrapContext *cx,
-				 const unsigned char *key, 
-				 unsigned int keylen, 
-				 const unsigned char *iv, 
-				 int mode, 
-				 unsigned int encrypt,
-				 unsigned int blocklen);
- SECStatus (* p_DES_InitContext)(DESContext *cx,
-				 const unsigned char *key, 
-				 unsigned int keylen,
-				 const unsigned char *iv, 
-				 int mode,
-				 unsigned int encrypt,
-				 unsigned int );
- SECStatus (* p_RC2_InitContext)(RC2Context *cx,
-				 const unsigned char *key, 
-				 unsigned int keylen,
-				 const unsigned char *iv, 
-				 int mode, 
-				 unsigned int effectiveKeyLen,
-				 unsigned int );
- SECStatus (* p_RC4_InitContext)(RC4Context *cx, 
-				 const unsigned char *key, 
-				 unsigned int keylen,
-				 const unsigned char *, 
-				 int, 
-				 unsigned int ,
-				 unsigned int );
-
- AESContext *(*p_AES_AllocateContext)(void);
- AESKeyWrapContext *(*p_AESKeyWrap_AllocateContext)(void);
- DESContext *(*p_DES_AllocateContext)(void);
- RC2Context *(*p_RC2_AllocateContext)(void);
- RC4Context *(*p_RC4_AllocateContext)(void);
-
- void (* p_MD2_Clone)(MD2Context *dest, MD2Context *src);
- void (* p_MD5_Clone)(MD5Context *dest, MD5Context *src);
- void (* p_SHA1_Clone)(SHA1Context *dest, SHA1Context *src);
- void (* p_SHA256_Clone)(SHA256Context *dest, SHA256Context *src);
- void (* p_SHA384_Clone)(SHA384Context *dest, SHA384Context *src);
- void (* p_SHA512_Clone)(SHA512Context *dest, SHA512Context *src);
-
- SECStatus (* p_TLS_PRF)(const SECItem *secret, const char *label, 
-		         SECItem *seed, SECItem *result, PRBool isFIPS);
-
- const SECHashObject *(* p_HASH_GetRawHashObject)(HASH_HashType hashType);
-
- HMACContext * (* p_HMAC_Create)(const SECHashObject *hashObj, 
-				 const unsigned char *secret, 
-				 unsigned int secret_len, PRBool isFIPS);
- SECStatus (* p_HMAC_Init)(HMACContext *cx, const SECHashObject *hash_obj, 
-			   const unsigned char *secret, 
-			   unsigned int secret_len, PRBool isFIPS);
- void (* p_HMAC_Begin)(HMACContext *cx);
- void  (* p_HMAC_Update)(HMACContext *cx, const unsigned char *data, 
-			 unsigned int data_len);
- HMACContext * (* p_HMAC_Clone)(HMACContext *cx);
- SECStatus (* p_HMAC_Finish)(HMACContext *cx, unsigned char *result, 
-			     unsigned int *result_len, 
-			     unsigned int max_result_len);
- void (* p_HMAC_Destroy)(HMACContext *cx, PRBool freeit);
-
- void (* p_RNG_SystemInfoForRNG)(void);
-
-  /* Version 3.008 came to here */
-
- SECStatus (* p_FIPS186Change_GenerateX)(unsigned char *XKEY,
-                                         const unsigned char *XSEEDj,
-                                         unsigned char *x_j);
- SECStatus (* p_FIPS186Change_ReduceModQForDSA)(const unsigned char *w,
-                                                const unsigned char *q,
-                                                unsigned char *xj);
-
-  /* Version 3.009 came to here */
 };
 
 typedef struct FREEBLVectorStr FREEBLVector;

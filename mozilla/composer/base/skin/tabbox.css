@@ -68,7 +68,8 @@ tabpanels {
 
 /* ::::: tab ::::: */
 
-tab {
+tab 
+{
   /*-moz-appearance: tab;*/
   margin-top: 2px;
   border-top: 2px solid;

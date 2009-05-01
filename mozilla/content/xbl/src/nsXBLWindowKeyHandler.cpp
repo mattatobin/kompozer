@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,27 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
- *   - Mike Pinkerton (pinkerton@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
+ *  - Mike Pinkerton (pinkerton@netscape.com)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -46,11 +47,12 @@
 #include "nsIDOMNSUIEvent.h"
 #include "nsIDOMKeyEvent.h"
 #include "nsIDOMEventReceiver.h"
-#include "nsIDOMNSEvent.h"
+#include "nsIPrivateDOMEvent.h"
 #include "nsXBLService.h"
 #include "nsIServiceManager.h"
 #include "nsHTMLAtoms.h"
 #include "nsIXBLDocumentInfo.h"
+#include "nsIScriptGlobalObject.h"
 #include "nsIDOMElement.h"
 #include "nsXBLAtoms.h"
 #include "nsINativeKeyBindings.h"
@@ -69,14 +71,12 @@ nsXBLWindowKeyHandler::nsXBLWindowKeyHandler(nsIDOMElement* aElement, nsIDOMEven
 
 nsXBLWindowKeyHandler::~nsXBLWindowKeyHandler()
 {
-  // If mBoxObjectForElement is non-null, we created a prototype handler.
-  if (mBoxObjectForElement)
+  // If mElement is non-null, we created a prototype handler.
+  if (mElement)
     delete mHandler;
 }
 
-NS_IMPL_ISUPPORTS2(nsXBLWindowKeyHandler,
-                   nsIDOMKeyListener,
-                   nsIDOMEventListener)
+NS_IMPL_ISUPPORTS1(nsXBLWindowKeyHandler, nsIDOMKeyListener)
 
 static void
 BuildHandlerChain(nsIContent* aContent, nsXBLPrototypeHandler** aResult)
@@ -109,9 +109,7 @@ BuildHandlerChain(nsIContent* aContent, nsXBLPrototypeHandler** aResult)
 nsresult
 nsXBLWindowKeyHandler::EnsureHandlers(PRBool *aIsEditor)
 {
-  nsCOMPtr<nsIDOMElement> el = GetElement();
-  NS_ENSURE_STATE(!mBoxObjectForElement || el);
-  if (el) {
+  if (mElement) {
     // We are actually a XUL <keyset>.
     if (aIsEditor)
       *aIsEditor = PR_FALSE;
@@ -119,7 +117,7 @@ nsXBLWindowKeyHandler::EnsureHandlers(PRBool *aIsEditor)
     if (mHandler)
       return NS_OK;
 
-    nsCOMPtr<nsIContent> content(do_QueryInterface(el));
+    nsCOMPtr<nsIContent> content(do_QueryInterface(mElement));
     BuildHandlerChain(content, &mHandler);
   }
   else // We are an XBL file of handlers.
@@ -166,16 +164,14 @@ nsXBLWindowKeyHandler::WalkHandlers(nsIDOMEvent* aKeyEvent, nsIAtom* aEventType)
   if (prevent)
     return NS_OK;
 
-  nsCOMPtr<nsIDOMNSEvent> domNSEvent = do_QueryInterface(aKeyEvent);
-  PRBool trustedEvent = PR_FALSE;
-
-  if (domNSEvent) {
+  nsCOMPtr<nsIPrivateDOMEvent> privateEvent = do_QueryInterface(aKeyEvent);
+  if (privateEvent) {
     //Don't process the event if it was not dispatched from a trusted source
-    domNSEvent->GetIsTrusted(&trustedEvent);
+    PRBool trustedEvent;
+    privateEvent->IsTrustedEvent(&trustedEvent);
+    if (!trustedEvent)
+      return NS_OK;    
   }
-
-  if (!trustedEvent)
-    return NS_OK;
 
   // Make sure our event is really a key event
   nsCOMPtr<nsIDOMKeyEvent> keyEvent(do_QueryInterface(aKeyEvent));
@@ -183,11 +179,9 @@ nsXBLWindowKeyHandler::WalkHandlers(nsIDOMEvent* aKeyEvent, nsIAtom* aEventType)
     return NS_OK;
 
   PRBool isEditor;
-  nsresult rv = EnsureHandlers(&isEditor);
-  NS_ENSURE_SUCCESS(rv, rv);
+  EnsureHandlers(&isEditor);
   
-  nsCOMPtr<nsIDOMElement> el = GetElement();
-  if (!el) {
+  if (!mElement) {
     if (mUserHandler) {
       WalkHandlersInternal(aKeyEvent, aEventType, mUserHandler);
       evt->GetPreventDefault(&prevent);

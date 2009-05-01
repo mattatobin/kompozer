@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Mike Pinkerton (pinkerton@netscape.com).
- * Portions created by the Initial Developer are Copyright (C) 2001
+ * The Initial Developer of the Original Code is 
+ *   Mike Pinkerton (pinkerton@netscape.com)
+ *
+ * Netscape Communications Corporation.
+ * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,14 +46,13 @@
 #include "nsTransform2D.h"
 #include "nsThemeConstants.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIContent.h"
 #include "nsIDocument.h"
 #include "nsIFrame.h"
-#include "nsIAtom.h"
 #include "nsIEventStateManager.h"
 #include "nsINameSpaceManager.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsILookAndFeel.h"
 #include "nsRegionPool.h"
 #include "nsGfxUtils.h"
@@ -98,11 +99,7 @@ nsNativeThemeMac::nsNativeThemeMac()
     sTextfieldBorderSize.left = sTextfieldBorderSize.top = 2;
     sTextfieldBorderSize.right = sTextfieldBorderSize.bottom = 2;
     sTextfieldBGTransparent = PR_FALSE;
-    sListboxBGTransparent = PR_TRUE;
-    sTextfieldDisabledBGColorID = nsILookAndFeel::eColor__moz_field;
   }
-
-  mMenuActiveAtom = do_GetAtom("_moz-menuactive");
 }
 
 nsNativeThemeMac::~nsNativeThemeMac()
@@ -163,26 +160,24 @@ nsNativeThemeMac::DrawButton ( ThemeButtonKind inKind, const Rect& inBoxRect, PR
                                   PRInt32 inState )
 {
   ThemeButtonDrawInfo info;
-
-  info.value = inValue;
-  info.adornment = inAdornment;
-
   if ( inDisabled )
     info.state = kThemeStateUnavailableInactive;
-  else {
+  else
     info.state = ((inState & NS_EVENT_STATE_ACTIVE) && (inState & NS_EVENT_STATE_HOVER)) ? 
                     kThemeStatePressed : kThemeStateActive;
-    if ( inState & NS_EVENT_STATE_FOCUS ) {
-      // There is a bug in OS 10.2.x-10.3.x where if we are in a CG context and
-      // draw the focus ring with DrawThemeButton(), there are ugly lines all
-      // through the button.  This may get fixed in a dot-release, but until it
-      // does, we can't draw the focus ring.
-      if (inKind != kThemePushButton || nsRenderingContextMac::OnTigerOrLater())
-        info.adornment = kThemeAdornmentFocus;
-    }
-    if ( inIsDefault )
-      info.adornment |= kThemeAdornmentDefault;
+  info.value = inValue;
+  info.adornment = inAdornment;
+  if ( inState & NS_EVENT_STATE_FOCUS ) {
+    // There is a bug in OS 10.2 and higher where if we are in a CG context and
+    // draw the focus ring with DrawThemeButton(), there are ugly lines all
+    // through the button.  This may get fixed in a dot-release, but until it
+    // does, we can't draw the focus ring.
+    if (inKind != kThemePushButton || !nsRenderingContextMac::OnJaguar())
+      info.adornment = kThemeAdornmentFocus;
   }
+  if ( inIsDefault )
+    info.adornment |= kThemeAdornmentDefault;
+
   ::DrawThemeButton ( &inBoxRect, inKind, &info, nsnull, mEraseProc, nsnull, 0L );
 }
 
@@ -206,6 +201,7 @@ printf("told to draw at %ld %ld w %ld h %ld\n", inBoxRect.left, inBoxRect.top, i
 void
 nsNativeThemeMac::DrawEditText ( const Rect& inBoxRect, PRBool inIsDisabled )
 {
+#if TARGET_CARBON
   Pattern whitePat;
   ::BackColor(whiteColor);
   ::BackPat(GetQDGlobalsWhite(&whitePat));
@@ -213,12 +209,14 @@ nsNativeThemeMac::DrawEditText ( const Rect& inBoxRect, PRBool inIsDisabled )
   
   ThemeDrawState drawState = inIsDisabled ? kThemeStateDisabled : kThemeStateActive;
   ::DrawThemeEditTextFrame(&inBoxRect, drawState);
+#endif
 }
 
 
 void
 nsNativeThemeMac::DrawListBox ( const Rect& inBoxRect, PRBool inIsDisabled )
 {
+#if TARGET_CARBON
   Pattern whitePat;
   ::BackColor(whiteColor);
   ::BackPat(GetQDGlobalsWhite(&whitePat));
@@ -226,6 +224,7 @@ nsNativeThemeMac::DrawListBox ( const Rect& inBoxRect, PRBool inIsDisabled )
   
   ThemeDrawState drawState = inIsDisabled ? kThemeStateDisabled : kThemeStateActive;
   ::DrawThemeListBoxFrame(&inBoxRect, drawState);
+#endif
 }
 
 
@@ -289,37 +288,12 @@ nsNativeThemeMac::DrawTab ( const Rect& inBoxRect, PRBool inIsDisabled, PRBool i
   ::DrawThemeTab(&inBoxRect, style, direction, nsnull, 0L);
 }
 
-void
-nsNativeThemeMac::DrawMenu ( const Rect& inBoxRect, PRBool inIsDisabled )
-{
-  ::EraseRect(&inBoxRect);
-  ThemeMenuType menuType = inIsDisabled ? kThemeMenuTypeInactive : kThemeMenuTypePopUp;
-  ::DrawThemeMenuBackground(&inBoxRect, menuType);
-}
-
-void
-nsNativeThemeMac::DrawMenuItem ( const Rect& inBoxRect, ThemeMenuItemType itemType, PRBool inIsDisabled,
-                                   PRBool inHover)
-{
-  ThemeMenuState menuItemState;
-  if (inIsDisabled)
-    menuItemState = kThemeMenuDisabled;
-  else if (inHover)
-    menuItemState = kThemeMenuSelected;
-  else
-    menuItemState = kThemeMenuActive;
-
-  // XXXmano: pass the right menu rect!
-  ::DrawThemeMenuItem(&inBoxRect, &inBoxRect, inBoxRect.top,
-                      inBoxRect.bottom, menuItemState, itemType, NULL, 0);
-}
-
 NS_IMETHODIMP
 nsNativeThemeMac::DrawWidgetBackground(nsIRenderingContext* aContext, nsIFrame* aFrame,
                                         PRUint8 aWidgetType, const nsRect& aRect, const nsRect& aClipRect)
 {
   // setup to draw into the correct port
-  nsIDrawingSurface* surf;
+  nsDrawingSurface surf;
   aContext->GetDrawingSurface(&surf);
   nsDrawingSurfaceMac* macSurface = (nsDrawingSurfaceMac*)surf;
   CGrafPtr port = nsnull;
@@ -359,16 +333,10 @@ nsNativeThemeMac::DrawWidgetBackground(nsIRenderingContext* aContext, nsIFrame* 
       ::EraseRect(&macRect);
       ::SetThemeBackground(kThemeBrushWhite, 24, true);
       break;
-
+      
     case NS_THEME_MENUPOPUP:
       ::SetThemeBackground(kThemeBrushDialogBackgroundActive, 24, true);
-      DrawMenu(macRect, IsDisabled(aFrame));
-      ::SetThemeBackground(kThemeBrushWhite, 24, true);
-      break;
-
-    case NS_THEME_MENUITEM:
-      ::SetThemeBackground(kThemeBrushDialogBackgroundActive, 24, true);
-      DrawMenuItem(macRect, kThemeMenuItemPlain, IsDisabled(aFrame), CheckBooleanAttr(aFrame, mMenuActiveAtom));
+      ::EraseRect(&macRect);
       ::SetThemeBackground(kThemeBrushWhite, 24, true);
       break;
 
@@ -433,7 +401,7 @@ nsNativeThemeMac::DrawWidgetBackground(nsIRenderingContext* aContext, nsIFrame* 
       break;
 
     case NS_THEME_TEXTFIELD:
-      DrawEditText ( macRect, (IsDisabled(aFrame) || IsReadOnly(aFrame)) );
+      DrawEditText ( macRect, IsDisabled(aFrame) );
       break;
       
     case NS_THEME_PROGRESSBAR:
@@ -456,14 +424,11 @@ nsNativeThemeMac::DrawWidgetBackground(nsIRenderingContext* aContext, nsIFrame* 
                     kThemeDisclosureDown, kThemeAdornmentNone, eventState );
       break;
     case NS_THEME_TREEVIEW_HEADER_CELL:
-    {
-      TreeSortDirection sortDirection = GetTreeSortDirection(aFrame);
       DrawButton ( kThemeListHeaderButton, macRect, PR_FALSE, IsDisabled(aFrame), 
-                    sortDirection == eTreeSortDirection_Natural ? kThemeButtonOff : kThemeButtonOn,
-                    sortDirection == eTreeSortDirection_Descending ?
-                    kThemeAdornmentHeaderButtonSortUp : kThemeAdornmentNone, eventState );      
+                    IsSortedColumn(aFrame) ? kThemeButtonOn : kThemeButtonOff,
+                    IsSortReversed(aFrame) ? kThemeAdornmentHeaderButtonSortUp : kThemeAdornmentNone,
+                    eventState );      
       break;
-    }
     case NS_THEME_TREEVIEW_TREEITEM:
     case NS_THEME_TREEVIEW:
       ::SetThemeBackground(kThemeBrushWhite, 24, true);
@@ -523,11 +488,15 @@ nsNativeThemeMac::GetWidgetBorder(nsIDeviceContext* aContext,
       
   // XXX we should probably cache some of these metrics
   
+#if TARGET_CARBON
   switch ( aWidgetType ) {
   
     case NS_THEME_BUTTON:
-      aResult->SizeTo(kAquaPushButtonEndcaps, kAquaPushButtonTopBottom, 
-                          kAquaPushButtonEndcaps, kAquaPushButtonTopBottom);
+      if ( nsRenderingContextMac::OnMacOSX() )
+        aResult->SizeTo(kAquaPushButtonEndcaps, kAquaPushButtonTopBottom, 
+                            kAquaPushButtonEndcaps, kAquaPushButtonTopBottom);
+      else
+        aResult->SizeTo(5,2,5,2);     // 5px for AGA
       break;
 
     case NS_THEME_BUTTON_SMALL:
@@ -540,8 +509,11 @@ nsNativeThemeMac::GetWidgetBorder(nsIDeviceContext* aContext,
       break;
 
     case NS_THEME_DROPDOWN:
-      aResult->SizeTo(kAquaDropdownLeftEndcap, kAquaPushButtonTopBottom, 
-                        kAquaDropwdonRightEndcap, kAquaPushButtonTopBottom);
+      if ( nsRenderingContextMac::OnMacOSX() )
+        aResult->SizeTo(kAquaDropdownLeftEndcap, kAquaPushButtonTopBottom, 
+                          kAquaDropwdonRightEndcap, kAquaPushButtonTopBottom);
+      else
+        aResult->SizeTo(3,0,3,0);     // 3px for AGA
       break;
     
     case NS_THEME_TEXTFIELD:
@@ -559,6 +531,7 @@ nsNativeThemeMac::GetWidgetBorder(nsIDeviceContext* aContext,
     }
       
   }
+#endif
   
   return NS_OK;
 }
@@ -580,6 +553,7 @@ nsNativeThemeMac::GetMinimumWidgetSize(nsIRenderingContext* aContext, nsIFrame* 
   aResult->SizeTo(0,0);
   *aIsOverridable = PR_TRUE;
   
+#if TARGET_CARBON
   switch ( aWidgetType ) {
   
     case NS_THEME_BUTTON:
@@ -718,6 +692,7 @@ nsNativeThemeMac::GetMinimumWidgetSize(nsIRenderingContext* aContext, nsIFrame* 
     }
 
   }
+#endif
 
   return NS_OK;
 }
@@ -763,8 +738,7 @@ nsNativeThemeMac::WidgetStateChanged(nsIFrame* aFrame, PRUint8 aWidgetType,
     // disabled, checked, dlgtype, default, etc.
     *aShouldRepaint = PR_FALSE;
     if (aAttribute == mDisabledAtom || aAttribute == mCheckedAtom ||
-        aAttribute == mSelectedAtom || aAttribute == mMenuActiveAtom ||
-        aAttribute == mSortDirectionAtom)
+        aAttribute == mSelectedAtom)
       *aShouldRepaint = PR_TRUE;
   }
 
@@ -781,7 +755,7 @@ nsNativeThemeMac::ThemeChanged()
 
 
 PRBool 
-nsNativeThemeMac::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFrame,
+nsNativeThemeMac::ThemeSupportsWidget(nsIPresContext* aPresContext, nsIFrame* aFrame,
                                       PRUint8 aWidgetType)
 {
 #ifndef MOZ_WIDGET_COCOA
@@ -798,8 +772,7 @@ nsNativeThemeMac::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFr
   switch ( aWidgetType ) {
     case NS_THEME_DIALOG:
     case NS_THEME_WINDOW:
-    case NS_THEME_MENUPOPUP:
-    case NS_THEME_MENUITEM:
+      //    case NS_THEME_MENUPOPUP:     // no support for painting menu backgrounds
     case NS_THEME_TOOLTIP:
     
     case NS_THEME_CHECKBOX:
@@ -813,6 +786,9 @@ nsNativeThemeMac::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFr
     case NS_THEME_BUTTON_BEVEL:
     case NS_THEME_TOOLBAR:
     case NS_THEME_STATUSBAR:
+    case NS_THEME_DROPDOWN:
+    case NS_THEME_DROPDOWN_BUTTON:
+    case NS_THEME_DROPDOWN_TEXT:
     case NS_THEME_TEXTFIELD:
     //case NS_THEME_TOOLBOX:
     //case NS_THEME_TOOLBAR_BUTTON:
@@ -821,6 +797,8 @@ nsNativeThemeMac::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFr
     case NS_THEME_PROGRESSBAR_CHUNK:
     case NS_THEME_PROGRESSBAR_CHUNK_VERTICAL:
     case NS_THEME_TOOLBAR_SEPARATOR:
+    
+    case NS_THEME_LISTBOX:
     
     case NS_THEME_TAB_PANELS:
     case NS_THEME_TAB:
@@ -847,16 +825,11 @@ nsNativeThemeMac::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFr
     case NS_THEME_SCROLLBAR_GRIPPER_VERTICAL:
     case NS_THEME_SCROLLBAR_TRACK_VERTICAL:
     case NS_THEME_SCROLLBAR_TRACK_HORIZONTAL:
-      retVal = PR_TRUE;
+      // for now, only use on osx since i haven't yet verified on os9
+      if ( nsRenderingContextMac::OnMacOSX() )
+        retVal = PR_TRUE;
       break;
-
-    case NS_THEME_LISTBOX:
-    case NS_THEME_DROPDOWN:
-    case NS_THEME_DROPDOWN_BUTTON:
-    case NS_THEME_DROPDOWN_TEXT:
-      // Support listboxes and dropdowns regardless of styling,
-      // since non-themed ones look totally wrong.
-      return PR_TRUE;
+  
   }
 
   return retVal ? !IsWidgetStyled(aPresContext, aFrame, aWidgetType) : PR_FALSE;

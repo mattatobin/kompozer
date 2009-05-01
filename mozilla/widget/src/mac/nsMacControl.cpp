@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,7 +40,6 @@
 #include "nsFont.h"
 #include "nsFontUtils.h"
 #include "nsToolkit.h"
-#include "nsGfxUtils.h"
 
 #include "nsMacControl.h"
 #include "nsColor.h"
@@ -49,54 +48,41 @@
 #include "nsIServiceManager.h"
 #include "nsIPlatformCharset.h"
 
-#include <Carbon/Carbon.h>
-
-#if 0
-void DumpControlState(ControlHandle inControl, const char* message)
-{
-  if (!message) message = "gdb called";
-  
-  CGrafPtr curPort;
-  ::GetPort((GrafPtr*)&curPort);
-  Rect portBounds;
-  ::GetPortBounds(curPort, &portBounds);
-
-  Rect controlBounds = {0, 0, 0, 0};
-  if (inControl)
-    ::GetControlBounds(inControl, &controlBounds);
-    
-  printf("%20s -- port %p bounds %d, %d, %d, %d, control bounds %d, %d, %d, %d\n", message, curPort,
-    portBounds.left, portBounds.top, portBounds.right, portBounds.bottom,
-    controlBounds.left, controlBounds.top, controlBounds.right, controlBounds.bottom);
-}
+#if TARGET_CARBON || (UNIVERSAL_INTERFACES_VERSION >= 0x0330)
+#include <ControlDefinitions.h>
 #endif
 
+#include <Appearance.h>
+#include <TextUtils.h>
+#include <UnicodeConverter.h>
+#include <Fonts.h>
 
 static NS_DEFINE_CID(kCharsetConverterManagerCID, NS_ICHARSETCONVERTERMANAGER_CID);
 // TODO: leaks, need to release when unloading the dll
 nsIUnicodeEncoder * nsMacControl::mUnicodeEncoder = nsnull;
 nsIUnicodeDecoder * nsMacControl::mUnicodeDecoder = nsnull;
 
-#pragma mark -
 
 //-------------------------------------------------------------------------
 //
 //
 //-------------------------------------------------------------------------
 nsMacControl::nsMacControl()
-: mWidgetArmed(PR_FALSE)
-, mMouseInButton(PR_FALSE)
-, mValue(0)
-, mMin(0)
-, mMax(0)
-, mControl(nsnull)
-, mControlType(pushButProc)
-, mControlEventHandler(nsnull)
-, mWindowEventHandler(nsnull)
-, mLastValue(0)
-, mLastHilite(0)
 {
-  AcceptFocusOnClick(PR_FALSE);
+	mValue			= 0;
+	mMin			= 0;
+	mMax			= 1;
+	mWidgetArmed	= PR_FALSE;
+	mMouseInButton	= PR_FALSE;
+
+	mControl		= nsnull;
+	mControlType	= pushButProc;
+
+	mLastBounds.SetRect(0,0,0,0);
+	mLastValue = 0;
+	mLastHilite = 0;
+
+	AcceptFocusOnClick(PR_FALSE);
 }
 
 /**-------------------------------------------------------------------------
@@ -131,28 +117,9 @@ nsMacControl::~nsMacControl()
 	if (mControl)
 	{
 		Show(PR_FALSE);
-		ClearControl();
+		::DisposeControl(mControl);
 		mControl = nsnull;
 	}
-}
-
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-NS_IMETHODIMP
-nsMacControl::Destroy()
-{
-	if (mOnDestroyCalled)
-		return NS_OK;
-
-	// Hide the control to avoid drawing.  Even if we're very careful
-	// and avoid drawing the control ourselves after Destroy() is
-	// called, the system still might draw it, and it might wind up
-	// in the wrong location.
-	Show(PR_FALSE);
-
-	return Inherited::Destroy();
 }
 
 #pragma mark -
@@ -165,7 +132,7 @@ PRBool nsMacControl::OnPaint(nsPaintEvent &aEvent)
 	if (mControl && mVisible)
 	{
 		// turn off drawing for setup to avoid ugliness
-		Boolean		isVisible = ::IsControlVisible(mControl);
+		Boolean		isVisible = IsControlVisible(mControl);
 		::SetControlVisibility(mControl, false, false);
 
 		// update title
@@ -182,41 +149,54 @@ PRBool nsMacControl::OnPaint(nsPaintEvent &aEvent)
 			Rect macRect;
 			nsRectToMacRect(ctlRect, macRect);
 
-			::SetControlBounds(mControl, &macRect);
+			if ((mBounds.x != mLastBounds.x) || (mBounds.y != mLastBounds.y))
+				::MoveControl(mControl, macRect.left, macRect.top);
+			if ((mBounds.width != mLastBounds.width) || (mBounds.height != mLastBounds.height))
+				::SizeControl(mControl, ctlRect.width, ctlRect.height);
 
 			mLastBounds = mBounds;
 
-#if 0
-			// The widget rect can be larger than the control
-			// so the rect can be erased here to set up the
-			// background.  Unfortunately, the background color
-			// isn't properly set up (bug 5685).
-			//
-			// Since the only native control in use at the moment
-			// is the scrollbar, and the scrollbar does occupy
-			// the entire widget rect, there's no need to erase
-			// at all.
+			// Erase the widget rect (which can be larger than the control rect).
+			// Note: this should paint the backgrount with the right color but
+			// it doesn't work right now, see bug #5685 for more info.
 			nsRect bounds = mBounds;
 			bounds.x = bounds. y = 0;
 			nsRectToMacRect(bounds, macRect);
 			::EraseRect(&macRect);
-#endif
 		}
 
 		// update value
 		if (mValue != mLastValue)
 		{
 			mLastValue = mValue;
-			::SetControl32BitValue(mControl, mValue);
+			if (nsToolkit::HasAppearanceManager())
+				::SetControl32BitValue(mControl, mValue);
+			else
+				::SetControlValue(mControl, mValue);
 		}
 
 		// update hilite
-		SetupControlHiliteState();
+		PRInt16 hilite;
+		if (mEnabled)
+			hilite = (mWidgetArmed && mMouseInButton ? 1 : 0);
+		else
+			hilite = kControlInactivePart;
+		if (hilite != mLastHilite)
+		{
+			mLastHilite = hilite;
+			::HiliteControl(mControl, hilite);
+		}
 
 		::SetControlVisibility(mControl, isVisible, false);
 
 		// Draw the control
 		::DrawOneControl(mControl);
+
+		Rect macRect;
+		nsRect bounds = mBounds;
+		bounds.x = bounds. y = 0;
+		nsRectToMacRect(bounds, macRect);
+		::ValidWindowRect(mWindowPtr, &macRect);
 	}
 	return PR_FALSE;
 }
@@ -281,7 +261,7 @@ void  nsMacControl::ControlChanged(PRInt32 aNewValue)
 		mValue = aNewValue;
 		mLastValue = mValue;	// safely assume that the control has been repainted already
 
-		nsGUIEvent guiEvent(PR_TRUE, NS_CONTROL_CHANGE, this);
+		nsGUIEvent guiEvent(NS_CONTROL_CHANGE, this);
  		guiEvent.time	 	= PR_IntervalNow();
 		Inherited::DispatchWindowEvent(guiEvent);
 	}
@@ -345,97 +325,36 @@ void nsMacControl::GetRectForMacControl(nsRect &outRect)
 
 //-------------------------------------------------------------------------
 //
-// Get the current hilite state of the control
 //
 //-------------------------------------------------------------------------
-ControlPartCode nsMacControl::GetControlHiliteState()
+
+NS_METHOD nsMacControl::CreateOrReplaceMacControl(short inControlType)
 {
-  // update hilite
-  PRInt16 curHilite = kControlInactivePart;
+	nsRect		controlRect;
+	GetRectForMacControl(controlRect);
+	Rect macRect;
+	nsRectToMacRect(controlRect, macRect);
 
-  // Popups don't show up as active to the window manager, but if there's
-  // a popup visible, its UI elements want to have an active appearance.
-  PRBool isPopup = PR_FALSE;
-  nsCOMPtr<nsIWidget> windowWidget;
-  nsToolkit::GetTopWidget(mWindowPtr, getter_AddRefs(windowWidget));
-  if (windowWidget) {
-    nsWindowType windowType;
-    if (NS_SUCCEEDED(windowWidget->GetWindowType(windowType)) &&
-        windowType == eWindowType_popup) {
-      isPopup = PR_TRUE;
-    }
-  }
-
-  if (mEnabled && (isPopup || ::IsWindowActive(mWindowPtr)))
-    if (mWidgetArmed && mMouseInButton)
-      curHilite = kControlLabelPart;
-    else
-      curHilite = kControlNoPart;
-
-  return curHilite;
-}
-
-void
-nsMacControl::SetupControlHiliteState()
-{
-  PRInt16 curHilite = GetControlHiliteState();
-  if (curHilite != mLastHilite) {
-    mLastHilite = curHilite;
-    ::HiliteControl(mControl, curHilite);
-  }
-}
-
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-
-nsresult nsMacControl::CreateOrReplaceMacControl(short inControlType)
-{
-  nsresult rv = NS_ERROR_NULL_POINTER;
-  nsRect controlRect;
-  GetRectForMacControl(controlRect);
-  Rect macRect;
-  nsRectToMacRect(controlRect, macRect);
-
-  ClearControl();
-
-  if (mWindowPtr) {
-    mControl = ::NewControl(mWindowPtr, &macRect, "\p", PR_FALSE,
-                            mValue, mMin, mMax, inControlType, nsnull);
-
-    if (mControl) {
-      InstallEventHandlerOnControl();
-      SetupControlHiliteState();
-
-      // need to reset the font now
-      // XXX to do: transfer the text in the old control over too
-      if (mFontMetrics)
-        SetupMacControlFont();
-
-      if (mVisible)
-        ::ShowControl(mControl);
-
-      rv = NS_OK;
-    }
-  }
-
-  return rv;
-}
-
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-void nsMacControl::ClearControl()
-{
-	RemoveEventHandlerFromControl();
-	if (mControl)
+	if(nsnull != mWindowPtr)
 	{
-		::DisposeControl(mControl);
-		mControl = nsnull;
+		if (mControl)
+			::DisposeControl(mControl);
+
+		StartDraw();
+		mControl = ::NewControl(mWindowPtr, &macRect, "\p", mVisible, mValue, mMin, mMax, inControlType, nil);
+  		EndDraw();
+		
+		// need to reset the font now
+		// XXX to do: transfer the text in the old control over too
+		if (mControl && mFontMetrics)
+		{
+			SetupMacControlFont();
+		}
 	}
+
+	return (mControl) ? NS_OK : NS_ERROR_NULL_POINTER;
 }
+
 
 //-------------------------------------------------------------------------
 //
@@ -447,6 +366,9 @@ void nsMacControl::SetupMacControlFont()
 	NS_PRECONDITION(mContext != nsnull, "No context metrics in SetupMacControlFont");
 	
 	TextStyle		theStyle;
+#if !TARGET_CARBON
+	nsFontUtils::GetNativeTextStyle(*mFontMetrics, *mContext, theStyle);
+#endif
 	// if needed, impose a min size of 9pt on the control font
 	if (theStyle.tsSize < 9)
 		theStyle.tsSize = 9;
@@ -466,12 +388,10 @@ void nsMacControl::SetupMacControlFont()
 //
 //-------------------------------------------------------------------------
 
-void nsMacControl::StringToStr255(const nsAString& aText, Str255& aStr255)
+void nsMacControl::StringToStr255(const nsString& aText, Str255& aStr255)
 {
 	nsresult rv = NS_OK;
-	nsAString::const_iterator begin;
-	const PRUnichar *text = aText.BeginReading(begin).get();
-
+	
 	// get file system charset and create a unicode encoder
 	if (nsnull == mUnicodeEncoder) {
 		nsCAutoString fileSystemCharset;
@@ -491,13 +411,13 @@ void nsMacControl::StringToStr255(const nsAString& aText, Str255& aStr255)
 	if (NS_SUCCEEDED(rv)) {
 		PRInt32 inLength = aText.Length();
 		PRInt32 outLength = 255;
-		rv = mUnicodeEncoder->Convert(text, &inLength, (char *) &aStr255[1], &outLength);
+		rv = mUnicodeEncoder->Convert(aText.get(), &inLength, (char *) &aStr255[1], &outLength);
 		if (NS_SUCCEEDED(rv))
 			aStr255[0] = outLength;
 	}
 
 	if (NS_FAILED(rv)) {
-//		NS_ASSERTION(0, "error: charset conversion");
+//		NS_ASSERTION(0, "error: charset covnersion");
 		NS_LossyConvertUCS2toASCII buffer(Substring(aText,0,254));
 		PRInt32 len = buffer.Length();
 		memcpy(&aStr255[1], buffer.get(), len);
@@ -538,7 +458,7 @@ void nsMacControl::Str255ToString(const Str255& aStr255, nsString& aText)
 	}
 	
 	if (NS_FAILED(rv)) {
-//		NS_ASSERTION(0, "error: charset conversion");
+//		NS_ASSERTION(0, "error: charset covnersion");
 		aText.AssignWithConversion((char *) &aStr255[1], aStr255[0]);
 	}
 }
@@ -550,10 +470,96 @@ void nsMacControl::Str255ToString(const Str255& aStr255, nsString& aText)
 
 void nsMacControl::NSStringSetControlTitle(ControlHandle theControl, nsString title)
 {	
+#if TARGET_CARBON
+
   // wow, it sure is nice being able to use core foundation ;)
   CFStringRef str = CFStringCreateWithCharacters(NULL, (const UniChar*)title.get(), title.Length());
   SetControlTitleWithCFString(theControl, str);
   CFRelease(str);
+
+#else
+	TextStyle				theStyle;
+	ScriptCode				fontScript;
+	OSErr					err;
+	UnicodeToTextRunInfo	unicodeTextRunInfo;
+	const PRUnichar*		unicodeText;
+	char*					scriptRunText;
+	size_t					unicodeTextLengthInBytes, unicodeTextReadInBytes,
+							scriptRunTextSizeInBytes, scriptRunTextLengthInBytes,
+							scriptCodeRunListLength;
+	ScriptCodeRun			convertedTextScript;
+	
+	NS_PRECONDITION(mFontMetrics != nsnull, "nsMacControl::NSStringSetControlTitle: no Font Metrics");
+	
+	//
+	// determine the script of the font that the control is supposed to be drawn in
+	//
+#if !TARGET_CARBON
+	nsFontUtils::GetNativeTextStyle(*mFontMetrics, *mContext, theStyle);
+#endif
+	fontScript = ::FontToScript(theStyle.tsFont);
+	
+	//
+	// create a Unicode Conveter object (from Unicode -> font)
+	//
+ 	err = ::CreateUnicodeToTextRunInfoByScriptCode(1,&fontScript,&unicodeTextRunInfo);
+  	NS_ASSERTION(err==noErr,"nsMacControl::NSStringSetControlTitle: CreateUnicodeToTextRunInfoByScriptCode failed.");
+  	if (err!=noErr) { return; }
+
+	//
+	// get the Unicode text and prepare buffers
+	//
+	unicodeText = title.get();
+	unicodeTextLengthInBytes = title.Length() * sizeof(PRUnichar);
+	scriptRunTextSizeInBytes = unicodeTextLengthInBytes * 2;
+	scriptRunText = new char[scriptRunTextSizeInBytes];
+
+
+  	//
+  	// convert from Unicode to script run
+  	// 
+	err = ::ConvertFromUnicodeToScriptCodeRun(unicodeTextRunInfo,
+				unicodeTextLengthInBytes,NS_REINTERPRET_CAST(const PRUint16*, unicodeText),
+				0, /* no flags */
+				0,NULL,NULL,NULL, /* no offset arrays */
+				scriptRunTextSizeInBytes,&unicodeTextReadInBytes,&scriptRunTextLengthInBytes,
+				scriptRunText,
+				1 /* count of scrip runs*/,&scriptCodeRunListLength,&convertedTextScript);
+  	if (err!=noErr)
+  	{ 
+  		//
+  		// the font script is not capable of rendering this string, we need to find an installed
+  		//	script that can
+  		//
+ 		err = ::CreateUnicodeToTextRunInfoByScriptCode(0,NULL,&unicodeTextRunInfo);
+  		NS_ASSERTION(err==noErr,"nsMacControl::NSStringSetControlTitle: CreateUnicodeToTextRunInfoByScriptCode failed.");
+  		if (err!=noErr) { return; }
+
+	  	//
+	  	// convert from Unicode to script run
+	  	// 
+		err = ::ConvertFromUnicodeToScriptCodeRun(unicodeTextRunInfo,
+					unicodeTextLengthInBytes,NS_REINTERPRET_CAST(const PRUint16*, unicodeText),
+					0, /* no flags */
+					0,NULL,NULL,NULL, /* no offset arrays */
+					scriptRunTextSizeInBytes,&unicodeTextReadInBytes,&scriptRunTextLengthInBytes,
+					scriptRunText,
+					1 /* count of scrip runs*/,&scriptCodeRunListLength,&convertedTextScript);
+  					NS_ASSERTION(err==noErr,"nsMacControl::NSStringSetControlTitle: CreateUnicodeToTextRunInfoByScriptCode failed.");
+  					if (err!=noErr) { delete [] scriptRunText; return;}
+  	}	
+
+	scriptRunText[scriptRunTextLengthInBytes] = 0;	// null terminate
+
+	if (convertedTextScript.script!=fontScript)
+		SetupMacControlFontForScript(convertedTextScript.script);
+
+	//
+	// set the control title
+	//
+	::SetControlTitle(theControl,c2pstr(scriptRunText));
+	delete [] scriptRunText;	
+#endif					
 }
 //-------------------------------------------------------------------------
 //
@@ -570,6 +576,9 @@ void nsMacControl::SetupMacControlFontForScript(short theScript)
 
 	NS_PRECONDITION(mFontMetrics != nsnull, "No font metrics in SetupMacControlFont");
 	NS_PRECONDITION(mContext != nsnull, "No context metrics in SetupMacControlFont");
+#if !TARGET_CARBON
+	nsFontUtils::GetNativeTextStyle(*mFontMetrics, *mContext, theStyle);
+#endif
 
 	//
 	// take the script and select and override font
@@ -605,179 +614,8 @@ void nsMacControl::GetFileSystemCharset(nsCString & fileSystemCharset)
 
     NS_ASSERTION(NS_SUCCEEDED(rv), "error getting platform charset");
 	  if (NS_FAILED(rv)) 
-		  aCharset.AssignLiteral("x-mac-roman");
+		  aCharset.Assign(NS_LITERAL_CSTRING("x-mac-roman"));
   }
   fileSystemCharset = aCharset;
 }
-
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-
-OSStatus nsMacControl::InstallEventHandlerOnControl()
-{
-  const EventTypeSpec kControlEventList[] = {
-    // Installing a kEventControlDraw handler causes harmless but ugly visual
-    // imperfections in scrollbar tracks on Mac OS X 10.4.0 - 10.4.2.  This is
-    // fixed in 10.4.3.  Bug 300058.
-    { kEventClassControl, kEventControlDraw },
-  };
-
-  static EventHandlerUPP sControlEventHandlerUPP;
-  if (!sControlEventHandlerUPP)
-    sControlEventHandlerUPP = ::NewEventHandlerUPP(ControlEventHandler);
-
-  OSStatus err =
-   ::InstallControlEventHandler(mControl,
-                                sControlEventHandlerUPP,
-                                GetEventTypeCount(kControlEventList),
-                                kControlEventList,
-                                (void*)this,
-                                &mControlEventHandler);
-  NS_ENSURE_TRUE(err == noErr, err);
-
-  const EventTypeSpec kWindowEventList[] = {
-    { kEventClassWindow, kEventWindowActivated },
-    { kEventClassWindow, kEventWindowDeactivated },
-  };
-
-  static EventHandlerUPP sWindowEventHandlerUPP;
-  if (!sWindowEventHandlerUPP)
-    sWindowEventHandlerUPP = ::NewEventHandlerUPP(WindowEventHandler);
-
-  err = ::InstallWindowEventHandler(mWindowPtr,
-                                    sWindowEventHandlerUPP,
-                                    GetEventTypeCount(kWindowEventList),
-                                    kWindowEventList,
-                                    (void*)this,
-                                    &mWindowEventHandler);
-  return err;
-}
-
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-void nsMacControl::RemoveEventHandlerFromControl()
-{
-  if (mControlEventHandler) {
-    ::RemoveEventHandler(mControlEventHandler);
-    mControlEventHandler = nsnull;
-  }
-
-  if (mWindowEventHandler) {
-    ::RemoveEventHandler(mWindowEventHandler);
-    mWindowEventHandler = nsnull;
-  }
-}
-
-//-------------------------------------------------------------------------
-//
-// At present, this handles only { kEventClassControl, kEventControlDraw }.
-//
-//-------------------------------------------------------------------------
-// static
-pascal OSStatus
-nsMacControl::ControlEventHandler(EventHandlerCallRef aHandlerCallRef,
-                                  EventRef            aEvent,
-                                  void*               aUserData)
-{
-  nsMacControl* self = NS_STATIC_CAST(nsMacControl*, aUserData);
-
-  PRBool wasDrawing = self->IsDrawing();
-
-  if (wasDrawing) {
-    if (!self->IsQDStateOK()) {
-      // If you're here, you must be drawing the control inside |TrackControl|.
-      // The converse is not necessarily true.
-      //
-      // In the |TrackControl| loop, something on a PLEvent messed with the
-      // QD state.  The state can be fixed so the control draws in the proper
-      // place by setting the port and origin before calling the next handler,
-      // but it's extremely likely that the QD state was wrong when the
-      // Control Manager looked at the mouse position, so the control's
-      // current value will be incorrect.  Nobody wants to draw a control
-      // that shows the wrong value (ex. scroll thumb position), so don't
-      // draw it.  The subclass is responsible for catching this case in
-      // its TrackControl action proc and doing something smart about it,
-      // like fixing the port state and posting a fake event to force the
-      // Control Manager to reread the value.
-      //
-      // This works in concert with |nsNativeScrollBar::DoScrollAction|.
-      return noErr;
-    }
-  }
-  else {
-    self->StartDraw();
-  }
-
-  OSStatus err = ::CallNextEventHandler(aHandlerCallRef, aEvent);
-
-  if (!wasDrawing) {
-    self->EndDraw();
-  }
-
-  return err;
-}
-
-//-------------------------------------------------------------------------
-//
-// Returns true if the port and origin are set properly for this control.
-// Useful to determine whether the Control Manager is likely to have been
-// confused when it calls back into nsMacControl or a subclass.
-//
-//-------------------------------------------------------------------------
-PRBool nsMacControl::IsQDStateOK()
-{
-  CGrafPtr controlPort = ::GetWindowPort(mWindowPtr);
-  CGrafPtr currentPort;
-  ::GetPort(&currentPort);
-
-  if (controlPort != currentPort) {
-    return PR_FALSE;
-  }
-
-  nsRect controlBounds;
-  GetBounds(controlBounds);
-  LocalToWindowCoordinate(controlBounds);
-  Rect currentBounds;
-  ::GetPortBounds(currentPort, &currentBounds);
-
-  if (-controlBounds.x != currentBounds.left ||
-      -controlBounds.y != currentBounds.top) {
-    return PR_FALSE;
-  }
-
-  return PR_TRUE;
-}
-
-//-------------------------------------------------------------------------
-//
-// At present, this handles only
-//  { kEventClassWindow, kEventWindowActivated },
-//  { kEventClassWindow, kEventWindowDeactivated }
-//
-//-------------------------------------------------------------------------
-// static
-pascal OSStatus
-nsMacControl::WindowEventHandler(EventHandlerCallRef aHandlerCallRef,
-                                 EventRef            aEvent,
-                                 void*               aUserData)
-{
-  nsMacControl* self = NS_STATIC_CAST(nsMacControl*, aUserData);
-
-  // HiliteControl will cause the control to draw, so take care to only
-  // call SetupControlHiliteState if the control is supposed to be visible.
-  if (self->mVisible && self->ContainerHierarchyIsVisible())
-    self->SetupControlHiliteState();
-
-  // We can't call CallNextEventHandler() here:  There can be _many_ controls
-  // in a window, and this handler is installed on the same (window) target
-  // for each of them.  So CallNextEventHandler() recurses through this
-  // handler once for each "additional" control, and if there are too many
-  // controls a stack overflow can result (bmo bug 398499).  Since we never
-  // actually "consume" an activate or deactive event here, there should be
-  // no problem alwaye returning eventNotHandledErr.
-  return eventNotHandledErr;
-}
+	

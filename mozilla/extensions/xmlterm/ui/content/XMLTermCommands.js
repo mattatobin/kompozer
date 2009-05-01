@@ -728,7 +728,7 @@ function AboutXMLTerm() {
 }
 
 function Redirect() {
-   window.location.href = window.redirectURL;
+   window.location = window.redirectURL;
 }
 
 

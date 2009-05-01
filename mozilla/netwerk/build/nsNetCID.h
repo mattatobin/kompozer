@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Darin Fisher <darin@netscape.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,7 +44,7 @@
  * netwerk/base/ classes
  */
 
-// service implementing nsIIOService and nsIIOService2.
+// service implementing nsIIOService.
 #define NS_IOSERVICE_CLASSNAME \
     "nsIOService"
 #define NS_IOSERVICE_CONTRACTID \
@@ -56,10 +56,6 @@
     0x11d3,                                          \
     {0x93, 0x37, 0x00, 0x10, 0x4b, 0xa0, 0xfd, 0x40} \
 }
-
-// service implementing nsINetUtil
-#define NS_NETUTIL_CONTRACTID \
-    "@mozilla.org/network/util;1"
 
 // service implementing nsIEventTarget.  events dispatched to this event
 // target will be executed on one of necko's background i/o threads.
@@ -75,7 +71,7 @@
     {0x91, 0x55, 0xc3, 0x50, 0x94, 0x28, 0x46, 0x1e} \
 }
 
-// service implementing nsIProtocolProxyService and nsPIProtocolProxyService.
+// service implementing nsIProtocolProxyService.
 #define NS_PROTOCOLPROXYSERVICE_CLASSNAME \
     "nsProtocolProxyService"
 #define NS_PROTOCOLPROXYSERVICE_CONTRACTID \
@@ -339,9 +335,18 @@
     {0xa9, 0x04, 0xac, 0x1d, 0x6d, 0xa7, 0x7a, 0x02} \
 }
 
-// component implementing nsIIncrementalDownload.
-#define NS_INCREMENTALDOWNLOAD_CONTRACTID \
-    "@mozilla.org/network/incremental-download;1"
+// component implementing nsIResumableEntityID
+#define NS_RESUMABLEENTITYID_CLASSNAME \
+    "nsResumableEntityID"
+#define NS_RESUMABLEENTITYID_CONTRACTID \
+    "@mozilla.org/network/resumable-entity-id;1"
+#define NS_RESUMABLEENTITYID_CID \
+{ /* e744a9a6-1dd1-11b2-b95c-e5d67a34e6b3 */         \
+    0xe744a9a6,                                      \
+    0x1d11,                                          \
+    0x11b2,                                          \
+    {0xb9, 0x5c, 0xe5, 0xd6, 0x7a, 0x34, 0xe6, 0xb3} \
+}     
 
 // service implementing nsIStreamTransportService
 #define NS_STREAMTRANSPORTSERVICE_CLASSNAME \
@@ -380,6 +385,18 @@
     0x3b35,                                          \
     0x48fa,                                          \
     {0xab, 0x1d, 0x5e, 0x68, 0xa9, 0xf4, 0x5f, 0x08} \
+}
+
+#define NS_FILETRANSPORTSERVICE_CLASSNAME \
+    "nsFileTransportService"
+#define NS_FILETRANSPORTSERVICE_CONTRACTID \
+    "@mozilla.org/network/file-transport-service;1"
+#define NS_FILETRANSPORTSERVICE_CID                  \
+{ /* 2bb2b250-ea35-11d2-931b-00104ba0fd40 */         \
+    0x2bb2b250,                                      \
+    0xea35,                                          \
+    0x11d2,                                          \
+    {0x93, 0x1b, 0x00, 0x10, 0x4b, 0xa0, 0xfd, 0x40} \
 }
 
 #define NS_LOCALFILEINPUTSTREAM_CLASSNAME \
@@ -442,24 +459,6 @@
     0x4308,                                          \
     {0x94, 0xdb, 0xd4, 0xf8, 0x59, 0x05, 0x82, 0x15} \
 }
-
-// component implementing nsIPrompt
-//
-// NOTE: this implementation does not have any way to correctly parent itself,
-//       it is almost always wrong to get a prompt via this interface.
-//       use nsIWindowWatcher instead whenever possible.
-//
-#define NS_DEFAULTPROMPT_CONTRACTID \
-    "@mozilla.org/network/default-prompt;1"
-
-// component implementing nsIAuthPrompt
-//
-// NOTE: this implementation does not have any way to correctly parent itself,
-//       it is almost always wrong to get an auth prompt via this interface.
-//       use nsIWindowWatcher instead whenever possible.
-//
-#define NS_DEFAULTAUTHPROMPT_CONTRACTID \
-    "@mozilla.org/network/default-auth-prompt;1"
 
 /******************************************************************************
  * netwerk/cache/ classes
@@ -563,17 +562,6 @@
     {0x8c, 0xda, 0x00, 0x60, 0xb0, 0xfc, 0x14, 0xa3} \
 }
 
-#define NS_RESURL_CLASSNAME \
-    "nsResURL"
-#define NS_RESURL_CID                    \
-{ /* ff8fe7ec-2f74-4408-b742-6b7a546029a8 */         \
-    0xff8fe7ec,                                      \
-    0x2f74,                                          \
-    0x4408,                                          \
-    {0xb7, 0x42, 0x6b, 0x7a, 0x54, 0x60, 0x29, 0xa8} \
-}
-
-
 /******************************************************************************
  * netwerk/protocol/file/ classes
  */
@@ -603,17 +591,19 @@
 }
 
 /******************************************************************************
- * netwerk/protocol/viewsource/ classes
+ * netwerk/protocol/data/ classes
  */
 
-// service implementing nsIProtocolHandler
-#define NS_VIEWSOURCEHANDLER_CID                     \
-{ /* {0x9c7ec5d1-23f9-11d5-aea8-8fcc0793e97f} */     \
-    0x9c7ec5d1,                                      \
-    0x23f9,                                          \
-    0x11d5,                                          \
-    {0xae, 0xa8, 0x8f, 0xcc, 0x07, 0x93, 0xe9, 0x7f} \
+#define NS_JARPROTOCOLHANDLER_CLASSNAME \
+    "nsJarProtocolHandler"
+#define NS_JARPROTOCOLHANDLER_CID                    \
+{ /* 0xc7e410d4-0x85f2-11d3-9f63-006008a6efe9 */     \
+    0xc7e410d4,                                      \
+    0x85f2,                                          \
+    0x11d3,                                          \
+    {0x9f, 0x63, 0x00, 0x60, 0x08, 0xa6, 0xef, 0xe9} \
 }
+
 
 /******************************************************************************
  * netwerk/dns/ classes
@@ -693,16 +683,6 @@
     { 0xa2, 0x8a, 0x5b, 0xa2, 0x44, 0x7f, 0xba, 0xce } \
 }
 
-#define NS_SSLSOCKETPROVIDER_CONTRACTID \
-    NS_NETWORK_SOCKET_CONTRACTID_PREFIX "ssl"
-
-/* This code produces a normal socket which can be used to initiate the
- * STARTTLS protocol by calling its nsISSLSocketControl->StartTLS()
- */
-#define NS_STARTTLSSOCKETPROVIDER_CONTRACTID \
-    NS_NETWORK_SOCKET_CONTRACTID_PREFIX "starttls"
-
-
 /******************************************************************************
  * netwerk/cookie classes
  */
@@ -732,82 +712,5 @@
     0x11d6,                                            \
     { 0xa6, 0x18, 0x00, 0x10, 0xa4, 0x01, 0xeb, 0x10 } \
 }
-
-/**
- * General-purpose content sniffer component. Use with CreateInstance.
- *
- * Implements nsIContentSniffer_MOZILLA_1_8_BRANCH
- */
-#define NS_GENERIC_CONTENT_SNIFFER \
-    "@mozilla.org/network/content-sniffer;1"
-
-/******************************************************************************
- * netwerk/streamconv classes
- */
-
-// service implementing nsIStreamConverterService
-#define NS_STREAMCONVERTERSERVICE_CID                \
-{ /* 892FFEB0-3F80-11d3-A16C-0050041CAF44 */         \
-    0x892ffeb0,                                      \
-    0x3f80,                                          \
-    0x11d3,                                          \
-    {0xa1, 0x6c, 0x00, 0x50, 0x04, 0x1c, 0xaf, 0x44} \
-}
-
-/******************************************************************************
- * netwerk/system classes
- */
-
-// service implementing nsINetworkLinkService
-#define NS_NETWORK_LINK_SERVICE_CLASSNAME \
-    "Network Link Status"
-#define NS_NETWORK_LINK_SERVICE_CID                  \
-{ /* 75a500a2-0030-40f7-86f8-63f225b940ae */         \
-    0x75a500a2,                                      \
-    0x0030,                                          \
-    0x40f7,                                          \
-    {0x86, 0xf8, 0x63, 0xf2, 0x25, 0xb9, 0x40, 0xae} \
-}
-
-/******************************************************************************
- * Contracts that can be implemented by necko users.
- */
-
-/**
- * This contract ID will be gotten as a service implementing nsINetworkLinkService
- * and monitored by IOService for automatic online/offline management.
- */
-#define NS_NETWORK_LINK_SERVICE_CONTRACTID \
-    "@mozilla.org/network/network-link-service;1"
-
-/******************************************************************************
- * Categories
- */
-/**
- * Services registered in this category will get notified via
- * nsIChannelEventSink about all redirects that happen and have the opportunity
- * to veto them. The value of the category entries is interpreted as the
- * contract ID of the service.
- */
-#define NS_CHANNEL_EVENT_SINK_CATEGORY "net-channel-event-sinks"
-
-/**
- * Services in this category will get told about each load that happens and get
- * the opportunity to override the detected MIME type via
- * nsIContentSniffer_MOZILLA_1_8_BRANCH.
- * Services should not set the MIME type on the channel directly, but return the
- * new type. If getMIMETypeFromContent throws an exception, the type will remain
- * unchanged.
- *
- * Note that only channels with the LOAD_CALL_CONTENT_SNIFFERS flag will call
- * content sniffers. Also note that there can be security implications about
- * changing the MIME type -- proxies filtering responses based on their MIME
- * type might consider certain types to be safe, which these sniffers can
- * override.
- *
- * Not all channels may implement content sniffing. See also
- * nsIChannel::LOAD_CALL_CONTENT_SNIFFERS.
- */
-#define NS_CONTENT_SNIFFER_CATEGORY "net-content-sniffers"
 
 #endif // nsNetCID_h__

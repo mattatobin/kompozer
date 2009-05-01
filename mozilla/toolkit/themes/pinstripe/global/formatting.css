@@ -223,27 +223,24 @@
     }
 
 #commonDialog > hbox > vbox > description, #commonDialog > hbox > vbox > vbox > description {
-  font: menu;
-  line-height: 16px;
-  margin-bottom: 6px;
+	font: menu;
+	font-weight: bold !important;
+        line-height: 16px;
+	margin-bottom: 6px;
 }
 
-#commonDialog .dialogTitle {
-  font-weight: bold !important;
-}
 
 /* class for text with a 'link' appearance */
   .text-link
     {
       color                 : blue;
       text-decoration       : underline;
-      border                : 1px solid transparent;
     }
   
   .text-link:focus
     {
       color                 : red;
-      border                : 1px dotted -moz-DialogText;
+      -moz-outline: 1px dotted invert;
     }
 
   .text-link:hover

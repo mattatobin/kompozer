@@ -9,9 +9,9 @@
 }
 
 #find-closebutton > .toolbarbutton-icon {
-  -moz-margin-end: 0px !important;
-  -moz-padding-end: 2px !important;
-  -moz-padding-start: 2px !important;
+  margin-right: 0px !important;
+  padding-right: 2px !important;
+  padding-left: 2px !important;
 }
 
 #find-closebutton:hover {
@@ -86,20 +86,14 @@
 #find-status-icon
 {
   list-style-image: none;
-  margin-top: 2px;
-  margin-bottom: 0px;
-  -moz-margin-start: 12px;
-  -moz-margin-end: 0px;
+  margin: 2px 0px 0px 12px;
   width: 16px;
   height: 16px;
 }
 
 #find-status
 {
-  margin-top: 0px;
-  margin-bottom: 0px;
-  -moz-margin-start: 3px;
-  -moz-margin-end: 0px;
+  margin: 0px 0px 0px 3px;
   padding: 2px;
 }
 

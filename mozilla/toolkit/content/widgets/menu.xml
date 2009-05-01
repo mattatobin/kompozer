@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 
 <!DOCTYPE bindings [
-  <!ENTITY % globalDTD SYSTEM "chrome://global/locale/global.dtd">
-  %globalDTD;
+  <!ENTITY % globalRegionDTD SYSTEM "chrome://global-region/locale/region.dtd">
+  %globalRegionDTD;
 ]>
 
 <bindings id="menuitemBindings"
@@ -18,16 +18,13 @@
       <property name="accessible">
         <getter>
           <![CDATA[
-            try {
-              var accService = Components.classes["@mozilla.org/accessibilityService;1"]
-                                         .getService(Components.interfaces.nsIAccessibilityService);
-              if (this.localName == "menuseparator")
-                return accService.createXULMenuSeparatorAccessible(this);
-              return accService.createXULMenuitemAccessible(this);
-            }
-            catch(ex) { /* no chrome privileges */ }
-
-            return null;
+            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
+            if (this.localName == "menuseparator")
+              return accService.createXULMenuSeparatorAccessible(this);
+            if (this.parentNode && this.parentNode.parentNode &&
+                this.parentNode.localName == "menupopup" && this.parentNode.parentNode.localName == "menulist")
+              return accService.createXULSelectOptionAccessible(this);
+            return accService.createXULMenuitemAccessible(this);
           ]]>
         </getter>
       </property>
@@ -107,17 +104,6 @@
     </content>
   </binding>
 
-  <binding id="menuitem-iconic-desc-noaccel" extends="chrome://global/content/bindings/menu.xml#menuitem">
-    <content>
-      <xul:hbox class="menu-iconic-left" align="center" pack="center"
-                xbl:inherits="selected,disabled,checked">
-        <xul:image class="menu-iconic-icon" xbl:inherits="src=image,validate,src"/>
-      </xul:hbox>
-      <xul:label class="menu-iconic-text" xbl:inherits="value=label,accesskey,crop" crop="right" flex="1"/>
-      <xul:label class="menu-iconic-text menu-description" xbl:inherits="value=description" crop="right" flex="10000"/>
-    </content>
-  </binding>
-
   <binding id="menu-iconic" extends="chrome://global/content/bindings/menu.xml#menuitem-base">
     <content>
       <xul:hbox class="menu-iconic-left" align="center" pack="center">
@@ -127,8 +113,7 @@
       <xul:hbox anonid="accel">
         <xul:label class="menu-iconic-accel" xbl:inherits="value=acceltext"/>
       </xul:hbox>
-      <xul:hbox class="menu-right" chromedir="&locale.dir;"
-                xbl:inherits="_moz-menuactive,disabled" align="center" pack="center">
+      <xul:hbox class="menu-right" xbl:inherits="_moz-menuactive,disabled" align="center" pack="center">
         <xul:image/>
       </xul:hbox>
       <children includes="menupopup|template"/>

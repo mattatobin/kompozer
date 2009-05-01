@@ -49,7 +49,6 @@
 #include "nsISupports.h"
 #include "nsIFactory.h"
 #include "jni.h"
-#include "jsjava.h" // For lcjsobject
 
 #define NS_ILIVECONNECT_IID                          \
 { /* 68190910-3318-11d2-97f0-00805f8a28d0 */         \
@@ -67,6 +66,8 @@
     {0x97, 0xf0, 0x00, 0x80, 0x5f, 0x8a, 0x28, 0xd0} \
 }
 
+typedef jint jsobject;
+
 class nsILiveconnect : public nsISupports {
 public:
 	NS_DEFINE_STATIC_IID_ACCESSOR(NS_ILIVECONNECT_IID)
@@ -83,7 +84,7 @@ public:
      *                     wrapped up as java wrapper netscape.javascript.JSObject.
      */
     NS_IMETHOD
-    GetMember(JNIEnv *jEnv, lcjsobject jsobj, const jchar *name, jsize length, void* principalsArray[], 
+    GetMember(JNIEnv *jEnv, jsobject jsobj, const jchar *name, jsize length, void* principalsArray[], 
               int numPrincipals, nsISupports *securitySupports, jobject *pjobj) = 0;
 
     /**
@@ -95,7 +96,7 @@ public:
      *                     the member. 
      */
     NS_IMETHOD
-    GetSlot(JNIEnv *jEnv, lcjsobject jsobj, jint slot, void* principalsArray[], 
+    GetSlot(JNIEnv *jEnv, jsobject jsobj, jint slot, void* principalsArray[], 
             int numPrincipals, nsISupports *securitySupports, jobject *pjobj) = 0;
 
     /**
@@ -108,7 +109,7 @@ public:
      *                     then a internal mapping is consulted to convert to a NJSObject.
      */
     NS_IMETHOD
-    SetMember(JNIEnv *jEnv, lcjsobject jsobj, const jchar* name, jsize length, jobject jobj, void* principalsArray[], 
+    SetMember(JNIEnv *jEnv, jsobject jsobj, const jchar* name, jsize length, jobject jobj, void* principalsArray[], 
               int numPrincipals, nsISupports *securitySupports) = 0;
 
     /**
@@ -121,7 +122,7 @@ public:
      *                     then a internal mapping is consulted to convert to a NJSObject.
      */
     NS_IMETHOD
-    SetSlot(JNIEnv *jEnv, lcjsobject jsobj, jint slot, jobject jobj, void* principalsArray[], 
+    SetSlot(JNIEnv *jEnv, jsobject jsobj, jint slot, jobject jobj, void* principalsArray[], 
             int numPrincipals, nsISupports *securitySupports) = 0;
 
     /**
@@ -131,7 +132,7 @@ public:
      * @param name       - Name of a member.
      */
     NS_IMETHOD
-    RemoveMember(JNIEnv *jEnv, lcjsobject jsobj, const jchar* name, jsize length,  void* principalsArray[], 
+    RemoveMember(JNIEnv *jEnv, jsobject jsobj, const jchar* name, jsize length,  void* principalsArray[], 
                  int numPrincipals, nsISupports *securitySupports) = 0;
 
     /**
@@ -143,7 +144,7 @@ public:
      * @param pjobj      - return value.
      */
     NS_IMETHOD
-    Call(JNIEnv *jEnv, lcjsobject jsobj, const jchar* name, jsize length, jobjectArray jobjArr,  void* principalsArray[], 
+    Call(JNIEnv *jEnv, jsobject jsobj, const jchar* name, jsize length, jobjectArray jobjArr,  void* principalsArray[], 
          int numPrincipals, nsISupports *securitySupports, jobject *pjobj) = 0;
 
     /**
@@ -156,7 +157,7 @@ public:
      * @param pjobj              - return value.
      */
     NS_IMETHOD	
-    Eval(JNIEnv *jEnv, lcjsobject obj, const jchar *script, jsize length, void* principalsArray[], 
+    Eval(JNIEnv *jEnv, jsobject obj, const jchar *script, jsize length, void* principalsArray[], 
          int numPrincipals, nsISupports *securitySupports, jobject *pjobj) = 0;
 
     /**
@@ -170,7 +171,7 @@ public:
      */
     NS_IMETHOD
     GetWindow(JNIEnv *jEnv, void *pJavaObject, void* principalsArray[], 
-              int numPrincipals, nsISupports *securitySupports, lcjsobject *pobj) = 0;
+              int numPrincipals, nsISupports *securitySupports, jsobject *pobj) = 0;
 
     /**
      * Get the window object for a plugin instance.
@@ -179,7 +180,7 @@ public:
      * @param obj        - A Native JS Object.
      */
     NS_IMETHOD
-    FinalizeJSObject(JNIEnv *jEnv, lcjsobject jsobj) = 0;
+    FinalizeJSObject(JNIEnv *jEnv, jsobject jsobj) = 0;
 
     /**
      * Get the window object for a plugin instance.
@@ -189,7 +190,7 @@ public:
      * @param jstring    - Return value as a jstring representing a JS object.
      */
     NS_IMETHOD
-    ToString(JNIEnv *jEnv, lcjsobject obj, jstring *pjstring) = 0;
+    ToString(JNIEnv *jEnv, jsobject obj, jstring *pjstring) = 0;
 };
 
 #endif // nsILiveconnect_h___

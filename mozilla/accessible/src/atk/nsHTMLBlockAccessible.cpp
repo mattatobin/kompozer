@@ -61,7 +61,6 @@ NS_IMETHODIMP nsHTMLBlockAccessible::GetState(PRUint32 *aState)
 {
   nsAccessible::GetState(aState);
   *aState &= ~STATE_FOCUSABLE;
-  *aState |= STATE_UNAVAILABLE;
   return NS_OK;
 }
 

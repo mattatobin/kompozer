@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Brian Ryner.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Brian Ryner.
+ * Portions created by Brian Ryner are Copyright (C) 2000 Brian Ryner.
+ * All Rights Reserved.
  *
- * Contributor(s):
+ * Contributor(s): 
  *   Brian Ryner <bryner@brianryner.com>
  *   Darin Fisher <darin@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 // finger implementation
 
@@ -115,7 +98,7 @@ nsFingerChannel::Init(nsIURI *uri, nsIProxyInfo *proxyInfo)
     if (mHost.IsEmpty())
         return NS_ERROR_MALFORMED_URI;
 
-    mContentType.AssignLiteral(TEXT_HTML); // expected content-type
+    mContentType = NS_LITERAL_CSTRING(TEXT_HTML); // expected content-type
     return NS_OK;
 }
 
@@ -208,7 +191,9 @@ nsFingerChannel::Open(nsIInputStream **_retval)
 NS_IMETHODIMP
 nsFingerChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *ctxt)
 {
-    nsresult rv = NS_CheckPortSafety(mPort, "finger");
+    nsresult rv = NS_OK;
+
+    rv = NS_CheckPortSafety(mPort, "finger");
     if (NS_FAILED(rv)) return rv;
 
     nsCOMPtr<nsIEventQueue> eventQ;
@@ -226,7 +211,8 @@ nsFingerChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *ctxt)
                               getter_AddRefs(mTransport));
     if (NS_FAILED(rv)) return rv;
 
-    // not fatal if this fails
+    // not fatal if these fail
+    mTransport->SetSecurityCallbacks(mCallbacks);
     mTransport->SetEventSink(this, eventQ);
 
     rv = WriteRequest(mTransport);
@@ -239,8 +225,11 @@ nsFingerChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *ctxt)
              do_GetService(kStreamConverterServiceCID, &rv);
     if (NS_FAILED(rv)) return rv;
 
+    NS_NAMED_LITERAL_STRING(fromStr, "text/plain");
+    NS_NAMED_LITERAL_STRING(toStr, "text/html");
+
     nsCOMPtr<nsIStreamListener> convListener;
-    rv = scs->AsyncConvertData("text/plain", "text/html", this, nsnull,
+    rv = scs->AsyncConvertData(fromStr.get(), toStr.get(), this, nsnull,
                                getter_AddRefs(convListener));
     if (NS_FAILED(rv)) return rv;
 
@@ -250,7 +239,7 @@ nsFingerChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *ctxt)
         rv = mURI->GetPath(userHost);
 
         nsAutoString title;
-        title.AppendLiteral("Finger information for ");
+        title = NS_LITERAL_STRING("Finger information for ");
         AppendUTF8toUTF16(userHost, title);
 
         conv->SetTitle(title.get());
@@ -346,7 +335,6 @@ NS_IMETHODIMP
 nsFingerChannel::SetLoadGroup(nsILoadGroup* aLoadGroup)
 {
     mLoadGroup = aLoadGroup;
-    mProgressSink = nsnull;
     return NS_OK;
 }
 
@@ -377,7 +365,7 @@ NS_IMETHODIMP
 nsFingerChannel::SetNotificationCallbacks(nsIInterfaceRequestor* aNotificationCallbacks)
 {
     mCallbacks = aNotificationCallbacks;
-    mProgressSink = nsnull;
+    mProgressSink = do_GetInterface(mCallbacks);
     return NS_OK;
 }
 
@@ -416,11 +404,6 @@ nsFingerChannel::OnStopRequest(nsIRequest *req, nsISupports *ctx, nsresult statu
 
     mPump = 0;
     mTransport = 0;
-    
-    // Drop notification callbacks to prevent cycles.
-    mCallbacks = 0;
-    mProgressSink = 0;
-
     return NS_OK;
 }
 
@@ -438,15 +421,12 @@ nsFingerChannel::OnDataAvailable(nsIRequest *req, nsISupports *ctx,
 
 NS_IMETHODIMP
 nsFingerChannel::OnTransportStatus(nsITransport *trans, nsresult status,
-                                   PRUint64 progress, PRUint64 progressMax)
+                                   PRUint32 progress, PRUint32 progressMax)
 {
-    if (!mProgressSink)
-        NS_QueryNotificationCallbacks(mCallbacks, mLoadGroup, mProgressSink);
-
     // suppress status notification if channel is no longer pending!
     if (mProgressSink && NS_SUCCEEDED(mStatus) && mPump && !(mLoadFlags & LOAD_BACKGROUND)) {
         mProgressSink->OnStatus(this, nsnull, status,
-                                NS_ConvertUTF8toUTF16(mHost).get());
+                                NS_ConvertUTF8toUCS2(mHost).get());
 
         if (status == nsISocketTransport::STATUS_RECEIVING_FROM ||
             status == nsISocketTransport::STATUS_SENDING_TO) {

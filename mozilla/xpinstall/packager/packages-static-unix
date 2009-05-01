@@ -36,10 +36,6 @@ bin/defaults/profile/search.rdf
 bin/defaults/profile/mimeTypes.rdf
 bin/defaults/messenger/mailViews.dat
 bin/defaults/isp/movemail.rdf
-bin/defaults/messenger/Habeas.sfd
-bin/defaults/messenger/SpamAssassin.sfd
-bin/defaults/messenger/SpamCatcher.sfd
-bin/defaults/messenger/SpamPal.sfd
 
 [xpcom]
 bin/libmozjs.so
@@ -48,7 +44,6 @@ bin/libplc4.so
 bin/libplds4.so
 bin/cpu/sparcv8plus/libnspr_flt4.so
 bin/libxpcom.so
-bin/libxpcom_core.so
 bin/libxpistub.so
 bin/components/libxpinstall.so
 bin/components/libjar50.so
@@ -56,8 +51,8 @@ bin/libxpcom_compat.so
 bin/components/libxpcom_compat_c.so
 
 [browser]
-bin/seamonkey
-bin/seamonkey-bin
+bin/mozilla
+bin/mozilla-bin
 bin/icons/*
 bin/run-mozilla.sh
 bin/regExport
@@ -74,7 +69,6 @@ bin/libldap50.so
 bin/libprldap50.so
 bin/liblber50.so
 
-bin/components/alerts.xpt
 bin/components/accessibility.xpt
 bin/components/accessibility-atk.xpt
 bin/components/bookmarks.xpt
@@ -82,6 +76,7 @@ bin/components/directory.xpt
 bin/components/downloadmanager.xpt
 bin/components/history.xpt
 bin/components/related.xpt
+bin/components/urlbarhistory.xpt
 bin/components/search.xpt
 bin/components/autocomplete.xpt   
 bin/components/appshell.xpt
@@ -91,14 +86,11 @@ bin/components/jsdservice.xpt
 bin/components/libjsd.so
 bin/components/dom.xpt
 bin/components/dom_base.xpt
-bin/components/dom_canvas.xpt
 bin/components/dom_core.xpt
 bin/components/dom_css.xpt
 bin/components/dom_events.xpt
-bin/components/dom_loadsave.xpt
 bin/components/dom_html.xpt
 bin/components/dom_range.xpt
-bin/components/dom_sidebar.xpt
 bin/components/dom_stylesheets.xpt
 bin/components/dom_traversal.xpt
 bin/components/dom_views.xpt
@@ -109,19 +101,16 @@ bin/components/editor.xpt
 bin/components/find.xpt
 bin/components/gfx.xpt
 bin/components/gfx2.xpt
-bin/components/gksvgrenderer.xpt
 bin/components/intl.xpt
 bin/components/imglib2.xpt
 bin/components/chardet.xpt
 bin/components/jar.xpt
-bin/components/jsconsole.xpt
 bin/components/jsconsole-clhandler.js
 bin/components/content_base.xpt
 bin/components/content_html.xpt
 bin/components/content_htmldoc.xpt
 bin/components/content_xmldoc.xpt
 bin/components/content_xslt.xpt
-bin/components/content_xtf.xpt
 bin/components/txmgr.xpt
 bin/components/webBrowser_core.xpt
 bin/components/locale.xpt
@@ -138,6 +127,7 @@ bin/components/necko_data.xpt
 bin/components/necko_dns.xpt
 bin/components/necko_ftp.xpt
 bin/components/necko_http.xpt
+bin/components/necko_jar.xpt
 bin/components/necko_res.xpt
 bin/components/necko_socket.xpt
 bin/components/nsFilePicker.js
@@ -167,8 +157,8 @@ bin/components/xpcom_io.xpt
 bin/components/xpconnect.xpt
 bin/components/chrome.xpt
 bin/components/docshell.xpt
+bin/components/jsurl.xpt
 bin/components/layout_base.xpt
-bin/components/layout_printing.xpt
 bin/components/layout_xul.xpt
 bin/components/layout_xul_tree.xpt
 bin/components/xuldoc.xpt
@@ -177,7 +167,6 @@ bin/components/prefmigr.xpt
 bin/components/profile.xpt
 bin/components/uconv.xpt
 bin/components/util.xpt
-bin/components/xpautocomplete.xpt
 bin/components/xpcom_components.xpt
 bin/components/xpcom_threads.xpt
 bin/components/xpcom_obsolete.xpt
@@ -189,6 +178,7 @@ bin/components/embed_base.xpt
 bin/components/commandhandler.xpt
 bin/components/webbrowserpersist.xpt
 bin/components/windowwatcher.xpt
+bin/components/xmlextras.xpt
 bin/components/nsHelperAppDlg.js
 bin/components/helperAppDlg.xpt
 bin/components/nsProgressDialog.js
@@ -198,17 +188,6 @@ bin/components/filepicker.xpt
 bin/components/mozldap.xpt
 bin/components/typeaheadfind.xpt
 bin/components/nsCloseAllWindows.js
-bin/components/extensions.xpt
-bin/components/nsExtensionManager.js
-bin/components/htmlparser.xpt
-bin/components/lwbrk.xpt
-bin/components/nsInterfaceInfoToIDL.js
-bin/components/nsResetPrefs.js
-bin/components/nsUpdateNotifier.js
-bin/components/plugin.xpt
-bin/components/prefetch.xpt
-bin/copmonents/imgicon.xpt
-
 bin/chrome/help.jar
 bin/chrome/toolkit.jar
 bin/chrome/comm.jar
@@ -218,15 +197,9 @@ bin/chrome/classic.jar
 bin/chrome/installed-chrome.txt
 bin/chrome/chromelist.txt
 
-bin/components/xulappinfo.js
-bin/components/xulappinfo.xpt
-
 ; webservices
 bin/components/libwebsrvcs.so
 bin/components/websrvcs.xpt
-
-; Roaming
-bin/chrome/sroaming.jar
 
 ;-bin/chrome/comm/content/editor/EditorInitPage.html
 ;-bin/chrome/comm/content/editor/content/EditorInitPagePlain.html
@@ -248,9 +221,7 @@ bin/defaults/wallet/DistinguishedSchema.tbl
 bin/defaults/wallet/SchemaStrings.tbl
 bin/defaults/wallet/PositionalSchema.tbl
 bin/defaults/wallet/StateSchema.tbl
-bin/res/hiddenWindow.html
 bin/res/arrow.gif
-bin/res/arrowd.gif
 bin/res/loading-image.gif
 bin/res/broken-image.gif
 bin/res/charsetalias.properties
@@ -262,6 +233,7 @@ bin/res/ua.css
 bin/res/html.css
 bin/res/quirk.css
 bin/res/forms.css
+bin/res/platform-forms.css
 bin/res/EditorOverride.css
 bin/res/grabber.gif
 bin/res/table-add-column-after-active.gif
@@ -290,6 +262,10 @@ bin/res/rdf/loading.gif
 bin/res/html/*
 bin/res/fonts/*
 bin/res/dtd/*
+;debug menus reference samples dir - remove for actual releases:
+bin/res/samples/*
+bin/res/builtin/htmlBindings.xml
+bin/res/builtin/platformHTMLBindings.xml
 
 ; p3p
 bin/components/p3p.xpt
@@ -307,7 +283,6 @@ bin/components/msgimap.xpt
 bin/components/msglocal.xpt
 bin/components/msgnews.xpt
 bin/components/msgsearch.xpt
-bin/components/nsAbLDAPAttributeMap.js
 bin/components/nsLDAPPrefsService.js
 bin/components/import.xpt
 bin/chrome/messenger.jar
@@ -345,21 +320,14 @@ bin/libnss3.so
 bin/libsmime3.so
 bin/libsoftokn3.chk
 bin/libsoftokn3.so
-bin/libfreebl3.chk
-bin/libfreebl3.so
-bin/libfreebl_32fpu_3.chk
-bin/libfreebl_32fpu_3.so
-bin/libfreebl_32int_3.chk
-bin/libfreebl_32int_3.so
-bin/libfreebl_32int64_3.so
-bin/libfreebl_32int64_3.chk
-bin/libfreebl_64fpu_3.chk
-bin/libfreebl_64fpu_3.so
-bin/libfreebl_64int_3.chk
-bin/libfreebl_64int_3.so
 bin/libssl3.so
 bin/chrome/pipnss.jar
 bin/chrome/pippki.jar
+; These are required for solaris 32-bit builds
+bin/libfreebl_pure32_3.chk
+bin/libfreebl_pure32_3.so
+bin/libfreebl_hybrid_3.chk
+bin/libfreebl_hybrid_3.so
 
 [inspector]
 bin/components/inspector-cmdline.js
@@ -369,6 +337,3 @@ bin/chrome/inspector.jar
 bin/defaults/pref/inspector.js
 bin/res/inspector/viewer-registry.rdf
 bin/res/inspector/search-registry.rdf
-
-[reporter]
-bin/chrome/reporter.jar

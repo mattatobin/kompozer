@@ -20,7 +20,6 @@
  *
  * Contributor(s):
  *   Daniel Glazman (glazman@disruptive-innovations.com), Original author
- *   Fabien Cazenave <kaze@kompozer.net>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -36,23 +35,18 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-//function MakePhpAndCommentsVisible(doc)
-function MakePhpAndCommentsVisible(doc, element)
+function MakePhpAndCommentsVisible(doc)
 {
   function acceptNode(node)
   {
-    //if (node.nodeType == Node.COMMENT_NODE ||
-        //node.nodeType == Node.PROCESSING_INSTRUCTION_NODE) {
-    if ((node.nodeType == Node.COMMENT_NODE || node.nodeType == Node.PROCESSING_INSTRUCTION_NODE)
-      && node.parentNode.getAttribute("xmlns") != NVU_NS) {
+    if (node.nodeType == Node.COMMENT_NODE ||
+        node.nodeType == Node.PROCESSING_INSTRUCTION_NODE) {
       return NodeFilter.FILTER_ACCEPT;
     }
     return NodeFilter.FILTER_SKIP;
   }
 
-  if (!element) element = doc.documentElement; // Kaze
-  //var treeWalker = doc.createTreeWalker(doc.documentElement,
-  var treeWalker = doc.createTreeWalker(element,
+  var treeWalker = doc.createTreeWalker(doc.documentElement,
                                         NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_PROCESSING_INSTRUCTION,
                                         acceptNode,
                                         true);
@@ -96,8 +90,7 @@ function MakePhpAndCommentsVisible(doc, element)
   }
 }
 
-//function MakePhpAndCommentsInvisible(doc)
-function MakePhpAndCommentsInvisible(doc, element)
+function MakePhpAndCommentsInvisible(doc)
 {
   function acceptNode(node)
   {
@@ -108,9 +101,7 @@ function MakePhpAndCommentsInvisible(doc, element)
     return NodeFilter.FILTER_SKIP;
   }
 
-  if (!element) element = doc.documentElement; // Kaze
-  //var treeWalker = doc.createTreeWalker(doc.documentElement,
-  var treeWalker = doc.createTreeWalker(element,
+  var treeWalker = doc.createTreeWalker(doc.documentElement,
                                         NodeFilter.SHOW_ELEMENT,
                                         acceptNode,
                                         true);

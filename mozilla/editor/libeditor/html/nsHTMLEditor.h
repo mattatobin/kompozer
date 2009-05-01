@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,17 +23,18 @@
  *   Daniel Glazman <glazman@netscape.com>
  *   Kathleen Brade <brade@netscape.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -56,11 +57,13 @@
 #include "nsICSSLoader.h"
 #include "nsICSSLoaderObserver.h"
 #include "nsITableLayout.h"
+#include "nsIRangeUtils.h"
 
 #include "nsEditRules.h"
 
 #include "nsEditProperty.h"
 #include "nsHTMLCSSUtils.h"
+#include "nsIParserService.h"
 
 #include "nsVoidArray.h"
 
@@ -68,6 +71,7 @@
 #include "nsIHTMLAbsPosEditor.h"
 #include "nsIHTMLInlineTableEditor.h"
 #include "nsIHTMLObjectResizeListener.h"
+#include "nsIHTMLTemplateEditor.h"
 
 #include "nsIDocumentObserver.h"
 
@@ -82,8 +86,19 @@ class nsIClipboard;
 class TypeInState;
 class nsIContentFilter;
 class nsIURL;
-class nsIRangeUtils;
-class nsILinkHandler;
+
+class TableDefaults {
+
+public:
+
+  TableDefaults();
+
+  nsString mHAlign;
+  nsString mVAlign;
+  nsString mWrapping;
+  nsString mCellSpacing;
+  nsString mCellPadding;
+};
 
 /**
  * The HTML editor implementation.<br>
@@ -95,6 +110,7 @@ class nsHTMLEditor : public nsPlaintextEditor,
                      public nsIHTMLAbsPosEditor,
                      public nsITableEditor,
                      public nsIHTMLInlineTableEditor,
+                     public nsIHTMLTemplateEditor,
                      public nsIEditorStyleSheets,
                      public nsICSSLoaderObserver
 {
@@ -122,7 +138,8 @@ public:
     kOpSetAbsolutePosition = 3015,
     kOpRemoveAbsolutePosition = 3016,
     kOpDecreaseZIndex      = 3017,
-    kOpIncreaseZIndex      = 3018
+    kOpIncreaseZIndex      = 3018,
+    kOpMakeComplexBlock    = 3019
   };
 
   enum ResizingRequestID
@@ -165,6 +182,10 @@ public:
   /* ------- Implemented in nsHTMLInlineTableEditor.cpp --------- */
   NS_DECL_NSIHTMLINLINETABLEEDITOR
 
+  /* ------------ nsIHTMLTemplateEditor methods -------------- */
+  /* ------- Implemented in nsHTMLTemplateEditor.cpp --------- */
+  NS_DECL_NSIHTMLTEMPLATEEDITOR
+
   /* ------------ nsIHTMLEditor methods -------------- */
   NS_IMETHOD CopyLastEditableChildStyles(nsIDOMNode *aPreviousBlock, nsIDOMNode *aNewBlock,
                                          nsIDOMNode **aOutBrNode);
@@ -179,6 +200,11 @@ public:
   NS_IMETHOD GetHighlightColor(PRBool *mixed, PRUnichar **_retval);
 
   NS_IMETHOD GetNextElementByTagName(nsIDOMElement *aCurrentElement, const nsAString *aTagName, nsIDOMElement **aReturn);
+
+  /* ------------ nsIEditorIMESupport overrides -------------- */
+  
+  NS_IMETHOD SetCompositionString(const nsAString& aCompositionString, nsIPrivateTextRangeList* aTextRangeList,nsTextEventReply* aReply);
+  NS_IMETHOD GetReconversionString(nsReconversionEventReply* aReply);
 
   /* ------------ nsIEditorStyleSheets methods -------------- */
 
@@ -322,6 +348,10 @@ public:
   /** Internal, static version */
   static nsresult NodeIsBlockStatic(nsIDOMNode *aNode, PRBool *aIsBlock);
 
+
+  /** we override this here to install event listeners */
+  NS_IMETHOD PostCreate();
+
   NS_IMETHOD GetFlags(PRUint32 *aFlags);
   NS_IMETHOD SetFlags(PRUint32 aFlags);
 
@@ -435,10 +465,12 @@ protected:
 
   NS_IMETHOD  InitRules();
 
-  // Create the event listeners for the editor to install
-  virtual nsresult CreateEventListeners();
-
-  virtual void RemoveEventListeners();
+  /** install the event listeners for the editor 
+    * used to be part of Init, but now broken out into a separate method
+    * called by PostCreate, giving the caller the chance to interpose
+    * their own listeners before we install our own backstops.
+    */
+  NS_IMETHOD InstallEventListeners();
 
   /** returns the layout object (nsIFrame in the real world) for aNode
     * @param aNode          the content to get a frame for
@@ -648,6 +680,9 @@ protected:
                                      PRInt32 aHighWaterMark);
   nsIDOMNode* GetArrayEndpoint(PRBool aEnd, nsCOMArray<nsIDOMNode>& aNodeArray);
 
+  /** simple utility to handle any error with event listener allocation or registration */
+  void HandleEventListenerError();
+
   /* small utility routine to test if a break node is visible to user */
   PRBool   IsVisBreak(nsIDOMNode *aNode);
 
@@ -703,9 +738,11 @@ protected:
   nsresult ApplyDefaultProperties();
   nsresult RemoveStyleInside(nsIDOMNode *aNode, 
                              nsIAtom *aProperty, 
-                             const nsAString *aAttribute, 
+                             const nsAString *aAttribute,
+                             const nsAString *aValue,
                              PRBool aChildrenOnly = PR_FALSE);
-  nsresult RemoveInlinePropertyImpl(nsIAtom *aProperty, const nsAString *aAttribute);
+  nsresult RemoveInlinePropertyImpl(nsIAtom *aProperty, const nsAString *aAttribute,
+                                    const nsAString *aValue);
 
   PRBool NodeIsProperty(nsIDOMNode *aNode);
   PRBool HasAttr(nsIDOMNode *aNode, const nsAString *aAttribute);
@@ -732,6 +769,8 @@ protected:
   nsresult GetFirstEditableLeaf( nsIDOMNode *aNode, nsCOMPtr<nsIDOMNode> *aOutFirstLeaf);
   nsresult GetLastEditableLeaf( nsIDOMNode *aNode, nsCOMPtr<nsIDOMNode> *aOutLastLeaf);
 
+  nsresult GetDOMEventReceiver(nsIDOMEventReceiver **aEventReceiver);
+
   //XXX Kludge: Used to suppress spurious drag/drop events (bug 50703)
   PRBool   mIgnoreSpuriousDragEvent;
 
@@ -743,9 +782,18 @@ protected:
                              PRBool *aAll,
                              nsAString *outValue,
                              PRBool aCheckDefaults = PR_TRUE);
+  nsresult GetAttributeOnlyBasedInlineProperty(const nsAString * aAttribute,
+                                               PRBool    * aIsSet,
+                                               nsAString * aOutValue,
+                                               PRBool      aCheckDefaults);
   nsresult HasStyleOrIdOrClass(nsIDOMElement * aElement, PRBool *aHasStyleOrIdOrClass);
   nsresult RemoveElementIfNoStyleOrIdOrClass(nsIDOMElement * aElement, nsIAtom * aTag);
 
+  nsresult AddClass(const nsAString & aClass);
+  nsresult RemoveClass(const nsAString & aClass);
+
+  nsresult AppendNewRowSameStyle();
+  
 // Data members
 protected:
 
@@ -753,48 +801,57 @@ protected:
 
   TypeInState*         mTypeInState;
 
+  nsCOMPtr<nsIAtom>    mBoldAtom;
+  nsCOMPtr<nsIAtom>    mItalicAtom;
+  nsCOMPtr<nsIAtom>    mUnderlineAtom;
+  nsCOMPtr<nsIAtom>    mFontAtom;
+  nsCOMPtr<nsIAtom>    mLinkAtom;
+
   nsCOMPtr<nsIDOMNode> mCachedNode;
+  
+  PRBool   mCachedBoldStyle;
+  PRBool   mCachedItalicStyle;
+  PRBool   mCachedUnderlineStyle;
+  nsString mCachedFontName;
 
-  PRPackedBool mCRInParagraphCreatesParagraph;
-
-  PRPackedBool mCSSAware;
-  nsHTMLCSSUtils *mHTMLCSSUtils;
+  // Used to disable HTML formatting commands during HTML source editing
+  PRBool   mCanEditHTML;
 
   // Used by GetFirstSelectedCell and GetNextSelectedCell
   PRInt32  mSelectedCellIndex;
 
+  nsCOMPtr<nsIRangeUtils> mRangeHelper;
+
   nsString mLastStyleSheetURL;
   nsString mLastOverrideStyleSheetURL;
+
+  PRBool mCSSAware;
+  nsHTMLCSSUtils *mHTMLCSSUtils;
 
   // Maintain a list of associated style sheets and their urls.
   nsStringArray mStyleSheetURLs;
   nsCOMArray<nsICSSStyleSheet> mStyleSheets;
+  PRInt32 mNumStyleSheets;
   
   // an array for holding default style settings
   nsVoidArray mDefaultStyles;
 
-   // for real-time spelling
-   nsCOMPtr<nsITextServicesDocument> mTextServices;
+  // for real-time spelling
+  nsCOMPtr<nsITextServicesDocument> mTextServices;
 
-  // And a static range utils service
-  static nsIRangeUtils* sRangeHelper;
-
-public:
-  // ... which means that we need to listen to shutdown
-  static void Shutdown();
+  // Maintain a static parser service ...
+  static nsCOMPtr<nsIParserService> sParserService;
+  // ... which means that we need an instance count to know when to delete it
+  static PRInt32 sInstanceCount;
 
 protected:
 
+  TableDefaults *GetTableDefaults();
+  
   /* ANONYMOUS UTILS */
-  void     RemoveListenerAndDeleteRef(const nsAString& aEvent,
-                                      nsIDOMEventListener* aListener,
-                                      PRBool aUseCapture,
-                                      nsIDOMElement* aElement,
-                                      nsIContent* aParentContent,
-                                      nsIPresShell* aShell);
   void     DeleteRefToAnonymousNode(nsIDOMElement* aElement,
                                     nsIContent * aParentContent,
-                                    nsIPresShell* aShell);
+                                    nsIDocumentObserver * aDocObserver);
   nsresult GetElementOrigin(nsIDOMElement * aElement, PRInt32 & aX, PRInt32 & aY);
   nsresult GetPositionAndDimensions(nsIDOMElement * aElement,
                                     PRInt32 & aX, PRInt32 & aY,
@@ -844,6 +901,7 @@ protected:
   nsCOMPtr<nsIDOMElement> mResizedObject;
 
   nsCOMPtr<nsIDOMEventListener>  mMouseMotionListenerP;
+  nsCOMPtr<nsIDOMEventListener>  mMutationListenerP;
   nsCOMPtr<nsISelectionListener> mSelectionListenerP;
   nsCOMPtr<nsIDOMEventListener>  mResizeEventListenerP;
 
@@ -941,7 +999,9 @@ protected:
   void     AddMouseClickListener(nsIDOMElement * aElement);
   void     RemoveMouseClickListener(nsIDOMElement * aElement);
 
-  nsCOMPtr<nsILinkHandler> mLinkHandler;
+  PRPackedBool mForceCRdoesNotCreateNewP;
+
+  PRPackedBool mIsDocumentBasedOnTemplate;
 
 public:
 
@@ -951,5 +1011,6 @@ friend class nsTextEditRules;
 friend class nsWSRunObject;
 
 };
+
 #endif //nsHTMLEditor_h__
 

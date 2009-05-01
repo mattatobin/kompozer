@@ -48,7 +48,7 @@ function renderMachineReadable()
   policyuri.ref = "";
 
   try {
-    var docshell  = getBrowser().docShell.QueryInterface(nsIDocShell);
+    var docshell  = getSummaryBrowser().docShell.QueryInterface(nsIDocShell);
     
     // For browser security do not allow javascript on the transformed document.
     docshell.allowJavascript = false; 
@@ -75,7 +75,7 @@ function renderMachineReadable()
     //resultDocument.appendChild(result);
     transferToDocument(result, resultDocument);
 
-    document.title = resultDocument.getElementById("topic").firstChild.nodeValue;
+    window.title = resultDocument.getElementById("topic").firstChild.nodeValue;
   }
   catch (ex) {
     alertMessage(getBundle().GetStringFromName("InternalError"));
@@ -116,17 +116,11 @@ function transferToDocument(aResult, aResultDocument)
             else {
                 aResultDocument.insertBefore(childNode, aResultDocument.documentElement);
             }
-            // We removed the node from the list, which will cause it
-            // to shrink by one element.  "i" is now pointing to the
-            // node that used to be _after_ the node we just removed.
-            // Decrement i, so when it increments (at the start of the
-            // next iteration) we'll point at the right place.
-            --i;
         }
     }
 }
 
-function getBrowser()
+function getSummaryBrowser()
 {
   if (!gBrowser)
     gBrowser = document.getElementById("content");
@@ -136,7 +130,7 @@ function getBrowser()
 function getDocument()
 {
   if (!gDocument)
-    gDocument = getBrowser().contentDocument;
+    gDocument = getSummaryBrowser().contentDocument;
   return gDocument;
 }
 
@@ -152,7 +146,7 @@ function p3pSummarySavePage()
     fp.init(window, getBundle().GetStringFromName("savePolicy.title"), 
       kIFilePicker.modeSave);
     fp.appendFilters(kIFilePicker.filterAll | kIFilePicker.filterHTML);
-    fp.defaultString = document.title;
+    fp.defaultString = window.title;
     fp.defaultExtension = "html";
 
     var rv = fp.show();
@@ -189,16 +183,10 @@ function p3pSummarySavePage()
  */
 function captureContentClick(aEvent)
 {
-  if (aEvent.target.hasAttribute("message"))
+  if (aEvent.target.hasAttribute("message")) {
     alertMessage(aEvent.target.getAttribute("message"));
+    return true;
+  }
 
-  return true;
-}
-
-function updateSavePageItems()
-{
-  var autoDownload = Components.classes["@mozilla.org/preferences-service;1"]
-                               .getService(Components.interfaces.nsIPrefBranch)
-                               .getBoolPref("browser.download.autoDownload");
-  goSetMenuValue("savepage", autoDownload ? "valueSave" : "valueSaveAs");
+  return contentAreaClick(aEvent);
 }

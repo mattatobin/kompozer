@@ -1,41 +1,24 @@
 /* -*- Mode: C++; tab-width: 3; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Travis Bogard <travis@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 // Local Includes
 #include "nsContentTreeOwner.h"
@@ -44,15 +27,12 @@
 // Helper Classes
 #include "nsIGenericFactory.h"
 #include "nsIServiceManager.h"
-#include "nsAutoPtr.h"
 
 // Interfaces needed to be included
 #include "nsIDOMNode.h"
 #include "nsIDOMElement.h"
 #include "nsIDOMNodeList.h"
 #include "nsIDOMWindowInternal.h"
-#include "nsIDOMChromeWindow.h"
-#include "nsIBrowserDOMWindow.h"
 #include "nsIDOMXULElement.h"
 #include "nsIEmbeddingSiteWindow.h"
 #include "nsIEmbeddingSiteWindow2.h"
@@ -60,12 +40,6 @@
 #include "nsIAuthPrompt.h"
 #include "nsIWindowMediator.h"
 #include "nsIXULBrowserWindow.h"
-#include "nsIPrincipal.h"
-#include "nsIURIFixup.h"
-#include "nsCDefaultURIFixup.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
-#include "nsIWebNavigation.h"
 
 // Needed for nsIDocument::FlushPendingNotifications(...)
 #include "nsIDOMDocument.h"
@@ -97,7 +71,8 @@ private:
 //*****************************************************************************
 
 nsContentTreeOwner::nsContentTreeOwner(PRBool fPrimary) : mXULWindow(nsnull), 
-   mPrimary(fPrimary), mContentTitleSetting(PR_FALSE)
+   mPrimary(fPrimary), mContentTitleSetting(PR_FALSE), 
+   mChromeFlags(nsIWebBrowserChrome::CHROME_ALL)
 {
   // note if this fails, QI on nsIEmbeddingSiteWindow(2) will simply fail
   mSiteWindow2 = new nsSiteWindow2(this);
@@ -118,13 +93,9 @@ NS_IMPL_RELEASE(nsContentTreeOwner)
 NS_INTERFACE_MAP_BEGIN(nsContentTreeOwner)
    NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDocShellTreeOwner)
    NS_INTERFACE_MAP_ENTRY(nsIDocShellTreeOwner)
-   NS_INTERFACE_MAP_ENTRY(nsIDocShellTreeOwner_MOZILLA_1_8_BRANCH)
    NS_INTERFACE_MAP_ENTRY(nsIBaseWindow)
    NS_INTERFACE_MAP_ENTRY(nsIWebBrowserChrome)
    NS_INTERFACE_MAP_ENTRY(nsIInterfaceRequestor)
-   NS_INTERFACE_MAP_ENTRY(nsIWindowProvider)
-   // XXXbz why not just implement those interfaces directly on this object?
-   // Should file a followup and fix.
    NS_INTERFACE_MAP_ENTRY_AGGREGATED(nsIEmbeddingSiteWindow, mSiteWindow2)
    NS_INTERFACE_MAP_ENTRY_AGGREGATED(nsIEmbeddingSiteWindow2, mSiteWindow2)
 NS_INTERFACE_MAP_END
@@ -138,6 +109,9 @@ NS_IMETHODIMP nsContentTreeOwner::GetInterface(const nsIID& aIID, void** aSink)
   NS_ENSURE_ARG_POINTER(aSink);
   *aSink = 0;
 
+  if(aIID.Equals(NS_GET_IID(nsIWebBrowserChrome)))
+    return mXULWindow->GetInterface(aIID, aSink);
+
   if(aIID.Equals(NS_GET_IID(nsIPrompt)))
     return mXULWindow->GetInterface(aIID, aSink);
   if(aIID.Equals(NS_GET_IID(nsIAuthPrompt)))
@@ -145,8 +119,12 @@ NS_IMETHODIMP nsContentTreeOwner::GetInterface(const nsIID& aIID, void** aSink)
   if (aIID.Equals(NS_GET_IID(nsIDocShellTreeItem))) {
     nsCOMPtr<nsIDocShell> shell;
     mXULWindow->GetDocShell(getter_AddRefs(shell));
-    if (shell)
-      return shell->QueryInterface(aIID, aSink);
+    if (shell) {
+      nsIDocShellTreeItem *result;
+      CallQueryInterface(shell, &result);
+      *aSink = result;
+      return NS_OK;
+    }
     return NS_ERROR_FAILURE;
   }
 
@@ -172,56 +150,30 @@ NS_IMETHODIMP nsContentTreeOwner::GetInterface(const nsIID& aIID, void** aSink)
 //*****************************************************************************   
 
 NS_IMETHODIMP nsContentTreeOwner::FindItemWithName(const PRUnichar* aName,
-   nsIDocShellTreeItem* aRequestor, nsIDocShellTreeItem* aOriginalRequestor,
-   nsIDocShellTreeItem** aFoundItem)
+   nsIDocShellTreeItem* aRequestor, nsIDocShellTreeItem** aFoundItem)
 {
    NS_ENSURE_ARG_POINTER(aFoundItem);
 
    *aFoundItem = nsnull;
 
+   nsAutoString   name(aName);
+
    PRBool fIs_Content = PR_FALSE;
 
    /* Special Cases */
-   if (!aName || !*aName)
+   if(name.IsEmpty())
       return NS_OK;
-
-   nsDependentString name(aName);
-
-   if (name.LowerCaseEqualsLiteral("_blank"))
+   if(name.EqualsIgnoreCase("_blank"))
       return NS_OK;
    // _main is an IE target which should be case-insensitive but isn't
    // see bug 217886 for details
-   if (name.LowerCaseEqualsLiteral("_content") ||
-       name.EqualsLiteral("_main")) {
-     // If we're being called with an aRequestor and it's targetable, just
-     // return it -- _main and _content from inside targetable content shells
-     // should just be that content shell.  Note that we don't have to worry
-     // about the case when it's not targetable because it's primary -- that
-     // will Just Work when we call GetPrimaryContentShell.
-     if (aRequestor) {
-       // This better be the root item!
-#ifdef DEBUG
-       nsCOMPtr<nsIDocShellTreeItem> debugRoot;
-       aRequestor->GetSameTypeRootTreeItem(getter_AddRefs(debugRoot));
-       NS_ASSERTION(SameCOMIdentity(debugRoot, aRequestor),
-                    "Bogus aRequestor");
-#endif
-       PRInt32 count = mXULWindow->mTargetableShells.Count();
-       for (PRInt32 i = 0; i < count; ++i) {
-         nsCOMPtr<nsIDocShellTreeItem> item =
-           do_QueryReferent(mXULWindow->mTargetableShells[i]);
-         if (SameCOMIdentity(item, aRequestor)) {
-           NS_ADDREF(*aFoundItem = aRequestor);
-           return NS_OK;
-         }
-       }
-     }
-     mXULWindow->GetPrimaryContentShell(aFoundItem);
-     if(*aFoundItem)
-       return NS_OK;
-     // Fall through and keep looking...
-     fIs_Content = PR_TRUE;
-   }
+   if(name.EqualsIgnoreCase("_content") || name.Equals(NS_LITERAL_STRING("_main")))
+      {
+      fIs_Content = PR_TRUE;
+      mXULWindow->GetPrimaryContentShell(aFoundItem);
+      if(*aFoundItem)
+         return NS_OK;
+      }
 
    nsCOMPtr<nsIWindowMediator> windowMediator(do_GetService(kWindowMediatorCID));
    NS_ENSURE_TRUE(windowMediator, NS_ERROR_FAILURE);
@@ -233,70 +185,46 @@ NS_IMETHODIMP nsContentTreeOwner::FindItemWithName(const PRUnichar* aName,
    PRBool more;
    
    windowEnumerator->HasMoreElements(&more);
-   while(more) {
-     nsCOMPtr<nsISupports> nextWindow = nsnull;
-     windowEnumerator->GetNext(getter_AddRefs(nextWindow));
-     nsCOMPtr<nsIXULWindow> xulWindow(do_QueryInterface(nextWindow));
-     NS_ENSURE_TRUE(xulWindow, NS_ERROR_FAILURE);
+   while(more)
+      {
+      nsCOMPtr<nsISupports> nextWindow = nsnull;
+      windowEnumerator->GetNext(getter_AddRefs(nextWindow));
+      nsCOMPtr<nsIXULWindow> xulWindow(do_QueryInterface(nextWindow));
+      NS_ENSURE_TRUE(xulWindow, NS_ERROR_FAILURE);
 
-     if (fIs_Content) {
-       xulWindow->GetPrimaryContentShell(aFoundItem);
-     } else {
-       // Get all the targetable windows from xulWindow and search them
-       nsRefPtr<nsXULWindow> win;
-       xulWindow->QueryInterface(NS_GET_IID(nsXULWindow), getter_AddRefs(win));
-       if (win) {
-         PRInt32 count = win->mTargetableShells.Count();
-         PRInt32 i;
-         for (i = 0; i < count && !*aFoundItem; ++i) {
-           nsCOMPtr<nsIDocShellTreeItem> shellAsTreeItem =
-             do_QueryReferent(win->mTargetableShells[i]);
-           if (shellAsTreeItem) {
-             // Get the root tree item of same type, since roots are the only
-             // things that call into the treeowner to look for named items.
-             // XXXbz ideally we could guarantee that mTargetableShells only
-             // contains roots, but the current treeowner apis don't allow
-             // that... yet.
-             nsCOMPtr<nsIDocShellTreeItem> root;
-             shellAsTreeItem->GetSameTypeRootTreeItem(getter_AddRefs(root));
-             NS_ASSERTION(root, "Must have root tree item of same type");
-             shellAsTreeItem.swap(root);
-             if (aRequestor != shellAsTreeItem) {
-               // Do this so we can pass in the tree owner as the
-               // requestor so the child knows not to call back up.
-               nsCOMPtr<nsIDocShellTreeOwner> shellOwner;
-               shellAsTreeItem->GetTreeOwner(getter_AddRefs(shellOwner));
-               nsCOMPtr<nsISupports> shellOwnerSupports =
-                 do_QueryInterface(shellOwner);
+      nsCOMPtr<nsIDocShellTreeItem> shellAsTreeItem;
+      xulWindow->GetPrimaryContentShell(getter_AddRefs(shellAsTreeItem));
 
-               shellAsTreeItem->FindItemWithName(aName, shellOwnerSupports,
-                                                 aOriginalRequestor,
-                                                 aFoundItem);
-             }
-           }
+      if(shellAsTreeItem)
+         {
+         if(fIs_Content)
+		    {
+            *aFoundItem = shellAsTreeItem;
+            NS_ADDREF(*aFoundItem);
+            }
+         else if(aRequestor != shellAsTreeItem.get())
+            {
+            // Do this so we can pass in the tree owner as the requestor so the child knows not
+            // to call back up.
+            nsCOMPtr<nsIDocShellTreeOwner> shellOwner;
+            shellAsTreeItem->GetTreeOwner(getter_AddRefs(shellOwner));
+            nsCOMPtr<nsISupports> shellOwnerSupports(do_QueryInterface(shellOwner));
+
+            shellAsTreeItem->FindItemWithName(aName, shellOwnerSupports, aFoundItem);
+            }
+         if(*aFoundItem)
+            return NS_OK;
          }
-       }
-     }
-     
-     if (*aFoundItem)
-       return NS_OK;
-
-     windowEnumerator->HasMoreElements(&more);
-   }
+      windowEnumerator->HasMoreElements(&more);
+      }
    return NS_OK;      
 }
 
 NS_IMETHODIMP nsContentTreeOwner::ContentShellAdded(nsIDocShellTreeItem* aContentShell,
    PRBool aPrimary, const PRUnichar* aID)
 {
-   NS_ENSURE_STATE(mXULWindow);
-   if (aID) {
-     return mXULWindow->ContentShellAdded(aContentShell, aPrimary, PR_FALSE,
-                                          nsDependentString(aID));
-   }
-
-   return mXULWindow->ContentShellAdded(aContentShell, aPrimary, PR_FALSE,
-                                        EmptyString());
+   mXULWindow->ContentShellAdded(aContentShell, aPrimary, aID);
+   return NS_OK;
 }
 
 NS_IMETHODIMP nsContentTreeOwner::GetPrimaryContentShell(nsIDocShellTreeItem** aShell)
@@ -332,7 +260,7 @@ nsContentTreeOwner::SetPersistence(PRBool aPersistPosition,
     persistString.Cut(index, 7);
     saveString = PR_TRUE;
   } else if (aPersistPosition && index < 0) {
-    persistString.AppendLiteral(" screenX");
+    persistString.Append(NS_LITERAL_STRING(" screenX"));
     saveString = PR_TRUE;
   }
   // Set Y
@@ -341,7 +269,7 @@ nsContentTreeOwner::SetPersistence(PRBool aPersistPosition,
     persistString.Cut(index, 7);
     saveString = PR_TRUE;
   } else if (aPersistPosition && index < 0) {
-    persistString.AppendLiteral(" screenY");
+    persistString.Append(NS_LITERAL_STRING(" screenY"));
     saveString = PR_TRUE;
   }
   // Set CX
@@ -350,7 +278,7 @@ nsContentTreeOwner::SetPersistence(PRBool aPersistPosition,
     persistString.Cut(index, 5);
     saveString = PR_TRUE;
   } else if (aPersistSize && index < 0) {
-    persistString.AppendLiteral(" width");
+    persistString.Append(NS_LITERAL_STRING(" width"));
     saveString = PR_TRUE;
   }
   // Set CY
@@ -359,7 +287,7 @@ nsContentTreeOwner::SetPersistence(PRBool aPersistPosition,
     persistString.Cut(index, 6);
     saveString = PR_TRUE;
   } else if (aPersistSize && index < 0) {
-    persistString.AppendLiteral(" height");
+    persistString.Append(NS_LITERAL_STRING(" height"));
     saveString = PR_TRUE;
   }
   // Set SizeMode
@@ -368,7 +296,7 @@ nsContentTreeOwner::SetPersistence(PRBool aPersistPosition,
     persistString.Cut(index, 8);
     saveString = PR_TRUE;
   } else if (aPersistSizeMode && (index < 0)) {
-    persistString.AppendLiteral(" sizemode");
+    persistString.Append(NS_LITERAL_STRING(" sizemode"));
     saveString = PR_TRUE;
   }
 
@@ -409,10 +337,6 @@ nsContentTreeOwner::GetPersistence(PRBool* aPersistPosition,
 
 NS_IMETHODIMP nsContentTreeOwner::SetStatus(PRUint32 aStatusType, const PRUnichar* aStatus)
 {
-  // We only allow the status to be set from the primary content shell
-  if (!mPrimary && aStatusType != STATUS_LINK)
-    return NS_OK;
-  
   nsCOMPtr<nsIXULBrowserWindow> xulBrowserWindow;
   mXULWindow->GetXULBrowserWindow(getter_AddRefs(xulBrowserWindow));
 
@@ -431,6 +355,25 @@ NS_IMETHODIMP nsContentTreeOwner::SetStatus(PRUint32 aStatusType, const PRUnicha
        break;
      }
    }
+
+  //
+  // Force pending notifications to be processed immediately... This
+  // causes the status message to be displayed synchronously.
+  //
+  // XXX: This is nasty because we have to drill down to the nsIDocument to
+  //      force the flushing...
+  //
+  nsCOMPtr<nsIDOMWindowInternal> domWindow;
+  nsCOMPtr<nsIDOMDocument> domDoc;
+  nsCOMPtr<nsIDocument> doc;
+
+  mXULWindow->GetWindowDOMWindow(getter_AddRefs(domWindow));
+  domWindow->GetDocument(getter_AddRefs(domDoc));
+  doc = do_QueryInterface(domDoc);
+
+  if (doc) {
+    doc->FlushPendingNotifications(PR_TRUE, PR_TRUE);
+  }
 
   return NS_OK;
 }
@@ -452,12 +395,34 @@ NS_IMETHODIMP nsContentTreeOwner::GetWebBrowser(nsIWebBrowser** aWebBrowser)
 
 NS_IMETHODIMP nsContentTreeOwner::SetChromeFlags(PRUint32 aChromeFlags)
 {
-   return mXULWindow->SetChromeFlags(aChromeFlags);
+   mChromeFlags = aChromeFlags;
+   NS_ENSURE_SUCCESS(ApplyChromeFlags(), NS_ERROR_FAILURE);
+
+   return NS_OK;
 }
 
 NS_IMETHODIMP nsContentTreeOwner::GetChromeFlags(PRUint32* aChromeFlags)
 {
-  return mXULWindow->GetChromeFlags(aChromeFlags);
+  NS_ENSURE_ARG_POINTER(aChromeFlags);
+
+  *aChromeFlags = mChromeFlags;
+
+  /* mChromeFlags is kept up to date, except for scrollbar visibility.
+     That can be changed directly by the content DOM window, which
+     doesn't know to update the chrome window. So that we must check
+     separately. */
+
+  // however, it's pointless to ask if the window isn't set up yet
+  if (!mXULWindow->mChromeLoaded)
+    return NS_OK;
+
+  PRBool scrollbarVisibility = mXULWindow->GetContentScrollbarVisibility();
+  if (scrollbarVisibility)
+    *aChromeFlags |= nsIWebBrowserChrome::CHROME_SCROLLBARS;
+  else
+    *aChromeFlags &= ~nsIWebBrowserChrome::CHROME_SCROLLBARS;
+
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsContentTreeOwner::DestroyBrowserWindow()
@@ -620,7 +585,9 @@ NS_IMETHODIMP nsContentTreeOwner::GetTitle(PRUnichar** aTitle)
 {
    NS_ENSURE_ARG_POINTER(aTitle);
 
-   return mXULWindow->GetTitle(aTitle);
+   //XXX First Check In
+   NS_ASSERTION(PR_FALSE, "Not Yet Implemented");
+   return NS_OK;
 }
 
 NS_IMETHODIMP nsContentTreeOwner::SetTitle(const PRUnichar* aTitle)
@@ -646,193 +613,76 @@ NS_IMETHODIMP nsContentTreeOwner::SetTitle(const PRUnichar* aTitle)
       title = docTitle;
     }
   
-    if (!mWindowTitleModifier.IsEmpty())
-      title += mTitleSeparator + mWindowTitleModifier;
+    title += mTitleSeparator + mWindowTitleModifier;
   }
   else
     title.Assign(mWindowTitleModifier); // Title will just be plain "Mozilla"
 
-  //
-  // if there is no location bar we modify the title to display at least
-  // the scheme and host (if any) as an anti-spoofing measure.
-  //
-  nsCOMPtr<nsIDOMElement> docShellElement;
-  mXULWindow->GetWindowDOMElement(getter_AddRefs(docShellElement));
-
-  if (docShellElement) {
-    nsAutoString chromeString;
-    docShellElement->GetAttribute(NS_LITERAL_STRING("chromehidden"), chromeString);
-    if (chromeString.Find(NS_LITERAL_STRING("location")) != kNotFound) {
-      //
-      // location bar is turned off, find the browser location
-      //
-      // use the document's nsPrincipal to find the true owner
-      // in case of javascript: or data: documents
-      //
-      nsCOMPtr<nsIDocShellTreeItem> dsitem;
-      GetPrimaryContentShell(getter_AddRefs(dsitem));
-      nsCOMPtr<nsIDOMDocument> domdoc(do_GetInterface(dsitem));
-      nsCOMPtr<nsIDocument> doc(do_QueryInterface(domdoc));
-      if (doc) {
-        nsCOMPtr<nsIURI> uri;
-        nsIPrincipal* principal = doc->GetPrincipal();
-        if (principal) {
-          principal->GetURI(getter_AddRefs(uri));
-          if (uri) {
-            //
-            // remove any user:pass information
-            //
-            nsCOMPtr<nsIURIFixup> fixup(do_GetService(NS_URIFIXUP_CONTRACTID));
-            if (fixup) {
-              nsCOMPtr<nsIURI> tmpuri;
-              nsresult rv = fixup->CreateExposableURI(uri,getter_AddRefs(tmpuri));
-              if (NS_SUCCEEDED(rv) && tmpuri) {
-                // (don't bother if there's no host)
-                nsCAutoString host;
-                nsCAutoString prepath;
-                tmpuri->GetHost(host);
-                tmpuri->GetPrePath(prepath);
-                if (!host.IsEmpty()) {
-                  //
-                  // We have a scheme/host, update the title
-                  //
-                  title.Insert(NS_ConvertUTF8toUTF16(prepath) +
-                               mTitleSeparator, 0);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return mXULWindow->SetTitle(title.get());
+  // XXX Don't need to fully qualify this once I remove nsWebShellWindow::SetTitle
+  // return mXULWindow->SetTitle(title.get());
+  return mXULWindow->nsXULWindow::SetTitle(title.get());
 }
 
 //*****************************************************************************
-// nsContentTreeOwner: nsIWindowProvider
+// nsContentTreeOwner: Helpers
 //*****************************************************************************   
-NS_IMETHODIMP
-nsContentTreeOwner::ProvideWindow(nsIDOMWindow* aParent,
-                                  PRUint32 aChromeFlags,
-                                  PRBool aPositionSpecified,
-                                  PRBool aSizeSpecified,
-                                  nsIURI* aURI,
-                                  const nsAString& aName,
-                                  const nsACString& aFeatures,
-                                  PRBool* aWindowIsNew,
-                                  nsIDOMWindow** aReturn)
+
+NS_IMETHODIMP nsContentTreeOwner::ApplyChromeFlags()
 {
-  NS_ENSURE_ARG_POINTER(aParent);
-  
-  *aReturn = nsnull;
+  if(!mXULWindow->mChromeLoaded)
+    return NS_OK;  // We'll do this later when chrome is loaded
+      
+  nsCOMPtr<nsIDOMElement> window;
+  mXULWindow->GetWindowDOMElement(getter_AddRefs(window));
+  NS_ENSURE_TRUE(window, NS_ERROR_FAILURE);
 
-  if (!mXULWindow) {
-    // Nothing to do here
-    return NS_OK;
-  }
+  // menubar has its own special treatment
+  mXULWindow->mWindow->ShowMenuBar(mChromeFlags & 
+                                     nsIWebBrowserChrome::CHROME_MENUBAR ? 
+                                   PR_TRUE : PR_FALSE);
 
-#ifdef DEBUG
-  nsCOMPtr<nsIWebNavigation> parentNav = do_GetInterface(aParent);
-  nsCOMPtr<nsIDocShellTreeOwner> parentOwner = do_GetInterface(parentNav);
-  NS_ASSERTION(SameCOMIdentity(parentOwner,
-                               NS_STATIC_CAST(nsIDocShellTreeOwner*, this)),
-               "Parent from wrong docshell tree?");
-#endif
+  /* Scrollbars have their own special treatment. (note here we *do* use
+     mChromeFlags directly, without going through the accessor. This method
+     is intended to be used right after setting mChromeFlags, so this is
+     where the content window's scrollbar state is set to match mChromeFlags
+     in the first place. */
+  mXULWindow->SetContentScrollbarVisibility(mChromeFlags &
+                                              nsIWebBrowserChrome::CHROME_SCROLLBARS ?
+                                            PR_TRUE : PR_FALSE);
 
-  // First check what our prefs say
-  nsCOMPtr<nsIPrefService> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID);
-  if (!prefs) {
-    return NS_OK;
-  }
+  /* the other flags are handled together. we have style rules
+     in navigator.css that trigger visibility based on
+     the 'chromehidden' attribute of the <window> tag. */
+  nsAutoString newvalue;
 
-  nsCOMPtr<nsIPrefBranch> branch;
-  prefs->GetBranch("browser.link.", getter_AddRefs(branch));
-  if (!branch) {
-    return NS_OK;
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_MENUBAR))
+    newvalue.Append(NS_LITERAL_STRING("menubar "));
 
-  // Where should we open this?
-  PRInt32 containerPref;
-  if (NS_FAILED(branch->GetIntPref("open_newwindow", &containerPref))) {
-    return NS_OK;
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_TOOLBAR))
+    newvalue.Append(NS_LITERAL_STRING("toolbar "));
 
-  if (containerPref != nsIBrowserDOMWindow::OPEN_NEWTAB &&
-      containerPref != nsIBrowserDOMWindow::OPEN_CURRENTWINDOW) {
-    // Just open a window normally
-    return NS_OK;
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_LOCATIONBAR))
+    newvalue.Append(NS_LITERAL_STRING("location "));
 
-  /* Now check our restriction pref.  The restriction pref is a power-user's
-     fine-tuning pref. values:     
-     0: no restrictions - divert everything
-     1: don't divert window.open at all
-     2: don't divert window.open with features
-  */
-  PRInt32 restrictionPref;
-  if (NS_FAILED(branch->GetIntPref("open_newwindow.restriction",
-                                   &restrictionPref)) ||
-      restrictionPref < 0 ||
-      restrictionPref > 2) {
-    restrictionPref = 2; // Sane default behavior
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_PERSONAL_TOOLBAR))
+    newvalue.Append(NS_LITERAL_STRING("directories "));
 
-  if (restrictionPref == 1) {
-    return NS_OK;
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_STATUSBAR))
+    newvalue.Append(NS_LITERAL_STRING("status "));
 
-  if (restrictionPref == 2 &&
-      // Only continue if there are no size/position features and no special
-      // chrome flags.
-      (aChromeFlags != nsIWebBrowserChrome::CHROME_ALL ||
-       aPositionSpecified || aSizeSpecified)) {
-    return NS_OK;
-  }
+  if (! (mChromeFlags & nsIWebBrowserChrome::CHROME_EXTRA))
+    newvalue.Append(NS_LITERAL_STRING("extrachrome"));
 
-  nsCOMPtr<nsIDOMWindowInternal> domWin;
-  mXULWindow->GetWindowDOMWindow(getter_AddRefs(domWin));
-  nsCOMPtr<nsIDOMChromeWindow> chromeWin = do_QueryInterface(domWin);
-  if (!chromeWin) {
-    // Really odd... but whatever
-    NS_WARNING("nsXULWindow's DOMWindow is not a chrome window");
-    return NS_OK;
-  }
-  
-  nsCOMPtr<nsIBrowserDOMWindow> browserDOMWin;
-  chromeWin->GetBrowserDOMWindow(getter_AddRefs(browserDOMWin));
-  if (!browserDOMWin) {
-    return NS_OK;
-  }
 
-  *aWindowIsNew = (containerPref != nsIBrowserDOMWindow::OPEN_CURRENTWINDOW);
-  
-  // Get a new rendering area from the browserDOMWin.  To make this
-  // safe for cases when it'll try to return an existing window or
-  // something, get it with a null URI.
-  return browserDOMWin->OpenURI(nsnull, aParent, containerPref,
-                                nsIBrowserDOMWindow::OPEN_NEW, aReturn);
-}
+  // Get the old value, to avoid useless style reflows if we're just
+  // setting stuff to the exact same thing.
+  nsAutoString oldvalue;
+  window->GetAttribute(NS_LITERAL_STRING("chromehidden"), oldvalue);
 
-//*****************************************************************************
-// nsContentTreeOwner::nsIDocShellTreeOwner_MOZILLA_1_8_BRANCH
-//*****************************************************************************   
-NS_IMETHODIMP
-nsContentTreeOwner::ContentShellAdded2(nsIDocShellTreeItem* aContentShell,
-                                       PRBool aPrimary, PRBool aTargetable,
-                                       const nsAString& aID)
-{
-  NS_ENSURE_STATE(mXULWindow);
-  return mXULWindow->ContentShellAdded(aContentShell, aPrimary, aTargetable,
-                                       aID);
-}
+  if (oldvalue != newvalue)
+    window->SetAttribute(NS_LITERAL_STRING("chromehidden"), newvalue);
 
-NS_IMETHODIMP
-nsContentTreeOwner::ContentShellRemoved(nsIDocShellTreeItem* aContentShell)
-{
-  NS_ENSURE_STATE(mXULWindow);
-  return mXULWindow->ContentShellRemoved(aContentShell);
+  return NS_OK;
 }
 
 //*****************************************************************************
@@ -853,7 +703,7 @@ void nsContentTreeOwner::XULWindow(nsXULWindow* aXULWindow)
       if(docShellElement)  
          {
          docShellElement->GetAttribute(NS_LITERAL_STRING("contenttitlesetting"), contentTitleSetting);
-         if(contentTitleSetting.EqualsLiteral("true"))
+         if(contentTitleSetting.Equals(NS_LITERAL_STRING("true")))
             {
             mContentTitleSetting = PR_TRUE;
             docShellElement->GetAttribute(NS_LITERAL_STRING("titledefault"), mTitleDefault);
@@ -870,8 +720,9 @@ void nsContentTreeOwner::XULWindow(nsXULWindow* aXULWindow)
                 mTitleDefault = mWindowTitleModifier;
                 mWindowTitleModifier.Truncate();
             }
-#endif
+#else
             docShellElement->GetAttribute(NS_LITERAL_STRING("titlemenuseparator"), mTitleSeparator);
+#endif
             }
          }
       else

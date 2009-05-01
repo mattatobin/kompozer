@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
  
@@ -45,7 +45,7 @@
 const int netCharType[256] =
 /*	Bit 0		xalpha		-- the alphas
 **	Bit 1		xpalpha		-- as xalpha but 
-**                             converts spaces to plus and plus to %2B
+**                             converts spaces to plus and plus to %20
 **	Bit 3 ...	path		-- as xalphas but doesn't escape '/'
 */
     /*   0 1 2 3 4 5 6 7 8 9 A B C D E F */
@@ -69,54 +69,37 @@ const int netCharType[256] =
      ((C >= 'a' && C <= 'f') ? C - 'a' + 10 : 0)))
 
 
-#define IS_OK(C) (netCharType[((unsigned int) (C))] & (flags))
+#define IS_OK(C) (netCharType[((unsigned int) (C))] & (mask))
 #define HEX_ESCAPE '%'
 
 //----------------------------------------------------------------------------------------
 static char* nsEscapeCount(
     const char * str,
-    nsEscapeMask flags,
-    size_t* out_len)
+    PRInt32 len,
+    nsEscapeMask mask,
+    PRInt32* out_len)
 //----------------------------------------------------------------------------------------
 {
 	if (!str)
 		return 0;
 
-    size_t i, len = 0, charsToEscape = 0;
+    int i, extra = 0;
     static const char hexChars[] = "0123456789ABCDEF";
 
 	register const unsigned char* src = (const unsigned char *) str;
-    while (*src)
+    for (i = 0; i < len; i++)
 	{
-        len++;
         if (!IS_OK(*src++))
-            charsToEscape++;
+            extra += 2; /* the escape, plus an extra byte for each nibble */
 	}
 
-    // calculate how much memory should be allocated
-    // original length + 2 bytes for each escaped character + terminating '\0'
-    // do the sum in steps to check for overflow
-    size_t dstSize = len + 1 + charsToEscape;
-    if (dstSize <= len)
-	return 0;
-    dstSize += charsToEscape;
-    if (dstSize < len)
-	return 0;
-
-    // fail if we need more than 4GB
-    // size_t is likely to be long unsigned int but nsMemory::Alloc(size_t)
-    // calls NS_Alloc_P(size_t) which calls PR_Malloc(PRUint32), so there is
-    // no chance to allocate more than 4GB using nsMemory::Alloc()
-    if (dstSize > PR_UINT32_MAX)
-        return 0;
-
-	char* result = (char *)nsMemory::Alloc(dstSize);
+	char* result = (char *)nsMemory::Alloc(len + extra + 1);
     if (!result)
         return 0;
 
     register unsigned char* dst = (unsigned char *) result;
 	src = (const unsigned char *) str;
-	if (flags == url_XPAlphas)
+	if (mask == url_XPAlphas)
 	{
 	    for (i = 0; i < len; i++)
 		{
@@ -156,12 +139,12 @@ static char* nsEscapeCount(
 }
 
 //----------------------------------------------------------------------------------------
-NS_COM char* nsEscape(const char * str, nsEscapeMask flags)
+NS_COM char* nsEscape(const char * str, nsEscapeMask mask)
 //----------------------------------------------------------------------------------------
 {
     if(!str)
         return NULL;
-    return nsEscapeCount(str, flags, NULL);
+    return nsEscapeCount(str, (PRInt32)strlen(str), mask, NULL);
 }
 
 //----------------------------------------------------------------------------------------
@@ -222,67 +205,53 @@ NS_COM PRInt32 nsUnescapeCount(char * str)
 NS_COM char *
 nsEscapeHTML(const char * string)
 {
-    char *rv = nsnull;
-    /* XXX Hardcoded max entity len. The +1 is for the trailing null. */
-    PRUint32 len = PL_strlen(string);
-    if (len >= (PR_UINT32_MAX / 6))
-      return nsnull;
+  char *rv = (char *) nsMemory::Alloc(strlen(string)*6 + 1); /* The +1 is for the trailing null! */
+	char *ptr = rv;
 
-    rv = (char *)NS_Alloc( (6 * len) + 1 );
-    char *ptr = rv;
+	if(rv)
+	  {
+		for(; *string != '\0'; string++)
+		  {
+			if(*string == '<')
+			  {
+				*ptr++ = '&';
+				*ptr++ = 'l';
+				*ptr++ = 't';
+				*ptr++ = ';';
+			  }
+			else if(*string == '>')
+			  {
+				*ptr++ = '&';
+				*ptr++ = 'g';
+				*ptr++ = 't';
+				*ptr++ = ';';
+			  }
+			else if(*string == '&')
+			  {
+				*ptr++ = '&';
+				*ptr++ = 'a';
+				*ptr++ = 'm';
+				*ptr++ = 'p';
+				*ptr++ = ';';
+			  }
+			else if (*string == '"')
+			  {
+				*ptr++ = '&';
+				*ptr++ = 'q';
+				*ptr++ = 'u';
+				*ptr++ = 'o';
+				*ptr++ = 't';
+				*ptr++ = ';';
+			  }			
+			else
+			  {
+				*ptr++ = *string;
+			  }
+		  }
+		*ptr = '\0';
+	  }
 
-    if(rv)
-      {
-        for(; *string != '\0'; string++)
-          {
-            if(*string == '<')
-              {
-                *ptr++ = '&';
-                *ptr++ = 'l';
-                *ptr++ = 't';
-                *ptr++ = ';';
-              }
-            else if(*string == '>')
-              {
-                *ptr++ = '&';
-                *ptr++ = 'g';
-                *ptr++ = 't';
-                *ptr++ = ';';
-              }
-            else if(*string == '&')
-              {
-                *ptr++ = '&';
-                *ptr++ = 'a';
-                *ptr++ = 'm';
-                *ptr++ = 'p';
-                *ptr++ = ';';
-              }
-            else if (*string == '"')
-              {
-                *ptr++ = '&';
-                *ptr++ = 'q';
-                *ptr++ = 'u';
-                *ptr++ = 'o';
-                *ptr++ = 't';
-                *ptr++ = ';';
-              }
-            else if (*string == '\'')
-              {
-                *ptr++ = '&';
-                *ptr++ = '#';
-                *ptr++ = '3';
-                *ptr++ = '9';
-                *ptr++ = ';';
-              }
-            else
-              {
-                *ptr++ = *string;
-              }
-          }
-        *ptr = '\0';
-      }
-
-    return(rv);
+	return(rv);
 }
 
 NS_COM PRUnichar *
@@ -293,13 +262,7 @@ nsEscapeHTML2(const PRUnichar *aSourceBuffer, PRInt32 aSourceBufferLen)
     aSourceBufferLen = nsCRT::strlen(aSourceBuffer); // ...then I will
   }
 
-  /* XXX Hardcoded max entity len. */
-  if (aSourceBufferLen >=
-      ((PR_UINT32_MAX - sizeof(PRUnichar)) / (6 * sizeof(PRUnichar))) )
-    return nsnull;
-
-  PRUnichar *resultBuffer = (PRUnichar *)nsMemory::Alloc(aSourceBufferLen *
-                            6 * sizeof(PRUnichar) + sizeof(PRUnichar('\0')));
+  PRUnichar *resultBuffer = (PRUnichar *)nsMemory::Alloc(aSourceBufferLen*6*sizeof(PRUnichar) + sizeof(PRUnichar('\0')));
   PRUnichar *ptr = resultBuffer;
 
   if (resultBuffer) {
@@ -329,12 +292,6 @@ nsEscapeHTML2(const PRUnichar *aSourceBuffer, PRInt32 aSourceBufferLen)
         *ptr++ = 'o';
         *ptr++ = 't';
         *ptr++ = ';';
-      } else if (aSourceBuffer[i] == '\'') {
-        *ptr++ = '&';
-        *ptr++ = '#';
-        *ptr++ = '3';
-        *ptr++ = '9';
-        *ptr++ = ';';
       } else {
         *ptr++ = aSourceBuffer[i];
       }
@@ -361,13 +318,13 @@ const int EscapeChars[256] =
         0    /* 8x  DEL               */
 };
 
-#define NO_NEED_ESC(C) (EscapeChars[((unsigned int) (C))] & (flags))
+#define NO_NEED_ESC(C) (EscapeChars[((unsigned int) (C))] & (mask))
 
 //----------------------------------------------------------------------------------------
 
 /* returns an escaped string */
 
-/* use the following flags to specify which 
+/* use the following masks to specify which 
    part of an URL you want to escape: 
 
    esc_Scheme        =     1
@@ -385,7 +342,7 @@ const int EscapeChars[256] =
 /* by default this function will not escape parts of a string
    that already look escaped, which means it already includes 
    a valid hexcode. This is done to avoid multiple escapes of
-   a string. Use the following flags to force escaping of a 
+   a string. Use the following mask to force escaping of a 
    string:
  
    esc_Forced        =  1024
@@ -393,7 +350,7 @@ const int EscapeChars[256] =
 
 NS_COM PRBool NS_EscapeURL(const char *part,
                            PRInt32 partLen,
-                           PRUint32 flags,
+                           PRInt16 mask,
                            nsACString &result)
 {
     if (!part) {
@@ -405,18 +362,17 @@ NS_COM PRBool NS_EscapeURL(const char *part,
     static const char hexChars[] = "0123456789ABCDEF";
     if (partLen < 0)
         partLen = strlen(part);
-    PRBool forced = (flags & esc_Forced);
-    PRBool ignoreNonAscii = (flags & esc_OnlyASCII);
-    PRBool ignoreAscii = (flags & esc_OnlyNonASCII);
-    PRBool writing = (flags & esc_AlwaysCopy);
-    PRBool colon = (flags & esc_Colon);
+    PRBool forced = (mask & esc_Forced);
+    PRBool ignoreNonAscii = (mask & esc_OnlyASCII);
+    PRBool ignoreAscii = (mask & esc_OnlyNonASCII);
+    PRBool writing = (mask & esc_AlwaysCopy);
+    PRBool colon = (mask & esc_Colon);
 
     register const unsigned char* src = (const unsigned char *) part;
 
     char tempBuffer[100];
     unsigned int tempBufferPos = 0;
 
-    PRBool previousIsNonASCII = PR_FALSE;
     for (i = 0; i < partLen; i++)
     {
       unsigned char c = *src++;
@@ -431,14 +387,10 @@ NS_COM PRBool NS_EscapeURL(const char *part,
       // On special request we will also escape the colon even when
       // not covered by the matrix.
       // ignoreAscii is not honored for control characters (C0 and DEL)
-      //
-      // And, we should escape the '|' character when it occurs after any
-      // non-ASCII character as it may be part of a multi-byte character.
       if ((NO_NEED_ESC(c) || (c == HEX_ESCAPE && !forced)
                           || (c > 0x7f && ignoreNonAscii)
                           || (c > 0x1f && c < 0x7f && ignoreAscii))
-          && !(c == ':' && colon)
-          && !(previousIsNonASCII && c == '|' && !ignoreNonAscii))
+          && !(c == ':' && colon))
       {
         if (writing)
           tempBuffer[tempBufferPos++] = c;
@@ -454,17 +406,15 @@ NS_COM PRBool NS_EscapeURL(const char *part,
         tempBuffer[tempBufferPos++] = hexChars[c >> 4];	/* high nibble */
         tempBuffer[tempBufferPos++] = hexChars[c & 0x0f]; /* low nibble */
       }
-
+ 	  
       if (tempBufferPos >= sizeof(tempBuffer) - 4)
-      {
+ 	  {
         NS_ASSERTION(writing, "should be writing");
         tempBuffer[tempBufferPos] = '\0';
         result += tempBuffer;
         tempBufferPos = 0;
-      }
-
-      previousIsNonASCII = (c > 0x7f);
-    }
+ 	  }
+	}
     if (writing) {
       tempBuffer[tempBufferPos] = '\0';
       result += tempBuffer;
@@ -474,7 +424,7 @@ NS_COM PRBool NS_EscapeURL(const char *part,
 
 #define ISHEX(c) memchr(hexChars, c, sizeof(hexChars)-1)
 
-NS_COM PRBool NS_UnescapeURL(const char *str, PRInt32 len, PRUint32 flags, nsACString &result)
+NS_COM PRBool NS_UnescapeURL(const char *str, PRInt32 len, PRInt16 flags, nsACString &result)
 {
     if (!str) {
         NS_NOTREACHED("null pointer");

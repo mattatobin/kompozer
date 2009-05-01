@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 3; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Scott MacGregor <mscott@netscape.com>
  *   Boris Zbarsky <bzbarsky@mit.edu>  (Added mailcap and mime.types support)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1133,11 +1116,11 @@ nsOSHelperAppService::GetHandlerAndDescriptionFromMailcapFile(const nsAString& a
               nsDependentSubstring optionName(start_option_iter, end_optionname_iter);
               if (equalSignFound) {
                 // This is an option that has a name and value
-                if (optionName.EqualsLiteral("description")) {
+                if (optionName.Equals(NS_LITERAL_STRING("description"))) {
                   aDescription = Substring(++equal_sign_iter, semicolon_iter);
-                } else if (optionName.EqualsLiteral("x-mozilla-flags")) {
+                } else if (optionName.Equals(NS_LITERAL_STRING("x-mozilla-flags"))) {
                   aMozillaFlags = Substring(++equal_sign_iter, semicolon_iter);
-                } else if (optionName.EqualsLiteral("test")) {
+                } else if (optionName.Equals(NS_LITERAL_STRING("test"))) {
                   nsCAutoString testCommand;
                   rv = UnescapeCommand(Substring(++equal_sign_iter, semicolon_iter),
                                        aMajorType,
@@ -1298,22 +1281,6 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURI)
 #endif
 }
 
-NS_IMETHODIMP nsOSHelperAppService::GetApplicationDescription(const nsACString& aScheme, nsAString& _retval)
-{
-  nsCOMPtr<nsIFile> appFile;
-  nsresult rv = GetHandlerAppFromPrefs(PromiseFlatCString(aScheme).get(),
-                                       getter_AddRefs(appFile));
-  if (NS_SUCCEEDED(rv))
-    return appFile->GetLeafName(_retval);
-
-#ifdef MOZ_WIDGET_GTK2
-  nsGNOMERegistry::GetAppDescForScheme(aScheme, _retval);
-  return _retval.IsEmpty() ? NS_ERROR_NOT_AVAILABLE : NS_OK;
-#else
-  return NS_ERROR_NOT_AVAILABLE;
-#endif
-}
-
 nsresult nsOSHelperAppService::GetFileTokenForPath(const PRUnichar * platformAppPath, nsIFile ** aFile)
 {
   LOG(("-- nsOSHelperAppService::GetFileTokenForPath: '%s'\n",
@@ -1382,12 +1349,12 @@ nsresult nsOSHelperAppService::GetFileTokenForPath(const PRUnichar * platformApp
 }
 
 already_AddRefed<nsMIMEInfoBase>
-nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
-  // if the extension is empty, return immediately
-  if (aFileExt.IsEmpty())
+nsOSHelperAppService::GetFromExtension(const char *aFileExt) {
+  // if the extension is null, return immediately
+  if (!aFileExt || !*aFileExt)
     return nsnull;
   
-  LOG(("Here we do an extension lookup for '%s'\n", aFileExt.get()));
+  LOG(("Here we do an extension lookup for '%s'\n", aFileExt));
 
   nsAutoString majorType, minorType,
                mime_types_description, mailcap_description,
@@ -1403,7 +1370,7 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
     
 #ifdef MOZ_WIDGET_GTK2
     LOG(("Looking in GNOME registry\n"));
-    nsMIMEInfoBase *gnomeInfo = nsGNOMERegistry::GetFromExtension(aFileExt.get()).get();
+    nsMIMEInfoBase *gnomeInfo = nsGNOMERegistry::GetFromExtension(aFileExt).get();
     if (gnomeInfo) {
       LOG(("Got MIMEInfo from GNOME registry\n"));
       return gnomeInfo;
@@ -1434,7 +1401,7 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
   }
 
   nsCAutoString mimeType(asciiMajorType + NS_LITERAL_CSTRING("/") + asciiMinorType);
-  nsMIMEInfoImpl* mimeInfo = new nsMIMEInfoImpl(mimeType);
+  nsMIMEInfoImpl* mimeInfo = new nsMIMEInfoImpl(mimeType.get());
   if (!mimeInfo)
     return nsnull;
   NS_ADDREF(mimeInfo);
@@ -1451,9 +1418,9 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
   mailcap_description.Trim(" \t\"");
   mozillaFlags.Trim(" \t");
   if (!mime_types_description.IsEmpty()) {
-    mimeInfo->SetDescription(mime_types_description);
+    mimeInfo->SetDescription(mime_types_description.get());
   } else {
-    mimeInfo->SetDescription(mailcap_description);
+    mimeInfo->SetDescription(mailcap_description.get());
   }
 
   if (NS_SUCCEEDED(rv) && handler.IsEmpty()) {
@@ -1467,7 +1434,7 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
     if (NS_SUCCEEDED(rv)) {
       mimeInfo->SetDefaultApplication(handlerFile);
       mimeInfo->SetPreferredAction(nsIMIMEInfo::useSystemDefault);
-      mimeInfo->SetDefaultDescription(handler);
+      mimeInfo->SetDefaultDescription(handler.get());
     }
   }
 
@@ -1479,12 +1446,12 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
 }
 
 already_AddRefed<nsMIMEInfoBase>
-nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
-  // if the type is empty, return immediately
-  if (aMIMEType.IsEmpty())
+nsOSHelperAppService::GetFromType(const char *aMIMEType) {
+  // if the type is null, return immediately
+  if (!aMIMEType || !*aMIMEType)
     return nsnull;
   
-  LOG(("Here we do a mimetype lookup for '%s'\n", aMIMEType.get()));
+  LOG(("Here we do a mimetype lookup for '%s'\n", aMIMEType));
 
   // extract the major and minor types
   NS_ConvertASCIItoUTF16 mimeType(aMIMEType);
@@ -1506,8 +1473,13 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
 
   nsDependentSubstring majorType(majorTypeStart, majorTypeEnd);
   nsDependentSubstring minorType(minorTypeStart, minorTypeEnd);
+  nsAutoString extensions, mime_types_description;
+  LookUpExtensionsAndDescription(majorType,
+                                 minorType,
+                                 extensions,
+                                 mime_types_description);
 
-  // First check the user's private mailcap file
+
   nsAutoString mailcap_description, handler, mozillaFlags;
   DoLookUpHandlerAndDescription(majorType,
                                 minorType,
@@ -1516,46 +1488,23 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
                                 mailcap_description,
                                 mozillaFlags,
                                 PR_TRUE);
-  
-  LOG(("Private Handler/Description results:  handler='%s', description='%s'\n",
-          NS_LossyConvertUTF16toASCII(handler).get(),
-          NS_LossyConvertUTF16toASCII(mailcap_description).get()));
 
+  
+  if (handler.IsEmpty() && extensions.IsEmpty() &&
+      mailcap_description.IsEmpty() && mime_types_description.IsEmpty()) {
+    // No useful data yet
+    
 #ifdef MOZ_WIDGET_GTK2
-  nsMIMEInfoBase *gnomeInfo = nsnull;
-  if (handler.IsEmpty()) {
-    // No useful data yet.  Check the GNOME registry.  Unfortunately, newer
-    // GNOME versions no longer have type-to-extension mappings, so we might
-    // get back a MIMEInfo without any extensions set.  In that case we'll have
-    // to look in our mime.types files for the extensions.    
     LOG(("Looking in GNOME registry\n"));
-    gnomeInfo = nsGNOMERegistry::GetFromType(aMIMEType.get()).get();
-    if (gnomeInfo && gnomeInfo->HasExtensions()) {
-      LOG(("Got MIMEInfo from GNOME registry, and it has extensions set\n"));
+    nsMIMEInfoBase *gnomeInfo = nsGNOMERegistry::GetFromType(aMIMEType).get();
+    if (gnomeInfo) {
+      LOG(("Got MIMEInfo from GNOME registry\n"));
       return gnomeInfo;
     }
-  }
 #endif
-
-  // Now look up our extensions
-  nsAutoString extensions, mime_types_description;
-  LookUpExtensionsAndDescription(majorType,
-                                 minorType,
-                                 extensions,
-                                 mime_types_description);
-
-#ifdef MOZ_WIDGET_GTK2
-  if (gnomeInfo) {
-    LOG(("Got MIMEInfo from GNOME registry without extensions; setting them "
-         "to %s\n", NS_LossyConvertUTF16toASCII(extensions).get()));
-
-    NS_ASSERTION(!gnomeInfo->HasExtensions(), "How'd that happen?");
-    gnomeInfo->SetFileExtensions(NS_ConvertUTF16toUTF8(extensions));
-    return gnomeInfo;
   }
-#endif
 
-  if (handler.IsEmpty()) {
+  if (handler.IsEmpty() && mailcap_description.IsEmpty()) {
     DoLookUpHandlerAndDescription(majorType,
                                   minorType,
                                   typeOptions,
@@ -1565,7 +1514,7 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
                                   PR_FALSE);
   }
 
-  if (handler.IsEmpty()) {
+  if (handler.IsEmpty() && mailcap_description.IsEmpty()) {
     DoLookUpHandlerAndDescription(majorType,
                                   NS_LITERAL_STRING("*"),
                                   typeOptions,
@@ -1575,7 +1524,7 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
                                   PR_TRUE);
   }
 
-  if (handler.IsEmpty()) {
+  if (handler.IsEmpty() && mailcap_description.IsEmpty()) {
     DoLookUpHandlerAndDescription(majorType,
                                   NS_LITERAL_STRING("*"),
                                   typeOptions,
@@ -1604,11 +1553,11 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
     return nsnull;
   NS_ADDREF(mimeInfo);
 
-  mimeInfo->SetFileExtensions(NS_ConvertUCS2toUTF8(extensions));
+  mimeInfo->SetFileExtensions(NS_ConvertUCS2toUTF8(extensions).get());
   if (! mime_types_description.IsEmpty()) {
-    mimeInfo->SetDescription(mime_types_description);
+    mimeInfo->SetDescription(mime_types_description.get());
   } else {
-    mimeInfo->SetDescription(mailcap_description);
+    mimeInfo->SetDescription(mailcap_description.get());
   }
 
   rv = NS_ERROR_NOT_AVAILABLE;
@@ -1620,7 +1569,7 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
   if (NS_SUCCEEDED(rv)) {
     mimeInfo->SetDefaultApplication(handlerFile);
     mimeInfo->SetPreferredAction(nsIMIMEInfo::useSystemDefault);
-    mimeInfo->SetDefaultDescription(handler);
+    mimeInfo->SetDefaultDescription(handler.get());
   } else {
     mimeInfo->SetPreferredAction(nsIMIMEInfo::saveToDisk);
   }
@@ -1630,23 +1579,23 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
 
 
 already_AddRefed<nsIMIMEInfo>
-nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
-                                        const nsACString& aFileExt,
+nsOSHelperAppService::GetMIMEInfoFromOS(const char *aType,
+                                        const char *aFileExt,
                                         PRBool     *aFound) {
   *aFound = PR_TRUE;
-  nsMIMEInfoBase* retval = GetFromType(PromiseFlatCString(aType)).get();
+  nsMIMEInfoBase* retval = GetFromType(aType).get();
   PRBool hasDefault = PR_FALSE;
   if (retval)
     retval->GetHasDefaultHandler(&hasDefault);
   if (!retval || !hasDefault) {
-    nsRefPtr<nsMIMEInfoBase> miByExt = GetFromExtension(PromiseFlatCString(aFileExt));
+    nsRefPtr<nsMIMEInfoBase> miByExt = GetFromExtension(aFileExt);
     // If we had no extension match, but a type match, use that
     if (!miByExt && retval)
       return retval;
     // If we had an extension match but no type match, set the mimetype and use
     // it
     if (!retval && miByExt) {
-      if (!aType.IsEmpty())
+      if (aType)
         miByExt->SetMIMEType(aType);
       miByExt.swap(retval);
 
@@ -1655,10 +1604,12 @@ nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
     // If we got nothing, make a new mimeinfo
     if (!retval) {
       *aFound = PR_FALSE;
-      retval = new nsMIMEInfoImpl(aType);
+      retval = new nsMIMEInfoImpl();
       if (retval) {
         NS_ADDREF(retval);
-        if (!aFileExt.IsEmpty())
+        if (aType && *aType)
+          retval->SetMIMEType(aType);
+        if (aFileExt && *aFileExt)
           retval->AppendExtension(aFileExt);
       }
       
@@ -1667,7 +1618,6 @@ nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
 
     // Copy the attributes of retval onto miByExt, to return it
     retval->CopyBasicDataTo(miByExt);
-
     miByExt.swap(retval);
   }
   return retval;

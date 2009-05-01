@@ -1,40 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Ian McGreer <mcgreer@netscape.com>
- *   Javier Delgadillo <javi@netscape.com>
+ *  Ian McGreer <mcgreer@netscape.com>
+ *  Javier Delgadillo <javi@netscape.com>
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsNSSComponent.h"
 #include "nsNSSCertificateDB.h"
@@ -53,11 +51,6 @@
 #include "nsReadableUtils.h"
 #include "nsArray.h"
 #include "nsNSSShutDown.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
-#include "nsIPrompt.h"
-#include "nsIProxyObjectManager.h"
-#include "nsProxiedService.h"
 
 #include "nspr.h"
 extern "C" {
@@ -140,17 +133,11 @@ nsNSSCertificateDB::FindCertByDBKey(const char *aDBkey, nsISupports *aToken,
   CERTIssuerAndSN issuerSN;
   unsigned long moduleID,slotID;
   *_cert = nsnull; 
-  if (!aDBkey || !*aDBkey)
-    return NS_ERROR_INVALID_ARG;
-
+  if (!aDBkey) return NS_ERROR_FAILURE;
   dummy = NSSBase64_DecodeBuffer(nsnull, &keyItem, aDBkey,
                                  (PRUint32)PL_strlen(aDBkey)); 
-  if (!dummy || keyItem.len < NS_NSS_LONG*4) {
-    PR_FREEIF(keyItem.data);
-    return NS_ERROR_INVALID_ARG;
-  }
-
   CERTCertificate *cert;
+
   // someday maybe we can speed up the search using the moduleID and slotID
   moduleID = NS_NSS_GET_LONG(keyItem.data);
   slotID = NS_NSS_GET_LONG(&keyItem.data[NS_NSS_LONG]);
@@ -158,12 +145,6 @@ nsNSSCertificateDB::FindCertByDBKey(const char *aDBkey, nsISupports *aToken,
   // build the issuer/SN structure
   issuerSN.serialNumber.len = NS_NSS_GET_LONG(&keyItem.data[NS_NSS_LONG*2]);
   issuerSN.derIssuer.len = NS_NSS_GET_LONG(&keyItem.data[NS_NSS_LONG*3]);
-  if (issuerSN.serialNumber.len == 0 || issuerSN.derIssuer.len == 0
-      || issuerSN.serialNumber.len + issuerSN.derIssuer.len
-         != keyItem.len - NS_NSS_LONG*4) {
-    PR_FREEIF(keyItem.data);
-    return NS_ERROR_INVALID_ARG;
-  }
   issuerSN.serialNumber.data= &keyItem.data[NS_NSS_LONG*4];
   issuerSN.derIssuer.data= &keyItem.data[NS_NSS_LONG*4+
                                               issuerSN.serialNumber.len];
@@ -277,13 +258,13 @@ nsNSSCertificateDB::handleCACertDownload(nsIArray *x509Certs,
   // certs which may or may not be a chained list of certs.  Until
   // the day we can design some solid UI for the general case, we'll
   // code to the > 90% case.  That case is where a CA sends down a
-  // list that is a hierarchy whose root is either the first or 
-  // the last cert.  What we're gonna do is compare the first 
-  // 2 entries, if the second was signed by the first, we assume
-  // the root cert is the first cert and display it.  Otherwise,
-  // we compare the last 2 entries, if the second to last cert was
-  // signed by the last cert, then we assume the last cert is the
-  // root and display it.
+  // list that is a chain up to its root in either ascending or 
+  // descending order.  What we're gonna do is compare the first 
+  // 2 entries, if the first was signed by the second, we assume
+  // the leaf cert is the first cert and display it.  If the second
+  // cert was signed by the first cert, then we assume the first cert
+  // is the root and the last cert in the array is the leaf.  In this
+  // case we display the last cert.
 
   nsNSSShutDownPreventionLock locker;
 
@@ -302,37 +283,35 @@ nsNSSCertificateDB::handleCACertDownload(nsIArray *x509Certs,
     selCertIndex = 0;
     certToShow = do_QueryElementAt(x509Certs, selCertIndex);
   } else {
-    nsCOMPtr<nsIX509Cert> cert0;    // first cert
-    nsCOMPtr<nsIX509Cert> cert1;    // second cert
-    nsCOMPtr<nsIX509Cert> certn_2;  // second to last cert
-    nsCOMPtr<nsIX509Cert> certn_1;  // last cert
+    nsCOMPtr<nsIX509Cert> cert0;
+    nsCOMPtr<nsIX509Cert> cert1;
 
     cert0 = do_QueryElementAt(x509Certs, 0);
     cert1 = do_QueryElementAt(x509Certs, 1);
-    certn_2 = do_QueryElementAt(x509Certs, numCerts-2);
-    certn_1 = do_QueryElementAt(x509Certs, numCerts-1);
 
     nsXPIDLString cert0SubjectName;
+    nsXPIDLString cert0IssuerName;
+    nsXPIDLString cert1SubjectName;
     nsXPIDLString cert1IssuerName;
-    nsXPIDLString certn_2IssuerName;
-    nsXPIDLString certn_1SubjectName;
 
+    cert0->GetIssuerName(cert0IssuerName);
     cert0->GetSubjectName(cert0SubjectName);
+
     cert1->GetIssuerName(cert1IssuerName);
-    certn_2->GetIssuerName(certn_2IssuerName);
-    certn_1->GetSubjectName(certn_1SubjectName);
+    cert1->GetSubjectName(cert1SubjectName);
 
     if (cert1IssuerName.Equals(cert0SubjectName)) {
       // In this case, the first cert in the list signed the second,
-      // so the first cert is the root.  Let's display it. 
+      // so the first cert is the root.  Let's display the last cert 
+      // in the list.
+      selCertIndex = numCerts-1;
+      certToShow = do_QueryElementAt(x509Certs, selCertIndex);
+    } else 
+    if (cert0IssuerName.Equals(cert1SubjectName)) { 
+      // In this case the second cert has signed the first cert.  The 
+      // first cert is the leaf, so let's display it.
       selCertIndex = 0;
       certToShow = cert0;
-    } else 
-    if (certn_2IssuerName.Equals(certn_1SubjectName)) { 
-      // In this case the last cert has signed the second to last cert.
-      // The last cert is the root, so let's display it.
-      selCertIndex = numCerts-1;
-      certToShow = certn_1;
     } else {
       // It's not a chain, so let's just show the first one in the 
       // downloaded list.
@@ -366,10 +345,6 @@ nsNSSCertificateDB::handleCACertDownload(nsIArray *x509Certs,
     tmpCert = CERT_NewTempCertificate(certdb, &der,
                                       nsnull, PR_FALSE, PR_TRUE);
   }
-  nsMemory::Free(der.data);
-  der.data = nsnull;
-  der.len = 0;
-  
   if (!tmpCert) {
     NS_ERROR("Couldn't create cert from DER blob\n");
     return NS_ERROR_FAILURE;
@@ -377,13 +352,11 @@ nsNSSCertificateDB::handleCACertDownload(nsIArray *x509Certs,
 
   CERTCertificateCleaner tmpCertCleaner(tmpCert);
 
-  if (!CERT_IsCACert(tmpCert, NULL)) {
-    DisplayCertificateAlert(ctx, "NotACACert", certToShow);
-    return NS_ERROR_FAILURE;
-  }
-
   if (tmpCert->isperm) {
-    DisplayCertificateAlert(ctx, "CaCertExists", certToShow);
+    nsPSMUITracker tracker;
+    if (!tracker.isUIForbidden()) {
+      dialogs->NotifyCACertExists(ctx);
+    }
     return NS_ERROR_FAILURE;
   }
 
@@ -438,10 +411,6 @@ nsNSSCertificateDB::handleCACertDownload(nsIArray *x509Certs,
 
     CERTCertificate *tmpCert2 = 
       CERT_NewTempCertificate(certdb, &der, nsnull, PR_FALSE, PR_TRUE);
-
-    nsMemory::Free(der.data);
-    der.data = nsnull;
-    der.len = 0;
 
     if (!tmpCert2) {
       NS_ASSERTION(0, "Couldn't create temp cert from DER blob\n");
@@ -582,6 +551,13 @@ nsNSSCertificateDB::ImportEmailCertificate(PRUint8 * data, PRUint32 length,
       CERT_AddCertToListTail(certList, cert);
   }
 
+  /* filter out the certs we don't want */
+  srv = CERT_FilterCertListByUsage(certList, certusage, PR_FALSE);
+  if (srv != SECSuccess) {
+    nsrv = NS_ERROR_FAILURE;
+    goto loser;
+  }
+
   /* go down the remaining list of certs and verify that they have
    * valid chains, then import them.
    */
@@ -589,33 +565,17 @@ nsNSSCertificateDB::ImportEmailCertificate(PRUint8 * data, PRUint32 length,
   for (node = CERT_LIST_HEAD(certList);
        !CERT_LIST_END(node,certList);
        node = CERT_LIST_NEXT(node)) {
-
-    bool alert_and_skip = false;
-
-    if (!node->cert) {
-      continue;
-    }
-
     if (CERT_VerifyCert(certdb, node->cert, 
         PR_TRUE, certusage, now, ctx, NULL) != SECSuccess) {
-      alert_and_skip = true;
-    }
-
-    CERTCertificateList *certChain = nsnull;
-    CERTCertificateListCleaner chainCleaner(certChain);
-
-    if (!alert_and_skip) {
-      certChain = CERT_CertChainFromCert(node->cert, certusage, PR_FALSE);
-      if (!certChain) {
-        alert_and_skip = true;
-      }
-    }
-
-    if (alert_and_skip) {    
-      nsCOMPtr<nsIX509Cert> certToShow = new nsNSSCertificate(node->cert);
-      DisplayCertificateAlert(ctx, "NotImportingUnverifiedCert", certToShow);
       continue;
     }
+
+    CERTCertificateList *certChain = CERT_CertChainFromCert(node->cert, certusage, PR_FALSE);
+    if (!certChain) {
+      continue;
+    }
+
+    CERTCertificateListCleaner chainCleaner(certChain);
 
     /*
      * CertChain returns an array of SECItems, import expects an array of
@@ -784,29 +744,17 @@ nsNSSCertificateDB::ImportValidCACertsInList(CERTCertList *certList, nsIInterfac
   for (node = CERT_LIST_HEAD(certList);
        !CERT_LIST_END(node,certList);
        node = CERT_LIST_NEXT(node)) {
-
-    bool alert_and_skip = false;
-
     if (CERT_VerifyCert(CERT_GetDefaultCertDB(), node->cert, 
         PR_TRUE, certUsageVerifyCA, now, ctx, NULL) != SECSuccess) {
-      alert_and_skip = true;
-    }
-
-    CERTCertificateList *certChain = nsnull;
-    CERTCertificateListCleaner chainCleaner(certChain);
-
-    if (!alert_and_skip) {    
-      certChain = CERT_CertChainFromCert(node->cert, certUsageAnyCA, PR_FALSE);
-      if (!certChain) {
-        alert_and_skip = true;
-      }
-    }
-
-    if (alert_and_skip) {    
-      nsCOMPtr<nsIX509Cert> certToShow = new nsNSSCertificate(node->cert);
-      DisplayCertificateAlert(ctx, "NotImportingUnverifiedCert", certToShow);
       continue;
     }
+
+    CERTCertificateList *certChain = CERT_CertChainFromCert(node->cert, certUsageAnyCA, PR_FALSE);
+    if (!certChain) {
+      continue;
+    }
+
+    CERTCertificateListCleaner chainCleaner(certChain);
 
     /*
      * CertChain returns an array of SECItems, import expects an array of
@@ -827,54 +775,6 @@ nsNSSCertificateDB::ImportValidCACertsInList(CERTCertList *certList, nsIInterfac
   }
   
   return NS_OK;
-}
-
-void nsNSSCertificateDB::DisplayCertificateAlert(nsIInterfaceRequestor *ctx, 
-                                                 const char *stringID, 
-                                                 nsIX509Cert *certToShow)
-{
-  nsPSMUITracker tracker;
-  if (!tracker.isUIForbidden()) {
-
-    nsCOMPtr<nsIInterfaceRequestor> my_cxt = ctx;
-    if (!my_cxt)
-      my_cxt = new PipUIContext();
-
-    // This shall be replaced by embedding ovverridable prompts
-    // as discussed in bug 310446, and should make use of certToShow.
-
-    nsresult rv;
-    nsCOMPtr<nsINSSComponent> nssComponent(do_GetService(kNSSComponentCID, &rv));
-    if (NS_SUCCEEDED(rv)) {
-      nsAutoString tmpMessage;
-      nssComponent->GetPIPNSSBundleString(stringID, tmpMessage);
-
-      // The interface requestor object may not be safe, so proxy the call to get
-      // the nsIPrompt.
-
-      nsCOMPtr<nsIInterfaceRequestor> proxiedCallbacks;
-      NS_GetProxyForObject(NS_UI_THREAD_EVENTQ,
-                           NS_GET_IID(nsIInterfaceRequestor),
-                           my_cxt,
-                           PROXY_SYNC,
-                           getter_AddRefs(proxiedCallbacks));
-    
-      nsCOMPtr<nsIPrompt> prompt (do_GetInterface(proxiedCallbacks));
-      if (!prompt)
-        return;
-    
-      // Finally, get a proxy for the nsIPrompt
-    
-      nsCOMPtr<nsIPrompt> proxyPrompt;
-      NS_GetProxyForObject(NS_UI_THREAD_EVENTQ,
-                           NS_GET_IID(nsIPrompt),
-                           prompt,
-                           PROXY_SYNC,
-                           getter_AddRefs(proxyPrompt));
-    
-      proxyPrompt->Alert(nsnull, tmpMessage.get());
-    }
-  }
 }
 
 
@@ -909,8 +809,6 @@ nsNSSCertificateDB::ImportUserCertificate(PRUint8 *data, PRUint32 length, nsIInt
 
   slot = PK11_KeyForCertExists(cert, NULL, ctx);
   if ( slot == NULL ) {
-    nsCOMPtr<nsIX509Cert> certToShow = new nsNSSCertificate(cert);
-    DisplayCertificateAlert(ctx, "UserCertIgnoredNoPrivateKey", certToShow);
     goto loser;
   }
   PK11_FreeSlot(slot);
@@ -933,10 +831,6 @@ nsNSSCertificateDB::ImportUserCertificate(PRUint8 *data, PRUint32 length, nsIInt
   }
   PK11_FreeSlot(slot);
 
-  {
-    nsCOMPtr<nsIX509Cert> certToShow = new nsNSSCertificate(cert);
-    DisplayCertificateAlert(ctx, "UserCertImported", certToShow);
-  }
   rv = NS_OK;
 
   numCACerts = collectArgs->numcerts - 1;
@@ -1005,8 +899,6 @@ nsNSSCertificateDB::SetCertTrust(nsIX509Cert *cert,
   SECStatus srv;
   nsNSSCertTrust trust;
   nsNSSCertificate *pipCert = NS_STATIC_CAST(nsNSSCertificate *, cert);
-  if (!pipCert)
-    return NS_ERROR_FAILURE;
   CERTCertificate *nsscert = pipCert->GetCert();
   CERTCertificateCleaner certCleaner(nsscert);
   if (type == nsIX509Cert::CA_CERT) {
@@ -1045,18 +937,12 @@ nsNSSCertificateDB::IsCertTrusted(nsIX509Cert *cert,
                                   PRUint32 trustType,
                                   PRBool *_isTrusted)
 {
-  NS_ENSURE_ARG_POINTER(_isTrusted);
-  *_isTrusted = PR_FALSE;
-
   nsNSSShutDownPreventionLock locker;
   SECStatus srv;
   nsNSSCertificate *pipCert = NS_STATIC_CAST(nsNSSCertificate *, cert);
   CERTCertificate *nsscert = pipCert->GetCert();
   CERTCertTrust nsstrust;
   srv = CERT_GetCertTrust(nsscert, &nsstrust);
-  if (srv != SECSuccess)
-    return NS_ERROR_FAILURE;
-
   nsNSSCertTrust trust(&nsstrust);
   CERT_DestroyCertificate(nsscert);
   if (certType == nsIX509Cert::CA_CERT) {
@@ -1099,7 +985,6 @@ nsNSSCertificateDB::ImportCertsFromFile(nsISupports *aToken,
                                         nsILocalFile *aFile,
                                         PRUint32 aType)
 {
-  NS_ENSURE_ARG(aFile);
   switch (aType) {
     case nsIX509Cert::CA_CERT:
     case nsIX509Cert::EMAIL_CERT:
@@ -1167,9 +1052,9 @@ nsNSSCertificateDB::ImportPKCS12File(nsISupports *aToken,
 {
   NS_ENSURE_ARG(aFile);
   nsPKCS12Blob blob;
-  nsCOMPtr<nsIPK11Token> token = do_QueryInterface(aToken);
-  if (token) {
-    blob.SetToken(token);
+  if (aToken) {
+    nsCOMPtr<nsIPK11Token> t = do_QueryInterface(aToken);
+    blob.SetToken(t);
   }
   return blob.ImportFromFile(aFile);
 }
@@ -1330,12 +1215,9 @@ nsNSSCertificateDB::getCertNames(CERTCertList *certList,
         namestr = node->cert->emailAddr;
       } else {
         namestr = node->cert->nickname;
-        if (namestr) {
-          char *sc = strchr(namestr, ':');
-          if (sc) *sc = DELIM;
-        }
+        char *sc = strchr(namestr, ':');
+        if (sc) *sc = DELIM;
       }
-      if (!namestr) namestr = "";
       nsAutoString certname = NS_ConvertASCIItoUCS2(namestr);
       certstr.Append(PRUnichar(DELIM));
       certstr += certname;
@@ -1355,10 +1237,10 @@ finish:
 NS_IMETHODIMP 
 nsNSSCertificateDB::GetIsOcspOn(PRBool *aOcspOn)
 {
-  nsCOMPtr<nsIPrefBranch> pref = do_GetService(NS_PREFSERVICE_CONTRACTID);
+  nsCOMPtr<nsIPref> prefService = do_GetService(NS_PREF_CONTRACTID);
 
   PRInt32 ocspEnabled;
-  pref->GetIntPref("security.OCSP.enabled", &ocspEnabled);
+  prefService->GetIntPref("security.OCSP.enabled", &ocspEnabled);
   *aOcspOn = ( ocspEnabled == 0 ) ? PR_FALSE : PR_TRUE; 
   return NS_OK;
 }
@@ -1686,6 +1568,10 @@ NS_IMETHODIMP nsNSSCertificateDB::AddCertFromBase64(const char *aBase64, const c
   // need to calculate the trust bits from the aTrust string.
   nsresult rv = CERT_DecodeTrustString(trust.GetTrust(), /* this is const, but not declared that way */(char *) aTrust);
   NS_ENSURE_SUCCESS(rv, rv); // if bad trust passed in, return error.
+  trust.SetValidCA();
+  trust.AddCATrust(trust.GetTrust()->sslFlags,
+                   trust.GetTrust()->emailFlags,
+                   trust.GetTrust()->objectSigningFlags);
 
 
   rv = ConstructX509FromBase64(aBase64, getter_AddRefs(newCert));
@@ -1702,9 +1588,6 @@ NS_IMETHODIMP nsNSSCertificateDB::AddCertFromBase64(const char *aBase64, const c
   if (!tmpCert) 
     tmpCert = CERT_NewTempCertificate(certdb, &der,
                                       nsnull, PR_FALSE, PR_TRUE);
-  nsMemory::Free(der.data);
-  der.data = nsnull;
-  der.len = 0;
 
   if (!tmpCert) {
     NS_ASSERTION(0,"Couldn't create cert from DER blob\n");

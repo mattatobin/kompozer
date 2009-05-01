@@ -11,35 +11,35 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Original Code is Mozilla Communicator client code.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
+ * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Pete Collins
  *   Brian King
- *   Daniel Glazman <glazman@netscape.com>
+ *   Daniel Glazman (glazman@disruptive-innovations.com), on behalf of Linspire Inc.
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 /**** NAMESPACES ****/
 const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+const NVU_NS = "http://disruptive-innovations.com/zoo/nvu";
 
 // Each editor window must include this file
 // Variables  shared by all dialogs:
@@ -242,15 +242,24 @@ function GetCurrentEditorElement()
   
   do {
     // Get the <editor> element(s)
-    var editorList = tmpWindow.document.getElementsByTagName("editor");
+    var tabeditor = tmpWindow.document.getElementById("tabeditor");
 
     // This will change if we support > 1 editor element
-    if (editorList.item(0))
-      return editorList.item(0);
+    if (tabeditor )
+      return tabeditor.getCurrentEditorElement() ;
 
     tmpWindow = tmpWindow.opener;
   } 
   while (tmpWindow);
+
+  return null;
+}
+
+function GetCurrentEditingSession()
+{
+  try {
+    return GetCurrentEditorElement().editingSession;
+  } catch (e) { dump (e)+"\n"; }
 
   return null;
 }
@@ -361,7 +370,8 @@ function newCommandParams()
 function GetDocumentTitle()
 {
   try {
-    return new XPCNativeWrapper(GetCurrentEditor().document, "title").title;
+    return GetCurrentEditor().document.title;
+    // return new XPCNativeWrapper(GetCurrentEditor().document, "title").title;
   } catch (e) {}
 
   return "";
@@ -437,10 +447,27 @@ function SetElementEnabled(element, doEnable)
 {
   if ( element )
   {
-    if ( doEnable )
+    /*if ( doEnable )
       element.removeAttribute("disabled");
     else
-      element.setAttribute("disabled", "true");
+      element.setAttribute("disabled", "true");*/
+
+    element.disabled = !doEnable;
+  }
+  else
+  {
+    dump("Element  not found in SetElementEnabled\n");
+  }
+}
+
+function SetElementVisible(element, isVisible)
+{
+  if ( element )
+  {
+    if ( isVisible)
+      element.style.visibility = "visible";
+    else
+      element.style.visibility = "hidden";
   }
   else
   {
@@ -635,18 +662,21 @@ function TextIsURI(selectedText)
 
 function IsUrlAboutBlank(urlString)
 {
-  return (urlString == "about:blank");
+  return (urlString == "about:blank" || urlString == "about:xblank" ||
+          urlString == "about:strictblank" || urlString == "about:xstrictblank");
 }
 
-function MakeRelativeUrl(url)
-{
+//~ function MakeRelativeUrl(url)
+function MakeRelativeUrl(url, base) { // modified
+// Added: optional "base" param (default = document URL)
+
   var inputUrl = TrimString(url);
   if (!inputUrl)
     return inputUrl;
 
   // Get the filespec relative to current document's location
   // NOTE: Can't do this if file isn't saved yet!
-  var docUrl = GetDocumentBaseUrl();
+  var docUrl = base ? base : GetDocumentBaseUrl(); // Kaze
   var docScheme = GetScheme(docUrl);
 
   // Can't relativize if no doc scheme (page hasn't been saved)
@@ -707,12 +737,12 @@ function MakeRelativeUrl(url)
 
       // Remove filename for named anchors in the same file
       if (nextDocSlash == -1 && docFilename)
-      { 
+      {
         var anchorIndex = urlPath.indexOf("#");
         if (anchorIndex > 0)
         {
           var urlFilename = doCaseInsensitive ? urlPath.toLowerCase() : urlPath;
-        
+
           if (urlFilename.indexOf(docFilename) == 0)
             urlPath = urlPath.slice(anchorIndex);
         }
@@ -739,8 +769,8 @@ function MakeRelativeUrl(url)
         // No match, we're done
         done = true;
 
-        // Be sure we are on the same local drive or volume 
-        //   (the first "dir" in the path) because we can't 
+        // Be sure we are on the same local drive or volume
+        //   (the first "dir" in the path) because we can't
         //   relativize to different drives/volumes.
         // UNIX doesn't have volumes, so we must not do this else
         //  the first directory will be misinterpreted as a volume name
@@ -1096,4 +1126,119 @@ function Clone(obj)
       clone[i] = obj[i];
   }
   return clone;
+}
+
+function GetCSSPropertyValueForSelection(property)
+{
+  var value = "";
+  try {
+    if (!gAtomService) GetAtomService();
+    var propAtom = gAtomService.getAtom(property);
+
+    value = GetCurrentEditor().getCSSPropertyValueForSelection(propAtom);
+  }
+  catch(e) {}
+
+  return value;
+}
+
+function ListAvailableCharSets()
+{
+  try {
+    var availCharsetDict     = [];
+    var rdf = Components.classes["@mozilla.org/rdf/rdf-service;1"].getService(Components.interfaces.nsIRDFService); 
+    var kNC_Root = rdf.GetResource("NC:DecodersRoot");
+    var kNC_name = rdf.GetResource("http://home.netscape.com/NC-rdf#Name");
+    var rdfDataSource = rdf.GetDataSource("rdf:charset-menu"); 
+    var rdfContainer = Components.classes["@mozilla.org/rdf/container;1"].getService(Components.interfaces.nsIRDFContainer);
+
+    rdfContainer.Init(rdfDataSource, kNC_Root);
+    var availableCharsets = rdfContainer.GetElements();
+    var charset;
+
+    for (var i = 0; i < rdfContainer.GetCount(); i++) {
+      charset = availableCharsets.getNext().QueryInterface(Components.interfaces.nsIRDFResource);
+      availCharsetDict[i] = new Array(2);
+      availCharsetDict[i][0] = readRDFString(rdfDataSource, charset, kNC_name);
+      availCharsetDict[i][1] = charset.Value;
+    }
+    return availCharsetDict;
+  }
+  catch (e) { return null; }
+}
+
+function ExplodeElement(node)
+{
+  var child = node.firstChild;
+  var parent = node.parentNode;
+  if (!parent)
+    return;
+  while (child)
+  {
+    var tmp = child.nextSibling;
+    parent.insertBefore(child, node);
+    child = tmp;
+  }
+  var brNode = document.createElement("br");
+  parent.insertBefore(brNode, node);
+  parent.removeChild(node);
+}
+
+function NormalizeURL(url)
+{
+  if (!GetScheme(url) && !IsUrlAboutBlank(url))
+  {
+    var k = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsILocalFile);
+
+    var noBackSlashUrl = url.replace(/\\\"/g, "\"");
+    var c0 = noBackSlashUrl[0];
+    var c1 = noBackSlashUrl[1]
+    if (c0 == '/' ||
+        ( ((c0 >= 'a' && c0 <= 'z') || (c0 >= 'A' && c0 <= 'Z')) && c1 == ":"))
+    {
+      // this is an absolute path
+      k.initWithPath(url);
+    }
+    else
+    {
+      // First, get the current dir for the process...
+      var dirServiceProvider = Components.classes["@mozilla.org/file/directory_service;1"].getService(Components.interfaces.nsIDirectoryServiceProvider);
+      var p = new Object();
+      var currentProcessDir = dirServiceProvider.getFile("CurWorkD", p).path;
+      k.initWithPath(currentProcessDir);
+
+      // then try to append the relative path
+      try {
+        k.appendRelativePath(url);
+      }
+      catch (e) {
+        dump("### Can't understand the filepath\n");
+        return "about:blank";
+      }
+      var ioService = Components.classes["@mozilla.org/network/io-service;1"].getService(Components.interfaces.nsIIOService);
+      var fileHandler = ioService.getProtocolHandler("file").QueryInterface(Components.interfaces.nsIFileProtocolHandler);
+      url = fileHandler.getURLSpecFromFile(k);
+    }
+  }
+  return url;
+}
+
+function IsXHTMLDocument()
+{
+  var doctype = GetCurrentEditor().document.doctype;
+  return (doctype.publicId == "-//W3C//DTD XHTML 1.0 Transitional//EN" ||
+          doctype.publicId == "-//W3C//DTD XHTML 1.0 Strict//EN");
+}
+
+function IsStrictDTD()
+{
+  var doctype = GetCurrentEditor().document.doctype;
+  return (doctype.publicId.lastIndexOf("Strict") != -1);
+}
+
+function IsCSSDisabledAndStrictDTD()
+{
+  var prefs = GetPrefs();
+  var IsCSSPrefChecked = prefs.getBoolPref("editor.use_css");
+  return !IsCSSPrefChecked && IsStrictDTD();
 }

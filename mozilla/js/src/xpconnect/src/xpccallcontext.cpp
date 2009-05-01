@@ -57,8 +57,7 @@ XPCCallContext::XPCCallContext(XPCContext::LangType callerLanguage,
         mJSContext(cx),
         mContextPopRequired(JS_FALSE),
         mDestroyJSContextInDestructor(JS_FALSE),
-        mCallerLanguage(callerLanguage),
-        mCallee(nsnull)
+        mCallerLanguage(callerLanguage)
 {
     if(!mXPC)
         return;
@@ -186,10 +185,9 @@ XPCCallContext::SetName(jsval name)
     }
     else
     {
-        mSet = mWrapper ? mWrapper->GetSet() : nsnull;
+        mSet = mWrapper->GetSet();
 
-        if(mSet &&
-           mSet->FindMember(name, &mMember, &mInterface,
+        if(mSet->FindMember(name, &mMember, &mInterface,
                             mWrapper->HasProto() ?
                                 mWrapper->GetProto()->GetSet() :
                                 nsnull,
@@ -299,28 +297,31 @@ XPCCallContext::~XPCCallContext()
     {
         mXPCContext->SetCallingLangType(mPrevCallerLanguage);
 
+        if(mContextPopRequired)
+        {
+            XPCJSContextStack* stack = mThreadData->GetJSContextStack();
+            if(stack)
+            {
+#ifdef DEBUG
+                JSContext* poppedCX;
+                nsresult rv = stack->Pop(&poppedCX);
+                NS_ASSERTION(NS_SUCCEEDED(rv) && poppedCX == mJSContext, "bad pop");
+#else
+                (void) stack->Pop(nsnull);
+#endif
+            }
+            else
+            {
+                NS_ASSERTION(0, "bad!");
+            }
+        }
+
 #ifdef DEBUG
         XPCCallContext* old = mThreadData->SetCallContext(mPrevCallContext);
         NS_ASSERTION(old == this, "bad pop from per thread data");
 #else
         (void) mThreadData->SetCallContext(mPrevCallContext);
 #endif
-    }
-
-    if(mContextPopRequired)
-    {
-        XPCJSContextStack* stack = mThreadData->GetJSContextStack();
-        NS_ASSERTION(stack, "bad!");
-        if(stack)
-        {
-#ifdef DEBUG
-            JSContext* poppedCX;
-            nsresult rv = stack->Pop(&poppedCX);
-            NS_ASSERTION(NS_SUCCEEDED(rv) && poppedCX == mJSContext, "bad pop");
-#else
-            (void) stack->Pop(nsnull);
-#endif
-        }
     }
 
     if(mJSContext)
@@ -344,11 +345,7 @@ XPCCallContext::~XPCCallContext()
         }
         else
         {
-            // Don't clear newborns if JS frames (compilation or execution)
-            // are active!  Doing so violates ancient invariants in the JS
-            // engine, and it's not necessary to fix JS component leaks.
-            if (!mJSContext->fp)
-                JS_ClearNewbornRoots(mJSContext);
+            JS_ClearNewbornRoots(mJSContext);
         }
     }
 
@@ -362,7 +359,7 @@ NS_IMETHODIMP_(nsrefcnt)
 XPCCallContext::Release(void)
 {
   NS_PRECONDITION(0 != mRefCnt, "dup release");
-  NS_ASSERT_OWNINGTHREAD(XPCCallContext);
+  NS_ASSERT_OWNINGTHREAD(_class);
   --mRefCnt;
   NS_LOG_RELEASE(this, mRefCnt, "XPCCallContext");
   // no delete this!
@@ -373,7 +370,7 @@ XPCCallContext::Release(void)
 NS_IMETHODIMP
 XPCCallContext::GetCallee(nsISupports * *aCallee)
 {
-    nsISupports* temp = mWrapper ? mWrapper->GetIdentityObject() : nsnull;
+    nsISupports* temp = mWrapper->GetIdentityObject();
     NS_IF_ADDREF(temp);
     *aCallee = temp;
     return NS_OK;
@@ -411,7 +408,7 @@ XPCCallContext::GetCalleeInterface(nsIInterfaceInfo * *aCalleeInterface)
 NS_IMETHODIMP
 XPCCallContext::GetCalleeClassInfo(nsIClassInfo * *aCalleeClassInfo)
 {
-    nsIClassInfo* temp = mWrapper ? mWrapper->GetClassInfo() : nsnull;
+    nsIClassInfo* temp = mWrapper->GetClassInfo();
     NS_IF_ADDREF(temp);
     *aCalleeClassInfo = temp;
     return NS_OK;

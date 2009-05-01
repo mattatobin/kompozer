@@ -1,47 +1,31 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla MathML Project.
- *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is The University Of 
+ * Queensland.  Portions created by The University Of Queensland are
+ * Copyright (C) 1999 The University Of Queensland.  All Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Roger B. Sidje <rbs@maths.uq.edu.au>
  *   David J. Fiddes <D.J.Fiddes@hw.ac.uk>
  *   Shyjan Mahamud <mahamud@cs.cmu.edu>
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 
 #include "nsCOMPtr.h"
 #include "nsFrame.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsUnitConversion.h"
 #include "nsStyleContext.h"
 #include "nsStyleConsts.h"
@@ -80,7 +64,8 @@ nsMathMLmunderFrame::~nsMathMLmunderFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::AttributeChanged(nsIContent*     aContent,
+nsMathMLmunderFrame::AttributeChanged(nsIPresContext* aPresContext,
+                                      nsIContent*     aContent,
                                       PRInt32         aNameSpaceID,
                                       nsIAtom*        aAttribute,
                                       PRInt32         aModType)
@@ -88,20 +73,21 @@ nsMathMLmunderFrame::AttributeChanged(nsIContent*     aContent,
   if (nsMathMLAtoms::accentunder_ == aAttribute) {
     // When we have automatic data to update within ourselves, we ask our
     // parent to re-layout its children
-    return ReLayoutChildren(mParent);
+    return ReLayoutChildren(aPresContext, mParent);
   }
 
   return nsMathMLContainerFrame::
-         AttributeChanged(aContent, aNameSpaceID,
+         AttributeChanged(aPresContext, aContent, aNameSpaceID,
                           aAttribute, aModType);
 }
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::UpdatePresentationData(PRInt32         aScriptLevelIncrement,
+nsMathMLmunderFrame::UpdatePresentationData(nsIPresContext* aPresContext,
+                                            PRInt32         aScriptLevelIncrement,
                                             PRUint32        aFlagsValues,
                                             PRUint32        aFlagsToUpdate)
 {
-  nsMathMLContainerFrame::UpdatePresentationData(
+  nsMathMLContainerFrame::UpdatePresentationData(aPresContext,
     aScriptLevelIncrement, aFlagsValues, aFlagsToUpdate);
   // disable the stretch-all flag if we are going to act like a subscript
   if ( NS_MATHML_EMBELLISH_IS_MOVABLELIMITS(mEmbellishData.flags) &&
@@ -115,7 +101,8 @@ nsMathMLmunderFrame::UpdatePresentationData(PRInt32         aScriptLevelIncremen
 }
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::UpdatePresentationDataFromChildAt(PRInt32         aFirstIndex,
+nsMathMLmunderFrame::UpdatePresentationDataFromChildAt(nsIPresContext* aPresContext,
+                                                       PRInt32         aFirstIndex,
                                                        PRInt32         aLastIndex,
                                                        PRInt32         aScriptLevelIncrement,
                                                        PRUint32        aFlagsValues,
@@ -141,7 +128,7 @@ nsMathMLmunderFrame::UpdatePresentationDataFromChildAt(PRInt32         aFirstInd
         aFlagsToUpdate &= ~NS_MATHML_DISPLAYSTYLE;
         aFlagsValues &= ~NS_MATHML_DISPLAYSTYLE;
       }
-      PropagatePresentationDataFor(childFrame,
+      PropagatePresentationDataFor(aPresContext, childFrame,
         aScriptLevelIncrement, aFlagsValues, aFlagsToUpdate);
     }
     index++;
@@ -154,10 +141,11 @@ nsMathMLmunderFrame::UpdatePresentationDataFromChildAt(PRInt32         aFirstInd
 }
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::InheritAutomaticData(nsIFrame* aParent)
+nsMathMLmunderFrame::InheritAutomaticData(nsIPresContext* aPresContext,
+                                          nsIFrame*       aParent)
 {
   // let the base class get the default from our parent
-  nsMathMLContainerFrame::InheritAutomaticData(aParent);
+  nsMathMLContainerFrame::InheritAutomaticData(aPresContext, aParent);
 
   mPresentationData.flags |= NS_MATHML_STRETCH_ALL_CHILDREN_HORIZONTALLY;
 
@@ -165,7 +153,7 @@ nsMathMLmunderFrame::InheritAutomaticData(nsIFrame* aParent)
 }
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::TransmitAutomaticData()
+nsMathMLmunderFrame::TransmitAutomaticData(nsIPresContext* aPresContext)
 {
   // At this stage, all our children are in sync and we can fully
   // resolve our own mEmbellishData struct
@@ -191,12 +179,15 @@ XXX The winner is the outermost setting in conflicting settings like these:
   nsIFrame* baseFrame = mFrames.FirstChild();
   if (baseFrame)
     underscriptFrame = baseFrame->GetNextSibling();
+  if (!baseFrame || !underscriptFrame)
+    return NS_OK; // a visual error indicator will be reported later during layout
 
   // if our base is an embellished operator, let its state bubble to us (in particular,
   // this is where we get the flag for NS_MATHML_EMBELLISH_MOVABLELIMITS). Our flags
   // are reset to the default values of false if the base frame isn't embellished.
-  mPresentationData.baseFrame = baseFrame;
   GetEmbellishDataFrom(baseFrame, mEmbellishData);
+  if (NS_MATHML_IS_EMBELLISH_OPERATOR(mEmbellishData.flags))
+    mEmbellishData.nextFrame = baseFrame;
 
   nsAutoString value;
 
@@ -212,9 +203,9 @@ XXX The winner is the outermost setting in conflicting settings like these:
   // if we have an accentunder attribute, it overrides what the underscript said
   if (NS_CONTENT_ATTR_HAS_VALUE == mContent->GetAttr(kNameSpaceID_None, 
                    nsMathMLAtoms::accentunder_, value)) {
-    if (value.EqualsLiteral("true"))
+    if (value.Equals(NS_LITERAL_STRING("true")))
       mEmbellishData.flags |= NS_MATHML_EMBELLISH_ACCENTUNDER;
-    else if (value.EqualsLiteral("false")) 
+    else if (value.Equals(NS_LITERAL_STRING("false"))) 
       mEmbellishData.flags &= ~NS_MATHML_EMBELLISH_ACCENTUNDER;
   }
 
@@ -236,7 +227,7 @@ XXX The winner is the outermost setting in conflicting settings like these:
   */
   PRInt32 increment = NS_MATHML_EMBELLISH_IS_ACCENTUNDER(mEmbellishData.flags)
     ? 0 : 1;
-  PropagatePresentationDataFor(underscriptFrame, increment,
+  PropagatePresentationDataFor(aPresContext, underscriptFrame, increment,
     ~NS_MATHML_DISPLAYSTYLE | NS_MATHML_COMPRESSED,
      NS_MATHML_DISPLAYSTYLE | NS_MATHML_COMPRESSED);
 
@@ -263,14 +254,15 @@ i.e.,:
 */
 
 NS_IMETHODIMP
-nsMathMLmunderFrame::Place(nsIRenderingContext& aRenderingContext,
+nsMathMLmunderFrame::Place(nsIPresContext*      aPresContext,
+                           nsIRenderingContext& aRenderingContext,
                            PRBool               aPlaceOrigin,
                            nsHTMLReflowMetrics& aDesiredSize)
 {
   if ( NS_MATHML_EMBELLISH_IS_MOVABLELIMITS(mEmbellishData.flags) &&
       !NS_MATHML_IS_DISPLAYSTYLE(mPresentationData.flags)) {
     // place like subscript
-    return nsMathMLmsubFrame::PlaceSubScript(GetPresContext(),
+    return nsMathMLmsubFrame::PlaceSubScript(aPresContext,
                                              aRenderingContext,
                                              aPlaceOrigin,
                                              aDesiredSize,
@@ -290,12 +282,14 @@ nsMathMLmunderFrame::Place(nsIRenderingContext& aRenderingContext,
   if (!baseFrame || !underFrame || underFrame->GetNextSibling()) {
     // report an error, encourage people to get their markups in order
     NS_WARNING("invalid markup");
-    return ReflowError(aRenderingContext, aDesiredSize);
+    return ReflowError(aPresContext, aRenderingContext, aDesiredSize);
   }
   GetReflowAndBoundingMetricsFor(baseFrame, baseSize, bmBase);
   GetReflowAndBoundingMetricsFor(underFrame, underSize, bmUnder);
 
-  nscoord onePixel = GetPresContext()->IntScaledPixelsToTwips(1);
+  float p2t;
+  aPresContext->GetScaledPixelsToTwips(&p2t);
+  nscoord onePixel = NSIntPixelsToTwips(1, p2t);
 
   ////////////////////
   // Place Children
@@ -373,10 +367,10 @@ nsMathMLmunderFrame::Place(nsIRenderingContext& aRenderingContext,
   if (aPlaceOrigin) {
     nscoord dy = 0;
     // place base
-    FinishReflowChild(baseFrame, GetPresContext(), nsnull, baseSize, dxBase, dy, 0);
+    FinishReflowChild(baseFrame, aPresContext, nsnull, baseSize, dxBase, dy, 0);
     // place underscript
     dy = aDesiredSize.ascent + mBoundingMetrics.descent - bmUnder.descent - underSize.ascent;
-    FinishReflowChild(underFrame, GetPresContext(), nsnull, underSize, dxUnder, dy, 0);
+    FinishReflowChild(underFrame, aPresContext, nsnull, underSize, dxUnder, dy, 0);
   }
 
   return NS_OK;

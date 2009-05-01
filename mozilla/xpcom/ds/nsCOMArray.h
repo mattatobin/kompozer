@@ -14,7 +14,7 @@
  *
  * The Original Code is a COM aware array class.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code
  * Netscape Communications Corp.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
@@ -97,7 +97,7 @@ public:
     }
 
     nsISupports* ObjectAt(PRInt32 aIndex) const {
-        return NS_STATIC_CAST(nsISupports*, mArray.FastElementAt(aIndex));
+        return NS_STATIC_CAST(nsISupports*, mArray.ElementAt(aIndex));
     }
     
     nsISupports* SafeObjectAt(PRInt32 aIndex) const {
@@ -106,13 +106,6 @@ public:
 
     nsISupports* operator[](PRInt32 aIndex) const {
         return ObjectAt(aIndex);
-    }
-
-    // Ensures there is enough space to store a total of aCapacity objects.
-    // This method never deletes any objects.
-    PRBool SetCapacity(PRUint32 aCapacity) {
-      return aCapacity > 0 ? mArray.SizeTo(NS_STATIC_CAST(PRInt32, aCapacity))
-                           : PR_TRUE;
     }
 
 private:

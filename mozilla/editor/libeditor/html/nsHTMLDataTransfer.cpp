@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsICaret.h"
@@ -84,7 +85,7 @@
 #include "nsIDocumentEncoder.h"
 #include "nsIDOMDocumentFragment.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIParser.h"
 #include "nsParserCIID.h"
 #include "nsIImage.h"
@@ -93,8 +94,7 @@
 #include "nsXPCOM.h"
 #include "nsISupportsPrimitives.h"
 #include "nsLinebreakConverter.h"
-#include "nsIFragmentContentSink.h"
-#include "nsIContentSink.h"
+#include "nsIHTMLFragmentContentSink.h"
 
 // netwerk
 #include "nsIURI.h"
@@ -105,9 +105,6 @@
 #include "nsITransferable.h"
 #include "nsIDragService.h"
 #include "nsIDOMNSUIEvent.h"
-#include "nsIOutputStream.h"
-#include "nsIInputStream.h"
-#include "nsDirectoryServiceDefs.h"
 
 // for relativization
 #include "nsUnicharUtils.h"
@@ -133,6 +130,10 @@
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
 #include "nsIContentFilter.h"
+#include "imgIEncoder.h"
+
+#include "nsIExternalHelperAppService.h"
+#include "nsCExternalHandlerService.h"
 
 const PRUnichar nbsp = 160;
 
@@ -222,7 +223,7 @@ NS_IMETHODIMP nsHTMLEditor::LoadHTML(const nsAString & aInputString)
     nsCOMPtr<nsIDOMDocumentFragment> docfrag;
     {
       res = nsrange->CreateContextualFragment(aInputString, getter_AddRefs(docfrag));
-      NS_ENSURE_SUCCESS(res, res);
+    NS_ENSURE_SUCCESS(res, res);
     }
     // put the fragment into the document
     nsCOMPtr<nsIDOMNode> parent, junk;
@@ -295,7 +296,7 @@ nsHTMLEditor::InsertHTMLWithContext(const nsAString & aInputString,
   // pasting just the cell text which is what we want anyway. 
   // A paste from an excel cell always starts with a new line, two spaces and then the td tag
   if (StringBeginsWith(aInputString, NS_LITERAL_STRING("\n  <td"))) 
-    contextStr.Truncate();
+    contextStr = NS_LITERAL_STRING("");
 #endif
 
   res = CreateDOMFragmentFromPaste(aInputString, contextStr, aInfoStr, 
@@ -389,9 +390,6 @@ nsHTMLEditor::InsertHTMLWithContext(const nsAString & aInputString,
                                  streamStartParent, streamStartOffset,
                                  streamEndParent, streamEndOffset);
   NS_ENSURE_SUCCESS(res, res);
-
-  if (nodeList.Count() == 0)
-    return NS_OK;
 
   // walk list of nodes; perform surgery on nodes (relativize) with _mozattr
   res = RelativizeURIInFragmentList(nodeList, aFlavor, aSourceDoc, targetNode);
@@ -797,7 +795,7 @@ nsHTMLEditor::GetAttributeToModifyOnNode(nsIDOMNode *aNode, nsAString &aAttr)
   nsCOMPtr<nsIDOMHTMLAnchorElement> nodeAsAnchor = do_QueryInterface(aNode);
   if (nodeAsAnchor)
   {
-    aAttr.AssignLiteral("href");
+    aAttr = NS_LITERAL_STRING("href");
     return NS_OK;
   }
 
@@ -847,7 +845,7 @@ nsHTMLEditor::GetAttributeToModifyOnNode(nsIDOMNode *aNode, nsAString &aAttr)
   nsCOMPtr<nsIDOMHTMLObjectElement> nodeAsObject = do_QueryInterface(aNode);
   if (nodeAsObject)
   {
-    aAttr.AssignLiteral("data");
+    aAttr = NS_LITERAL_STRING("data");
     return NS_OK;
   }
   
@@ -879,9 +877,10 @@ nsHTMLEditor::GetAttributeToModifyOnNode(nsIDOMNode *aNode, nsAString &aAttr)
         } while (current != end && !nsCRT::IsAsciiSpace(*current));
 
         // Store the link for fix up if it says "stylesheet"
-        if (Substring(startWord, current).LowerCaseEqualsLiteral("stylesheet"))
+        if (Substring(startWord, current).Equals(NS_LITERAL_STRING("stylesheet"),
+                      nsCaseInsensitiveStringComparator()))
         {
-          aAttr.AssignLiteral("href");
+          aAttr = NS_LITERAL_STRING("href");
           return NS_OK;
         }
         if (current == end)
@@ -1130,7 +1129,9 @@ NS_IMETHODIMP nsHTMLEditor::PrepareHTMLTransferable(nsITransferable **aTransfera
                                                     PRBool aHavePrivFlavor)
 {
   // Create generic Transferable for getting the data
-  nsresult rv = CallCreateInstance("@mozilla.org/widget/transferable;1", aTransferable);
+  nsresult rv = nsComponentManager::CreateInstance("@mozilla.org/widget/transferable;1", nsnull, 
+                                          NS_GET_IID(nsITransferable), 
+                                          (void**)aTransferable);
   if (NS_FAILED(rv))
     return rv;
 
@@ -1147,10 +1148,9 @@ NS_IMETHODIMP nsHTMLEditor::PrepareHTMLTransferable(nsITransferable **aTransfera
       }
       (*aTransferable)->AddDataFlavor(kHTMLMime);
       (*aTransferable)->AddDataFlavor(kFileMime);
-#ifdef XP_WIN32
-      // image pasting from the clipboard is only implemented on Windows right now.
       (*aTransferable)->AddDataFlavor(kJPEGImageMime);
-#endif
+      (*aTransferable)->AddDataFlavor(kNativeImageMime);
+
     }
     (*aTransferable)->AddDataFlavor(kUnicodeMime);
   }
@@ -1290,10 +1290,10 @@ NS_IMETHODIMP nsHTMLEditor::InsertFromTransferable(nsITransferable *transferable
                                                    PRBool aDoDeleteSelection)
 {
   nsresult rv = NS_OK;
-  nsXPIDLCString bestFlavor;
+  char* bestFlavor = nsnull;
   nsCOMPtr<nsISupports> genericDataObj;
   PRUint32 len = 0;
-  if ( NS_SUCCEEDED(transferable->GetAnyTransferData(getter_Copies(bestFlavor), getter_AddRefs(genericDataObj), &len)) )
+  if ( NS_SUCCEEDED(transferable->GetAnyTransferData(&bestFlavor, getter_AddRefs(genericDataObj), &len)) )
   {
     nsAutoTxnsConserveSelection dontSpazMySelection(this);
     nsAutoString flavor;
@@ -1349,24 +1349,152 @@ NS_IMETHODIMP nsHTMLEditor::InsertFromTransferable(nsITransferable *transferable
       {
         nsAutoString text;
         textDataObj->GetData(text);
+
         NS_ASSERTION(text.Length() <= (len/2), "Invalid length!");
         stuffToPaste.Assign(text.get(), len / 2);
-        nsAutoEditBatch beginBatching(this);
-        // need to provide a hook from this point
-        rv = InsertTextAt(stuffToPaste, aDestinationNode, aDestOffset, aDoDeleteSelection);
+
+        PRBool hasMozSourceView = PR_FALSE;
+        rv  = GetIsColoredSourceView(&hasMozSourceView);
+        if (NS_FAILED(rv)) return rv;
+        if (hasMozSourceView)
+        {
+          stuffToPaste.ReplaceSubstring(NS_LITERAL_STRING("&").get(),
+                                        NS_LITERAL_STRING("&amp;").get());
+          stuffToPaste.ReplaceSubstring(NS_LITERAL_STRING("<").get(),
+                                        NS_LITERAL_STRING("&lt;").get());
+
+          // Windows linebreaks: Map CRLF to LF:
+          stuffToPaste.ReplaceSubstring(NS_LITERAL_STRING("\r\n").get(),
+                                        NS_LITERAL_STRING("\n").get());
+         
+          // Mac linebreaks: Map any remaining CR to LF:
+          stuffToPaste.ReplaceSubstring(NS_LITERAL_STRING("\r").get(),
+                                        NS_LITERAL_STRING("\n").get());
+
+          PRUnichar last = stuffToPaste.Last();
+          if (last == '\n')
+            stuffToPaste.Truncate(stuffToPaste.Length() - 1);
+
+          stuffToPaste.ReplaceSubstring(NS_LITERAL_STRING("\n").get(),
+                                        NS_LITERAL_STRING("<li>").get());
+
+          nsCOMPtr<nsISelection> selection;
+          rv = GetSelection(getter_AddRefs(selection));
+          if (NS_FAILED(rv)) return rv;
+          nsCOMPtr<nsIDOMNode> selStartNode, selEndNode;
+          PRInt32 selStartOffset, selEndOffset;
+          rv = GetStartNodeAndOffset(selection, address_of(selStartNode), &selStartOffset);
+          if (NS_FAILED(rv)) return rv;
+
+          // get the selection end location
+          rv = GetEndNodeAndOffset(selection, address_of(selEndNode), &selEndOffset);
+          if (NS_FAILED(rv)) return rv;
+
+          if (nsHTMLEditUtils::IsOrderedList(selStartNode) /*&&
+              nsHTMLEditUtils::IsOrderedList(selEndNode)*/)
+            stuffToPaste = NS_LITERAL_STRING("<li>") + stuffToPaste + NS_LITERAL_STRING("</li>");
+
+          const nsAFlatString& empty = EmptyString();
+          nsCRT::free(bestFlavor);
+          bestFlavor = nsCRT::strdup(kHTMLMime);
+          flavor.AssignWithConversion(bestFlavor);
+          rv = InsertHTMLWithContext(stuffToPaste,
+                                     empty, empty, flavor, 
+                                     aSourceDoc,
+                                     aDestinationNode, aDestOffset,
+                                     aDoDeleteSelection);
+        }
+        else
+#ifdef XP_UNIX
+        if (!hasMozSourceView && StringBeginsWith(stuffToPaste, NS_LITERAL_STRING("file:/")))
+        {
+          nsCRT::free(bestFlavor);
+          bestFlavor = nsCRT::strdup(kFileMime);
+          flavor.AssignWithConversion(bestFlavor);
+
+          NS_ConvertUCS2toUTF8 cStuffToPaste(stuffToPaste);
+          nsCOMPtr<nsIURI> uri;
+          rv = NS_NewURI(getter_AddRefs(uri), cStuffToPaste);
+          if (NS_FAILED(rv))
+            return rv;
+
+          nsCOMPtr<nsIURL> fileURL(do_QueryInterface(uri));
+          if (fileURL)
+          {
+            PRBool insertAsImage = PR_FALSE;
+            nsCAutoString fileextension;
+            rv = fileURL->GetFileExtension(fileextension);
+            if (NS_SUCCEEDED(rv) && !fileextension.IsEmpty())
+            {
+              if ( (nsCRT::strcasecmp(fileextension.get(), "jpg") == 0 )
+                   || (nsCRT::strcasecmp(fileextension.get(), "jpeg") == 0 )
+                   || (nsCRT::strcasecmp(fileextension.get(), "gif") == 0 )
+                   || (nsCRT::strcasecmp(fileextension.get(), "png") == 0 ) )
+              {
+                insertAsImage = PR_TRUE;
+              }
+            }
+
+            nsCAutoString urltext;
+            rv = fileURL->GetSpec(urltext);
+            if (NS_SUCCEEDED(rv) && !urltext.IsEmpty())
+            {
+              if (insertAsImage)
+              {
+                stuffToPaste.Assign(NS_LITERAL_STRING("<IMG alt=\""));
+                AppendUTF8toUTF16(urltext, stuffToPaste);
+                stuffToPaste.Append(NS_LITERAL_STRING("\" src=\""));
+                AppendUTF8toUTF16(urltext, stuffToPaste);
+                stuffToPaste.Append(NS_LITERAL_STRING("\">"));
+              }
+              else /* insert as link */
+              {
+                stuffToPaste.Assign(NS_LITERAL_STRING("<A href=\""));
+                AppendUTF8toUTF16(urltext, stuffToPaste);
+                stuffToPaste.Append(NS_LITERAL_STRING("\">"));
+                AppendUTF8toUTF16(urltext, stuffToPaste);
+                stuffToPaste.Append(NS_LITERAL_STRING("</A>"));
+              }
+              nsAutoEditBatch beginBatching(this);
+                      
+              const nsAFlatString& empty = EmptyString();
+              rv = InsertHTMLWithContext(stuffToPaste,
+                                         empty, empty, flavor, 
+                                         aSourceDoc,
+                                         aDestinationNode, aDestOffset,
+                                         aDoDeleteSelection);
+            }
+          }
+        }
+        else
+#endif
+        {
+          nsAutoEditBatch beginBatching(this);
+          // need to provide a hook from this point
+          rv = InsertTextAt(stuffToPaste, aDestinationNode, aDestOffset, aDoDeleteSelection);
+        }
       }
     }
+    else if (0 == nsCRT::strcmp(bestFlavor, kJPEGImageMime))
+    {
+      // need to provide a hook from here
+      // Insert Image code here
+      printf("Don't know how to insert an image yet!\n");
+      //nsIImage* image = (nsIImage *)data;
+      //NS_RELEASE(image);
+      rv = NS_ERROR_NOT_IMPLEMENTED; // for now give error code
+    }
+
     else if (0 == nsCRT::strcmp(bestFlavor, kFileMime))
     {
       nsCOMPtr<nsIFile> fileObj(do_QueryInterface(genericDataObj));
       if (fileObj && len > 0)
       {
-        
         nsCOMPtr<nsIURI> uri;
         rv = NS_NewFileURI(getter_AddRefs(uri), fileObj);
         if (NS_FAILED(rv))
           return rv;
-        
+
         nsCOMPtr<nsIURL> fileURL(do_QueryInterface(uri));
         if (fileURL)
         {
@@ -1376,31 +1504,31 @@ NS_IMETHODIMP nsHTMLEditor::InsertFromTransferable(nsITransferable *transferable
           if (NS_SUCCEEDED(rv) && !fileextension.IsEmpty())
           {
             if ( (nsCRT::strcasecmp(fileextension.get(), "jpg") == 0 )
-              || (nsCRT::strcasecmp(fileextension.get(), "jpeg") == 0 )
-              || (nsCRT::strcasecmp(fileextension.get(), "gif") == 0 )
-              || (nsCRT::strcasecmp(fileextension.get(), "png") == 0 ) )
+                 || (nsCRT::strcasecmp(fileextension.get(), "jpeg") == 0 )
+                 || (nsCRT::strcasecmp(fileextension.get(), "gif") == 0 )
+                 || (nsCRT::strcasecmp(fileextension.get(), "png") == 0 ) )
             {
               insertAsImage = PR_TRUE;
             }
           }
-          
+
           nsCAutoString urltext;
           rv = fileURL->GetSpec(urltext);
           if (NS_SUCCEEDED(rv) && !urltext.IsEmpty())
           {
             if (insertAsImage)
             {
-              stuffToPaste.AssignLiteral("<IMG src=\"");
+              stuffToPaste.Assign(NS_LITERAL_STRING("<IMG src=\""));
               AppendUTF8toUTF16(urltext, stuffToPaste);
-              stuffToPaste.AppendLiteral("\" alt=\"\" >");
+              stuffToPaste.Append(NS_LITERAL_STRING("\" alt=\"\" >"));
             }
             else /* insert as link */
             {
-              stuffToPaste.AssignLiteral("<A href=\"");
+              stuffToPaste.Assign(NS_LITERAL_STRING("<A href=\""));
               AppendUTF8toUTF16(urltext, stuffToPaste);
-              stuffToPaste.AppendLiteral("\">");
+              stuffToPaste.Append(NS_LITERAL_STRING("\">"));
               AppendUTF8toUTF16(urltext, stuffToPaste);
-              stuffToPaste.AppendLiteral("</A>");
+              stuffToPaste.Append(NS_LITERAL_STRING("</A>"));
             }
             nsAutoEditBatch beginBatching(this);
 
@@ -1414,60 +1542,65 @@ NS_IMETHODIMP nsHTMLEditor::InsertFromTransferable(nsITransferable *transferable
         }
       }
     }
+    else if (flavor.Equals(NS_LITERAL_STRING(kNativeImageMime)))
+    {
+      nsXPIDLString htmlstr;
+      nsAutoEditBatch beginBatching(this);
+      rv = InsertHTMLWithContext(htmlstr, nsString(), nsString(), flavor, aSourceDoc, aDestinationNode, aDestOffset, aDoDeleteSelection);
+    }
     else if (0 == nsCRT::strcmp(bestFlavor, kJPEGImageMime))
     {
-      nsCOMPtr<nsIInputStream> imageStream(do_QueryInterface(genericDataObj));
-      NS_ENSURE_TRUE(imageStream, NS_ERROR_FAILURE);
+      // need to provide a hook from here
+      // Insert Image code here
 
-      nsCOMPtr<nsIFile> fileToUse;
-      NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(fileToUse));
-      fileToUse->Append(NS_LITERAL_STRING("moz-screenshot.jpg"));
-      nsCOMPtr<nsILocalFile> path = do_QueryInterface(fileToUse);
-      path->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0600);
-
-      nsCOMPtr<nsIOutputStream> outputStream;
-      rv = NS_NewLocalFileOutputStream(getter_AddRefs(outputStream), fileToUse);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      PRUint32 length;
-      imageStream->Available(&length);
-
-      nsCOMPtr<nsIOutputStream> bufferedOutputStream;
-      rv = NS_NewBufferedOutputStream(getter_AddRefs(bufferedOutputStream), outputStream, length);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      PRUint32 numWritten;
-      rv = bufferedOutputStream->WriteFrom(imageStream, length, &numWritten);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      // force the stream close before we try to insert the image
-      // into the document.
-      rv = bufferedOutputStream->Close();
-      NS_ENSURE_SUCCESS(rv, rv);
-      
-      nsCOMPtr<nsIURI> uri;
-      rv = NS_NewFileURI(getter_AddRefs(uri), fileToUse);
-      NS_ENSURE_SUCCESS(rv, rv);
-      nsCOMPtr<nsIURL> fileURL(do_QueryInterface(uri));
-      if (fileURL)
+      nsCOMPtr<nsIClipboardImage> clipboardImage (do_QueryInterface(genericDataObj));
+      if (clipboardImage)
       {
-        nsCAutoString urltext;
-        rv = fileURL->GetSpec(urltext);
-        if (NS_SUCCEEDED(rv) && !urltext.IsEmpty())
+        // invoke image encoder
+        nsCOMPtr<imgIEncoder> imgEncoder (do_CreateInstance("@mozilla.org/image/encoder;2?type=image/jpeg"));
+        if (imgEncoder)
         {
-          stuffToPaste.AssignLiteral("<IMG src=\"");
-          AppendUTF8toUTF16(urltext, stuffToPaste);
-          stuffToPaste.AppendLiteral("\" alt=\"\" >");
-          nsAutoEditBatch beginBatching(this);
-          rv = InsertHTMLWithContext(stuffToPaste, EmptyString(), EmptyString(), 
-                                     NS_LITERAL_STRING(kFileMime),
-                                     aSourceDoc,
-                                     aDestinationNode, aDestOffset,
-                                     aDoDeleteSelection);
+          nsCOMPtr<nsIFile> clipboardImageFile;
+          rv = imgEncoder->EncodeClipboardImage(clipboardImage, getter_AddRefs(clipboardImageFile));
+
+          if (NS_FAILED(rv) || !clipboardImageFile) 
+            return rv;
+          
+          nsCOMPtr<nsIURI> uri;
+          rv = NS_NewFileURI(getter_AddRefs(uri), clipboardImageFile);
+          if (NS_FAILED(rv))
+            return rv;
+        
+          nsCOMPtr<nsIURL> fileURL(do_QueryInterface(uri));
+          if (fileURL)
+          {
+            nsCAutoString urltext;
+            rv = fileURL->GetSpec(urltext);
+            if (NS_SUCCEEDED(rv) && !urltext.IsEmpty())
+            {
+              stuffToPaste.Assign(NS_LITERAL_STRING("<IMG src=\""));
+              stuffToPaste.Append(NS_ConvertUTF8toUCS2(urltext));
+              stuffToPaste.Append(NS_LITERAL_STRING("\" alt=\"\" >"));
+              nsAutoEditBatch beginBatching(this);
+              rv = InsertHTMLWithContext(stuffToPaste,
+                                       nsString(), nsString(), NS_LITERAL_STRING(kFileMime), 
+                                       aSourceDoc,
+                                       aDestinationNode, aDestOffset,
+                                       aDoDeleteSelection);
+            }
+          }
+          
+          // XXX: For mail, it should be safe to move this temporary file onto the list of files to delete at shutdown.
+          // But that is not true for editor documents. Maybe we should leave the document around if pasting into an editor document?
+
+          nsCOMPtr<nsPIExternalAppLauncher> tempFileManager (do_GetService(NS_EXTERNALHELPERAPPSERVICE_CONTRACTID));
+          if (tempFileManager)
+            tempFileManager->DeleteTemporaryFileOnExit(clipboardImageFile);
         }
       }
     }
   }
+  nsCRT::free(bestFlavor);
       
   // Try to scroll the selection into view if the paste/drop succeeded
   if (NS_SUCCEEDED(rv))
@@ -1977,7 +2110,7 @@ NS_IMETHODIMP nsHTMLEditor::CanPaste(PRInt32 aSelectionType, PRBool *aCanPaste)
   
   // the flavors that we can deal with
   const char* const textEditorFlavors[] = { kUnicodeMime, nsnull };
-  const char* const htmlEditorFlavors[] = { kHTMLMime, kJPEGImageMime, nsnull };
+  const char* const htmlEditorFlavors[] = { kHTMLMime, kJPEGImageMime, kNativeImageMime, nsnull };
 
   nsCOMPtr<nsISupportsArray> flavorsList =
                            do_CreateInstance(NS_SUPPORTSARRAY_CONTRACTID, &rv);
@@ -2133,7 +2266,7 @@ NS_IMETHODIMP nsHTMLEditor::PasteAsPlaintextQuotation(PRInt32 aSelectionType)
         rv = InsertAsPlaintextQuotation(stuffToPaste, PR_TRUE, 0);
       }
     }
-    NS_Free(flav);
+    nsCRT::free(flav);
   }
 
   return rv;
@@ -2285,9 +2418,9 @@ nsHTMLEditor::InsertAsPlaintextQuotation(const nsAString & aQuotedText,
       // Wrap the inserted quote in a <pre> so it won't be wrapped:
       nsAutoString tag;
       if (quotesInPre)
-        tag.AssignLiteral("pre");
+        tag.Assign(NS_LITERAL_STRING("pre"));
       else
-        tag.AssignLiteral("span");
+        tag.Assign(NS_LITERAL_STRING("span"));
 
       rv = DeleteSelectionAndCreateNode(tag, getter_AddRefs(preNode));
       
@@ -2595,7 +2728,7 @@ nsresult nsHTMLEditor::ParseFragment(const nsAString & aFragStr,
     sink = do_CreateInstance(NS_HTMLFRAGMENTSINK_CONTRACTID);
 
   NS_ENSURE_TRUE(sink, NS_ERROR_FAILURE);
-  nsCOMPtr<nsIFragmentContentSink> fragSink(do_QueryInterface(sink));
+  nsCOMPtr<nsIHTMLFragmentContentSink> fragSink(do_QueryInterface(sink));
   NS_ENSURE_TRUE(fragSink, NS_ERROR_FAILURE);
 
   fragSink->SetTargetDocument(aTargetDocument);
@@ -2605,7 +2738,7 @@ nsresult nsHTMLEditor::ParseFragment(const nsAString & aFragStr,
   if (bContext)
     parser->Parse(aFragStr, (void*)0, NS_LITERAL_CSTRING("text/html"), PR_FALSE, PR_TRUE, eDTDMode_fragment);
   else
-    parser->ParseFragment(aFragStr, 0, aTagStack, PR_FALSE, NS_LITERAL_CSTRING("text/html"), eDTDMode_quirks);
+    parser->ParseFragment(aFragStr, 0, aTagStack, 0, NS_LITERAL_CSTRING("text/html"), eDTDMode_quirks);
   // get the fragment node
   nsCOMPtr<nsIDOMDocumentFragment> contextfrag;
   res = fragSink->GetFragment(getter_AddRefs(contextfrag));
@@ -2662,7 +2795,7 @@ void nsHTMLEditor::FreeTagStackStrings(nsVoidArray &tagStack)
   {
     PRUnichar* str = (PRUnichar*)tagStack.ElementAt(i);
     if (str) {
-      NS_Free(str);
+      nsCRT::free(str);
     }
   }
 }
@@ -2883,14 +3016,14 @@ nsHTMLEditor::ReplaceOrphanedStructure(PRBool aEnd,
 nsIDOMNode* nsHTMLEditor::GetArrayEndpoint(PRBool aEnd,
                                            nsCOMArray<nsIDOMNode>& aNodeArray)
 {
-  PRInt32 listCount = aNodeArray.Count();
-  if (listCount <= 0) 
-    return nsnull;
-
   if (aEnd)
   {
-    return aNodeArray[listCount-1];
+    PRInt32 listCount = aNodeArray.Count();
+    if (listCount <= 0) return nsnull;
+    else return aNodeArray[listCount-1];
   }
-  
-  return aNodeArray[0];
+  else
+  {
+    return aNodeArray[0];
+  }
 }

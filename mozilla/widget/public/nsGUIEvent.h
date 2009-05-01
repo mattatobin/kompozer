@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Dean Tessman <dean_tessman@hotmail.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -52,9 +52,7 @@
 #ifdef WIN32
 #undef ERROR
 #endif
-#include "nsCOMPtr.h"
 #include "nsIDOMKeyEvent.h"
-#include "nsWeakPtr.h"
 
 class nsIRenderingContext;
 class nsIRegion;
@@ -63,7 +61,6 @@ class nsIMenuItem;
 class nsIAccessible;
 class nsIContent;
 class nsIURI;
-class nsIDOMEvent;
            
 /**
  * Event Struct Types
@@ -85,7 +82,6 @@ class nsIDOMEvent;
 #define NS_RECONVERSION_EVENT             15
 #define NS_MOUSE_SCROLL_EVENT             16
 #define NS_SCROLLPORT_EVENT               18
-#define NS_MUTATION_EVENT                 19 // |nsMutationEvent| in content
 #define NS_ACCESSIBLE_EVENT               20
 #define NS_FORM_EVENT                     21
 #define NS_FOCUS_EVENT                    22
@@ -93,18 +89,8 @@ class nsIDOMEvent;
 #define NS_APPCOMMAND_EVENT               24
 #define NS_POPUPBLOCKED_EVENT             25
 #define NS_BEFORE_PAGE_UNLOAD_EVENT       26
-#define NS_UI_EVENT                       27
-#define NS_QUERYCARETRECT_EVENT           28
-#define NS_PAGETRANSITION_EVENT               29
-#ifdef MOZ_SVG
-#define NS_SVG_EVENT                      30
-#define NS_SVGZOOM_EVENT                  31
-#endif // MOZ_SVG
-#define NS_XUL_COMMAND_EVENT              32
 
-// These flags are sort of a mess. They're sort of shared between event
-// listener flags and event flags, but only some of them. You've been
-// warned!
+
 #define NS_EVENT_FLAG_NONE                0x0000
 #define NS_EVENT_FLAG_INIT                0x0001
 #define NS_EVENT_FLAG_BUBBLE              0x0002
@@ -116,10 +102,6 @@ class nsIDOMEvent;
 #define NS_PRIV_EVENT_FLAG_SCRIPT         0x0080
 #define NS_EVENT_FLAG_NO_CONTENT_DISPATCH 0x0100
 #define NS_EVENT_FLAG_SYSTEM_EVENT        0x0200
-#define NS_EVENT_FLAG_STOP_DISPATCH_IMMEDIATELY 0x0400 // @see nsIDOM3Event::stopImmediatePropagation()
-#define NS_EVENT_FLAG_DISPATCHING         0x0800
-
-#define NS_PRIV_EVENT_UNTRUSTED_PERMITTED 0x8000
 
 #define NS_EVENT_CAPTURE_MASK             (~(NS_EVENT_FLAG_INIT | NS_EVENT_FLAG_BUBBLE | NS_EVENT_FLAG_NO_CONTENT_DISPATCH))
 #define NS_EVENT_BUBBLE_MASK              (~(NS_EVENT_FLAG_INIT | NS_EVENT_FLAG_CAPTURE | NS_EVENT_FLAG_NO_CONTENT_DISPATCH))
@@ -249,7 +231,6 @@ class nsIDOMEvent;
 #define NS_IMAGE_ERROR                  (NS_STREAM_EVENT_START + 4)
 #define NS_SCRIPT_LOAD                  (NS_STREAM_EVENT_START + 5)
 #define NS_BEFORE_PAGE_UNLOAD           (NS_STREAM_EVENT_START + 6)
-#define NS_PAGE_RESTORE                 (NS_STREAM_EVENT_START + 7)
  
 #define NS_FORM_EVENT_START             1200
 #define NS_FORM_SUBMIT                  (NS_FORM_EVENT_START)
@@ -279,7 +260,7 @@ class nsIDOMEvent;
 #define NS_XUL_POPUP_SHOWN            (NS_XUL_EVENT_START+1)
 #define NS_XUL_POPUP_HIDING           (NS_XUL_EVENT_START+2)
 #define NS_XUL_POPUP_HIDDEN           (NS_XUL_EVENT_START+3)
-// NS_XUL_COMMAND used to be here     (NS_XUL_EVENT_START+4)
+#define NS_XUL_COMMAND                (NS_XUL_EVENT_START+4)
 #define NS_XUL_BROADCAST              (NS_XUL_EVENT_START+5)
 #define NS_XUL_COMMAND_UPDATE         (NS_XUL_EVENT_START+6)
 #define NS_XUL_CLICK                  (NS_XUL_EVENT_START+7)
@@ -327,41 +308,6 @@ class nsIDOMEvent;
 #define NS_TEXT_START                 2400
 #define NS_TEXT_TEXT                  (NS_TEXT_START)
 
-// UI events
-#define NS_UI_EVENT_START          2500
-// this is not to be confused with NS_ACTIVATE!
-#define NS_UI_ACTIVATE             (NS_UI_EVENT_START)
-#define NS_UI_FOCUSIN              (NS_UI_EVENT_START + 1)
-#define NS_UI_FOCUSOUT             (NS_UI_EVENT_START + 2)
-
-// query caret rect events
-#define NS_QUERYCARETRECT_START    2600
-#define NS_QUERYCARETRECT          (NS_QUERYCARETRECT_START)
-
-// pagetransition events
-#define NS_PAGETRANSITION_START    2700
-#define NS_PAGE_SHOW               (NS_PAGETRANSITION_START + 1)
-#define NS_PAGE_HIDE               (NS_PAGETRANSITION_START + 2)
-
-#ifdef MOZ_SVG
-// SVG events
-#define NS_SVG_EVENT_START              2800
-#define NS_SVG_LOAD                     (NS_SVG_EVENT_START)
-#define NS_SVG_UNLOAD                   (NS_SVG_EVENT_START + 1)
-#define NS_SVG_ABORT                    (NS_SVG_EVENT_START + 2)
-#define NS_SVG_ERROR                    (NS_SVG_EVENT_START + 3)
-#define NS_SVG_RESIZE                   (NS_SVG_EVENT_START + 4)
-#define NS_SVG_SCROLL                   (NS_SVG_EVENT_START + 5)
-
-// SVG Zoom events
-#define NS_SVGZOOM_EVENT_START          2900
-#define NS_SVG_ZOOM                     (NS_SVGZOOM_EVENT_START)
-#endif // MOZ_SVG
-
-// XUL command events
-#define NS_XULCOMMAND_EVENT_START       3000
-#define NS_XUL_COMMAND                  (NS_XULCOMMAND_EVENT_START)
-
 /**
  * Return status for event processors, nsEventStatus, is defined in
  * nsEvent.h.
@@ -389,54 +335,34 @@ enum nsWindowZ {
  * General event
  */
 
-class nsEvent
-{
-protected:
-  nsEvent(PRBool isTrusted, PRUint32 msg, PRUint8 structType)
+struct nsEvent {
+  nsEvent(PRUint32 msg = 0, PRUint8 structType = NS_EVENT)
     : eventStructType(structType),
       message(msg),
       point(0, 0),
       refPoint(0, 0),
       time(0),
       flags(0),
-      internalAppFlags(isTrusted ? NS_APP_EVENT_FLAG_TRUSTED :
-                       NS_APP_EVENT_FLAG_NONE),
+      internalAppFlags(NS_APP_EVENT_FLAG_NONE),
       userType(0)
   {
   }
 
-public:
-  nsEvent(PRBool isTrusted, PRUint32 msg)
-    : eventStructType(NS_EVENT),
-      message(msg),
-      point(0, 0),
-      refPoint(0, 0),
-      time(0),
-      flags(0),
-      internalAppFlags(isTrusted ? NS_APP_EVENT_FLAG_TRUSTED :
-                       NS_APP_EVENT_FLAG_NONE),
-      userType(0)
-  {
-  }
-
-  // See event struct types
+  /// See event struct types
   PRUint8     eventStructType;
-  // See GUI MESSAGES,
+  /// See GUI MESSAGES,
   PRUint32    message;              
-  // In widget relative coordinates, modified to be relative to
-  // current view in layout.
+  /// in widget relative coordinates, modified to be relative to current view in layout.
   nsPoint     point;               
-  // In widget relative coordinates, not modified by layout code.
+  // in widget relative coordinates, not modified by layout code.
   nsPoint     refPoint;               
-  // Elapsed time, in milliseconds, from the time the system was
-  // started to the time the message was created
+  /// elapsed time, in milliseconds, from the time the system was started to the time the message was created
   PRUint32    time;      
-  // Flags to hold event flow stage and capture/bubble cancellation
-  // status
+  // flags to hold event flow stage and capture/bubble cancellation status
   PRUint32    flags;
-  // Flags for indicating more event state for Mozilla applications.
+  // flags for indicating more event state for Mozilla applications.
   PRUint32    internalAppFlags;
-  // Additional type info for user defined events
+  // additional type info for user defined events
   nsHashKey*  userType;
 };
 
@@ -444,18 +370,12 @@ public:
  * General graphic user interface event
  */
 
-class nsGUIEvent : public nsEvent
+struct nsGUIEvent : public nsEvent
 {
-protected:
-  nsGUIEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w, PRUint8 structType)
-    : nsEvent(isTrusted, msg, structType),
-      widget(w), nativeMsg(nsnull)
-  {
-  }
-
-public:
-  nsGUIEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsEvent(isTrusted, msg, NS_GUI_EVENT),
+  nsGUIEvent(PRUint32 msg = 0,
+             nsIWidget *w = nsnull,
+             PRUint8 structType = NS_GUI_EVENT)
+    : nsEvent(msg, structType),
       widget(w), nativeMsg(nsnull)
   {
   }
@@ -470,11 +390,11 @@ public:
  * Script error event
  */
 
-class nsScriptErrorEvent : public nsEvent
+struct nsScriptErrorEvent : public nsEvent
 {
-public:
-  nsScriptErrorEvent(PRBool isTrusted, PRUint32 msg)
-    : nsEvent(isTrusted, msg, NS_SCRIPT_ERROR_EVENT),
+  nsScriptErrorEvent(PRUint32 msg = 0,
+                     PRUint8 structType = NS_SCRIPT_ERROR_EVENT)
+    : nsEvent(msg, structType),
       lineNr(0), errorMsg(nsnull), fileName(nsnull)
   {
   }
@@ -484,11 +404,10 @@ public:
   const PRUnichar*  fileName;
 };
 
-class nsBeforePageUnloadEvent : public nsEvent
+struct nsBeforePageUnloadEvent : public nsEvent
 {
-public:
-  nsBeforePageUnloadEvent(PRBool isTrusted, PRUint32 msg)
-    : nsEvent(isTrusted, msg, NS_BEFORE_PAGE_UNLOAD_EVENT)
+  nsBeforePageUnloadEvent(PRUint32 msg)
+    : nsEvent(msg, NS_BEFORE_PAGE_UNLOAD_EVENT)
   {
   }
 
@@ -499,11 +418,12 @@ public:
  * Window resize event
  */
 
-class nsSizeEvent : public nsGUIEvent
+struct nsSizeEvent : public nsGUIEvent
 {
-public:
-  nsSizeEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_SIZE_EVENT),
+  nsSizeEvent(PRUint32 msg = 0,
+              nsIWidget *w = nsnull,
+              PRUint8 structType = NS_SIZE_EVENT)
+    : nsGUIEvent(msg, w, structType),
       windowSize(nsnull), mWinWidth(0), mWinHeight(0)
   {
   }
@@ -520,11 +440,12 @@ public:
  * Window size mode event
  */
 
-class nsSizeModeEvent : public nsGUIEvent
+struct nsSizeModeEvent : public nsGUIEvent
 {
-public:
-  nsSizeModeEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_SIZEMODE_EVENT),
+  nsSizeModeEvent(PRUint32 msg = 0,
+                  nsIWidget *w = nsnull,
+                  PRUint8 structType = NS_SIZEMODE_EVENT)
+    : nsGUIEvent(msg, w, structType),
       mSizeMode(nsSizeMode_Normal)
   {
   }
@@ -536,11 +457,12 @@ public:
  * Window z-level event
  */
 
-class nsZLevelEvent : public nsGUIEvent
+struct nsZLevelEvent : public nsGUIEvent
 {
-public:
-  nsZLevelEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_ZLEVEL_EVENT),
+  nsZLevelEvent(PRUint32 msg = 0,
+                nsIWidget *w = nsnull,
+                PRUint8 structType = NS_ZLEVEL_EVENT)
+    : nsGUIEvent(msg, w, structType),
       mPlacement(nsWindowZTop), mReqBelow(nsnull), mActualBelow(nsnull),
       mImmediate(PR_FALSE), mAdjusted(PR_FALSE)
   {
@@ -557,11 +479,12 @@ public:
  * Window repaint event
  */
 
-class nsPaintEvent : public nsGUIEvent
+struct nsPaintEvent : public nsGUIEvent
 {
-public:
-  nsPaintEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_PAINT_EVENT),
+  nsPaintEvent(PRUint32 msg = 0,
+               nsIWidget *w = nsnull,
+               PRUint8 structType = NS_PAINT_EVENT)
+    : nsGUIEvent(msg, w, structType),
       renderingContext(nsnull), region(nsnull), rect(nsnull)
   {
   }
@@ -578,11 +501,12 @@ public:
  * Scrollbar event
  */
 
-class nsScrollbarEvent : public nsGUIEvent
+struct nsScrollbarEvent : public nsGUIEvent
 {
-public:
-  nsScrollbarEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_SCROLLBAR_EVENT),
+  nsScrollbarEvent(PRUint32 msg = 0,
+                   nsIWidget *w = nsnull,
+                   PRUint8 structType = NS_SCROLLBAR_EVENT)
+    : nsGUIEvent(msg, w, structType),
       position(0)
   {
   }
@@ -591,17 +515,18 @@ public:
   PRUint32        position; 
 };
 
-class nsScrollPortEvent : public nsGUIEvent
+struct nsScrollPortEvent : public nsGUIEvent
 {
-public:
   enum orientType {
     vertical   = 0,
     horizontal = 1,
     both       = 2
   };
 
-  nsScrollPortEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_SCROLLPORT_EVENT),
+  nsScrollPortEvent(PRUint32 msg = 0,
+                    nsIWidget *w = nsnull,
+                    PRUint8 structType = NS_SCROLLPORT_EVENT)
+    : nsGUIEvent(msg, w, structType),
       orient(vertical)
   {
   }
@@ -609,19 +534,12 @@ public:
   orientType orient;
 };
 
-class nsInputEvent : public nsGUIEvent
+struct nsInputEvent : public nsGUIEvent
 {
-protected:
-  nsInputEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w,
-               PRUint8 structType)
-    : nsGUIEvent(isTrusted, msg, w, structType),
-      isShift(PR_FALSE), isControl(PR_FALSE), isAlt(PR_FALSE), isMeta(PR_FALSE)
-  {
-  }
-
-public:
-  nsInputEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_INPUT_EVENT),
+  nsInputEvent(PRUint32 msg = 0,
+               nsIWidget *w = nsnull,
+               PRUint8 structType = NS_INPUT_EVENT)
+    : nsGUIEvent(msg, w, structType),
       isShift(PR_FALSE), isControl(PR_FALSE), isAlt(PR_FALSE), isMeta(PR_FALSE)
   {
   }
@@ -640,15 +558,13 @@ public:
  * Mouse event
  */
 
-class nsMouseEvent : public nsInputEvent
+struct nsMouseEvent : public nsInputEvent
 {
-public:
-  enum reasonType { eReal, eSynthesized };
-
-  nsMouseEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w,
-               reasonType aReason)
-    : nsInputEvent(isTrusted, msg, w, NS_MOUSE_EVENT),
-      clickCount(0), acceptActivation(PR_FALSE), reason(aReason)
+  nsMouseEvent(PRUint32 msg = 0,
+               nsIWidget *w = nsnull,
+               PRUint8 structType = NS_MOUSE_EVENT)
+    : nsInputEvent(msg, w, structType),
+      clickCount(0), acceptActivation(PR_FALSE)
   {
     if (msg == NS_MOUSE_MOVE) {
       flags |= NS_EVENT_FLAG_CANT_CANCEL;
@@ -659,35 +575,36 @@ public:
   PRUint32        clickCount;          
   /// Special return code for MOUSE_ACTIVATE to signal
   /// if the target accepts activation (1), or denies it (0)
-  PRPackedBool    acceptActivation;           
-  reasonType      reason : 8;
+  PRBool          acceptActivation;           
 };
 
 /**
  * Accessible event
  */
 
-class nsAccessibleEvent : public nsInputEvent
+struct nsAccessibleEvent : public nsInputEvent
 {
-public:
-  nsAccessibleEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_ACCESSIBLE_EVENT),
+  nsAccessibleEvent(PRUint32 msg = 0,
+                    nsIWidget *w = nsnull,
+                    PRUint8 structType = NS_ACCESSIBLE_EVENT)
+    : nsInputEvent(msg, w, structType),
       accessible(nsnull)
   {
   }
 
-  nsIAccessible*  accessible;     
+  nsIAccessible*     accessible;           
 };
 
 /**
  * Keyboard event
  */
 
-class nsKeyEvent : public nsInputEvent
+struct nsKeyEvent : public nsInputEvent
 {
-public:
-  nsKeyEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_KEY_EVENT),
+  nsKeyEvent(PRUint32 msg = 0,
+             nsIWidget *w = nsnull,
+             PRUint8 structType = NS_KEY_EVENT)
+    : nsInputEvent(msg, w, structType),
       keyCode(0), charCode(0), isChar(0)
   {
   }
@@ -703,8 +620,7 @@ public:
 /**
  * IME Related Events
  */
-struct nsTextRange
-{
+struct nsTextRange {
   nsTextRange()
     : mStartOffset(0), mEndOffset(0), mRangeType(0)
   {
@@ -717,8 +633,7 @@ struct nsTextRange
 
 typedef nsTextRange* nsTextRangeArray;
 
-struct nsTextEventReply
-{
+struct nsTextEventReply {
   nsTextEventReply()
     : mCursorIsCollapsed(PR_FALSE)
   {
@@ -730,11 +645,12 @@ struct nsTextEventReply
 
 typedef struct nsTextEventReply nsTextEventReply;
 
-class nsTextEvent : public nsInputEvent
+struct nsTextEvent : public nsInputEvent
 {
-public:
-  nsTextEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_TEXT_EVENT),
+  nsTextEvent(PRUint32 msg = 0,
+              nsIWidget *w = nsnull,
+              PRUint8 structType = NS_TEXT_EVENT)
+    : nsInputEvent(msg, w, structType),
       theText(nsnull), rangeCount(0), rangeArray(nsnull), isChar(PR_FALSE)
   {
   }
@@ -746,29 +662,30 @@ public:
   PRBool            isChar;
 };
 
-class nsCompositionEvent : public nsInputEvent
+struct nsCompositionEvent : public nsInputEvent
 {
-public:
-  nsCompositionEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_COMPOSITION_EVENT)
+  nsCompositionEvent(PRUint32 msg = 0,
+                     nsIWidget *w = nsnull,
+                     PRUint8 structType = NS_COMPOSITION_EVENT)
+    : nsInputEvent(msg, w, structType)
   {
   }
 
   nsTextEventReply theReply;
 };
 
-class nsMouseScrollEvent : public nsInputEvent
+struct nsMouseScrollEvent : public nsInputEvent
 {
-public:
   enum nsMouseScrollFlags {
     kIsFullPage =   1 << 0,
     kIsVertical =   1 << 1,
-    kIsHorizontal = 1 << 2,
-    kIsPixels =     1 << 3
+    kIsHorizontal = 1 << 2
   };
 
-  nsMouseScrollEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_MOUSE_SCROLL_EVENT),
+  nsMouseScrollEvent(PRUint32 msg = 0,
+                     nsIWidget *w = nsnull,
+                     PRUint8 structType = NS_MOUSE_SCROLL_EVENT)
+    : nsInputEvent(msg, w, structType),
       scrollFlags(0), delta(0)
   {
   }
@@ -786,37 +703,16 @@ struct nsReconversionEventReply {
   PRUnichar *mReconversionString;
 };
 
-class nsReconversionEvent : public nsInputEvent
+struct nsReconversionEvent : public nsInputEvent
 {
-public:
-  nsReconversionEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_RECONVERSION_EVENT)
+  nsReconversionEvent(PRUint32 msg = 0,
+                      nsIWidget *w = nsnull,
+                      PRUint8 structType = NS_RECONVERSION_EVENT)
+    : nsInputEvent(msg, w, structType)
   {
   }
 
   nsReconversionEventReply  theReply;
-};
-
-struct nsQueryCaretRectEventReply
-{
-  nsQueryCaretRectEventReply()
-    : mRectIsValid(PR_FALSE)
-  {
-  }
-
-  PRBool mRectIsValid;
-  nsRect mCaretRect;
-};
-
-class nsQueryCaretRectEvent : public nsInputEvent
-{
-public:
-  nsQueryCaretRectEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_QUERYCARETRECT_EVENT)
-  {
-  }
-
-  nsQueryCaretRectEventReply theReply;
 };
 
 /**
@@ -826,11 +722,12 @@ public:
  * for the event
  */
 
-class nsMenuEvent : public nsGUIEvent
+struct nsMenuEvent : public nsGUIEvent
 {
-public:
-  nsMenuEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_MENU_EVENT),
+  nsMenuEvent(PRUint32 msg = 0,
+              nsIWidget *w = nsnull,
+              PRUint8 structType = NS_MENU_EVENT)
+    : nsGUIEvent(msg, w, structType),
       mMenuItem(nsnull), mCommand(0)
   {
   }
@@ -846,11 +743,10 @@ public:
  * originator is a weak pointer (does not hold a strong reference).
  */
 
-class nsFormEvent : public nsEvent
+struct nsFormEvent : public nsEvent
 {
-public:
-  nsFormEvent(PRBool isTrusted, PRUint32 msg)
-    : nsEvent(isTrusted, msg, NS_FORM_EVENT),
+  nsFormEvent(PRUint32 msg = 0, PRUint8 structType = NS_FORM_EVENT)
+    : nsEvent(msg, structType),
       originator(nsnull)
   {
   }
@@ -861,11 +757,12 @@ public:
 /**
 * Focus event
 */
-class nsFocusEvent : public nsGUIEvent
+struct nsFocusEvent : public nsGUIEvent
 {
-public:
-  nsFocusEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsGUIEvent(isTrusted, msg, w, NS_FOCUS_EVENT),
+  nsFocusEvent(PRUint32 msg = 0,
+               nsIWidget *w = nsnull,
+               PRUint8 structType = NS_FOCUS_EVENT)
+    : nsGUIEvent(msg, w, structType),
       isMozWindowTakingFocus(PR_FALSE)
   {
   }
@@ -879,11 +776,12 @@ public:
  * Custom commands from the operating system.  eg. WM_APPCOMMAND on Windows
  */
 
-class nsAppCommandEvent : public nsInputEvent
+struct nsAppCommandEvent : public nsInputEvent
 {
-public:
-  nsAppCommandEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_APPCOMMAND_EVENT),
+  nsAppCommandEvent(PRUint32 msg = 0,
+                    nsIWidget *w = nsnull,
+                    PRUint8 structType = NS_APPCOMMAND_EVENT)
+    : nsInputEvent(msg, w, structType),
       appCommand(0)
   {
   }
@@ -894,63 +792,18 @@ public:
 /**
  * blocked popup window event
  */
-class nsPopupBlockedEvent : public nsEvent
+struct nsPopupBlockedEvent : public nsEvent
 {
-public:
-  nsPopupBlockedEvent(PRBool isTrusted, PRUint32 msg)
-    : nsEvent(isTrusted, msg, NS_POPUPBLOCKED_EVENT),
+  nsPopupBlockedEvent(PRUint32 msg = 0,
+                      PRUint8 structType = NS_POPUPBLOCKED_EVENT)
+    : nsEvent(msg, structType),
       mRequestingWindowURI(nsnull), mPopupWindowURI(nsnull)
   {
   }
 
   nsIURI* mRequestingWindowURI; // owning reference
-  nsWeakPtr mRequestingWindow;
   nsIURI* mPopupWindowURI;      // owning reference
   nsString mPopupWindowFeatures;
-};
-
-/**
- * DOM UIEvent
- */
-class nsUIEvent : public nsEvent
-{
-public:
-  nsUIEvent(PRBool isTrusted, PRUint32 msg, PRInt32 d)
-    : nsEvent(isTrusted, msg, NS_UI_EVENT),
-      detail(d)
-  {
-  }
-
-  PRInt32 detail;
-};
-
-/**
- * PageTransition event
- */
-class nsPageTransitionEvent : public nsEvent
-{
-public:
-  nsPageTransitionEvent(PRBool isTrusted, PRUint32 msg, PRBool p)
-    : nsEvent(isTrusted, msg, NS_PAGETRANSITION_EVENT),
-      persisted(p)
-  {
-  }
-
-  PRBool persisted;
-};
-
-/**
- * XUL command event
- */
-class nsXULCommandEvent : public nsInputEvent
-{
-public:
-  nsXULCommandEvent(PRBool isTrusted, PRUint32 msg, nsIWidget *w)
-    : nsInputEvent(isTrusted, msg, w, NS_XUL_COMMAND_EVENT)
-  {
-  }
-
-  nsCOMPtr<nsIDOMEvent> sourceEvent;
 };
 
 /**
@@ -1006,7 +859,6 @@ enum nsDragDropEventStatus {
         ((evnt)->message == NS_COMPOSITION_START) ||  \
         ((evnt)->message == NS_COMPOSITION_END) || \
         ((evnt)->message == NS_RECONVERSION_QUERY) || \
-        ((evnt)->message == NS_QUERYCARETRECT) || \
         ((evnt)->message == NS_COMPOSITION_QUERY))
 
 #define NS_IS_FOCUS_EVENT(evnt) \
@@ -1015,23 +867,6 @@ enum nsDragDropEventStatus {
         ((evnt)->message == NS_ACTIVATE) || \
         ((evnt)->message == NS_DEACTIVATE) || \
         ((evnt)->message == NS_PLUGIN_ACTIVATE))
-
-#define NS_IS_TRUSTED_EVENT(event) \
-  (((event)->internalAppFlags & NS_APP_EVENT_FLAG_TRUSTED) != 0)
-
-// Mark an event as being dispatching.
-#define NS_MARK_EVENT_DISPATCH_STARTED(event) \
-  (event)->flags |= NS_EVENT_FLAG_DISPATCHING;
-
-#define NS_IS_EVENT_IN_DISPATCH(event) \
-  (((event)->flags & NS_EVENT_FLAG_DISPATCHING) != 0)
-
-// Mark an event as being done dispatching.
-#define NS_MARK_EVENT_DISPATCH_DONE(event) \
-  NS_ASSERTION(NS_IS_EVENT_IN_DISPATCH(event), \
-               "Event never got marked for dispatch!"); \
-  (event)->flags &= ~NS_EVENT_FLAG_DISPATCHING; \
-  (event)->flags |= NS_EVENT_FLAG_STOP_DISPATCH_IMMEDIATELY;
 
 /*
  * Virtual key bindings for keyboard events.

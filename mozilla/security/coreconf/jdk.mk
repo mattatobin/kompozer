@@ -1,39 +1,35 @@
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
+# The contents of this file are subject to the Mozilla Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/MPL/
+# 
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
+# 
 # The Original Code is the Netscape security libraries.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1994-2000
-# the Initial Developer. All Rights Reserved.
-#
+# 
+# The Initial Developer of the Original Code is Netscape
+# Communications Corporation.  Portions created by Netscape are 
+# Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+# Rights Reserved.
+# 
 # Contributor(s):
+# 
+# Alternatively, the contents of this file may be used under the
+# terms of the GNU General Public License Version 2 or later (the
+# "GPL"), in which case the provisions of the GPL are applicable 
+# instead of those above.  If you wish to allow use of your 
+# version of this file only under the terms of the GPL and not to
+# allow others to use your version of this file under the MPL,
+# indicate your decision by deleting the provisions above and
+# replace them with the notice and other provisions required by
+# the GPL.  If you do not delete the provisions above, a recipient
+# may use your version of this file under either the MPL or the
+# GPL.
 #
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
 
 ifdef NS_USE_JDK
 #######################################################################
@@ -86,14 +82,14 @@ endif
 
 # set [Microsoft Windows] platforms
 ifeq ($(OS_ARCH), WINNT)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -105,20 +101,32 @@ ifeq ($(OS_ARCH), WINNT)
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
 
+	# (3) specify "linker" information
+	JAVA_CPU =
+
+	JAVA_LIBDIR = lib
+
+	JAVA_CLIBS =
+
+	JAVA_LIBS  = -LIBPATH:$(JAVA_HOME)/$(JAVA_LIBDIR) jvm.lib
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
+
 	#     currently, disable JIT option on this platform
 	JDK_JIT_OPT = -nojit
 endif
 
 # set [Sun Solaris] platforms
 ifeq ($(OS_ARCH), SunOS)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -130,20 +138,53 @@ ifeq ($(OS_ARCH), SunOS)
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
 
+	# (3) specify "linker" information
+ifeq ($(USE_64), 1)
+	JAVA_CPU = $(shell uname -p)v9
+else
+	JAVA_CPU = $(shell uname -p)
+endif
+
+ifeq ($(JDK_VERSION), 1.1)
+	JAVA_LIBDIR = lib/$(JAVA_CPU)
+else
+	JAVA_LIBDIR = jre/lib/$(JAVA_CPU)
+endif
+
+	#     ** IMPORTANT ** having -lthread before -lnspr is critical on solaris
+	#     when linking with -ljava as nspr redefines symbols in libthread that
+	#     cause JNI executables to fail with assert of bad thread stack values.
+	JAVA_CLIBS = -lthread
+
+ifneq ($(JDK_VERSION), 1.1)
+ifeq ($(USE_64), 1)
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/server
+else
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic
+endif
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)
+	JAVA_LIBS += -ljvm -ljava
+else
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/$(JDK_THREADING_MODEL) -ljava
+endif
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
+
 	#     currently, disable JIT option on this platform
 	JDK_JIT_OPT =
 endif
 
 # set [Hewlett Packard HP-UX] platforms
 ifeq ($(OS_ARCH), HP-UX)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -155,20 +196,34 @@ ifeq ($(OS_ARCH), HP-UX)
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
 
+	# (3) specify "linker" information
+	JAVA_CPU = PA_RISC
+
+	JAVA_LIBDIR = jre/lib/$(JAVA_CPU)
+
+	JAVA_CLIBS =
+
+	JAVA_LIBS  = -L$(JAVA_HOME)/$(JAVA_LIBDIR)/$(JDK_THREADING_MODEL) -lhpi
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic -ljvm
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR) -ljava
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
+
 	# no JIT option available on this platform
 	JDK_JIT_OPT =
 endif
 
 # set [Redhat Linux] platforms
 ifeq ($(OS_ARCH), Linux)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -180,30 +235,22 @@ ifeq ($(OS_ARCH), Linux)
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
 
-	# no JIT option available on this platform
-	JDK_JIT_OPT =
-endif
+	# (3) specify "linker" information
+	JAVA_CPU = i386
 
-# set [Mac OS X] platforms
-ifeq ($(OS_ARCH), Darwin)
-	JAVA_CLASSES = $(JAVA_HOME)/../Classes/classes.jar
+	JAVA_LIBDIR = jre/lib/$(JAVA_CPU)
 
-	ifeq ($(JRE_HOME),)
-		JRE_HOME = $(JAVA_HOME)
-		JRE_CLASSES = $(JAVA_CLASSES)
-	else
-		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/../Classes/classes.jar
-		endif
+	JAVA_CLIBS =
+
+        ifeq ($(JDK_VERSION), 1.4)
+	    JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/server -ljvm
+        else
+	    JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic -ljvm
 	endif
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR) -ljava
+	JAVA_LIBS += $(JAVA_CLIBS)
 
-	PATH_SEPARATOR = :
-
-	# (2) specify "header" information
-	JAVA_ARCH = darwin
-
-	INCLUDES += -I$(JAVA_HOME)/include
-	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
+	LDFLAGS += $(JAVA_LIBS)
 
 	# no JIT option available on this platform
 	JDK_JIT_OPT =
@@ -211,14 +258,14 @@ endif
 
 # set [IBM AIX] platforms
 ifeq ($(OS_ARCH), AIX)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -230,20 +277,34 @@ ifeq ($(OS_ARCH), AIX)
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
 
+	# (3) specify "linker" information
+	JAVA_CPU = aix
+
+	JAVA_LIBDIR = jre/bin
+
+	JAVA_CLIBS =
+
+	JAVA_LIBS  = -L$(JAVA_HOME)/$(JAVA_LIBDIR) -lhpi
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic -ljvm
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR) -ljava
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
+
 	# no JIT option available on this platform
 	JDK_JIT_OPT =
 endif
 
 # set [Digital UNIX] platforms
 ifeq ($(OS_ARCH), OSF1)
-	JAVA_CLASSES = $(JAVA_HOME)/jre/lib/rt.jar
+	JAVA_CLASSES = $(JAVA_HOME)/lib/classes.zip
 
 	ifeq ($(JRE_HOME),)
 		JRE_HOME = $(JAVA_HOME)
 		JRE_CLASSES = $(JAVA_CLASSES)
 	else
 		ifeq ($(JRE_CLASSES),)
-			JRE_CLASSES = $(JRE_HOME)/lib/rt.jar
+			JRE_CLASSES = $(JRE_HOME)/lib/classes.zip
 		endif
 	endif
 
@@ -254,6 +315,20 @@ ifeq ($(OS_ARCH), OSF1)
 
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
+
+	# (3) specify "linker" information
+	JAVA_CPU = alpha
+
+	JAVA_LIBDIR = jre/lib/$(JAVA_CPU)
+
+	JAVA_CLIBS =
+
+	JAVA_LIBS  = -L$(JAVA_HOME)/$(JAVA_LIBDIR)/$(JDK_THREADING_MODEL) -lhpi
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic -ljvm
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR) -ljava
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
 
 	# no JIT option available on this platform
 	JDK_JIT_OPT =
@@ -279,6 +354,21 @@ ifeq ($(OS_ARCH), IRIX)
 
 	INCLUDES += -I$(JAVA_HOME)/include
 	INCLUDES += -I$(JAVA_HOME)/include/$(JAVA_ARCH)
+
+	# (3) specify "-n32 linker" information
+	JAVA_CPU = sgi
+
+	JAVA_LIBDIR = lib32/$(JAVA_CPU)
+
+	JAVA_CLIBS =
+
+	JAVA_LIBS  = -L$(JAVA_HOME)/$(JAVA_LIBDIR)/$(JDK_THREADING_MODEL) -lhpi
+	JAVA_LIBS += -lirixextra
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR)/classic -ljvm
+	JAVA_LIBS += -L$(JAVA_HOME)/$(JAVA_LIBDIR) -ljava
+	JAVA_LIBS += $(JAVA_CLIBS)
+
+	LDFLAGS += $(JAVA_LIBS)
 
 	# no JIT option available on this platform
 	JDK_JIT_OPT =

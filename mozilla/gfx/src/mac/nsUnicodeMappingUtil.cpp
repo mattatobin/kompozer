@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,31 +22,30 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsIServiceManager.h"
 #include "nsTextFormatter.h"
 #include "nsUnicodeMappingUtil.h"
-#include "nsUnicodeFontMappingMac.h"
 #include "nsDeviceContextMac.h"
 #include "nsReadableUtils.h"
-#include "nsString.h"
 #include "nsCRT.h"
-
 static NS_DEFINE_CID(kPrefCID, NS_PREF_CID);
 
+#define BAD_FONT_NUM -1 
 //--------------------------------------------------------------------------
 
 nsUnicodeMappingUtil *nsUnicodeMappingUtil::gSingleton = nsnull;
@@ -206,86 +205,53 @@ ScriptCode nsUnicodeMappingUtil::MapLangGroupToScriptCode(const char* aLangGroup
 {
 	if(0==nsCRT::strcmp(aLangGroup,  "x-western")) {
 		return smRoman;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "x-central-euro")) {
 		return smCentralEuroRoman;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "x-cyrillic")) {
 		return smCyrillic;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "el")) {
 		return smGreek;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "tr")) {
 		return smRoman;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "he")) {
 		return smHebrew;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "ar")) {
 		return smArabic;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "x-baltic")) {
 		return smRoman;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "th")) {
 		return smThai;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "ja")) {
 		return smJapanese;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "zh-CN")) {
 		return smSimpChinese;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "ko")) {
 		return smKorean;
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "zh-TW")) {
 		return smTradChinese;
-	}
-    // No separate script code for zh-HK. Use smTradChinese.
+	} else 
+        // No separate script code for zh-HK. Use smTradChinese.
 	if(0==nsCRT::strcmp(aLangGroup,  "zh-HK")) {
 		return smTradChinese;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-devanag")) {
-		return smDevanagari;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-tamil")) {
-		return smTamil;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-beng")) {
-		return smBengali;;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-armn")) {
-		return smArmenian;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-geor")) {
-		return smGeorgian;;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-gujr")) {
-		return smGujarati;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-guru")) {
-		return smGurmukhi;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-mlym")) {
-		return smMalayalam;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-khmr")) {
-		return smKhmer;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-ethi")) {
-		return smEthiopic;
-	}
-	if(0==nsCRT::strcmp(aLangGroup,  "x-cans")) {
-		return (smPseudoUnicode);  // XXX : no script code for UCA
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "x-unicode")) {
 		return (smPseudoUnicode);
-	}
+	} else 
 	if(0==nsCRT::strcmp(aLangGroup,  "x-user-def")) {
 		return (smPseudoUserDef);
-	}
+	} else 
 	{
 		return smRoman;
 	}
@@ -441,8 +407,7 @@ void nsUnicodeMappingUtil::InitBlockToScriptMapping()
 		smGurmukhi, smGujarati, smOriya, 		smTamil, 	
 		smTelugu, 	smKannada,	smMalayalam,	smThai,
 		smLao,		smTibetan,	smGeorgian,		smKorean,
-		smTradChinese, smEthiopic, smKhmer,
-		smPseudoUnicode,  // for Unified Canadian Syllable
+		smTradChinese,
 		smPseudoUserDef,
 		
 		// start the variable section
@@ -458,17 +423,17 @@ void nsUnicodeMappingUtil::InitBlockToScriptMapping()
 //--------------------------------------------------------------------------
 nsGenericFontNameType nsUnicodeMappingUtil::MapGenericFontNameType(const nsString& aGenericName)
 {
-	if (aGenericName.LowerCaseEqualsLiteral("serif"))
+	if (aGenericName.EqualsIgnoreCase("serif"))
 	  return kSerif;
-	if (aGenericName.LowerCaseEqualsLiteral("sans-serif"))
+	if (aGenericName.EqualsIgnoreCase("sans-serif"))
 	  return kSansSerif;
-	if (aGenericName.LowerCaseEqualsLiteral("monospace"))
+	if (aGenericName.EqualsIgnoreCase("monospace"))
 	  return kMonospace;
-	if (aGenericName.LowerCaseEqualsLiteral("-moz-fixed"))
+	if (aGenericName.EqualsIgnoreCase("-moz-fixed"))
 	  return kMonospace;
-	if (aGenericName.LowerCaseEqualsLiteral("cursive"))
+	if (aGenericName.EqualsIgnoreCase("cursive"))
 	  return kCursive;
-	if (aGenericName.LowerCaseEqualsLiteral("fantasy"))
+	if (aGenericName.EqualsIgnoreCase("fantasy"))
 	  return kFantasy;
 	  
 	return kUknownGenericFontName;			

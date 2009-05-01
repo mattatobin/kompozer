@@ -27,12 +27,12 @@
         <xul:button dlgtype="extra1" class="dialog-button" hidden="true"/>
         <xul:spacer anonid="spacer" flex="1"/>
         <xul:button dlgtype="cancel" class="dialog-button"/>
-        <xul:button dlgtype="accept" class="dialog-button" xbl:inherits="disabled=buttondisabledaccept"/>
+        <xul:button dlgtype="accept" class="dialog-button"/>
 #else
                 pack="end">
         <xul:button dlgtype="extra2" class="dialog-button" hidden="true"/>
         <xul:spacer anonid="spacer" flex="1" hidden="true"/>
-        <xul:button dlgtype="accept" class="dialog-button" xbl:inherits="disabled=buttondisabledaccept"/>
+        <xul:button dlgtype="accept" class="dialog-button"/>
         <xul:button dlgtype="extra1" class="dialog-button" hidden="true"/>
         <xul:button dlgtype="cancel" class="dialog-button"/>
         <xul:button dlgtype="help" class="dialog-button" hidden="true"/>
@@ -47,27 +47,17 @@
         if (!document.documentElement.cancelDialog())
           event.preventDefault();
       })</field>
+      <field name="enterDefaultAlways">
+#ifdef XP_MACOSX
+        true
+#else
+        false
+#endif
+      </field>
 
       <property name="buttons"
                 onget="return this.getAttribute('buttons');"
                 onset="this._configureButtons(val); return val;"/>
-
-      <property name="defaultButton">
-        <getter>
-        <![CDATA[
-          if (this.hasAttribute("defaultButton"))
-            return this.getAttribute("defaultButton");
-          else // default to the accept button
-            return "accept";
-        ]]>
-        </getter>
-        <setter>
-        <![CDATA[
-          this._setDefaultButton(val);
-          return val;
-        ]]>
-        </setter>
-      </property>
 
       <method name="acceptDialog">
         <body>
@@ -157,32 +147,12 @@
         <parameter name="aEvent"/>
         <body>
         <![CDATA[
-          function focusInit() {
-            // give focus to the first focusable element in the dialog
-            if (!document.commandDispatcher.focusedElement) {
-              document.commandDispatcher.advanceFocusIntoSubtree(document.documentElement);
-              var focusedElt = document.commandDispatcher.focusedElement;
-              if (focusedElt) {
-                if (focusedElt.localName == 'tab') {
-                  // Move focus into the tab
-                  document.commandDispatcher.advanceFocusIntoSubtree(focusedElt);
-                  if (document.commandDispatcher.focusedElement.hasAttribute("dlgtype")) {
-                    // We don't want to focus on anonymous OK, Cancel, etc. buttons,
-                    // so return focus to the tab itself
-                    focusedElt.focus();
-                  }
-                }
-#ifndef XP_MACOSX
-                else {
-                  const dialog = document.documentElement;
-                  const defaultButton = dialog.getButton(dialog.defaultButton);
-                  if (focusedElt.hasAttribute("dlgtype") && focusedElt != defaultButton)
-                    defaultButton.focus();
-                }
-#endif
-              }
-            }
-          }
+          var focusInit = 
+            function() {
+              // give focus to the first focusable element in the dialog
+              if (!document.commandDispatcher.focusedElement)
+                document.commandDispatcher.advanceFocusIntoSubtree(document.documentElement);
+            };
 
           // Give focus after onload completes, see bug 103197.
           setTimeout(focusInit, 0);
@@ -235,6 +205,7 @@
           for (dlgtype in buttons) {
             var button = buttons[dlgtype];
             button.addEventListener("command", this._handleButtonCommand, true);
+            
 
             // don't override custom labels with pre-defined labels on explicit buttons
             if (!button.hasAttribute("label")) {
@@ -250,50 +221,21 @@
                   button.setAttribute("accesskey", accessKey);
               }
             }
-            // allow specifying alternate icons in the dialog header
-            if (!button.hasAttribute("icon")) {
-              // if there's an icon specified, use that
-              if (this.hasAttribute("buttonicon"+dlgtype))
-                button.setAttribute("icon", this.getAttribute("buttonicon"+dlgtype));
-              // otherwise set defaults
-              else
-                switch (dlgtype) {
-                  case "accept":
-                    button.setAttribute("icon","accept");
-                    break;
-                  case "cancel":
-                    button.setAttribute("icon","cancel");
-                    break;
-                  case "disclosue":
-                    button.setAttribute("icon","properties");
-                    break;
-                  case "help":
-                    button.setAttribute("icon","help");
-                    break;
-                  default:
-                    break;
-                }
-            }
           }
 
-          // ensure that hitting enter triggers the default button command
-          this.defaultButton = this.defaultButton;
+          // ensure that hitting enter triggers ondialogaccept
+          buttons["accept"].setAttribute("default", "true");
           
           // if there is a special button configuration, use it
           if (aButtons) {
             // expect a comma delimited list of dlgtype values
             var list = aButtons.split(",");
-
             // mark shown dlgtypes as true
             var shown = { accept: false, cancel: false, help: false,
                           disclosure: false, extra1: false, extra2: false };
             for (i = 0; i < list.length; ++i)
               shown[list[i].replace(/ /g, "")] = true;
             
-#ifdef MOZ_THUNDERBIRD
-          shown['help'] = false;
-          buttons.help.hidden = true; 
-#endif
             // hide/show the buttons we want
             for (dlgtype in buttons) 
               buttons[dlgtype].hidden = !shown[dlgtype];
@@ -309,30 +251,7 @@
         ]]>
         </body>
       </method>
-
-      <method name="_setDefaultButton">
-        <parameter name="aNewDefault"/>
-        <body>
-        <![CDATA[
-          // remove the default attribute from the previous default button, if any
-          var oldDefaultButton = this.getButton(this.defaultButton);
-          if (oldDefaultButton)
-            oldDefaultButton.removeAttribute("default");
-
-          var newDefaultButton = this.getButton(aNewDefault);
-          if (newDefaultButton) {
-            this.setAttribute("defaultButton", aNewDefault);
-            newDefaultButton.setAttribute("default", "true");
-          }
-          else {
-            this.setAttribute("defaultButton", "none");
-            if (aNewDefault != "none")
-              dump("invalid new default button: " +  aNewDefault + ", assuming: none\n");
-          }
-        ]]>
-        </body>
-      </method>
-
+      
       <method name="_handleButtonCommand">
         <parameter name="aEvent"/>
         <body>
@@ -344,6 +263,22 @@
       </method>
       
       <method name="_doButtonCommand">
+        <parameter name="aDlgType"/>
+        <body>
+        <![CDATA[
+          // calling window.close() while an oncommand event
+          // call is on the stack fails to close the window, 
+          // so we need to do this ugly setTimeout hack
+          window.setTimeout(
+            function(aDlgType) {
+              document.documentElement._reallyDoButtonCommand(aDlgType);
+            },
+            0, aDlgType);
+        ]]>
+        </body>
+      </method>
+      
+      <method name="_reallyDoButtonCommand">
         <parameter name="aDlgType"/>
         <body>
         <![CDATA[
@@ -366,7 +301,7 @@
         <body>
         <![CDATA[
           var event = document.createEvent("Events");
-          event.initEvent("dialog"+aDlgType, true, true);
+          event.initEvent("dialog"+aDlgType, false, true);
           
           // handle dom event handlers
           var noCancel = this.dispatchEvent(event);
@@ -389,12 +324,22 @@
         <parameter name="evt"/>
         <body>
         <![CDATA[
-          if (evt.getPreventDefault())
+          var target = evt.originalTarget;
+          if ((target.localName == "textarea")&&(target.namespaceURI == "http://www.w3.org/1999/xhtml")) {
             return;
+          }
+          // if a button is focused, do nothing, so that activating the button 
+          // doesn't cause the dialog to exit
+          if (!this.enterDefaultAlways) {
+            var focused = document.commandDispatcher.focusedElement;
+            if (focused && focused.localName == "button")
+              return;
+          }
 
-          var btn = this.getButton(this.defaultButton);
-          if (btn)
-            this._doButtonCommand(this.defaultButton);
+          // only accept dialog if accept button is the default
+          var btn = this.getButton("accept");
+          if (btn && btn.hasAttribute("default"))
+            this.acceptDialog();
         ]]>
         </body>
       </method>
@@ -402,22 +347,11 @@
     </implementation>
     
     <handlers>
-      <handler event="keypress" keycode="VK_ENTER"
-               group="system" action="this._hitEnter(event);"/>
-      <handler event="keypress" keycode="VK_RETURN"
-               group="system" action="this._hitEnter(event);"/>
-      <handler event="keypress" keycode="VK_ESCAPE" group="system">
-        if (!event.getPreventDefault())
-          this.cancelDialog();
-      </handler>
+      <handler event="keypress" keycode="VK_ENTER" action="this._hitEnter(event);"/>
+      <handler event="keypress" keycode="VK_RETURN" action="this._hitEnter(event);"/>
+      <handler event="keypress" keycode="VK_ESCAPE" action="this.cancelDialog();"/>
 #ifdef XP_MACOSX
       <handler event="keypress" key="." modifiers="meta" phase="capturing" action="this.cancelDialog();"/>
-#else
-      <handler event="focus" phase="capturing">
-        var btn = this.getButton(this.defaultButton);
-        if (btn)
-          btn.setAttribute("default", event.originalTarget == btn || !(event.originalTarget instanceof Components.interfaces.nsIDOMXULButtonElement));
-      </handler>
 #endif
     </handlers>
 

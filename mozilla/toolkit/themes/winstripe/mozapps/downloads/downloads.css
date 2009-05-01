@@ -4,12 +4,11 @@
 
 /* Download View */
 #downloadView {
+  -moz-binding: url("chrome://mozapps/skin/downloads/downloads.xml#download-view");
   margin: 10px 10px 5px 10px;
-  border: 2px solid;
-  -moz-border-top-colors: ThreeDShadow ThreeDDarkShadow;
-  -moz-border-right-colors: ThreeDHighlight ThreeDLightShadow;
-  -moz-border-bottom-colors: ThreeDHighlight ThreeDLightShadow;
-  -moz-border-left-colors: ThreeDShadow ThreeDDarkShadow;
+  -moz-appearance: listbox;
+  -moz-user-focus: normal;
+  background-color: Window;
 }
 
 .downloadViewInner {
@@ -24,14 +23,18 @@
 
 #cleanUpButton {
   margin: 0px;
+  -moz-user-focus: ignore;
   list-style-image: url("chrome://mozapps/skin/downloads/downloadCleanup.png");
 }
 
-#cleanUpButton .button-icon {
-  margin-top: 0px;
-  margin-bottom: 0px;
-  -moz-margin-start: 0px;
-  -moz-margin-end: 5px;
+#optionsButton {
+  margin: 0px;
+  -moz-user-focus: ignore;
+  list-style-image: url("chrome://mozapps/skin/downloads/downloadOptions.png");
+}
+
+#cleanUpButton .button-icon, #optionsButton .button-icon {
+  margin: 0px 5px 0px 0px !important;
 }
 
 #cleanUpButton[disabled="true"] {
@@ -39,15 +42,12 @@
 }
 
 #commandBarSeparator {
-  -moz-margin-start: 5px;
+  margin-left: 5px;
 }
 
 /* Download View Items */
 download {
-  padding-top: 13px;
-  padding-bottom: 13px;
-  -moz-padding-start: 13px;
-  -moz-padding-end: 10px;
+  padding: 13px 10px 13px 13px;
   min-height: 25px;
   border-bottom: 1px dotted #C0C0C0;
 }
@@ -65,15 +65,31 @@ download[state="5"], download[state="6"] {
 
 /* Download View Items, implementation */
 .downloadContentBox {
-  opacity: 0.0;
+  -moz-opacity: 0.0;
 }
 
 .downloadContentBox[animated="true"] {
-  opacity: 1.0;
+  -moz-opacity: 1.0;
 }
 
 .downloadTypeIcon {
-  -moz-margin-end: 10px;
+  margin-right: 10px;
+}
+
+.link {
+  text-decoration: underline;
+  color: blue;
+  cursor: pointer;
+  -moz-user-focus: normal;
+  border: 1px solid transparent;
+}
+
+.link:hover:active {
+  color: red;
+}
+
+.link:focus {
+  border: 1px dotted black;
 }
 
 #folderIcon {
@@ -86,13 +102,11 @@ download[state="5"], download[state="6"] {
 }
 
 #saveToFolder {
-  padding-top: 1px;
-  padding-bottom: 3px;
-  -moz-padding-start: 5px;
-  -moz-padding-end: 6px;
+  padding: 0px 6px 3px 5px; 
 }
 
 #saveToFolder .toolbarbutton-text {
   text-align: left;
-  -moz-margin-start: 5px !important;
+  margin-left: 5px !important;
 }
+

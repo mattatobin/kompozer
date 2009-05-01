@@ -8,7 +8,7 @@
   <binding id="urlbar" extends="chrome://global/content/autocomplete.xml#autocomplete">
     <implementation>
       <constructor><![CDATA[
-        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranch2);
+        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
         if (pbi)
           pbi.addObserver("browser.urlbar", this.mPrefObserver, false);
         
@@ -17,7 +17,7 @@
       ]]></constructor>
 
       <destructor><![CDATA[
-        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranch2);
+        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
         if (pbi)
           pbi.removeObserver("browser.urlbar", this.mPrefObserver);
       ]]></destructor>
@@ -65,7 +65,7 @@
     <implementation>
       <constructor><![CDATA[
         // listen for changes to default search engine
-        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranch2);
+        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
         if (pbi) {
           pbi.addObserver("browser.search", this.mPrefObserver, false);
           pbi.addObserver("browser.urlbar", this.mPrefObserver, false);
@@ -73,7 +73,7 @@
       ]]></constructor>
 
       <destructor><![CDATA[
-        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranch2);
+        var pbi = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
         if (pbi) {
           pbi.removeObserver("browser.search", this.mPrefObserver);
           pbi.removeObserver("browser.urlbar", this.mPrefObserver);
@@ -158,14 +158,8 @@
       
       <method name="getOverrideValue">
         <body><![CDATA[
-          if (this.mSearchBox.selectedIndex != null) {
-            try {
-              if (pref.getBoolPref("browser.search.opensidebarsearchpanel"))
-                RevealSearchPanel();
-            } catch (ex) {
-            }
+          if (this.mSearchBox.selectedIndex != null)
             return this.mSearchBox.getOverrideValue();
-          }
           return null;
         ]]></body>
       </method>
@@ -197,8 +191,9 @@
 
       <method name="clearEngines">
         <body><![CDATA[
-          while (this.mSearchBox.hasChildNodes())
-            this.mSearchBox.removeChild(this.mSearchBox.lastChild);
+          var kids = this.mSearchBox.childNodes;
+          for (var i = kids.length-1; i >= 0; --i)
+            this.mSearchBox.removeChild(kids[i]);
         ]]></body>
       </method>
    
@@ -222,9 +217,9 @@
             defaultEngine = this.mPrefs.getComplexValue("browser.search.defaultengine",
                                                         Components.interfaces.nsISupportsString).data;
           } catch(ex) {
-            // this will re-invoke updateEngines via the pref observer if the pref changes
             this.ensureDefaultEnginePrefs(rdf, ds);
-            return;
+            defaultEngine = this.mPrefs.getComplexValue("browser.search.defaultengine",
+                                                        Components.interfaces.nsISupportsString).data;
           }
           
           if (defaultEngine) {
@@ -237,15 +232,10 @@
               } catch(ex) {
                 searchBarUrl = null;
               }
-              if (searchBarUrl == null) {
-                // this will re-invoke updateEngines via the pref observer if the pref changes
-                this.ensureDefaultEnginePrefs(rdf, ds);
-                return;
-              }
-              this.addEngine(res.Value, 
-                            this.readRDFString(ds, res, kNC_Name),
-                            this.readRDFString(ds, res, kNC_Icon),
-                            searchBarUrl);
+                this.addEngine(res.Value, 
+                              this.readRDFString(ds, res, kNC_Name),
+                              this.readRDFString(ds, res, kNC_Icon),
+                              searchBarUrl);					  							  
             }
           }
           
@@ -464,7 +454,7 @@
     
     <handlers>
       <handler event="mouseover">
-        this.parentNode.selectedIndex = Number(this.getAttribute("engineIndex"));
+        this.parentNode.selectedIndex = this.getAttribute("engineIndex");
       </handler>
 
       <handler event="mouseout">

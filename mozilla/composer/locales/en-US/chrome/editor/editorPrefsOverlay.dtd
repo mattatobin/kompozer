@@ -35,13 +35,12 @@
 #
 # ***** END LICENSE BLOCK ***** -->
 
-<!ENTITY prefWindow.size       "width: 52.3em; height: 37em;">
-<!ENTITY prefWindow.title      "Options">
+<!ENTITY prefWindow.size "width: 52.3em; height: 37em;">
+<!ENTITY prefWindow.title "Options">
 
-<!ENTITY general.label         "General">
-<!ENTITY extensions.label      "Extensions">
-<!ENTITY advanced.label        "Advanced">
-<!ENTITY helpers.label         "Applications">
+<!ENTITY general.label "General">
+<!ENTITY extensions.label "Extensions">
+<!ENTITY advanced.label "Advanced">
 <!ENTITY newpagesettings.label "New Page Settings">
-<!ENTITY fonts.label           "Fonts">
-<!ENTITY i18n.label            "Internationalization">
+<!ENTITY fonts.label   "Fonts">
+<!ENTITY i18n.label    "Internationalization">

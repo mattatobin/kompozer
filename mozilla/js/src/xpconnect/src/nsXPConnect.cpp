@@ -24,7 +24,6 @@
  * Contributor(s):
  *   John Bandhauer <jband@netscape.com> (original author)
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Nate Nielsen <nielsen@memberwebs.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either of the GNU General Public License Version 2 or later (the "GPL"),
@@ -43,14 +42,8 @@
 /* High level class and public functions implementation. */
 
 #include "xpcprivate.h"
-#include "XPCNativeWrapper.h"
 
-NS_IMPL_THREADSAFE_ISUPPORTS5(nsXPConnect,
-                              nsIXPConnect,
-                              nsIXPConnect_MOZILLA_1_8_BRANCH,
-                              nsIXPConnect_MOZILLA_1_8_BRANCH2,
-                              nsISupportsWeakReference,
-                              nsIEventQueueListener)
+NS_IMPL_THREADSAFE_ISUPPORTS2(nsXPConnect,nsIXPConnect,nsISupportsWeakReference)
 
 nsXPConnect* nsXPConnect::gSelf = nsnull;
 JSBool       nsXPConnect::gOnceAliveNowDead = JS_FALSE;
@@ -82,7 +75,9 @@ nsXPConnect::nsXPConnect()
         dont_AddRef(XPTI_GetInterfaceInfoManager());
     CallQueryInterface(iim, &mInterfaceInfoManager);
 
-    CallGetService(XPC_CONTEXT_STACK_CONTRACTID, &mContextStack);
+    nsServiceManager::GetService(XPC_CONTEXT_STACK_CONTRACTID,
+                                 NS_GET_IID(nsIThreadJSContextStack),
+                                 (nsISupports **)&mContextStack);
 
 #ifdef XPC_TOOLS_SUPPORT
   {
@@ -420,23 +415,6 @@ inline nsresult UnexpectedFailure(nsresult rv)
     return rv;
 }
 
-class SaveFrame
-{
-public:
-    SaveFrame(JSContext *cx)
-        : mJSContext(cx) {
-        mFrame = JS_SaveFrameChain(mJSContext);
-    }
-
-    ~SaveFrame() {
-        JS_RestoreFrameChain(mJSContext, mFrame);
-    }
-
-private:
-    JSContext *mJSContext;
-    JSStackFrame *mFrame;
-};
-
 /* void initClasses (in JSContextPtr aJSContext, in JSObjectPtr aGlobalJSObj); */
 NS_IMETHODIMP
 nsXPConnect::InitClasses(JSContext * aJSContext, JSObject * aGlobalJSObj)
@@ -444,7 +422,6 @@ nsXPConnect::InitClasses(JSContext * aJSContext, JSObject * aGlobalJSObj)
     NS_ASSERTION(aJSContext, "bad param");
     NS_ASSERTION(aGlobalJSObj, "bad param");
 
-    SaveFrame sf(aJSContext);
     XPCCallContext ccx(NATIVE_CALLER, aJSContext);
     if(!ccx.IsValid())
         return UnexpectedFailure(NS_ERROR_FAILURE);
@@ -470,10 +447,6 @@ nsXPConnect::InitClasses(JSContext * aJSContext, JSObject * aGlobalJSObj)
     // Initialize any properties IDispatch needs on the global object
     XPCIDispatchExtension::Initialize(ccx, aGlobalJSObj);
 #endif
-
-    if (!XPCNativeWrapper::AttachNewConstructorObject(ccx, aGlobalJSObj))
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
     return NS_OK;
 }
 
@@ -491,12 +464,12 @@ static JSClass xpcTempGlobalClass = {
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
-/* nsIXPConnectJSObjectHolder initClassesWithNewWrappedGlobal (in JSContextPtr aJSContext, in nsISupports aCOMObj, in nsIIDRef aIID, in PRUint32 aFlags); */
+/* nsIXPConnectJSObjectHolder initClassesWithNewWrappedGlobal (in JSContextPtr aJSContext, in nsISupports aCOMObj, in nsIIDRef aIID, in PRBool aCallJS_InitStandardClasses); */
 NS_IMETHODIMP
 nsXPConnect::InitClassesWithNewWrappedGlobal(JSContext * aJSContext,
                                              nsISupports *aCOMObj,
                                              const nsIID & aIID,
-                                             PRUint32 aFlags,
+                                             PRBool aCallJS_InitStandardClasses,
                                              nsIXPConnectJSObjectHolder **_retval)
 {
     NS_ASSERTION(aJSContext, "bad param");
@@ -518,33 +491,17 @@ nsXPConnect::InitClassesWithNewWrappedGlobal(JSContext * aJSContext,
        !JS_SetPrototype(aJSContext, tempGlobal, nsnull))
         return UnexpectedFailure(NS_ERROR_FAILURE);
 
-    if(aFlags & nsIXPConnect::FLAG_SYSTEM_GLOBAL_OBJECT)
-        JS_FlagSystemObject(aJSContext, tempGlobal);
+    if(NS_FAILED(InitClasses(aJSContext, tempGlobal)))
+        return UnexpectedFailure(NS_ERROR_FAILURE);
 
     nsCOMPtr<nsIXPConnectJSObjectHolder> holder;
-    {
-        // Scope for our auto-marker; it just needs to keep tempGlobal alive
-        // long enough for InitClasses and WrapNative to do their work
-        AUTO_MARK_JSVAL(ccx, OBJECT_TO_JSVAL(tempGlobal));
-
-        if(NS_FAILED(InitClasses(aJSContext, tempGlobal)))
-            return UnexpectedFailure(NS_ERROR_FAILURE);
-
-        nsresult rv;
-        if(!XPCConvert::NativeInterface2JSObject(ccx, getter_AddRefs(holder),
-                                                 aCOMObj, &aIID, tempGlobal,
-                                                 PR_FALSE, OBJ_IS_GLOBAL, &rv))
-            return UnexpectedFailure(rv);
-
-        NS_ASSERTION(NS_SUCCEEDED(rv) && holder, "Didn't wrap properly");
-    }
+    if(NS_FAILED(WrapNative(aJSContext, tempGlobal, aCOMObj, aIID,
+                            getter_AddRefs(holder))) || !holder)
+        return UnexpectedFailure(NS_ERROR_FAILURE);
 
     JSObject* globalJSObj;
     if(NS_FAILED(holder->GetJSObject(&globalJSObj)) || !globalJSObj)
         return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    if(aFlags & nsIXPConnect::FLAG_SYSTEM_GLOBAL_OBJECT)
-        NS_ASSERTION(JS_IsSystemObject(aJSContext, globalJSObj), "huh?!");
 
     // voodoo to fixup scoping and parenting...
 
@@ -554,7 +511,7 @@ nsXPConnect::InitClassesWithNewWrappedGlobal(JSContext * aJSContext,
     if(!oldGlobal || oldGlobal == tempGlobal)
         JS_SetGlobalObject(aJSContext, globalJSObj);
 
-    if((aFlags & nsIXPConnect::INIT_JS_STANDARD_CLASSES) &&
+    if(aCallJS_InitStandardClasses &&
        !JS_InitStandardClasses(aJSContext, globalJSObj))
         return UnexpectedFailure(NS_ERROR_FAILURE);
 
@@ -579,11 +536,7 @@ nsXPConnect::InitClassesWithNewWrappedGlobal(JSContext * aJSContext,
         JS_SetPrototype(aJSContext, protoJSObject, scope->GetPrototypeJSObject());
     }
 
-    SaveFrame sf(ccx);
     if(!nsXPCComponents::AttachNewComponentsObject(ccx, scope, globalJSObj))
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    if (!XPCNativeWrapper::AttachNewConstructorObject(ccx, globalJSObj))
         return UnexpectedFailure(NS_ERROR_FAILURE);
 
     NS_ADDREF(*_retval = holder);
@@ -611,18 +564,9 @@ nsXPConnect::WrapNative(JSContext * aJSContext,
         return UnexpectedFailure(NS_ERROR_FAILURE);
 
     nsresult rv;
-    if(!XPCConvert::NativeInterface2JSObject(ccx, _retval, aCOMObj, &aIID,
-                                             aScope, PR_FALSE,
-                                             OBJ_IS_NOT_GLOBAL, &rv))
+    if(!XPCConvert::NativeInterface2JSObject(ccx, _retval,
+                                             aCOMObj, &aIID, aScope, &rv))
         return rv;
-
-#ifdef DEBUG
-    JSObject* returnObj;
-    (*_retval)->GetJSObject(&returnObj);
-    NS_ASSERTION(!XPCNativeWrapper::IsNativeWrapper(aJSContext, returnObj),
-                 "Shouldn't be returning a native wrapper here");
-#endif
-    
     return NS_OK;
 }
 
@@ -767,122 +711,6 @@ nsXPConnect::ReparentWrappedNativeIfFound(JSContext * aJSContext,
     return XPCWrappedNative::
         ReparentWrapperIfFound(ccx, scope, scope2, aNewParent, aCOMObj,
                                (XPCWrappedNative**) _retval);
-}
-
-JS_STATIC_DLL_CALLBACK(JSDHashOperator)
-MoveableWrapperFinder(JSDHashTable *table, JSDHashEntryHdr *hdr,
-                      uint32 number, void *arg)
-{
-    // Every element counts.
-    nsVoidArray *va = NS_STATIC_CAST(nsVoidArray *,arg);
-    va->AppendElement(((Native2WrappedNativeMap::Entry*)hdr)->value);
-    return JS_DHASH_NEXT;
-}
-
-/* void reparentScopeAwareWrappers(in JSContextPtr aJSContext, in JSObjectPtr  aOldScope, in JSObjectPtr  aNewScope); */
-NS_IMETHODIMP
-nsXPConnect::ReparentScopeAwareWrappers(JSContext *aJSContext,
-                                        JSObject *aOldScope,
-                                        JSObject *aNewScope)
-{
-    XPCCallContext ccx(NATIVE_CALLER, aJSContext);
-    if(!ccx.IsValid())
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    XPCWrappedNativeScope *oldScope =
-        XPCWrappedNativeScope::FindInJSObjectScope(ccx, aOldScope);
-    if(!oldScope)
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    XPCWrappedNativeScope *newScope =
-        XPCWrappedNativeScope::FindInJSObjectScope(ccx, aNewScope);
-    if(!newScope)
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    {   // scoped lock
-        XPCAutoLock lock(oldScope->GetRuntime()->GetMapLock());
-
-        // First, look through the old scope and find all of the wrappers that
-        // we're going to move.
-
-        Native2WrappedNativeMap *map = oldScope->GetWrappedNativeMap();
-        nsVoidArray wrappersToMove(map->Count());
-        map->Enumerate(MoveableWrapperFinder, &wrappersToMove);
-
-        // Now that we have the wrappers, reparent them to the new scope.
-        for(PRInt32 i = 0, stop = wrappersToMove.Count(); i < stop; ++i)
-        {
-            // First, check to see if this wrapper really needs to be
-            // reparented.
-
-            XPCWrappedNative *wrapper =
-                NS_STATIC_CAST(XPCWrappedNative *, wrappersToMove[i]);
-            nsISupports *identity = wrapper->GetIdentityObject();
-            nsCOMPtr<nsIClassInfo> info(do_QueryInterface(identity));
-
-            // ClassInfo is implemented as singleton objects. If the identity
-            // object here is the same object as returned by the QI, then it
-            // is the singleton classinfo, so we don't need to reparent it.
-            if(SameCOMIdentity(identity, info))
-                info = nsnull;
-
-            if(!info)
-                continue;
-
-            XPCNativeScriptableCreateInfo sciProto;
-            XPCNativeScriptableCreateInfo sciWrapper;
-
-            nsresult rv =
-                XPCWrappedNative::GatherScriptableCreateInfo(identity,
-                                                             info.get(),
-                                                             &sciProto,
-                                                             &sciWrapper);
-            if(NS_FAILED(rv))
-                return NS_ERROR_FAILURE;
-
-            // If the wrapper doesn't want precreate, then we don't need to
-            // worry about reparenting it.
-            if(!sciWrapper.GetFlags().WantPreCreate())
-                continue;
-
-            JSObject *newParent = aOldScope;
-            rv = sciWrapper.GetCallback()->PreCreate(identity, ccx, aOldScope,
-                                                     &newParent);
-            if(NS_FAILED(rv))
-                return rv;
-
-            if(newParent != aOldScope)
-            {
-                // The wrapper returned a new parent. If the new parent is in
-                // a different scope, then we need to reparent it, otherwise,
-                // the old scope is fine.
-
-                XPCWrappedNativeScope *betterScope =
-                    XPCWrappedNativeScope::FindInJSObjectScope(ccx, newParent);
-                if(betterScope == oldScope)
-                    continue;
-
-                NS_ASSERTION(betterScope == newScope, "Weird scope returned");
-            }
-            else
-            {
-                // The old scope still works for this wrapper.
-                continue;
-            }
-
-            // Now, reparent the wrapper, since we know that it wants to be
-            // reparented.
-
-            nsRefPtr<XPCWrappedNative> junk;
-            rv = XPCWrappedNative::ReparentWrapperIfFound(ccx, oldScope,
-                                                          newScope, newParent,
-                                                          wrapper->GetIdentityObject(),
-                                                          getter_AddRefs(junk));
-            NS_ENSURE_SUCCESS(rv, rv);
-        }
-    }
-
-    return NS_OK;
 }
 
 /* void setSecurityManagerForJSContext (in JSContextPtr aJSContext, in nsIXPCSecurityManager aManager, in PRUint16 flags); */
@@ -1132,159 +960,6 @@ nsXPConnect::ClearAllWrappedNativeSecurityPolicies()
     return XPCWrappedNativeScope::ClearAllWrappedNativeSecurityPolicies(ccx);
 }
 
-/* void restoreWrappedNativePrototype (in JSContextPtr aJSContext, in JSObjectPtr aScope, in nsIClassInfo aClassInfo, in nsIXPConnectJSObjectHolder aPrototype); */
-NS_IMETHODIMP 
-nsXPConnect::RestoreWrappedNativePrototype(JSContext * aJSContext, 
-                                           JSObject * aScope, 
-                                           nsIClassInfo * aClassInfo, 
-                                           nsIXPConnectJSObjectHolder * aPrototype)
-{
-    XPCCallContext ccx(NATIVE_CALLER, aJSContext);
-    if(!ccx.IsValid())
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    if(!aClassInfo || !aPrototype)
-        return UnexpectedFailure(NS_ERROR_INVALID_ARG);
-
-    JSObject *protoJSObject;
-    nsresult rv = aPrototype->GetJSObject(&protoJSObject);
-    if(NS_FAILED(rv))
-        return UnexpectedFailure(rv);
-
-    if(!IS_PROTO_CLASS(JS_GET_CLASS(ccx, protoJSObject)))
-        return UnexpectedFailure(NS_ERROR_INVALID_ARG);
-
-    XPCWrappedNativeScope* scope =
-        XPCWrappedNativeScope::FindInJSObjectScope(ccx, aScope);
-    if(!scope)
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    XPCWrappedNativeProto *proto =
-        (XPCWrappedNativeProto*)JS_GetPrivate(ccx, protoJSObject);
-    if(!proto)
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    if(scope != proto->GetScope())
-    {
-        NS_ERROR("Attempt to reset prototype to a prototype from a"
-                 "different scope!");
-
-        return UnexpectedFailure(NS_ERROR_INVALID_ARG);
-    }
-
-    XPCNativeScriptableInfo *si = proto->GetScriptableInfo();
-
-    if(si && si->GetFlags().DontSharePrototype())
-        return UnexpectedFailure(NS_ERROR_INVALID_ARG);
-
-    ClassInfo2WrappedNativeProtoMap* map = scope->GetWrappedNativeProtoMap();
-    XPCLock* lock = scope->GetRuntime()->GetMapLock();
-
-    {   // scoped lock
-        XPCAutoLock al(lock);
-
-        XPCWrappedNativeProtoMap* detachedMap =
-            GetRuntime()->GetDetachedWrappedNativeProtoMap();
-
-        // If we're replacing an old proto, make sure to put it on the
-        // map of detached wrapped native protos so that the old proto
-        // gets properly cleaned up, especially during shutdown.
-        XPCWrappedNativeProto *oldProto = map->Find(aClassInfo);
-        if (oldProto) {
-            detachedMap->Add(oldProto);
-
-            // ClassInfo2WrappedNativeProtoMap doesn't ever replace
-            // entries in the map, so now since we know there's an
-            // entry for aClassInfo in the map we haveto remove it to
-            // be able to add the new one.
-            map->Remove(aClassInfo);
-
-            // This code should do the right thing even if we're
-            // restoring the current proto, but warn in that case
-            // since doing that is pointless.
-            NS_WARN_IF_FALSE(proto != oldProto,
-                             "Restoring current prototype, fix caller!");
-        }
-
-        map->Add(aClassInfo, proto);
-
-        // Remove the prototype from the map of detached wrapped
-        // native prototypes now that the prototype is part of a scope
-        // again.
-        detachedMap->Remove(proto);
-    }
-
-    // The global in this scope didn't change, but a prototype did
-    // (most likely the global object's prototype), which means the
-    // scope needs to get a chance to update its cached
-    // Object.prototype pointers etc.
-    scope->SetGlobal(ccx, aScope);
-
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-nsXPConnect::CreateSandbox(JSContext *cx, nsIPrincipal *principal,
-                           nsIXPConnectJSObjectHolder **_retval)
-{
-#ifdef XPCONNECT_STANDALONE
-    return NS_ERROR_NOT_AVAILABLE;
-#else /* XPCONNECT_STANDALONE */
-    XPCCallContext ccx(NATIVE_CALLER, cx);
-    if(!ccx.IsValid())
-        return UnexpectedFailure(NS_ERROR_FAILURE);
-
-    *_retval = nsnull;
-
-    jsval rval = JSVAL_VOID;
-    AUTO_MARK_JSVAL(ccx, &rval);
-
-    nsresult rv = xpc_CreateSandboxObject(cx, &rval, principal);
-    NS_ASSERTION(NS_FAILED(rv) || !JSVAL_IS_PRIMITIVE(rval),
-                 "Bad return value from xpc_CreateSandboxObject()!");
-
-    if (NS_SUCCEEDED(rv) && !JSVAL_IS_PRIMITIVE(rval)) {
-        *_retval = XPCJSObjectHolder::newHolder(cx, JSVAL_TO_OBJECT(rval));
-        NS_ENSURE_TRUE(*_retval, NS_ERROR_OUT_OF_MEMORY);
-
-        NS_ADDREF(*_retval);
-    }
-
-    return rv;
-#endif /* XPCONNECT_STANDALONE */
-}
-
-// nsIXPConnect_MOZILLA_1_8_BRANCH version.
-NS_IMETHODIMP
-nsXPConnect::EvalInSandboxObject(const nsAString& source, JSContext *cx,
-                                 nsIXPConnectJSObjectHolder *sandbox,
-                                 jsval *rval)
-{
-    return EvalInSandboxObject2(source, cx, sandbox, PR_FALSE, rval);
-}
-
-// nsIXPConnect_MOZILLA_1_8_BRANCH2 version.
-NS_IMETHODIMP
-nsXPConnect::EvalInSandboxObject2(const nsAString& source, JSContext *cx,
-                                  nsIXPConnectJSObjectHolder *sandbox,
-                                  PRBool returnStringOnly, jsval *rval)
-{
-#ifdef XPCONNECT_STANDALONE
-    return NS_ERROR_NOT_AVAILABLE;
-#else /* XPCONNECT_STANDALONE */
-    if (!sandbox)
-        return NS_ERROR_INVALID_ARG;
-
-    JSObject *obj;
-    nsresult rv = sandbox->GetJSObject(&obj);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    return xpc_EvalInSandbox(cx, obj, source,
-                             NS_ConvertUTF16toUTF8(source).get(), 1,
-                             returnStringOnly, rval);
-#endif /* XPCONNECT_STANDALONE */
-}
-
 /* nsIXPConnectJSObjectHolder getWrappedNativePrototype (in JSContextPtr aJSContext, in JSObjectPtr aScope, in nsIClassInfo aClassInfo); */
 NS_IMETHODIMP 
 nsXPConnect::GetWrappedNativePrototype(JSContext * aJSContext, 
@@ -1306,8 +981,7 @@ nsXPConnect::GetWrappedNativePrototype(JSContext * aJSContext,
 
     AutoMarkingWrappedNativeProtoPtr proto(ccx);
     proto = XPCWrappedNativeProto::GetNewOrUsed(ccx, scope, aClassInfo, 
-                                                &sciProto, JS_FALSE,
-                                                OBJ_IS_NOT_GLOBAL);
+                                                &sciProto, JS_FALSE);
     if(!proto)
         return UnexpectedFailure(NS_ERROR_FAILURE);
 
@@ -1538,86 +1212,6 @@ nsXPConnect::DebugDumpEvalInJSStackFrame(PRUint32 aFrameNumber, const char *aSou
     return NS_OK;
 }
 
-/* JSVal variantToJS (in JSContextPtr ctx, in JSObjectPtr scope, in nsIVariant value); */
-NS_IMETHODIMP 
-nsXPConnect::VariantToJS(JSContext* ctx, JSObject* scope, nsIVariant* value, jsval* _retval)
-{
-    NS_PRECONDITION(ctx, "bad param");
-    NS_PRECONDITION(scope, "bad param");
-    NS_PRECONDITION(value, "bad param");
-    NS_PRECONDITION(_retval, "bad param");
-
-    XPCCallContext ccx(NATIVE_CALLER, ctx);
-    if(!ccx.IsValid())
-        return NS_ERROR_FAILURE;
-
-    nsresult rv = NS_OK;
-    if(!XPCVariant::VariantDataToJS(ccx, value, scope, &rv, _retval))
-    {
-        if(NS_FAILED(rv)) 
-            return rv;
-
-        return NS_ERROR_FAILURE;
-    }
-
-    return NS_OK;
-}
-
-/* nsIVariant JSToVariant (in JSContextPtr ctx, in JSVal value); */
-NS_IMETHODIMP 
-nsXPConnect::JSToVariant(JSContext* ctx, jsval value, nsIVariant** _retval)
-{
-    NS_PRECONDITION(ctx, "bad param");
-    NS_PRECONDITION(value, "bad param");
-    NS_PRECONDITION(_retval, "bad param");
-
-    XPCCallContext ccx(NATIVE_CALLER, ctx);
-    if(!ccx.IsValid())
-        return NS_ERROR_FAILURE;
-
-    *_retval = XPCVariant::newVariant(ccx, value);
-    if(!(*_retval)) 
-        return NS_ERROR_FAILURE;
-
-    return NS_OK;
-}
-
-/* void flagSystemFilenamePrefix (in string filenamePrefix); */
-NS_IMETHODIMP 
-nsXPConnect::FlagSystemFilenamePrefix(const char *aFilenamePrefix)
-{
-    NS_PRECONDITION(aFilenamePrefix, "bad param");
-
-    nsIJSRuntimeService* rtsvc = nsXPConnect::GetJSRuntimeService();
-    if(!rtsvc)
-        return NS_ERROR_NOT_INITIALIZED;
-
-    JSRuntime* rt;
-    nsresult rv = rtsvc->GetRuntime(&rt);
-    if(NS_FAILED(rv))
-        return rv;
-
-    if(!JS_FlagScriptFilenamePrefix(rt, aFilenamePrefix, JSFILENAME_SYSTEM))
-        return NS_ERROR_OUT_OF_MEMORY;
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-nsXPConnect::WillProcessEvents(nsIEventQueue *aQueue)
-{
-    // Push a null JSContext so that we don't see any script during
-    // event processing.
-    NS_ENSURE_STATE(mContextStack);
-    return mContextStack->Push(nsnull);
-}
-
-NS_IMETHODIMP
-nsXPConnect::DidProcessEvents(nsIEventQueue *aQueue)
-{
-    NS_ENSURE_STATE(mContextStack);
-    return mContextStack->Pop(nsnull);
-}
-
 #ifdef DEBUG
 /* These are here to be callable from a debugger */
 JS_BEGIN_EXTERN_C
@@ -1644,42 +1238,6 @@ void DumpJSEval(PRUint32 frameno, const char* text)
 void DumpJSObject(JSObject* obj)
 {
     xpc_DumpJSObject(obj);
-}
-
-void DumpJSValue(jsval val)
-{
-    printf("Dumping 0x%lx. Value tag is %lu.\n", val, JSVAL_TAG(val));
-    if(JSVAL_IS_NULL(val)) {
-        printf("Value is null\n");
-    }
-    else if(JSVAL_IS_OBJECT(val)) {
-        printf("Value is an object\n");
-        JSObject* obj = JSVAL_TO_OBJECT(val);
-        DumpJSObject(obj);
-    }
-    else if(JSVAL_IS_NUMBER(val)) {
-        printf("Value is a number: ");
-        if(JSVAL_IS_INT(val))
-          printf("Integer %i\n", JSVAL_TO_INT(val));
-        else if(JSVAL_IS_DOUBLE(val))
-          printf("Floating-point value %f\n", *JSVAL_TO_DOUBLE(val));
-    }
-    else if(JSVAL_IS_STRING(val)) {
-        printf("Value is a string: ");
-        JSString* string = JSVAL_TO_STRING(val);
-        char* bytes = JS_GetStringBytes(string);
-        printf("<%s>\n", bytes);
-    }
-    else if(JSVAL_IS_BOOLEAN(val)) {
-        printf("Value is boolean: ");
-        printf(JSVAL_TO_BOOLEAN(val) ? "true" : "false");
-    }
-    else if(JSVAL_IS_VOID(val)) {
-        printf("Value is undefined\n");
-    }
-    else {
-        printf("No idea what this value is.\n");
-    }
 }
 JS_END_EXTERN_C
 #endif

@@ -26,13 +26,13 @@
     </content>
     
     <implementation>
-      <property name="title" onget="return document.title;"
-                             onset="return document.title = val;"/>
+      <property name="title" onget="return this.getAttribute('title')"
+                             onset="this.setAttribute('title', val);"/>
 
       <property name="canAdvance" onget="return this._canAdvance;"
-                                  onset="this._canAdvance=val; this._nextButton.disabled = !val;"/>
+                                  onset="this._canAdvance=val; this._nextButton.setAttribute('disabled', !val);"/>
       <property name="canRewind" onget="return this._canRewind;"
-                                 onset="this._canRewind=val; this._backButton.disabled = !val;"/>
+                                 onset="this._canRewind=val; this._backButton.setAttribute('disabled', !val);"/>
 
       <property name="pageStep" onget="return this._pageStack.length"/>
 
@@ -91,15 +91,13 @@
         </setter>
       </property>
 
-      <property name="pageIndex" onget="return this._currentPage.pageIndex;">
+      <property name="pageIndex" onget="return this._pageIndex;">
         <setter>
         <![CDATA[
           if (val < 0 || val >= this.pageCount)
-            return;
+            return this._pageIndex;
 
-          var page = this.wizardPages[val];
-          this._pageStack[this._pageStack.length-1] = page;
-          this.currentPage = page;
+          this.currentPage = this.wizardPages[val];
         ]]>
         </setter>
       </property>
@@ -120,7 +118,7 @@
         <body>
         <![CDATA[
           var btns = this.getElementsByAttribute("dlgtype", aDlgType);
-          return btns.item(0) ? btns[0] : document.getAnonymousElementByAttribute(this._wizardButtons, "dlgtype", aDlgType);
+          return btns.length > 0 ? btns[0] : document.getAnonymousElementByAttribute(this._wizardButtons, "dlgtype", aDlgType);
         ]]>
         </body>
       </method>
@@ -186,7 +184,7 @@
         <parameter name="aPageId"/>
         <body><![CDATA[
           var els = this.getElementsByAttribute("pageid", aPageId);
-          return els.item(0);
+          return els.length > 0 ? els[0] : null;
         ]]></body>
       </method>
 
@@ -271,7 +269,6 @@
 
           window.close();
           window.setTimeout(function() {window.close();}, 1);
-          return false;
         ]]></body>
       </method>
       
@@ -332,10 +329,6 @@
          if (btn) {
            btn.addEventListener("command", this["_"+aName+"Func"], false);
            btn.setAttribute("label", this._bundle.GetStringFromName("button-"+aName));
-           var accesskey = this._bundle.GetStringFromName("accesskey-"+aName);
-           if (accesskey) {
-             btn.setAttribute("accesskey", accesskey);
-           }
            this["_"+aName+"Button"] = btn;
          }
          return btn;
@@ -355,10 +348,12 @@
       </method>
 
       <method name="_hitEnter">
-        <parameter name="evt"/>
         <body>
         <![CDATA[
-          if (!evt.getPreventDefault())
+          // if a button is focused, dispatch its command instead 
+          // of advancing the wizard
+          var focused = document.commandDispatcher.focusedElement;
+          if (!(focused && focused.localName == "button" && focused.hasAttribute("dlgtype")))
             this.advance();
         ]]>
         </body>
@@ -370,7 +365,7 @@
         <body>
         <![CDATA[
           var event = document.createEvent("Events");
-          event.initEvent(aType, true, true);
+          event.initEvent(aType, false, true);
           
           // handle dom event handlers
           var noCancel = aTarget.dispatchEvent(event);
@@ -392,14 +387,9 @@
     </implementation>
 
     <handlers>
-      <handler event="keypress" keycode="VK_ENTER"
-               group="system" action="this._hitEnter(event)"/>
-      <handler event="keypress" keycode="VK_RETURN"
-               group="system" action="this._hitEnter(event)"/>
-      <handler event="keypress" keycode="VK_ESCAPE" group="system">
-        if (!event.getPreventDefault())
-          this.cancel();
-      </handler>
+      <handler event="keypress" keycode="VK_ENTER" action="this._hitEnter()"/>
+      <handler event="keypress" keycode="VK_RETURN" action="this._hitEnter()"/>
+      <handler event="keypress" keycode="VK_ESCAPE" action="this.cancel();"/>
     </handlers>
   </binding>
 

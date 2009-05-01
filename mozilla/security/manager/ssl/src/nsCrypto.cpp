@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Javier Delgadillo <javi@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *  Javier Delgadillo <javi@netscape.com>
+ */
 #include "nsNSSComponent.h"
 #include "nsCrypto.h"
 #include "nsKeygenHandler.h"
@@ -58,6 +42,8 @@
 #include "nsIScriptContext.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIXPConnect.h"
+#include "nsIEventQueueService.h"
+#include "nsIEventQueue.h"
 #include "nsIRunnable.h"
 #include "nsIWindowWatcher.h"
 #include "nsIPrompt.h"
@@ -69,7 +55,6 @@
 #include "nsIDOMCryptoDialogs.h"
 #include "nsIFormSigningDialog.h"
 #include "nsIProxyObjectManager.h"
-#include "nsIJSContextStack.h"
 #include "jsapi.h"
 #include "jsdbgapi.h"
 #include <ctype.h>
@@ -91,15 +76,12 @@ extern "C" {
 #include "secmod.h"
 #include "nsISaveAsCharset.h"
 
-#include "ssl.h" // For SSL_ClearSessionCache
-
 #include "nsNSSCleaner.h"
 NSSCleanupAutoPtrClass(SECKEYPrivateKey, SECKEY_DestroyPrivateKey)
 NSSCleanupAutoPtrClass(PK11SlotInfo, PK11_FreeSlot)
 NSSCleanupAutoPtrClass(CERTCertNicknames, CERT_FreeNicknames)
 
 #include "nsNSSShutDown.h"
-#include "nsNSSCertHelper.h"
 
 /*
  * These are the most common error strings that are returned
@@ -145,6 +127,17 @@ typedef struct nsKeyPairInfoStr {
   nsKeyGenType      keyGenType; /* What type of key gen are we doing.*/
 } nsKeyPairInfo;
 
+//
+// This is the class we'll use to run the keygen done code
+// as an nsIRunnable object;
+//
+struct CryptoRunnableEvent : PLEvent {
+  CryptoRunnableEvent(nsIRunnable* runnable);
+  ~CryptoRunnableEvent();
+
+   nsIRunnable* mRunnable;
+};
+
 
 //This class is just used to pass arguments
 //to the nsCryptoRunnable event.
@@ -152,7 +145,6 @@ class nsCryptoRunArgs : public nsISupports {
 public:
   nsCryptoRunArgs();
   virtual ~nsCryptoRunArgs();
-  nsCOMPtr<nsISupports> m_kungFuDeathGrip;
   JSContext *m_cx;
   JSObject  *m_scope;
   nsCOMPtr<nsIPrincipal> m_principals;
@@ -223,19 +215,34 @@ NS_INTERFACE_MAP_END
 NS_IMPL_ADDREF(nsPkcs11)
 NS_IMPL_RELEASE(nsPkcs11)
 
-// ISupports implementation for nsCryptoRunnable
-NS_IMPL_ISUPPORTS1(nsCryptoRunnable, nsIRunnable)
+// QueryInterface implementation for nsCryptoRunnable
+NS_INTERFACE_MAP_BEGIN(nsCryptoRunnable)
+  NS_INTERFACE_MAP_ENTRY(nsIRunnable)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
+NS_INTERFACE_MAP_END
 
-// ISupports implementation for nsP12Runnable
-NS_IMPL_ISUPPORTS1(nsP12Runnable, nsIRunnable)
+NS_IMPL_ADDREF(nsCryptoRunnable)
+NS_IMPL_RELEASE(nsCryptoRunnable)
 
-// ISupports implementation for nsCryptoRunArgs
-NS_IMPL_ISUPPORTS0(nsCryptoRunArgs)
+// QueryInterface implementation for nsP12Runnable
+NS_INTERFACE_MAP_BEGIN(nsP12Runnable)
+  NS_INTERFACE_MAP_ENTRY(nsIRunnable)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
+NS_INTERFACE_MAP_END_THREADSAFE
+
+NS_IMPL_THREADSAFE_ADDREF(nsP12Runnable)
+NS_IMPL_THREADSAFE_RELEASE(nsP12Runnable)
+
+NS_INTERFACE_MAP_BEGIN(nsCryptoRunArgs)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
+NS_INTERFACE_MAP_END_THREADSAFE
+
+NS_IMPL_THREADSAFE_ADDREF(nsCryptoRunArgs)
+NS_IMPL_THREADSAFE_RELEASE(nsCryptoRunArgs)
 
 static NS_DEFINE_CID(kNSSComponentCID, NS_NSSCOMPONENT_CID);
 
-nsCrypto::nsCrypto() :
-  mEnableSmartCardEvents(PR_FALSE)
+nsCrypto::nsCrypto()
 {
 }
 
@@ -243,31 +250,22 @@ nsCrypto::~nsCrypto()
 {
 }
 
-NS_IMETHODIMP
-nsCrypto::SetEnableSmartCardEvents(PRBool aEnable)
+//Grab the UI event queue so that we can post some events to it.
+nsIEventQueue* 
+nsCrypto::GetUIEventQueue()
 {
-  nsresult rv = NS_OK;
-
-  // this has the side effect of starting the nssComponent (and initializing
-  // NSS) even if it isn't already going. Starting the nssComponent is a 
-  // prerequisite for getting smartCard events.
-  if (aEnable) {
-    nsCOMPtr<nsINSSComponent> nssComponent(do_GetService(kNSSComponentCID, &rv));
-  }
-
-  if (NS_FAILED(rv)) {
-    return rv;
-  }
-
-  mEnableSmartCardEvents = aEnable;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsCrypto::GetEnableSmartCardEvents(PRBool *aEnable)
-{
-  *aEnable = mEnableSmartCardEvents;
-  return NS_OK;
+  nsresult rv;
+  nsCOMPtr<nsIEventQueueService> service = 
+                        do_GetService(NS_EVENTQUEUESERVICE_CONTRACTID, &rv);
+  if (NS_FAILED(rv)) 
+    return nsnull;
+  
+  nsIEventQueue* result = nsnull;
+  rv = service->GetThreadEventQueue(NS_UI_THREAD, &result);
+  if (NS_FAILED(rv)) 
+    return nsnull;
+  
+  return result;
 }
 
 //These next few functions are based on implementation in
@@ -288,7 +286,7 @@ cryptojs_GetScriptPrincipal(JSContext *cx, JSScript *script,
   }
   nsJSPrincipals *nsJSPrin = NS_STATIC_CAST(nsJSPrincipals *, jsp);
   *result = nsJSPrin->nsIPrincipalPtr;
-  if (!*result) {
+  if (!result) {
     return NS_ERROR_FAILURE;
   }
   NS_ADDREF(*result);
@@ -308,7 +306,7 @@ cryptojs_GetObjectPrincipal(JSContext *aCx, JSObject *aObj,
     if (jsClass && (jsClass->flags & (privateNsISupports)) == 
                     privateNsISupports)
     {
-      nsISupports *supports = (nsISupports *) JS_GetPrivate(aCx, parent);
+      nsCOMPtr<nsISupports> supports = (nsISupports *) JS_GetPrivate(aCx, parent);
       nsCOMPtr<nsIScriptObjectPrincipal> objPrin = do_QueryInterface(supports);
               
       if (!objPrin)
@@ -320,21 +318,19 @@ cryptojs_GetObjectPrincipal(JSContext *aCx, JSObject *aObj,
         nsCOMPtr<nsIXPConnectWrappedNative> xpcNative = 
                                             do_QueryInterface(supports);
 
-        if (xpcNative) {
-          objPrin = do_QueryWrappedNative(xpcNative);
+        if (xpcNative)
+          xpcNative->GetNative(getter_AddRefs(supports));
+          objPrin = do_QueryInterface(supports);
         }
-      }
 
-      if (objPrin && ((*result = objPrin->GetPrincipal()))) {
-        NS_ADDREF(*result);
-        return NS_OK;
-      }
-    }
-    parent = JS_GetParent(aCx, parent);
-  } while (parent);
+        if (objPrin && NS_SUCCEEDED(objPrin->GetPrincipal(result)))
+          return NS_OK;
+        }
+        parent = JS_GetParent(aCx, parent);
+    } while (parent);
 
-  // Couldn't find a principal for this object.
-  return NS_ERROR_FAILURE;
+    // Couldn't find a principal for this object.
+    return NS_ERROR_FAILURE;
 }
 
 static nsresult
@@ -367,7 +363,7 @@ cryptojs_GetFramePrincipal(JSContext *cx, JSStackFrame *fp,
   return cryptojs_GetFunctionObjectPrincipal(cx, obj, principal);
 }
 
-already_AddRefed<nsIPrincipal>
+nsIPrincipal*
 nsCrypto::GetScriptPrincipal(JSContext *cx)
 {
   JSStackFrame *fp = nsnull;
@@ -390,7 +386,7 @@ nsCrypto::GetScriptPrincipal(JSContext *cx)
     nsCOMPtr<nsIScriptObjectPrincipal> globalData =
       do_QueryInterface(scriptContext->GetGlobalObject());
     NS_ENSURE_TRUE(globalData, nsnull);
-    NS_IF_ADDREF(principal = globalData->GetPrincipal());
+    globalData->GetPrincipal(&principal);
   }
 
   return principal;
@@ -1410,16 +1406,7 @@ loser:
   nsFreeCertReqMessages(certReqMsgs,numRequests);
   return nsnull;;
 }
-
-static nsISupports *
-GetISupportsFromContext(JSContext *cx)
-{
-    if (JS_GetOptions(cx) & JSOPTION_PRIVATE_IS_NSISUPPORTS)
-        return NS_STATIC_CAST(nsISupports *, JS_GetContextPrivate(cx));
-
-    return nsnull;
-}
-
+                                                 
 //The top level method which is a member of nsIDOMCrypto
 //for generate a base64 encoded CRMF request.
 NS_IMETHODIMP
@@ -1458,7 +1445,7 @@ nsCrypto::GenerateCRMFRequest(nsIDOMCRMFObject** aReturn)
   /*
    * Get all of the parameters.
    */
-  if (argc < 5 || ((argc-5) % 3) != 0) {
+  if (((argc-5) % 3) != 0) {
     JS_ReportError(cx, "%s", "%s%s\n", JS_ERROR,
                   "incorrect number of parameters");
     return NS_ERROR_FAILURE;
@@ -1591,7 +1578,6 @@ nsCrypto::GenerateCRMFRequest(nsIDOMCRMFObject** aReturn)
   printf ("Created the folloing CRMF request:\n%s\n", encodedRequest);
 #endif
   if (!encodedRequest) {
-    nsFreeKeyPairInfo(keyids, numRequests);
     return NS_ERROR_FAILURE;
   }                                                    
   nsCRMFObject *newObject = new nsCRMFObject();
@@ -1627,7 +1613,6 @@ nsCrypto::GenerateCRMFRequest(nsIDOMCRMFObject** aReturn)
     return NS_ERROR_OUT_OF_MEMORY;
 
   args->m_cx         = cx;
-  args->m_kungFuDeathGrip = GetISupportsFromContext(cx);
   args->m_scope      = JS_GetParent(cx, script_obj);
   args->m_jsCallback.Adopt(jsCallback ? nsCRT::strdup(jsCallback) : 0);
   args->m_principals = principals;
@@ -1636,11 +1621,41 @@ nsCrypto::GenerateCRMFRequest(nsIDOMCRMFObject** aReturn)
   if (!cryptoRunnable)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  nsresult rv = nsNSSEventPostToUIEventQueue(cryptoRunnable);
-  if (NS_FAILED(rv))
+  CryptoRunnableEvent *runnable = new CryptoRunnableEvent(cryptoRunnable);
+  if (!runnable) {
     delete cryptoRunnable;
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+  nsCOMPtr<nsIEventQueue>uiQueue = dont_AddRef(GetUIEventQueue());
+  uiQueue->PostEvent(runnable);
+  return NS_OK;
+}
 
-  return rv;
+//A wrapper for PLEvent that we can use to post
+//our nsIRunnable Events.
+static void PR_CALLBACK
+handleCryptoRunnableEvent(CryptoRunnableEvent* aEvent)
+{
+  aEvent->mRunnable->Run();
+}
+
+static void PR_CALLBACK
+destroyCryptoRunnableEvent(CryptoRunnableEvent* aEvent)
+{
+  delete aEvent;
+}
+
+CryptoRunnableEvent::CryptoRunnableEvent(nsIRunnable* runnable)
+  :  mRunnable(runnable)
+{
+  NS_ADDREF(mRunnable);
+  PL_InitEvent(this, nsnull, PLHandleEventProc(handleCryptoRunnableEvent),
+               PLDestroyEventProc(&destroyCryptoRunnableEvent));
+}
+
+CryptoRunnableEvent::~CryptoRunnableEvent()
+{
+  NS_RELEASE(mRunnable);
 }
 
 
@@ -1786,23 +1801,15 @@ nsCryptoRunnable::Run()
   if (NS_FAILED(rv))
     return NS_ERROR_FAILURE;
 
-  // make sure the right context is on the stack. must not return w/out popping
-  nsCOMPtr<nsIJSContextStack> stack(do_GetService("@mozilla.org/js/xpc/ContextStack;1"));
-  if (!stack || NS_FAILED(stack->Push(cx))) {
-    return NS_ERROR_FAILURE;
-  }
-
   jsval retval;
   if (JS_EvaluateScriptForPrincipals(cx, m_args->m_scope, principals,
                                      m_args->m_jsCallback, 
                                      strlen(m_args->m_jsCallback),
                                      nsnull, 0,
                                      &retval) != JS_TRUE) {
-    rv = NS_ERROR_FAILURE;
+    return NS_ERROR_FAILURE;
   }
-
-  stack->Pop(nsnull);
-  return rv;
+  return NS_OK;
 }
 
 //Quick helper function to check if a newly issued cert
@@ -1860,6 +1867,7 @@ nsCrypto::ImportUserCertificates(const nsAString& aNickname,
   nsNSSShutDownPreventionLock locker;
   char *nickname=nsnull, *cmmfResponse=nsnull;
   char *retString=nsnull;
+  char *freeString=nsnull;
   CMMFCertRepContent *certRepContent = nsnull;
   int numResponses = 0;
   nsIX509Cert **certArr = nsnull;
@@ -2017,6 +2025,7 @@ nsCrypto::ImportUserCertificates(const nsAString& aNickname,
     // later.
     nsCOMPtr<nsIRunnable> p12Runnable = new nsP12Runnable(certArr, numResponses,
                                                           token);
+    CryptoRunnableEvent *runnable;
     if (!p12Runnable) {
       rv = NS_ERROR_FAILURE;
       goto loser;
@@ -2027,9 +2036,13 @@ nsCrypto::ImportUserCertificates(const nsAString& aNickname,
     // memory on the way out.
     certArr = nsnull;
 
-    rv = nsNSSEventPostToUIEventQueue(p12Runnable);
-    if (NS_FAILED(rv))
+    runnable = new CryptoRunnableEvent(p12Runnable);
+    if (!runnable) {
+      rv = NS_ERROR_FAILURE;
       goto loser;
+    }
+    nsCOMPtr<nsIEventQueue>uiQueue = dont_AddRef(GetUIEventQueue());
+    uiQueue->PostEvent(runnable);
   }
 
  loser:
@@ -2040,11 +2053,14 @@ nsCrypto::ImportUserCertificates(const nsAString& aNickname,
     delete []certArr;
   }
   aReturn.Assign(NS_ConvertASCIItoUCS2(retString));
+  if (freeString != nsnull) {
+    PR_smprintf_free(freeString);
+  }
   if (nickname) {
-    NS_Free(nickname);
+    nsCRT::free(nickname);
   }
   if (cmmfResponse) {
-    NS_Free(cmmfResponse);
+    nsCRT::free(cmmfResponse);
   }
   if (certRepContent) {
     CMMF_DestroyCertRepContent(certRepContent);
@@ -2096,6 +2112,9 @@ void signTextOutputCallback(void *arg, const char *buf, unsigned long len)
   ((nsCString*)arg)->Append(buf, len);
 }
 
+#define NICKNAME_EXPIRED_STRING " (expired)"
+#define NICKNAME_NOT_YET_VALID_STRING " (not yet valid)"
+
 NS_IMETHODIMP
 nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
                    nsAString& aResult)
@@ -2129,8 +2148,8 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
     return NS_OK;
   }
 
-  if (!aCaOption.EqualsLiteral("auto") &&
-      !aCaOption.EqualsLiteral("ask")) {
+  if (!aCaOption.Equals(NS_LITERAL_STRING("auto")) &&
+      !aCaOption.Equals(NS_LITERAL_STRING("ask"))) {
     JS_ReportError(cx, "%s%s\n", JS_ERROR, "caOption argument must be ask or auto");
 
     aResult.Append(internalError);
@@ -2174,7 +2193,7 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
 
         return NS_OK;
       }
-      caNames[i - 2] = JS_GetStringBytes(caName);
+      caNames[i] = JS_GetStringBytes(caName);
     }
 
     if (certList &&
@@ -2187,7 +2206,7 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
   }
 
   if (!certList || CERT_LIST_EMPTY(certList)) {
-    aResult.AppendLiteral("error:noMatchingCert");
+    aResult.Append(NS_LITERAL_STRING("error:noMatchingCert"));
 
     return NS_OK;
   }
@@ -2250,8 +2269,9 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
     ++numberOfCerts;
   }
 
-  CERTCertNicknames* nicknames = getNSSCertNicknamesFromCertList(certList);
-
+  CERTCertNicknames* nicknames =
+    CERT_NicknameStringsFromCertList(certList, NICKNAME_EXPIRED_STRING,
+                                     NICKNAME_NOT_YET_VALID_STRING);
   if (!nicknames) {
     aResult.Append(internalError);
 
@@ -2355,7 +2375,7 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
   }
 
   if (canceled) {
-    aResult.AppendLiteral("error:userCancel");
+    aResult.Append(NS_LITERAL_STRING("error:userCancel"));
 
     return NS_OK;
   }
@@ -2371,8 +2391,8 @@ nsCrypto::SignText(const nsAString& aStringToSign, const nsAString& aCaOption,
 
   // XXX Doing what nsFormSubmission::GetEncoder does (see
   //     http://bugzilla.mozilla.org/show_bug.cgi?id=81203).
-  if (charset.EqualsLiteral("ISO-8859-1")) {
-    charset.AssignLiteral("windows-1252");
+  if (charset.Equals(NS_LITERAL_CSTRING("ISO-8859-1"))) {
+    charset.Assign(NS_LITERAL_CSTRING("windows-1252"));
   }
 
   nsCOMPtr<nsISaveAsCharset> encoder =
@@ -2483,7 +2503,6 @@ nsCrypto::Logout()
   {
     nsNSSShutDownPreventionLock locker;
     PK11_LogoutAll();
-    SSL_ClearSessionCache();
   }
 
   return nssComponent->LogoutAuthenticatedPK11();
@@ -2535,8 +2554,7 @@ nsPkcs11::~nsPkcs11()
 PRBool
 confirm_user(const PRUnichar *message)
 {
-  PRInt32 buttonPressed = 1; // If the user exits by clicking the close box, assume No (button 1)
-
+  PRBool confirmation = PR_FALSE;
   nsCOMPtr<nsIWindowWatcher> wwatch(do_GetService(NS_WINDOWWATCHER_CONTRACTID));
   nsCOMPtr<nsIPrompt> prompter;
   if (wwatch)
@@ -2545,16 +2563,11 @@ confirm_user(const PRUnichar *message)
   if (prompter) {
     nsPSMUITracker tracker;
     if (!tracker.isUIForbidden()) {
-      prompter->ConfirmEx(0, message,
-                          (nsIPrompt::BUTTON_DELAY_ENABLE) +
-                          (nsIPrompt::BUTTON_POS_1_DEFAULT) +
-                          (nsIPrompt::BUTTON_TITLE_OK * nsIPrompt::BUTTON_POS_0) +
-                          (nsIPrompt::BUTTON_TITLE_CANCEL * nsIPrompt::BUTTON_POS_1),
-                          nsnull, nsnull, nsnull, nsnull, nsnull, &buttonPressed);
+      prompter->Confirm(0, message, &confirmation);
     }
   }
 
-  return (buttonPressed == 0);
+  return confirmation;
 }
 
 //Delete a PKCS11 module from the user's profile.
@@ -2592,11 +2605,6 @@ nsPkcs11::Deletemodule(const nsAString& aModuleName, PRInt32* aReturn)
   PRInt32 modType;
   SECStatus srv = SECMOD_DeleteModule(modName, &modType);
   if (srv == SECSuccess) {
-    SECMODModule *module = SECMOD_FindModule(modName);
-    if (module) {
-      nssComponent->ShutdownSmartCardThread(module);
-      SECMOD_DestroyModule(module);
-    }
     if (modType == SECMOD_EXTERNAL) {
       nssComponent->GetPIPNSSBundleString("DelModuleExtSuccess", errorMessage);
       *aReturn = JS_OK_DEL_EXTERNAL_MOD;
@@ -2666,14 +2674,6 @@ nsPkcs11::Addmodule(const nsAString& aModuleName,
   PRUint32 cipherFlags = SECMOD_PubCipherFlagstoInternal(aCipherFlags);
   SECStatus srv = SECMOD_AddNewModule(moduleName, fullPath, 
                                       mechFlags, cipherFlags);
-  if (srv == SECSuccess) {
-    SECMODModule *module = SECMOD_FindModule(moduleName);
-    if (module) {
-      nssComponent->LaunchSmartCardThread(module);
-      SECMOD_DestroyModule(module);
-    }
-  }
-
   nsMemory::Free(moduleName);
   nsMemory::Free(fullPath);
 

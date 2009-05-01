@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: Eric J. Burley (ericb@neoplanet.com)
+ * Original Author: Eric J. Burley (ericb@neoplanet.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,7 +44,7 @@
 #include "nsIDOMNodeList.h"
 #include "nsHTMLAtoms.h"
 #include "nsIWidget.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIDOMWindowInternal.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIViewManager.h"
@@ -80,7 +80,7 @@ nsTitleBarFrame::nsTitleBarFrame(nsIPresShell* aPresShell)
 
 
 
-NS_IMETHODIMP  nsTitleBarFrame::Init(nsPresContext*  aPresContext,
+NS_IMETHODIMP  nsTitleBarFrame::Init(nsIPresContext*  aPresContext,
                 nsIContent*      aContent,
                 nsIFrame*        aParent,
                 nsStyleContext*  aContext,
@@ -103,12 +103,13 @@ nsTitleBarFrame::GetMouseThrough(PRBool& aMouseThrough)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTitleBarFrame::GetFrameForPoint(const nsPoint& aPoint, 
+NS_IMETHODIMP nsTitleBarFrame::GetFrameForPoint(nsIPresContext* aPresContext,
+                                    const nsPoint& aPoint, 
                                     nsFramePaintLayer aWhichLayer,
                                     nsIFrame**     aFrame)
 {
   // override, since we don't want children to get events
-  return nsFrame::GetFrameForPoint(aPoint, aWhichLayer, aFrame);
+  return nsFrame::GetFrameForPoint(aPresContext, aPoint, aWhichLayer, aFrame);
 }
 
 
@@ -117,7 +118,7 @@ NS_IMETHODIMP nsTitleBarFrame::GetFrameForPoint(const nsPoint& aPoint,
 
 	
 NS_IMETHODIMP
-nsTitleBarFrame::HandleEvent(nsPresContext* aPresContext, 
+nsTitleBarFrame::HandleEvent(nsIPresContext* aPresContext, 
                                       nsGUIEvent* aEvent,
                                       nsEventStatus* aEventStatus)
 {
@@ -166,13 +167,19 @@ nsTitleBarFrame::HandleEvent(nsPresContext* aPresContext,
 			 if(mTrackingMouseMove)
 			 {				 				 
 			   // get the document and the global script object - should this be cached?
-			   nsCOMPtr<nsIDOMWindowInternal>
-           window(do_QueryInterface(aPresContext->PresShell()->GetDocument()->GetScriptGlobalObject()));
+			   nsCOMPtr<nsIDocument> document;
+			   aPresContext->PresShell()->GetDocument(getter_AddRefs(document));
+			   nsCOMPtr<nsIDOMWindowInternal> window(do_QueryInterface(document->GetScriptGlobalObject()));
 
-         if (window) {
-           nsPoint nsMoveBy = aEvent->refPoint - mLastPoint;
-           window->MoveBy(nsMoveBy.x,nsMoveBy.y);
-         }
+
+
+				 nsPoint nsMoveBy;
+				 nsMoveBy = aEvent->refPoint - mLastPoint;
+				 
+				 
+				 window->MoveBy(nsMoveBy.x,nsMoveBy.y);
+				 
+				 
 				 
 				 *aEventStatus = nsEventStatus_eConsumeNoDefault;				
 				 
@@ -184,7 +191,7 @@ nsTitleBarFrame::HandleEvent(nsPresContext* aPresContext,
 
 
     case NS_MOUSE_LEFT_CLICK:
-      MouseClicked(aPresContext, aEvent);
+      MouseClicked(aPresContext);
       break;
   }
   
@@ -195,7 +202,7 @@ nsTitleBarFrame::HandleEvent(nsPresContext* aPresContext,
 }
 
 NS_IMETHODIMP 
-nsTitleBarFrame::CaptureMouseEvents(nsPresContext* aPresContext,PRBool aGrabMouseEvents)
+nsTitleBarFrame::CaptureMouseEvents(nsIPresContext* aPresContext,PRBool aGrabMouseEvents)
 {
 	// get its view
   nsIView* view = GetView();
@@ -224,14 +231,10 @@ nsTitleBarFrame::CaptureMouseEvents(nsPresContext* aPresContext,PRBool aGrabMous
 
 
 void 
-nsTitleBarFrame::MouseClicked(nsPresContext* aPresContext, nsGUIEvent* aEvent) 
+nsTitleBarFrame::MouseClicked (nsIPresContext* aPresContext) 
 {
   // Execute the oncommand event handler.
   nsEventStatus status = nsEventStatus_eIgnore;
-
-  nsXULCommandEvent event(aEvent ? NS_IS_TRUSTED_EVENT(aEvent) : PR_FALSE,
-                          NS_XUL_COMMAND, nsnull);
-
-  mContent->HandleDOMEvent(aPresContext, &event, nsnull, NS_EVENT_FLAG_INIT,
-                           &status);
+  nsMouseEvent event(NS_XUL_COMMAND);
+  mContent->HandleDOMEvent(aPresContext, &event, nsnull, NS_EVENT_FLAG_INIT, &status);
 }

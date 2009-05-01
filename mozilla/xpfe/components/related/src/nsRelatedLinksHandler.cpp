@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4; c-file-style: "stroustrup" -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -196,7 +196,7 @@ RelatedLinksStreamListener::~RelatedLinksStreamListener()
 		 NS_IF_RELEASE(kNC_RelatedLinksRoot);
 		 mUnicodeDecoder = nsnull;
 
-		 NS_IF_RELEASE(gRDFService);
+		 nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
 	 }
 }
 
@@ -207,16 +207,20 @@ RelatedLinksStreamListener::Init()
 {
 	if (gRefCnt++ == 0)
 	{
-		nsresult rv = CallGetService(kRDFServiceCID, &gRDFService);
-		if (NS_FAILED(rv))
-    {
-      NS_ERROR("unable to get RDF service");
-			return(rv);
-    }
+		nsresult rv = nsServiceManager::GetService(kRDFServiceCID,
+				    NS_GET_IID(nsIRDFService),
+				    (nsISupports**) &gRDFService);
 
-		nsICharsetConverterManager *charsetConv;
-		rv = CallGetService(kCharsetConverterManagerCID, &charsetConv);
-		if (NS_SUCCEEDED(rv))
+		NS_ASSERTION(NS_SUCCEEDED(rv), "unable to get RDF service");
+		if (NS_FAILED(rv))
+			return(rv);
+
+		nsICharsetConverterManager	*charsetConv = nsnull;
+
+		rv = nsServiceManager::GetService(kCharsetConverterManagerCID, 
+				NS_GET_IID(nsICharsetConverterManager), 
+				(nsISupports**)&charsetConv);
+		if (NS_SUCCEEDED(rv) && (charsetConv))
 		{
 			rv = charsetConv->GetUnicodeDecoderRaw("UTF-8",
 												getter_AddRefs(mUnicodeDecoder));
@@ -557,22 +561,22 @@ RelatedLinksStreamListener::Unescape(nsString &text)
 
 	while((offset = text.FindChar((PRUnichar('&')), offset)) >= 0)
 	{
-		if (Substring(text, offset, 4).LowerCaseEqualsLiteral("&lt;"))
+		if (Substring(text, offset, 4).Equals(NS_LITERAL_STRING("&lt;"), nsCaseInsensitiveStringComparator()))
 		{
 			text.Cut(offset, 4);
 			text.Insert(PRUnichar('<'), offset);
 		}
-		else if (Substring(text, offset, 4).LowerCaseEqualsLiteral("&gt;"))
+		else if (Substring(text, offset, 4).Equals(NS_LITERAL_STRING("&gt;"), nsCaseInsensitiveStringComparator()))
 		{
 			text.Cut(offset, 4);
 			text.Insert(PRUnichar('>'), offset);
 		}
-		else if (Substring(text, offset, 5).LowerCaseEqualsLiteral("&amp;"))
+		else if (Substring(text, offset, 5).Equals(NS_LITERAL_STRING("&amp;"), nsCaseInsensitiveStringComparator()))
 		{
 			text.Cut(offset, 5);
 			text.Insert(PRUnichar('&'), offset);
 		}
-		else if (Substring(text, offset, 6).LowerCaseEqualsLiteral("&quot;"))
+		else if (Substring(text, offset, 6).Equals(NS_LITERAL_STRING("&quot;"), nsCaseInsensitiveStringComparator()))
 		{
 			text.Cut(offset, 6);
 			text.Insert(PRUnichar('\"'), offset);
@@ -608,7 +612,8 @@ RelatedLinksHandlerImpl::~RelatedLinksHandlerImpl()
 		NS_IF_RELEASE(kNC_RelatedLinksTopic);
 		NS_IF_RELEASE(kNC_Child);
 
-		NS_IF_RELEASE(gRDFService);
+		nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
+		gRDFService = nsnull;
 	}
 }
 
@@ -621,7 +626,9 @@ RelatedLinksHandlerImpl::Init()
 
 	if (gRefCnt++ == 0)
 	{
-		rv = CallGetService(kRDFServiceCID, &gRDFService);
+		rv = nsServiceManager::GetService(kRDFServiceCID,
+                                                  NS_GET_IID(nsIRDFService),
+                                                  (nsISupports**) &gRDFService);
 		if (NS_FAILED(rv)) return rv;
 
 		gRDFService->GetResource(NS_LITERAL_CSTRING(kURINC_RelatedLinksRoot),
@@ -648,13 +655,14 @@ RelatedLinksHandlerImpl::Init()
 			else
 			{
 				// no preference, so fallback to a well-known URL
-				mRLServerURL->AssignLiteral("http://www-rl.netscape.com/wtgn?");
+				mRLServerURL->Assign(NS_LITERAL_STRING("http://www-rl.netscape.com/wtgn?"));
 			}
 		}
 	}
 
-	mInner = do_CreateInstance(kRDFInMemoryDataSourceCID, &rv);
-	return rv;
+	rv = nsComponentManager::CreateInstance(kRDFInMemoryDataSourceCID,
+		nsnull, NS_GET_IID(nsIRDFDataSource), getter_AddRefs(mInner));
+	return(rv);
 }
 
 

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,22 +45,26 @@
 #include "nsNodeInfoManager.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
-#include "nsIDOMAttr.h"
 #include "nsDOMError.h"
 #include "nsIDOM3Node.h"
 #include "nsLayoutAtoms.h"
 #include "nsDOMString.h"
 
 class nsDocumentFragment : public nsGenericElement,
-                           public nsIDOMDocumentFragment,
+                           public nsIDocumentFragment,
                            public nsIDOM3Node
 {
 public:
-  nsDocumentFragment(nsINodeInfo *aNodeInfo);
+  nsDocumentFragment(nsIDocument* aOwnerDocument);
   virtual ~nsDocumentFragment();
 
   // nsISupports
   NS_DECL_ISUPPORTS_INHERITED
+
+  // interface nsIDocumentFragment
+  NS_IMETHOD DisconnectChildren();
+  NS_IMETHOD ReconnectChildren();
+  NS_IMETHOD DropChildReferences();
 
   // interface nsIDOMDocumentFragment
   NS_IMETHOD    GetNodeName(nsAString& aNodeName)
@@ -86,8 +91,7 @@ public:
       *aAttributes = nsnull;
       return NS_OK;
     }
-  NS_IMETHOD    GetOwnerDocument(nsIDOMDocument** aOwnerDocument)
-  { return nsGenericElement::GetOwnerDocument(aOwnerDocument); }
+  NS_IMETHOD    GetOwnerDocument(nsIDOMDocument** aOwnerDocument);
   NS_IMETHOD    InsertBefore(nsIDOMNode* aNewChild, nsIDOMNode* aRefChild, 
                              nsIDOMNode** aReturn)
   { return nsGenericElement::InsertBefore(aNewChild, aRefChild, aReturn); }
@@ -151,7 +155,7 @@ public:
     *aPrefix = nsnull;
     return NS_ERROR_ILLEGAL_VALUE;
   }
-  virtual nsresult HandleDOMEvent(nsPresContext* aPresContext,
+  virtual nsresult HandleDOMEvent(nsIPresContext* aPresContext,
                                   nsEvent* aEvent, nsIDOMEvent** aDOMEvent,
                                   PRUint32 aFlags, nsEventStatus* aEventStatus)
   {
@@ -159,24 +163,36 @@ public:
     *aEventStatus = nsEventStatus_eIgnore;
     return NS_OK;
   }
+
+protected:
+  nsCOMPtr<nsIDocument> mOwnerDocument;
 };
 
 nsresult
 NS_NewDocumentFragment(nsIDOMDocumentFragment** aInstancePtrResult,
-                       nsNodeInfoManager *aNodeInfoManager)
+                       nsIDocument* aOwnerDocument)
 {
-  NS_ENSURE_ARG(aNodeInfoManager);
+  NS_ENSURE_ARG(aOwnerDocument);
+
+  nsINodeInfoManager *nimgr = aOwnerDocument->GetNodeInfoManager();
 
   nsCOMPtr<nsINodeInfo> nodeInfo;
-  nsresult rv =
-    aNodeInfoManager->GetNodeInfo(nsLayoutAtoms::documentFragmentNodeName,
-                                  nsnull, kNameSpaceID_None,
-                                  getter_AddRefs(nodeInfo));
+  nsresult rv = nimgr->GetNodeInfo(nsLayoutAtoms::documentFragmentNodeName,
+                                   nsnull, kNameSpaceID_None,
+                                   getter_AddRefs(nodeInfo));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsDocumentFragment *it = new nsDocumentFragment(nodeInfo);
+  nsDocumentFragment* it = new nsDocumentFragment(aOwnerDocument);
   if (!it) {
     return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  rv = it->Init(nodeInfo);
+
+  if (NS_FAILED(rv)) {
+    delete it;
+
+    return rv;
   }
 
   *aInstancePtrResult = NS_STATIC_CAST(nsIDOMDocumentFragment *, it);
@@ -186,9 +202,9 @@ NS_NewDocumentFragment(nsIDOMDocumentFragment** aInstancePtrResult,
   return NS_OK;
 }
 
-nsDocumentFragment::nsDocumentFragment(nsINodeInfo *aNodeInfo)
-  : nsGenericElement(aNodeInfo)
+nsDocumentFragment::nsDocumentFragment(nsIDocument* aOwnerDocument)
 {
+  mOwnerDocument = aOwnerDocument;
 }
 
 nsDocumentFragment::~nsDocumentFragment()
@@ -198,11 +214,11 @@ nsDocumentFragment::~nsDocumentFragment()
 
 // QueryInterface implementation for nsDocumentFragment
 NS_INTERFACE_MAP_BEGIN(nsDocumentFragment)
+  NS_INTERFACE_MAP_ENTRY(nsIDocumentFragment)
   NS_INTERFACE_MAP_ENTRY(nsIDOMDocumentFragment)
   NS_INTERFACE_MAP_ENTRY(nsIDOMNode)
   NS_INTERFACE_MAP_ENTRY(nsIDOM3Node)
   NS_INTERFACE_MAP_ENTRY(nsIContent)
-  NS_INTERFACE_MAP_ENTRY(nsIDOMGCParticipant)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIContent)
   NS_INTERFACE_MAP_ENTRY_CONTENT_CLASSINFO(DocumentFragment)
 NS_INTERFACE_MAP_END
@@ -211,11 +227,74 @@ NS_INTERFACE_MAP_END
 NS_IMPL_ADDREF(nsDocumentFragment)
 NS_IMPL_RELEASE(nsDocumentFragment)
 
+NS_IMETHODIMP
+nsDocumentFragment::DisconnectChildren()
+{
+  PRUint32 i, count = GetChildCount();
+
+  for (i = 0; i < count; i++) {
+    GetChildAt(i)->SetParent(nsnull);
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocumentFragment::ReconnectChildren()
+{
+  PRUint32 i, count = GetChildCount();
+
+  for (i = 0; i < count; i++) {
+    nsIContent *child = GetChildAt(i);
+    nsIContent *parent = child->GetParent();
+
+    if (parent) {
+      // This is potentially a O(n**2) operation, but it should only
+      // happen in error cases (such as out of memory or something
+      // similar) so we don't care for now.
+
+      PRInt32 indx = parent->IndexOf(child);
+
+      if (indx >= 0) {
+        parent->RemoveChildAt(indx, PR_TRUE);
+      }
+    }
+
+    child->SetParent(this);
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocumentFragment::DropChildReferences()
+{
+  PRUint32 count = mAttrsAndChildren.ChildCount();
+  while (count > 0) {
+    mAttrsAndChildren.RemoveChildAt(--count);
+  }
+
+  return NS_OK;
+}
+
 NS_IMETHODIMP    
 nsDocumentFragment::GetNodeType(PRUint16* aNodeType)
 {
   *aNodeType = (PRUint16)nsIDOMNode::DOCUMENT_FRAGMENT_NODE;
   return NS_OK;
+}
+
+NS_IMETHODIMP    
+nsDocumentFragment::GetOwnerDocument(nsIDOMDocument** aOwnerDocument)
+{
+  NS_ENSURE_ARG_POINTER(aOwnerDocument);
+
+  if (!mOwnerDocument) {
+    *aOwnerDocument = nsnull;
+    return NS_OK;
+  }
+
+  return CallQueryInterface(mOwnerDocument, aOwnerDocument);
 }
 
 NS_IMETHODIMP
@@ -233,8 +312,7 @@ nsDocumentFragment::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
   nsresult rv = NS_OK;
   nsCOMPtr<nsIDOMDocumentFragment> newFragment;
 
-  rv = NS_NewDocumentFragment(getter_AddRefs(newFragment),
-                              mNodeInfo->NodeInfoManager());
+  rv = NS_NewDocumentFragment(getter_AddRefs(newFragment), mOwnerDocument);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (aDeep) {
@@ -295,8 +373,9 @@ NS_IMETHODIMP
 nsDocumentFragment::IsDefaultNamespace(const nsAString& aNamespaceURI,
                                        PRBool* aReturn)
 {
-  *aReturn = PR_FALSE;
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("nsDocumentFragment::IsDefaultNamespace()");
+
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
@@ -409,7 +488,15 @@ nsDocumentFragment::GetUserData(const nsAString& aKey,
 NS_IMETHODIMP
 nsDocumentFragment::GetTextContent(nsAString &aTextContent)
 {
-  return nsNode3Tearoff::GetTextContent(this, aTextContent);
+  if (mOwnerDocument) {
+    return nsNode3Tearoff::GetTextContent(mOwnerDocument,
+                                          this,
+                                          aTextContent);
+  }
+
+  SetDOMStringToNull(aTextContent);
+
+  return NS_OK;
 }
 
 NS_IMETHODIMP

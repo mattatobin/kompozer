@@ -1,4 +1,4 @@
-/* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */ 
+/* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -22,8 +22,6 @@
  * Contributor(s):
  *  Conrad Carlen <ccarlen@netscape.com>
  *  Jungshik Shin <jshin@mailaps.org>
- *  Asaf Romano <mozilla.mano@sent.com>
- *  Mark Mentovai <mark@moxienet.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -40,11 +38,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsLocalFile.h"
-#include "nsDirectoryServiceDefs.h"
 
 #include "nsString.h"
 #include "nsReadableUtils.h"
-#include "nsIDirectoryEnumerator.h"
 #include "nsISimpleEnumerator.h"
 #include "nsITimelineService.h"
 #include "nsVoidArray.h"
@@ -58,17 +54,15 @@
 #include "nsAutoBuffer.h"
 
 // Mac Includes
+#include <Aliases.h>
+#include <Gestalt.h>
+#include <AppleEvents.h>
+#include <AEDataModel.h>
+#include <Processes.h>
 #include <Carbon/Carbon.h>
 
 // Unix Includes
-#include <unistd.h>
 #include <sys/stat.h>
-
-#if !defined(MAC_OS_X_VERSION_10_4) || MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_4
-#define GetAliasSizeFromRecord(aliasRecord) aliasRecord.aliasSize
-#else
-#define GetAliasSizeFromRecord(aliasRecord) GetAliasSizeFromPtr(&aliasRecord)
-#endif
 
 //*****************************************************************************
 //  Static Function Prototypes
@@ -122,8 +116,7 @@ class StFollowLinksState
 #pragma mark -
 #pragma mark [nsDirEnumerator]
 
-class nsDirEnumerator : public nsISimpleEnumerator,
-                        public nsIDirectoryEnumerator
+class nsDirEnumerator : public nsISimpleEnumerator
 {
     public:
 
@@ -192,8 +185,6 @@ class nsDirEnumerator : public nsISimpleEnumerator,
             } 
           }
           *result = mNext != nsnull;
-          if (!*result)
-            Close();
           return NS_OK;
         }
 
@@ -214,36 +205,13 @@ class nsDirEnumerator : public nsISimpleEnumerator,
             return NS_OK;
         }
 
-        NS_IMETHOD GetNextFile(nsIFile **result)
-        {
-            *result = nsnull;
-            PRBool hasMore = PR_FALSE;
-            nsresult rv = HasMoreElements(&hasMore);
-            if (NS_FAILED(rv) || !hasMore)
-                return rv;
-            *result = mNext;
-            NS_IF_ADDREF(*result);
-            mNext = nsnull;
-            return NS_OK;
-        }
-
-        NS_IMETHOD Close()
-        {
-          if (mIterator) {
-            ::FSCloseIterator(mIterator);
-            mIterator = nsnull;
-          }
-          if (mFSRefsArray) {
-            nsMemory::Free(mFSRefsArray);
-            mFSRefsArray = nsnull;
-          }
-          return NS_OK;
-        }
-
     private:
         ~nsDirEnumerator() 
         {
-          Close();
+          if (mIterator)
+            ::FSCloseIterator(mIterator);
+          if (mFSRefsArray)
+            nsMemory::Free(mFSRefsArray);
         }
 
     protected:
@@ -260,7 +228,7 @@ class nsDirEnumerator : public nsISimpleEnumerator,
         PRInt32                 mArrayCnt, mArrayIndex;
 };
 
-NS_IMPL_ISUPPORTS2(nsDirEnumerator, nsISimpleEnumerator, nsIDirectoryEnumerator)
+NS_IMPL_ISUPPORTS1(nsDirEnumerator, nsISimpleEnumerator)
 
 #pragma mark -
 #pragma mark [StAEDesc]
@@ -336,11 +304,10 @@ nsLocalFile::~nsLocalFile()
 #pragma mark -
 #pragma mark [nsISupports]
 
-NS_IMPL_THREADSAFE_ISUPPORTS4(nsLocalFile,
+NS_IMPL_THREADSAFE_ISUPPORTS3(nsLocalFile,
                               nsILocalFileMac,
                               nsILocalFile,
-                              nsIFile,
-                              nsILocalFileMac_MOZILLA_1_8_BRANCH)
+                              nsIFile)
                               
 NS_METHOD nsLocalFile::nsLocalFileConstructor(nsISupports* outer, const nsIID& aIID, void* *aInstancePtr)
 {
@@ -546,154 +513,62 @@ NS_IMETHODIMP nsLocalFile::SetNativeLeafName(const nsACString& aNativeLeafName)
 /* void copyTo (in nsIFile newParentDir, in AString newName); */
 NS_IMETHODIMP nsLocalFile::CopyTo(nsIFile *newParentDir, const nsAString& newName)
 {
-  return CopyInternal(newParentDir, newName, PR_FALSE);
+    return MoveCopy(newParentDir, newName, PR_TRUE, PR_FALSE);
 }
 
 /* [noscrpit] void CopyToNative (in nsIFile newParentDir, in ACString newName); */
 NS_IMETHODIMP nsLocalFile::CopyToNative(nsIFile *newParentDir, const nsACString& newName)
 {
-  return CopyInternal(newParentDir, NS_ConvertUTF8toUCS2(newName), PR_FALSE);
+    return MoveCopy(newParentDir, NS_ConvertUTF8toUCS2(newName), PR_TRUE, PR_FALSE);
 }
 
 /* void copyToFollowingLinks (in nsIFile newParentDir, in AString newName); */
 NS_IMETHODIMP nsLocalFile::CopyToFollowingLinks(nsIFile *newParentDir, const nsAString& newName)
 {
-  return CopyInternal(newParentDir, newName, PR_TRUE);
+    return MoveCopy(newParentDir, newName, PR_TRUE, PR_TRUE);
 }
 
 /* [noscript] void copyToFollowingLinksNative (in nsIFile newParentDir, in ACString newName); */
 NS_IMETHODIMP nsLocalFile::CopyToFollowingLinksNative(nsIFile *newParentDir, const nsACString& newName)
 {
-  return CopyInternal(newParentDir, NS_ConvertUTF8toUCS2(newName), PR_TRUE);
+    return MoveCopy(newParentDir, NS_ConvertUTF8toUCS2(newName), PR_TRUE, PR_TRUE);
 }
 
 /* void moveTo (in nsIFile newParentDir, in AString newName); */
 NS_IMETHODIMP nsLocalFile::MoveTo(nsIFile *newParentDir, const nsAString& newName)
 {
-  return MoveToNative(newParentDir, NS_ConvertUCS2toUTF8(newName));
+    return MoveCopy(newParentDir, newName, FALSE, FALSE);
 }
 
 /* [noscript] void moveToNative (in nsIFile newParentDir, in ACString newName); */
 NS_IMETHODIMP nsLocalFile::MoveToNative(nsIFile *newParentDir, const nsACString& newName)
 {
-  StFollowLinksState followLinks(*this, PR_FALSE);
-
-  PRBool isDirectory;
-  nsresult rv = IsDirectory(&isDirectory);
-  if (NS_FAILED(rv))
-    return rv;
-
-  // Get the source path.
-  nsCAutoString srcPath;
-  rv = GetNativePath(srcPath);
-  if (NS_FAILED(rv))
-    return rv;
-
-  // Build the destination path.
-  nsCOMPtr<nsIFile> parentDir = newParentDir;
-  if (!parentDir) {
-    if (newName.IsEmpty())
-      return NS_ERROR_INVALID_ARG;
-    rv = GetParent(getter_AddRefs(parentDir));
-    if (NS_FAILED(rv))
-      return rv;   
-  }
-  else {
-    PRBool exists;
-    rv = parentDir->Exists(&exists);
-    if (NS_FAILED(rv))
-      return rv;
-    if (!exists) {
-      rv = parentDir->Create(nsIFile::DIRECTORY_TYPE, 0777);
-      if (NS_FAILED(rv))
-        return rv;
-    }
-  }
-
-  nsCAutoString destPath;
-  rv = parentDir->GetNativePath(destPath);
-  if (NS_FAILED(rv))
-    return rv;
-
-  if (!newName.IsEmpty())
-    destPath.Append(NS_LITERAL_CSTRING("/") + newName);
-  else {
-    nsCAutoString leafName;
-    rv = GetNativeLeafName(leafName);
-    if (NS_FAILED(rv))
-      return rv;
-    destPath.Append(NS_LITERAL_CSTRING("/") + leafName);
-  }
-
-  // Perform the move.
-  if (rename(srcPath.get(), destPath.get()) != 0) {
-    if (errno == EXDEV) {
-      // Can't move across volume (device) boundaries.  Copy and remove.
-      rv = CopyToNative(parentDir, newName);
-      if (NS_SUCCEEDED(rv)) {
-        // Permit removal failure.
-        Remove(PR_TRUE);
-      }
-    }
-    else
-      rv = NSRESULT_FOR_ERRNO();
-
-    if (NS_FAILED(rv))
-      return rv;
-  }
-
-  // Update |this| to refer to the moved file.
-  CFURLRef newBaseRef =
-   ::CFURLCreateFromFileSystemRepresentation(NULL, (UInt8*)destPath.get(),
-                                             destPath.Length(), isDirectory);
-  if (!newBaseRef)
-    return NS_ERROR_FAILURE;
-  SetBaseRef(newBaseRef);
-  ::CFRelease(newBaseRef);
-
-  return rv;
+    return MoveCopy(newParentDir, NS_ConvertUTF8toUCS2(newName), FALSE, FALSE);
 }
 
 /* void remove (in boolean recursive); */
 NS_IMETHODIMP nsLocalFile::Remove(PRBool recursive)
 {
-  // XXX If we're an alias, never remove target
-  StFollowLinksState followLinks(*this, PR_FALSE);
-
-  PRBool isDirectory;
-  nsresult rv = IsDirectory(&isDirectory);
+  StFollowLinksState followLinks(*this, PR_FALSE); // XXX If we're an alias, never remove target
+  
+  FSRef fsRef;
+  nsresult rv = GetFSRefInternal(fsRef);
   if (NS_FAILED(rv))
     return rv;
-
-  if (recursive && isDirectory) {
-    FSRef fsRef;
-    rv = GetFSRefInternal(fsRef);
-    if (NS_FAILED(rv))
-      return rv;
-
-    // Call MoreFilesX to do a recursive removal.
-    OSStatus err = ::FSDeleteContainer(&fsRef);
-    rv = MacErrorMapper(err);
-  }
-  else {
-    nsCAutoString path;
-    rv = GetNativePath(path);
-    if (NS_FAILED(rv))
-      return rv;
-
-    const char* pathPtr = path.get();
-    int status;
-    if (isDirectory)
-      status = rmdir(pathPtr);
-    else
-      status = unlink(pathPtr);
-
-    if (status != 0)
-      rv = NSRESULT_FOR_ERRNO();
-  }
-
+    
+  PRBool isDir;
+  rv = IsDirectory(&isDir);
+  if (NS_FAILED(rv))
+    return rv;
+  
+  OSErr err;
+  if (recursive && isDir)
+    err = ::FSDeleteContainer(&fsRef);
+  else
+    err = ::FSDeleteObject(&fsRef);
+  
   mCachedFSRefValid = PR_FALSE;
-  return rv;
+  return MacErrorMapper(err);
 }
 
 /* attribute unsigned long permissions; */
@@ -984,7 +859,7 @@ NS_IMETHODIMP nsLocalFile::IsHidden(PRBool *_retval)
   
   FSCatalogInfo catalogInfo;
   HFSUniStr255 leafName;  
-  OSErr err = ::FSGetCatalogInfo(&fsRef, kFSCatInfoFinderInfo, &catalogInfo,
+  OSErr err = ::FSGetCatalogInfo(&fsRef, kFSCatInfoNodeFlags, &catalogInfo,
                                 &leafName, nsnull, nsnull);
   if (err != noErr)
     return MacErrorMapper(err);
@@ -1211,32 +1086,18 @@ NS_IMETHODIMP nsLocalFile::InitWithPath(const nsAString& filePath)
 /* [noscript] void initWithNativePath (in ACString filePath); */
 NS_IMETHODIMP nsLocalFile::InitWithNativePath(const nsACString& filePath)
 {
-  nsCAutoString fixedPath;
-  if (Substring(filePath, 0, 2).EqualsLiteral("~/")) {
-    nsCOMPtr<nsIFile> homeDir;
-    nsCAutoString homePath;
-    nsresult rv = NS_GetSpecialDirectory(NS_OS_HOME_DIR,
-                                        getter_AddRefs(homeDir));
-    NS_ENSURE_SUCCESS(rv, rv);
-    rv = homeDir->GetNativePath(homePath);
-    NS_ENSURE_SUCCESS(rv, rv);
-    
-    fixedPath = homePath + Substring(filePath, 1, filePath.Length() - 1);
-  }
-  else if (filePath.IsEmpty() || filePath.First() != '/')
+  if (filePath.IsEmpty() || filePath.First() != '/')
     return NS_ERROR_FILE_UNRECOGNIZED_PATH;
-  else
-    fixedPath.Assign(filePath);
-
-  // A path with consecutive '/'s which are not between
-  // nodes crashes CFURLGetFSRef(). Consecutive '/'s which
+  // On 10.2, huge paths crash CFURLGetFSRef()
+  if (filePath.Length() > PATH_MAX)
+    return NS_ERROR_FILE_NAME_TOO_LONG;
+  // And, a path with consecutive '/'s which are not between
+  // nodes also crashes CFURLGetFSRef(). Consecutive '/'s which
   // are between actual nodes are OK. So, convert consecutive
   // '/'s to a single one.
+  nsCAutoString fixedPath;
+  fixedPath.Assign(filePath);
   fixedPath.ReplaceSubstring("//", "/");
-
-  // On 10.2, huge paths also crash CFURLGetFSRef()
-  if (fixedPath.Length() > PATH_MAX)
-    return NS_ERROR_FILE_NAME_TOO_LONG;
 
   CFStringRef pathAsCFString;
   CFURLRef pathAsCFURL;
@@ -1251,7 +1112,6 @@ NS_IMETHODIMP nsLocalFile::InitWithNativePath(const nsACString& filePath)
   }
   SetBaseRef(pathAsCFURL);
   ::CFRelease(pathAsCFURL);
-  ::CFRelease(pathAsCFString);
   return NS_OK;
 }
 
@@ -1438,13 +1298,6 @@ NS_IMETHODIMP nsLocalFile::SetPersistentDescriptor(const nsACString& aPersistent
   if (aPersistentDescriptor.IsEmpty())
     return NS_ERROR_INVALID_ARG;
 
-  // Support pathnames as user-supplied descriptors if they begin with '/'
-  // or '~'.  These characters do not collide with the base64 set used for
-  // encoding alias records.
-  char first = aPersistentDescriptor.First();
-  if (first == '/' || first == '~')
-    return InitWithNativePath(aPersistentDescriptor);
-
   nsresult rv = NS_OK;
   
   PRUint32 dataSize = aPersistentDescriptor.Length();    
@@ -1455,12 +1308,14 @@ NS_IMETHODIMP nsLocalFile::SetPersistentDescriptor(const nsACString& aPersistent
   }
   
   // Cast to an alias record and resolve.
-  AliasRecord aliasHeader = *(AliasPtr)decodedData;
-  PRInt32 aliasSize = GetAliasSizeFromRecord(aliasHeader);
-  if (aliasSize > (dataSize * 3) / 4) { // be paranoid about having too few data
+  PRInt32		aliasSize = (dataSize * 3) / 4;
+  AliasRecord	aliasHeader = *(AliasPtr)decodedData;
+  if (aliasHeader.aliasSize > aliasSize) {		// be paranoid about having too few data
     PR_Free(decodedData);
     return NS_ERROR_FAILURE;
   }
+  
+  aliasSize = aliasHeader.aliasSize;
   
   // Move the now-decoded data into the Handle.
   // The size of the decoded data is 3/4 the size of the encoded data. See plbase64.h
@@ -1917,29 +1772,6 @@ NS_IMETHODIMP nsLocalFile::IsPackage(PRBool *_retval)
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsLocalFile::GetBundleDisplayName(nsAString& outBundleName)
-{
-  PRBool isPackage = PR_FALSE;
-  nsresult rv = IsPackage(&isPackage);
-  if (NS_FAILED(rv) || !isPackage)
-    return NS_ERROR_FAILURE;
-  
-  nsAutoString name;
-  rv = GetLeafName(name);
-  if (NS_FAILED(rv))
-    return rv;
-  
-  PRInt32 length = name.Length();
-  if (Substring(name, length - 4, length).EqualsLiteral(".app")) {
-    // 4 characters in ".app"
-    outBundleName = Substring(name, 0, length - 4);
-  }
-  else
-    outBundleName = name;
-    
-  return NS_OK;
-}
 
 //*****************************************************************************
 //  nsLocalFile Methods
@@ -2027,21 +1859,20 @@ nsresult nsLocalFile::GetPathInternal(nsACString& path)
   return rv;
 }
 
-nsresult nsLocalFile::CopyInternal(nsIFile* aParentDir,
-                                   const nsAString& newName,
-                                   PRBool followLinks)
+nsresult nsLocalFile::MoveCopy(nsIFile* aParentDir, const nsAString& newName, PRBool isCopy, PRBool followLinks)
 {
   StFollowLinksState srcFollowState(*this, followLinks);
 
   nsresult rv;
   OSErr err;
   FSRef srcFSRef, newFSRef;
-
+  
   rv = GetFSRefInternal(srcFSRef);
   if (NS_FAILED(rv))
     return rv;
-
+    
   nsCOMPtr<nsIFile> newParentDir = aParentDir;
+  CFURLRef newBaseURLRef;
 
   if (!newParentDir) {
     if (newName.IsEmpty())
@@ -2050,18 +1881,18 @@ nsresult nsLocalFile::CopyInternal(nsIFile* aParentDir,
     if (NS_FAILED(rv))
       return rv;    
   }
-
+  
   // If newParentDir does not exist, create it
   PRBool exists;
   rv = newParentDir->Exists(&exists);
   if (NS_FAILED(rv))
     return rv;
   if (!exists) {
-    rv = newParentDir->Create(nsIFile::DIRECTORY_TYPE, 0777);
+    rv = newParentDir->Create(nsIFile::DIRECTORY_TYPE, 0666);
     if (NS_FAILED(rv))
       return rv;
   }
-
+    
   FSRef destFSRef;
   nsCOMPtr<nsILocalFileMac> newParentDirMac(do_QueryInterface(newParentDir));
   if (!newParentDirMac)
@@ -2069,12 +1900,53 @@ nsresult nsLocalFile::CopyInternal(nsIFile* aParentDir,
   rv = newParentDirMac->GetFSRef(&destFSRef);
   if (NS_FAILED(rv))
     return rv;
-
-  err =
-   ::FSCopyObject(&srcFSRef, &destFSRef, newName.Length(),
-                  newName.Length() ? PromiseFlatString(newName).get() : NULL,
-                  0, kFSCatInfoNone, false, false, NULL, NULL, &newFSRef);
-
+    
+  if (isCopy) {
+    err = ::FSCopyObject(&srcFSRef, &destFSRef,
+                         newName.Length(), newName.Length() ? PromiseFlatString(newName).get() : nsnull,
+                         0, kFSCatInfoNone, false, false, nsnull, nsnull, &newFSRef);
+    // don't update ourselves on a copy
+  }
+  else {
+    // According to the API: "If 'this' is a file, and the destination file already
+    // exists, moveTo will replace the old file."
+    FSCatalogInfo catalogInfo;
+    HFSUniStr255 leafName;
+    err = ::FSGetCatalogInfo(&srcFSRef, kFSCatInfoNodeFlags, &catalogInfo,
+                             newName.IsEmpty() ? &leafName : nsnull, nsnull, nsnull);
+    if (err == noErr) {      
+      if (!(catalogInfo.nodeFlags & kFSNodeIsDirectoryMask)) {
+        FSRef oldFileRef;
+        if (newName.IsEmpty())
+          err = ::FSMakeFSRefUnicode(&destFSRef, leafName.length, leafName.unicode,
+                    kTextEncodingUnknown, &oldFileRef);
+        else
+          err = ::FSMakeFSRefUnicode(&destFSRef, newName.Length(), PromiseFlatString(newName).get(),
+                    kTextEncodingUnknown, &oldFileRef);
+        if (err == noErr)
+          ::FSDeleteObject(&oldFileRef);
+      }
+    }
+    // First, try the quick way which works only within the same volume
+    err = ::FSMoveRenameObjectUnicode(&srcFSRef, &destFSRef,
+              newName.Length(), newName.Length() ? PromiseFlatString(newName).get() : nsnull,
+              kTextEncodingUnknown, &newFSRef);
+              
+    if (err == diffVolErr) {
+      // If on different volumes, resort to copy & delete
+      err = ::FSCopyObject(&srcFSRef, &destFSRef,
+                           newName.Length(), newName.Length() ? PromiseFlatString(newName).get() : nsnull,
+                           0, kFSCatInfoNone, false, false, nsnull, nsnull, &newFSRef);
+      ::FSDeleteObjects(&srcFSRef);
+    }
+    if (err == noErr) {
+      newBaseURLRef = ::CFURLCreateFromFSRef(kCFAllocatorDefault, &newFSRef);
+      if (!newBaseURLRef)
+        return NS_ERROR_FAILURE;
+      SetBaseRef(newBaseURLRef);
+      ::CFRelease(newBaseURLRef);
+    }
+  }
   return MacErrorMapper(err);
 }
 

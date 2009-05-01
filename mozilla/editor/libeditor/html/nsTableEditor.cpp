@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -281,7 +282,7 @@ nsHTMLEditor::GetFirstRow(nsIDOMElement* aTableElement, nsIDOMNode** aRowNode)
         res = tableChild->GetFirstChild(getter_AddRefs(rowNode));
         if (NS_FAILED(res)) return res;
         
-        // We can encounter textnodes here -- must find a row
+        // We can encounter "__moz_text" nodes here -- must find a row
         while (rowNode && !nsHTMLEditUtils::IsTableRow(rowNode))
         {
           nsCOMPtr<nsIDOMNode> nextNode;
@@ -300,7 +301,7 @@ nsHTMLEditor::GetFirstRow(nsIDOMElement* aTableElement, nsIDOMNode** aRowNode)
     }
     // Here if table child was a CAPTION or COLGROUP
     //  or child of a row parent wasn't a row (bad HTML?),
-    //  or first child was a textnode
+    //  or first child was a "__moz_text" node
     // Look in next table child
     nsCOMPtr<nsIDOMNode> nextChild;
     res = tableChild->GetNextSibling(getter_AddRefs(nextChild));
@@ -330,7 +331,7 @@ nsHTMLEditor::GetNextRow(nsIDOMNode* aCurrentRowNode, nsIDOMNode **aRowNode)
 
   nsCOMPtr<nsIDOMNode> nextNode;
 
-  // Skip over any textnodes here
+  // Skip over any "__moz_text" nodes here
   while (nextRow && !nsHTMLEditUtils::IsTableRow(nextRow))
   {
     res = nextRow->GetNextSibling(getter_AddRefs(nextNode));
@@ -360,7 +361,7 @@ nsHTMLEditor::GetNextRow(nsIDOMNode* aCurrentRowNode, nsIDOMNode **aRowNode)
     res = parentSibling->GetFirstChild(getter_AddRefs(nextRow));
     if (NS_FAILED(res)) return res;
   
-    // We can encounter textnodes here -- must find a row
+    // We can encounter "__moz_text" nodes here -- must find a row
     while (nextRow && !nsHTMLEditUtils::IsTableRow(nextRow))
     {
       res = nextRow->GetNextSibling(getter_AddRefs(nextNode));
@@ -404,7 +405,7 @@ nsHTMLEditor::GetFirstCellInRow(nsIDOMNode* aRowNode, nsIDOMNode** aCellNode)
 
   while (rowChild && !nsHTMLEditUtils::IsTableCell(rowChild))
   {
-    // Skip over textnodes
+    // Skip over "__moz_text" nodes
     nsCOMPtr<nsIDOMNode> nextChild;
     res = rowChild->GetNextSibling(getter_AddRefs(nextChild));
     if (NS_FAILED(res)) return res;
@@ -436,7 +437,7 @@ nsHTMLEditor::GetNextCellInRow(nsIDOMNode* aCurrentCellNode, nsIDOMNode** aCellN
 
   while (nextCell && !nsHTMLEditUtils::IsTableCell(nextCell))
   {
-    // Skip over textnodes
+    // Skip over "__moz_text" nodes
     nsCOMPtr<nsIDOMNode> nextChild;
     res = nextCell->GetNextSibling(getter_AddRefs(nextChild));
     if (NS_FAILED(res)) return res;
@@ -468,7 +469,7 @@ nsHTMLEditor::GetLastCellInRow(nsIDOMNode* aRowNode, nsIDOMNode** aCellNode)
 
   while (rowChild && !nsHTMLEditUtils::IsTableCell(rowChild))
   {
-    // Skip over textnodes
+    // Skip over "__moz_text" nodes
     nsCOMPtr<nsIDOMNode> previousChild;
     res = rowChild->GetPreviousSibling(getter_AddRefs(previousChild));
     if (NS_FAILED(res)) return res;
@@ -797,6 +798,96 @@ nsHTMLEditor::InsertTableRow(PRInt32 aNumber, PRBool aAfter)
     }
   }
   return res;
+}
+
+nsresult
+nsHTMLEditor::AppendNewRowSameStyle()
+{
+  // get the cell's coordinates in the table
+  nsCOMPtr<nsISelection> selection;
+  nsCOMPtr<nsIDOMElement> tblElement;
+  nsCOMPtr<nsIDOMElement> cell;
+  PRInt32 oldRowIndex, oldColIndex;
+  nsresult res = GetCellContext(getter_AddRefs(selection), 
+                                getter_AddRefs(tblElement),
+                                getter_AddRefs(cell), 
+                                nsnull, nsnull,
+                                &oldRowIndex, &oldColIndex);
+  if (NS_FAILED(res)) return res;
+
+  // get the parent row
+  nsCOMPtr<nsIDOMNode> oldRow;
+  res = cell->GetParentNode(getter_AddRefs(oldRow));
+  if (NS_FAILED(res)) return res;
+
+  nsAutoEditBatch beginBatching(this);
+  // Prevent auto insertion of BR in new cell until we're done
+  nsAutoRules beginRulesSniffing(this, kOpInsertNode, nsIEditor::eNext);
+
+  //We control selection resetting after the insert...
+  // nsSetSelectionAfterTableEdit setCaret(this, tblElement, oldRowIndex, oldColIndex, ePreviousColumn, PR_FALSE);
+  //...so suppress Rules System selection munging
+  // nsAutoTxnsConserveSelection dontChangeSelection(this);
+
+  // create the new row
+  nsCOMPtr<nsIDOMNode> newRow;
+  nsCOMPtr<nsIContent> newRowContent;
+  res = CreateHTMLContent(NS_LITERAL_STRING("tr"), getter_AddRefs(newRowContent));
+  if (NS_FAILED(res)) return res;
+  newRow = do_QueryInterface(newRowContent);
+
+  PRInt32 rowCount, colCount;
+  res = GetTableSize(tblElement, &rowCount, &colCount);
+
+  PRInt32 colIndex;
+  for (colIndex = 0; colIndex < colCount; colIndex++)
+  {
+    PRInt32 curStartRowIndex, curStartColIndex, rowSpan, colSpan, actualRowSpan, actualColSpan;
+    PRBool  isSelected;
+    res = GetCellDataAt(tblElement, oldRowIndex, colIndex,
+                        getter_AddRefs(cell),
+                        &curStartRowIndex, &curStartColIndex,
+                        &rowSpan, &colSpan, 
+                        &actualRowSpan, &actualColSpan, &isSelected);
+    if (NS_FAILED(res)) return res;
+
+    if ((rowSpan > 1 && oldRowIndex < curStartRowIndex + rowSpan - 1) ||
+        (colSpan > 1 && colIndex    < curStartColIndex + colSpan - 1))
+      continue;
+
+    nsCOMPtr<nsIDOMNode> cloneNode;
+    res = cell->CloneNode(PR_FALSE, getter_AddRefs(cloneNode));
+    if (NS_FAILED(res)) return res;
+    nsCOMPtr<nsIDOMNode> junk;
+    res = newRow->AppendChild(cloneNode, getter_AddRefs(junk));
+    // remove ID if there is one
+    PRBool hasId;
+    nsCOMPtr<nsIDOMElement> cloneElt = do_QueryInterface(cloneNode);
+    if (NS_SUCCEEDED(cloneElt->HasAttribute(NS_LITERAL_STRING("id"), &hasId)) && !hasId)
+    {
+      res = cloneElt->RemoveAttribute(NS_LITERAL_STRING("id"));
+      if (NS_FAILED(res)) return res;
+    }
+  }
+
+  // Use transaction system to insert the entire row+cells
+  // (Note that rows are inserted at same childoffset each time)
+  nsCOMPtr<nsIDOMNode> parentOfRow;
+  res = oldRow->GetParentNode(getter_AddRefs(parentOfRow));
+  if (NS_FAILED(res)) return res;
+  res = InsertNodeAfter(newRow, parentOfRow, nsnull);
+  if (NS_FAILED(res)) return res;
+
+
+  // ...so that we can ask for first cell in that row...
+  res = GetCellAt(tblElement, oldRowIndex+1, 0, getter_AddRefs(cell));
+  if (NS_FAILED(res)) return res;
+  // ...and then set selection there.
+  // (Note that normally you should use CollapseSelectionToDeepestNonTableFirstChild(),
+  //  but we know cell is an empty new cell, so this works fine)
+  nsCOMPtr<nsIDOMNode> node = do_QueryInterface(cell);
+  if (node) selection->Collapse(node,0);
+  return NS_OK;
 }
 
 // Editor helper only
@@ -2939,7 +3030,7 @@ nsHTMLEditor::GetCellContext(nsISelection **aSelection,
     res = GetSelectedOrParentTableElement(tagName, &selectedCount,
                                           getter_AddRefs(cellOrTableElement));
     if (NS_FAILED(res)) return res;
-    if (tagName.EqualsLiteral("table"))
+    if (tagName.Equals(NS_LITERAL_STRING("table")))
     {
       // We have a selected table, not a cell
       if (aTable)
@@ -2949,7 +3040,7 @@ nsHTMLEditor::GetCellContext(nsISelection **aSelection,
       }
       return NS_OK;
     }
-    if (!tagName.EqualsLiteral("td"))
+    if (!tagName.Equals(NS_LITERAL_STRING("td")))
       return NS_EDITOR_ELEMENT_NOT_FOUND;
 
     // We found a cell
@@ -3341,13 +3432,13 @@ nsHTMLEditor::GetSelectedOrParentTableElement(nsAString& aTagName,
         else if (atom == nsEditProperty::table)
         {
           tableOrCellElement = do_QueryInterface(selectedNode);
-          aTagName.AssignLiteral("table");
+          aTagName = NS_LITERAL_STRING("table");
           *aSelectedCount = 1;
         }
         else if (atom == nsEditProperty::tr)
         {
           tableOrCellElement = do_QueryInterface(selectedNode);
-          aTagName.AssignLiteral("tr");
+          aTagName = NS_LITERAL_STRING("tr");
           *aSelectedCount = 1;
         }
       }

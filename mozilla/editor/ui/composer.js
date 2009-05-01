@@ -20,11 +20,11 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Benjamin Smedberg <bsmedberg@covad.net>
+ * Benjamin Smedberg <bsmedberg@covad.net>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
@@ -66,7 +66,6 @@ pref("editor.table.maintain_structure", true);
 pref("editor.prettyprint", true);
 
 pref("editor.throbber.url","chrome://editor-region/locale/region.properties");
-pref("editor.spellcheckers.url","chrome://editor-region/locale/region.properties");
 
 pref("editor.toolbars.showbutton.new", true);
 pref("editor.toolbars.showbutton.open", true);
@@ -112,6 +111,8 @@ pref("editor.lastFileLocation.image",        "");
 pref("editor.lastFileLocation.html",         "");
 pref("editor.save_associated_files",         true);
 pref("editor.always_show_publish_dialog",    false);
+
+pref("editor.zoom_factor",                  "1");
 
 /*
  * What are the entities that you want Mozilla to save using mnemonic

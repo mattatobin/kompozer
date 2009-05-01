@@ -313,9 +313,7 @@ function PageIsEmptyAndUntouched()
 
 function IsInHTMLSourceMode()
 {
-  // Kaze
-  //return (gEditorDisplayMode == kDisplayModeSource);
-  return (gEditorEditMode == kEditModeSource);
+  return (gEditorDisplayMode == kDisplayModeSource);
 }
 
 // are we editing HTML (i.e. neither in HTML source mode, nor editing a text file)

@@ -1,27 +1,38 @@
 <?xml version="1.0"?>
+
 <?xul-overlay href="chrome://communicator/content/platformCommunicatorOverlay.xul"?>
 
 <!DOCTYPE overlay [
+
 <!ENTITY % brandDTD SYSTEM "chrome://global/locale/brand.dtd">
 %brandDTD;
 <!ENTITY % globalRegionDTD SYSTEM "chrome://global-region/locale/region.dtd">
 %globalRegionDTD;
 <!ENTITY % utilityDTD SYSTEM "chrome://editor/locale/utilityOverlay.dtd">
 %utilityDTD;
+
 ]>
 
 <overlay id="utilityOverlay"
          xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
-  <script type="application/x-javascript" src="chrome://global/content/strres.js"/>
-  <script type="application/x-javascript" src="chrome://communicator/content/utilityOverlay.js"/>
-  <script type="application/x-javascript" src="chrome://communicator/content/builtinURLs.js"/>
+  <script type="application/x-javascript"
+          src="chrome://global/content/strres.js"/>
+  <script type="application/x-javascript"
+          src="chrome://communicator/content/utilityOverlay.js"/>
+  <script type="application/x-javascript"
+          src="chrome://communicator/content/builtinURLs.js"/>
 
   <!-- New SubMenu (Under File Menu) -->
-  <command id="cmd_newNavigator"      oncommand="OpenBrowserWindow()"/>
-  <command id="cmd_newEditor"         oncommand="NewEditorWindow();"/>
-  <command id="cmd_newEditorTemplate" oncommand="NewEditorFromTemplate();"/>
-  <command id="cmd_newTemplate"       oncommand="NewTemplate();"/>
+  <command id="cmd_newNavigator"
+           oncommand="OpenBrowserWindow()"/>
+  <command id="cmd_newEditor"
+           oncommand="NewEditorWindow();"/>
+
+  <command id="cmd_newEditorTemplate"
+           oncommand="NewEditorFromTemplate();"/>
+  <command id="cmd_newTemplate"
+           oncommand="NewTemplate();"/>
 
   <menuitem id="menu_undo"
             label="&undoCmd.label;"

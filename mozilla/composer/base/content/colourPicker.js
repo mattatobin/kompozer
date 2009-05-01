@@ -482,13 +482,13 @@ function StartUp()
 
     if (GetCurrentEditor())
     {
-      document.title = GetString(ColorType+"Color");
+      window.title = GetString(ColorType+"Color");
       if (ColorType == "Page" && IsCSSPrefChecked && IsHTMLEditor())
-        document.title = GetString("BlockColor");
+        window.title = GetString("BlockColor");
     }
   }
-  if (!document.title)
-    document.title = GetString("Color");
+  if (!window.title)
+    window.title = GetString("Color");
 
   colours = new objColour();
 

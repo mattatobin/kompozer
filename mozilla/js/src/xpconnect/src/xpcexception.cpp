@@ -367,17 +367,12 @@ nsXPCException::ToString(char **_retval)
             return rv;
     }
 
-    const char* msg = mMessage ? mMessage : nsnull;
+    const char* msg = mMessage ? mMessage : defaultMsg;
     const char* location = indicatedLocation ?
                                 indicatedLocation : defaultLocation;
     const char* resultName = mName;
-    if(!resultName && !NameAndFormatForNSResult(mResult, &resultName,
-                                                (!msg) ? &msg : nsnull))
-    {
-        if(!msg)
-            msg = defaultMsg;
+    if(!resultName && !NameAndFormatForNSResult(mResult, &resultName, nsnull))
         resultName = "<unknown>";
-    }
     const char* data = mData ? "yes" : "no";
 
     char* temp = JS_smprintf(format, msg, mResult, resultName, location, data);
@@ -395,7 +390,6 @@ nsXPCException::ToString(char **_retval)
     return final ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }
 
-JSBool nsXPCException::sEverMadeOneFromFactory = JS_FALSE;
 
 // static
 nsresult
@@ -412,11 +406,12 @@ nsXPCException::NewException(const char *aMessage,
     // This is bad because it means that wrapped exceptions will never have a
     // shared prototype. So... We force one to be created via the factory
     // *once* and then go about our business.
-    if(!sEverMadeOneFromFactory)
+    static JSBool everMadeOneFromFactory = JS_FALSE;
+    if(!everMadeOneFromFactory)
     {
         nsCOMPtr<nsIXPCException> e =
             do_CreateInstance(XPC_EXCEPTION_CONTRACTID);
-        sEverMadeOneFromFactory = JS_TRUE;
+        everMadeOneFromFactory = JS_TRUE;
     }
 
     nsresult rv;

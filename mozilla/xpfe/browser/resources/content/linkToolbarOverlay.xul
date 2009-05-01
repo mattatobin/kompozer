@@ -56,7 +56,7 @@
 
   <script type="application/x-javascript">
     <![CDATA[
-      document.addEventListener("pageshow", linkToolbarUI.initHandlers, true);
+      document.addEventListener("load", linkToolbarUI.initHandlers, true);
     ]]>
   </script>
 
@@ -84,8 +84,8 @@
 
   <toolbox id="navigator-toolbox">
     <toolbar id="linktoolbar" class="chromeclass-directories"
-        oncommand="event.stopPropagation(); return linkToolbarUI.commanded(event);"
-        tbalign="stretch" hidden="true" hasitems="false">
+        oncommand="event.preventBubble(); return linkToolbarUI.commanded(event);"
+        tbautostretch="always" hidden="true" hasitems="false">
 
       <toolbarbutton id="link-top" class="bookmark-item"
           label="&topButton.label;" disabled="true"/>

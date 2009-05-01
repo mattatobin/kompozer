@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,18 +44,10 @@
 #include "nsIServiceManager.h"
 #include "nsIEventQueueService.h"
 #include "nsIEventQueue.h"
-#include "nsComponentManagerUtils.h"
-#include "nsNativeCharsetUtils.h"
 // objbase.h must be declared before initguid.h to use the |DEFINE_GUID|'s in aimm.h
 #include <objbase.h>
 #include <initguid.h>
 #include "aimm.h"
-
-#ifdef WINCE
-#include "resource.h"
-
-#include "aygshell.h"
-#endif
 
 // unknwn.h is needed to build with WIN32_LEAN_AND_MEAN
 #include <unknwn.h>
@@ -99,9 +91,13 @@ DEFINE_GUID(IID_IActiveIMMMessagePumpOwner,
 IActiveIMMApp* nsToolkit::gAIMMApp   = NULL;
 PRInt32        nsToolkit::gAIMMCount = 0;
 
-MouseTrailer MouseTrailer::mSingleton;
+nsWindow     *MouseTrailer::mCaptureWindow  = NULL;
+nsWindow     *MouseTrailer::mHoldMouse      = NULL;
+MouseTrailer *MouseTrailer::theMouseTrailer = NULL;
+PRBool        MouseTrailer::gIgnoreNextCycle(PR_FALSE);
+PRBool        MouseTrailer::mIsInCaptureMode(PR_FALSE);
 
-#if !defined(MOZ_STATIC_COMPONENT_LIBS) && !defined(MOZ_ENABLE_LIBXUL)
+#ifndef MOZ_STATIC_COMPONENT_LIBS
 //
 // Dll entry point. Keep the dll instance
 //
@@ -111,9 +107,6 @@ MouseTrailer MouseTrailer::mSingleton;
 extern "C" {
 #endif
 
-// Windows CE is created when nsToolkit
-// starts up, not when the dll is loaded.
-#ifndef WINCE
 BOOL APIENTRY DllMain(  HINSTANCE hModule, 
                         DWORD reason, 
                         LPVOID lpReserved )
@@ -137,7 +130,6 @@ BOOL APIENTRY DllMain(  HINSTANCE hModule,
 
     return TRUE;
 }
-#endif //#ifndef WINCE
 
 #if defined(__GNUC__)
 } // extern "C"
@@ -157,7 +149,6 @@ struct ThreadInitInfo {
 
 /* Detect when the user is moving a top-level window */
 
-#ifndef WINCE
 LRESULT CALLBACK DetectWindowMove(int code, WPARAM wParam, LPARAM lParam)
 {
     /* This msg filter is required to determine when the user has
@@ -180,15 +171,48 @@ LRESULT CALLBACK DetectWindowMove(int code, WPARAM wParam, LPARAM lParam)
         PL_FavorPerformanceHint(PR_TRUE, 0);
       }
     }
+
     return CallNextHookEx(nsMsgFilterHook, code, wParam, lParam);
 }
-#endif //#ifndef WINCE
+
+
+
+
 
 #include "nsWindowAPI.h"
 
 #define MAX_CLASS_NAME  128
 #define MAX_MENU_NAME   128
 #define MAX_FILTER_NAME 256
+
+int ConvertAtoW(LPCSTR aStrInA, int aBufferSize, LPWSTR aStrOutW)
+{
+  return MultiByteToWideChar(CP_ACP, 0, aStrInA, -1, aStrOutW, aBufferSize) ;
+}
+
+int ConvertWtoA(LPCWSTR aStrInW, int aBufferSizeOut, LPSTR aStrOutA)
+{
+  int  numCharsConverted;
+  char defaultStr[] = "?";
+
+  if ((!aStrInW) || (!aStrOutA))
+    return 0;
+
+  aStrOutA[0] = '\0';
+
+  numCharsConverted = WideCharToMultiByte(CP_ACP, 0, aStrInW, -1, 
+      aStrOutA, aBufferSizeOut, defaultStr, NULL);
+
+  if (!numCharsConverted)
+    return 0 ;
+
+  if (numCharsConverted < aBufferSizeOut)  {
+    *(aStrOutA+numCharsConverted) = '\0' ; // Null terminate
+    return (numCharsConverted) ; 
+  }
+
+  return 0 ;
+}
 
 BOOL CallOpenSaveFileNameA(LPOPENFILENAMEW aFileNameW, BOOL aOpen)
 {
@@ -226,14 +250,13 @@ BOOL CallOpenSaveFileNameA(LPOPENFILENAMEW aFileNameW, BOOL aOpen)
     ofnA.lpstrFilter = filterA; 
   }
   if (aFileNameW->lpstrCustomFilter)  {
-    NS_ConvertWtoA(aFileNameW->lpstrCustomFilter, MAX_FILTER_NAME,
-                   customFilterA, "?");
+    ConvertWtoA(aFileNameW->lpstrCustomFilter, MAX_FILTER_NAME, customFilterA);
     ofnA.lpstrCustomFilter = customFilterA; 
     ofnA.nMaxCustFilter = MAX_FILTER_NAME;  
   }
   ofnA.nFilterIndex = aFileNameW->nFilterIndex; // Index of pair of filter strings. Should be ok.
   if (aFileNameW->lpstrFile)  {
-    NS_ConvertWtoA(aFileNameW->lpstrFile, FILE_BUFFER_SIZE, fileA, "?");
+    ConvertWtoA(aFileNameW->lpstrFile, FILE_BUFFER_SIZE, fileA);
     ofnA.lpstrFile = fileA;
     ofnA.nMaxFile = FILE_BUFFER_SIZE;
     if (strlen(fileA))  {
@@ -244,28 +267,27 @@ BOOL CallOpenSaveFileNameA(LPOPENFILENAMEW aFileNameW, BOOL aOpen)
     }
   }
   if (aFileNameW->lpstrFileTitle) {
-    NS_ConvertWtoA(aFileNameW->lpstrFileTitle, MAX_PATH, fileTitleA, "?");
+    ConvertWtoA(aFileNameW->lpstrFileTitle, MAX_PATH, fileTitleA);
     ofnA.lpstrFileTitle = fileTitleA;
     ofnA.nMaxFileTitle = MAX_PATH;  
   }
   if (aFileNameW->lpstrInitialDir)  {
-    NS_ConvertWtoA(aFileNameW->lpstrInitialDir, MAX_PATH, initDirA, "?");
+    ConvertWtoA(aFileNameW->lpstrInitialDir, MAX_PATH, initDirA);
     ofnA.lpstrInitialDir = initDirA; 
   }
   if (aFileNameW->lpstrTitle) {
-    NS_ConvertWtoA(aFileNameW->lpstrTitle, MAX_PATH, titleA, "?");
+    ConvertWtoA(aFileNameW->lpstrTitle, MAX_PATH, titleA);
     ofnA.lpstrTitle = titleA; 
   }
   ofnA.Flags = aFileNameW->Flags; 
   if (aFileNameW->lpstrDefExt)  {
-    NS_ConvertWtoA(aFileNameW->lpstrDefExt, MAX_PATH, defExtA, "?");
+    ConvertWtoA(aFileNameW->lpstrDefExt, MAX_PATH, defExtA);
     ofnA.lpstrDefExt = defExtA; 
   }
-  // Warning:  No WtoA() is done to application-defined data 
-  ofnA.lCustData = aFileNameW->lCustData; 
+  ofnA.lCustData = aFileNameW->lCustData; // Warning:  No WtoA() is done to application-defined data 
   ofnA.lpfnHook = aFileNameW->lpfnHook;   
   if (aFileNameW->lpTemplateName) {
-    NS_ConvertWtoA(aFileNameW->lpTemplateName, MAX_PATH, tempNameA, "?");
+    ConvertWtoA(aFileNameW->lpTemplateName, MAX_PATH, tempNameA);
     ofnA.lpTemplateName = tempNameA; 
   }
   
@@ -295,7 +317,7 @@ BOOL CallOpenSaveFileNameA(LPOPENFILENAMEW aFileNameW, BOOL aOpen)
       aFileNameW->lpstrFile[lenW+1] = '\0';
     }
     else  { 
-      NS_ConvertAtoW(ofnA.lpstrFile, aFileNameW->nMaxFile, aFileNameW->lpstrFile);
+      ConvertAtoW(ofnA.lpstrFile, aFileNameW->nMaxFile, aFileNameW->lpstrFile);
     }
   }
 
@@ -321,7 +343,7 @@ int WINAPI nsGetClassName(HWND aWnd, LPWSTR aClassName, int aMaxCount)
   if (!GetClassNameA(aWnd, classNameA, MAX_CLASS_NAME))
     return 0;
 
-  aMaxCount = NS_ConvertAtoW(classNameA, MAX_CLASS_NAME, aClassName);
+  aMaxCount = ConvertAtoW(classNameA, MAX_CLASS_NAME, aClassName);
 
   return aMaxCount;
 }
@@ -344,9 +366,9 @@ HWND WINAPI nsCreateWindowEx(DWORD aExStyle,
 
   // Convert class name and Window name from Unicode to ANSI
   if (aClassNameW)
-      NS_ConvertWtoA(aClassNameW, MAX_CLASS_NAME, classNameA, "?");
+      ConvertWtoA(aClassNameW, MAX_CLASS_NAME, classNameA);
   if (aWindowNameW)
-      NS_ConvertWtoA(aWindowNameW, MAX_CLASS_NAME, windowNameA, "?");
+      ConvertWtoA(aWindowNameW, MAX_CLASS_NAME, windowNameA);
   
   // so far only NULL is passed
   if (aParam != NULL) {
@@ -368,8 +390,8 @@ LRESULT WINAPI nsSendMessage(HWND aWnd, UINT aMsg, WPARAM awParam, LPARAM alPara
 			"Warning. Make sure sending non-Unicode string to ::SendMessage().");
   if (WM_SETTEXT == aMsg)  {
     char title[MAX_PATH];
-    if (alParam) // Note: Window titles are truncated to 159 chars by Windows
-      NS_ConvertWtoA((LPCWSTR)alParam, MAX_PATH, title, "?");
+    if (alParam)
+      ConvertWtoA((LPCWSTR)alParam, MAX_CLASS_NAME, title);
     return SendMessageA(aWnd, aMsg, awParam, (LPARAM)&title);
   }
 
@@ -397,11 +419,11 @@ ATOM WINAPI nsRegisterClass(const WNDCLASSW *aClassW)
 
   wClass.lpszClassName = classNameA;
   if (aClassW->lpszClassName)
-    NS_ConvertWtoA(aClassW->lpszClassName, MAX_CLASS_NAME, classNameA, "?");
+    ConvertWtoA(aClassW->lpszClassName, MAX_CLASS_NAME, classNameA);
   
   wClass.lpszMenuName = menuNameA; 
   if (aClassW->lpszMenuName)
-    NS_ConvertWtoA(aClassW->lpszMenuName, MAX_MENU_NAME, menuNameA, "?");
+    ConvertWtoA(aClassW->lpszMenuName, MAX_MENU_NAME, menuNameA);
 
   return RegisterClassA(&wClass);
 }
@@ -411,27 +433,10 @@ BOOL WINAPI nsUnregisterClass(LPCWSTR aClassW, HINSTANCE aInst)
   char classA[MAX_PATH+1];
 
   if (aClassW)  {
-    NS_ConvertWtoA(aClassW, MAX_PATH, classA, "?");
+    ConvertWtoA(aClassW, MAX_PATH, classA);
     return UnregisterClassA((LPCSTR)classA, aInst);
   }
   return FALSE;
-}
-
-#ifndef WINCE
-UINT WINAPI nsDragQueryFile(HDROP aDrop, UINT aCount, LPWSTR aFileW, UINT aLen)
-{
-  char fileA[MAX_PATH+1];
-
-  // query a count of file?
-  if (aCount == 0xFFFFFFFF)
-    return DragQueryFileA(aDrop, aCount, NULL, 0);
-
-  aLen = DragQueryFileA(aDrop, aCount, fileA, MAX_PATH);
-  if (!aLen)
-    return 0;
-
-  aLen = NS_ConvertAtoW(fileA, aFileW ? MAX_PATH : 0, aFileW);
-  return aLen ? aLen - 1 : 0;
 }
 
 BOOL WINAPI nsSHGetPathFromIDList(LPCITEMIDLIST aIdList, LPWSTR aPathW)
@@ -439,9 +444,9 @@ BOOL WINAPI nsSHGetPathFromIDList(LPCITEMIDLIST aIdList, LPWSTR aPathW)
   char pathA[MAX_PATH+1];
 
   if (aPathW)  {
-    NS_ConvertWtoA(aPathW, MAX_PATH, pathA, "?");
+    ConvertWtoA(aPathW, MAX_PATH, pathA);
     if (SHGetPathFromIDListA(aIdList, pathA)) {
-      NS_ConvertAtoW(pathA, MAX_PATH, aPathW);
+      ConvertAtoW(pathA, MAX_PATH, aPathW);
       return TRUE;
     }
   }
@@ -460,11 +465,11 @@ LPITEMIDLIST WINAPI nsSHBrowseForFolder(LPBROWSEINFOW aBiW)
   biA.hwndOwner = aBiW->hwndOwner;
   biA.pidlRoot = aBiW->pidlRoot;
   if (aBiW->pszDisplayName)  {
-    NS_ConvertWtoA(aBiW->pszDisplayName, MAX_PATH, displayNameA, "?");
+    ConvertWtoA(aBiW->pszDisplayName, MAX_PATH, displayNameA);
     biA.pszDisplayName = displayNameA; 
   }
   if (aBiW->lpszTitle)  {
-    NS_ConvertWtoA(aBiW->lpszTitle, MAX_PATH, titleA, "?");
+    ConvertWtoA(aBiW->lpszTitle, MAX_PATH, titleA);
     biA.lpszTitle = titleA; 
   }
   biA.ulFlags = aBiW->ulFlags;
@@ -474,11 +479,10 @@ LPITEMIDLIST WINAPI nsSHBrowseForFolder(LPBROWSEINFOW aBiW)
 
   itemIdList = SHBrowseForFolderA(&biA);
   if (biA.pszDisplayName)  {
-    NS_ConvertAtoW(biA.pszDisplayName, MAX_PATH, aBiW->pszDisplayName);
+    ConvertAtoW(biA.pszDisplayName, MAX_PATH, aBiW->pszDisplayName);
   }
   return itemIdList;
 }
-#endif //#ifndef WINCE
 
 HMODULE             nsToolkit::mShell32Module = NULL;
 NS_DefWindowProc    nsToolkit::mDefWindowProc = DefWindowProcA;
@@ -495,12 +499,8 @@ NS_GetClassName     nsToolkit::mGetClassName = nsGetClassName;
 NS_CreateWindowEx   nsToolkit::mCreateWindowEx = nsCreateWindowEx;
 NS_RegisterClass    nsToolkit::mRegisterClass = nsRegisterClass; 
 NS_UnregisterClass  nsToolkit::mUnregisterClass = nsUnregisterClass; 
-
-#ifndef WINCE
-NS_DragQueryFile        nsToolkit::mDragQueryFile = nsDragQueryFile;
 NS_SHGetPathFromIDList  nsToolkit::mSHGetPathFromIDList = nsSHGetPathFromIDList; 
 NS_SHBrowseForFolder    nsToolkit::mSHBrowseForFolder = nsSHBrowseForFolder; 
-#endif
 
 void RunPump(void* arg)
 {
@@ -550,7 +550,7 @@ nsToolkit::nsToolkit()
 
     nsToolkit::gAIMMCount++;
 
-#if defined(MOZ_STATIC_COMPONENT_LIBS) || defined (WINCE)
+#ifdef MOZ_STATIC_COMPONENT_LIBS
     nsToolkit::Startup(GetModuleHandle(NULL));
 #endif
 }
@@ -588,14 +588,12 @@ nsToolkit::~nsToolkit()
 
     // Unhook the filter used to determine when
     // the user is moving a top-level window.
-#ifndef WINCE
     if (nsMsgFilterHook != NULL) {
       UnhookWindowsHookEx(nsMsgFilterHook);
       nsMsgFilterHook = NULL;
     }
-#endif
 
-#if defined (MOZ_STATIC_COMPONENT_LIBS) || defined(WINCE)
+#ifdef MOZ_STATIC_COMPONENT_LIBS
     nsToolkit::Shutdown();
 #endif
 }
@@ -604,7 +602,6 @@ nsToolkit::~nsToolkit()
 void
 nsToolkit::Startup(HMODULE hModule)
 {
-#ifndef WINCE
     //
     // Set flag of nsToolkit::mUseImeApiW due to using Unicode API.
     //
@@ -626,10 +623,7 @@ nsToolkit::Startup(HMODULE hModule)
     }
 
     nsToolkit::mIsNT = (osversion.dwPlatformId == VER_PLATFORM_WIN32_NT);
-    if (nsToolkit::mIsNT)
-#endif // #ifndef WINCE
-
-    {
+    if (nsToolkit::mIsNT)  {
       // For Windows 9x base OS nsFoo is already pointing to A functions
       // However on NT base OS we should point them to respective W functions
       nsToolkit::mDefWindowProc = DefWindowProcW;
@@ -648,8 +642,6 @@ nsToolkit::Startup(HMODULE hModule)
       nsToolkit::mUnregisterClass = UnregisterClassW; 
       // Explicit call of SHxxxW in Win95 makes moz fails to run (170969)
       // we use GetProcAddress() to hide
-#ifndef WINCE
-      nsToolkit::mDragQueryFile = DragQueryFileW;
       nsToolkit::mShell32Module = ::LoadLibrary("Shell32.dll");
       if (nsToolkit::mShell32Module) {
         nsToolkit::mSHGetPathFromIDList = (NS_SHGetPathFromIDList)GetProcAddress(nsToolkit::mShell32Module, "SHGetPathFromIDListW"); 
@@ -669,7 +661,6 @@ nsToolkit::Startup(HMODULE hModule)
           nsToolkit::mW2KXP_CP936 = PR_TRUE;
         }
       }
-#endif // #ifndef WINCE
     }
     nsToolkit::mDllInstance = hModule;
 
@@ -688,21 +679,6 @@ nsToolkit::Startup(HMODULE hModule)
     wc.lpszMenuName     = NULL;
     wc.lpszClassName    = L"nsToolkitClass";
     VERIFY(nsToolkit::mRegisterClass(&wc));
-
-    // Vista API.  Mozilla is DPI Aware.
-    typedef BOOL (*SetProcessDPIAwareFunc)(VOID);
- 
-    SetProcessDPIAwareFunc setDPIAware = (SetProcessDPIAwareFunc)
-      GetProcAddress(LoadLibrary("user32.dll"),
-                     "SetProcessDPIAware");
-    
-    if (setDPIAware)
-      setDPIAware();
-
-#ifdef WINCE
-    nsToolkit::mUseImeApiW  = PR_TRUE;
-#endif
-
 }
 
 
@@ -748,16 +724,15 @@ void nsToolkit::CreateInternalWindow(PRThread *aThread)
     //
     // create the internal window
     //
-
     mDispatchWnd = ::CreateWindow("nsToolkitClass",
-                                  "NetscapeDispatchWnd",
-                                  WS_DISABLED,
-                                  -50, -50,
-                                  10, 10,
-                                  NULL,
-                                  NULL,
-                                  nsToolkit::mDllInstance,
-                                  NULL);
+                                       "NetscapeDispatchWnd",
+                                       WS_DISABLED,
+                                       -50, -50,
+                                       10, 10,
+                                       NULL,
+                                       NULL,
+                                       nsToolkit::mDllInstance,
+                                       NULL);
 
     VERIFY(mDispatchWnd);
 }
@@ -816,14 +791,12 @@ NS_METHOD nsToolkit::Init(PRThread *aThread)
         CreateUIThread();
     }
 
-#ifndef WINCE
     // Hook window move messages so the toolkit can report when
     // the user is moving a top-level window.
     if (nsMsgFilterHook == NULL) {
       nsMsgFilterHook = SetWindowsHookEx(WH_CALLWNDPROC, DetectWindowMove, 
                                                 NULL, GetCurrentThreadId());
     }
-#endif
 
     return NS_OK;
 }
@@ -869,6 +842,7 @@ LRESULT CALLBACK nsToolkit::WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         if (nsToolkit::gAIMMApp->OnDefWindowProc(hWnd, msg, wParam, lParam, &lResult) == S_OK)
             return lResult;
     }
+
     return nsToolkit::mDefWindowProc(hWnd, msg, wParam, lParam);
 }
 
@@ -923,55 +897,69 @@ NS_METHOD NS_GetCurrentToolkit(nsIToolkit* *aResult)
   return rv;
 }
 
+
 //-------------------------------------------------------------------------
 //
 //
 //-------------------------------------------------------------------------
-MouseTrailer::MouseTrailer() : mHoldMouseWindow(nsnull), mCaptureWindow(nsnull),
-  mIsInCaptureMode(PR_FALSE), mIgnoreNextCycle(PR_FALSE)
-{
+MouseTrailer * MouseTrailer::GetMouseTrailer(DWORD aThreadID) {
+  if (nsnull == MouseTrailer::theMouseTrailer) {
+    MouseTrailer::theMouseTrailer = new MouseTrailer();
+  }
+  return MouseTrailer::theMouseTrailer;
+
 }
+
+//-------------------------------------------------------------------------
+//
+//
+//-------------------------------------------------------------------------
+nsWindow * MouseTrailer::GetMouseTrailerWindow() {
+  return MouseTrailer::mHoldMouse;
+}
+//-------------------------------------------------------------------------
+//
+//
+//-------------------------------------------------------------------------
+void MouseTrailer::SetMouseTrailerWindow(nsWindow * aNSWin) {
+  MouseTrailer::mHoldMouse = aNSWin;
+}
+
+//-------------------------------------------------------------------------
+//
+//
+//-------------------------------------------------------------------------
+MouseTrailer::MouseTrailer()
+{
+  mTimerId         = 0;
+  mHoldMouse       = NULL;
+}
+
+
 //-------------------------------------------------------------------------
 //
 //
 //-------------------------------------------------------------------------
 MouseTrailer::~MouseTrailer()
 {
-  DestroyTimer();
-  NS_IF_RELEASE(mHoldMouseWindow);
-  NS_IF_RELEASE(mCaptureWindow);
+    DestroyTimer();
+    if (mHoldMouse) {
+        NS_RELEASE(mHoldMouse);
+    }
 }
+
+
 //-------------------------------------------------------------------------
 //
 //
 //-------------------------------------------------------------------------
-void MouseTrailer::SetMouseTrailerWindow(nsWindow * aNSWin) 
+UINT MouseTrailer::CreateTimer()
 {
-  nsWindow *topWin = aNSWin ? aNSWin->GetTopLevelWindow() : nsnull;
-  if (mHoldMouseWindow != topWin && mTimer) {
-    // Make sure TimerProc is fired at least once for the old window
-    TimerProc(nsnull, nsnull);
-  }
-  NS_IF_RELEASE(mHoldMouseWindow);
-  mHoldMouseWindow = topWin;
-  CreateTimer();
-}
-//-------------------------------------------------------------------------
-//
-//
-//-------------------------------------------------------------------------
-nsresult MouseTrailer::CreateTimer()
-{
-  if (mTimer) {
-    return NS_OK;
+  if (!mTimerId) {
+    mTimerId = ::SetTimer(NULL, 0, 200, (TIMERPROC)MouseTrailer::TimerProc);
   } 
 
-  nsresult rv;
-  mTimer = do_CreateInstance("@mozilla.org/timer;1", &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  return mTimer->InitWithFuncCallback(TimerProc, nsnull, 200,
-                                      nsITimer::TYPE_REPEATING_SLACK);
+  return mTimerId;
 }
 
 
@@ -981,10 +969,11 @@ nsresult MouseTrailer::CreateTimer()
 //-------------------------------------------------------------------------
 void MouseTrailer::DestroyTimer()
 {
-  if (mTimer) {
-    mTimer->Cancel();
-    mTimer = nsnull;
+  if (mTimerId) {
+    ::KillTimer(NULL, mTimerId);
+    mTimerId = 0;
   }
+
 }
 //-------------------------------------------------------------------------
 //
@@ -992,66 +981,67 @@ void MouseTrailer::DestroyTimer()
 //-------------------------------------------------------------------------
 void MouseTrailer::SetCaptureWindow(nsWindow * aNSWin) 
 { 
-  NS_IF_RELEASE(mCaptureWindow);
-  mCaptureWindow = aNSWin ? aNSWin->GetTopLevelWindow() : nsnull;
+  mCaptureWindow = aNSWin;
   if (nsnull != mCaptureWindow) {
     mIsInCaptureMode = PR_TRUE;
   }
 }
+
+#define TIMER_DEBUG 1
 //-------------------------------------------------------------------------
 //
 //
 //-------------------------------------------------------------------------
-void MouseTrailer::TimerProc(nsITimer* aTimer, void* aClosure)
+void CALLBACK MouseTrailer::TimerProc(HWND hWnd, UINT msg, UINT event, DWORD time)
 {
   // Check to see if we are in mouse capture mode,
   // Once capture ends we could still get back one more timer event 
   // Capture could end outside our window
   // Also, for some reason when the mouse is on the frame it thinks that
   // it is inside the window that is being captured.
-  if (nsnull != mSingleton.mCaptureWindow) {
-    if (mSingleton.mCaptureWindow != mSingleton.mHoldMouseWindow) {
+  if (nsnull != MouseTrailer::mCaptureWindow) {
+    if (MouseTrailer::mCaptureWindow != MouseTrailer::mHoldMouse) {
       return;
     }
   } else {
-    if (mSingleton.mIsInCaptureMode) {
-      // The mHoldMouse could be bad from rolling over the frame, so clear 
+    if (mIsInCaptureMode) {
+      // the mHoldMouse could be bad from rolling over the frame, so clear 
       // it if we were capturing and now this is the first timer call back 
       // since we canceled the capture
-      NS_IF_RELEASE(mSingleton.mHoldMouseWindow);
-      mSingleton.mIsInCaptureMode = PR_FALSE;
+      MouseTrailer::mHoldMouse = nsnull;
+      mIsInCaptureMode = PR_FALSE;
       return;
     }
   }
 
-  if (mSingleton.mHoldMouseWindow && ::IsWindow(mSingleton.mHoldMouseWindow->GetWindowHandle())) {
-    if (mSingleton.mIgnoreNextCycle) {
-      mSingleton.mIgnoreNextCycle = PR_FALSE;
-    }
-    else {
-      POINT mp;
-      DWORD pos = ::GetMessagePos();
-      mp.x = GET_X_LPARAM(pos);
-      mp.y = GET_Y_LPARAM(pos);
-
-      // Need to get the top level wnd's here. Although mHoldMouseWindow is top level,
-      // the actual top level window handle might be something else
-      HWND mouseWnd = nsWindow::GetTopLevelHWND(::WindowFromPoint(mp), PR_TRUE);
-      HWND holdWnd = nsWindow::GetTopLevelHWND(mSingleton.mHoldMouseWindow->GetWindowHandle(), PR_TRUE);
-      if (mouseWnd != holdWnd) {
-        //notify someone that a mouse exit happened
-        if (nsnull != mSingleton.mHoldMouseWindow) {
-          mSingleton.mHoldMouseWindow->DispatchMouseEvent(NS_MOUSE_EXIT, NULL, NULL);
-        }
-
-        // we are out of this window and of any window, destroy timer
-        mSingleton.DestroyTimer();
-        NS_IF_RELEASE(mSingleton.mHoldMouseWindow);
+    if (MouseTrailer::mHoldMouse && ::IsWindow(MouseTrailer::mHoldMouse->GetWindowHandle())) {
+      if (gIgnoreNextCycle) {
+        gIgnoreNextCycle = PR_FALSE;
       }
+      else {
+        POINT mp;
+        DWORD pos = ::GetMessagePos();
+        mp.x = GET_X_LPARAM(pos);
+        mp.y = GET_Y_LPARAM(pos);
+
+        if (::WindowFromPoint(mp) != mHoldMouse->GetWindowHandle()) {
+            ::ScreenToClient(mHoldMouse->GetWindowHandle(), &mp);
+
+            //notify someone that a mouse exit happened
+            if (nsnull != MouseTrailer::mHoldMouse) {
+              MouseTrailer::mHoldMouse->DispatchMouseEvent(NS_MOUSE_EXIT);
+            }
+  
+            // we are out of this window and of any window, destroy timer
+            MouseTrailer::theMouseTrailer->DestroyTimer();
+            MouseTrailer::mHoldMouse = NULL;
+        }
+      }
+    } else {
+      MouseTrailer::theMouseTrailer->DestroyTimer();
+      MouseTrailer::mHoldMouse = NULL;
     }
-  } else {
-    mSingleton.DestroyTimer();
-    NS_IF_RELEASE(mSingleton.mHoldMouseWindow);
-  }
 }
+
+
 

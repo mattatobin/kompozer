@@ -214,7 +214,7 @@ sysPrefDeleteObserver(void *aElement, void *aData) {
     return PR_TRUE;
 }
 
-NS_IMPL_ISUPPORTS2(nsSystemPrefService, nsIPrefBranch, nsIPrefBranch2)
+NS_IMPL_ISUPPORTS2(nsSystemPrefService, nsIPrefBranch, nsIPrefBranchInternal)
 
 /* public */
 nsSystemPrefService::nsSystemPrefService()
@@ -411,8 +411,7 @@ NS_IMETHODIMP nsSystemPrefService::AddObserver(const char *aDomain, nsIObserver 
             nsMemory::Free(pCallbackData);
             return NS_ERROR_INVALID_ARG;
         }
-        nsCOMPtr<nsIWeakReference> tmp = do_GetWeakReference(weakRefFactory);
-        observerRef = tmp;
+        observerRef = do_GetWeakReference(weakRefFactory);
     } else {
         observerRef = aObserver;
     }
@@ -461,11 +460,8 @@ NS_IMETHODIMP nsSystemPrefService::RemoveObserver(const char *aDomain, nsIObserv
             if (pCallbackData->bIsWeakRef) {
                 nsCOMPtr<nsISupportsWeakReference> weakRefFactory =
                     do_QueryInterface(aObserver);
-                if (weakRefFactory) {
-                    nsCOMPtr<nsIWeakReference> tmp =
-                        do_GetWeakReference(aObserver);
-                    observerRef = tmp;
-                }
+                if (weakRefFactory)
+                    observerRef = do_GetWeakReference(aObserver);
             }
             if (!observerRef)
                 observerRef = aObserver;
@@ -702,28 +698,7 @@ nsresult
 GConfProxy::GetIntPref(const char *aMozKey, PRInt32 *retval)
 {
     NS_ENSURE_TRUE(mInitialized, NS_ERROR_FAILURE);
-    if (strcmp (aMozKey, "network.proxy.type") == 0) {
-	gchar *str;
-
-	str = GConfClientGetString(mGConfClient,
-	                           MozKey2GConfKey (aMozKey), NULL);
-
-	if (str) {
-		if (strcmp (str, "manual") == 0)
-			*retval = 1;
-		else if (strcmp (str, "auto") == 0)
-			*retval = 2;
-		else
-			*retval = 0;
-
-		g_free (str);
-	} else
-		*retval = 0;
-    } else {
-    	*retval = GConfClientGetInt(mGConfClient, 
-	                            MozKey2GConfKey(aMozKey), NULL);
-    }
-
+    *retval = GConfClientGetInt(mGConfClient, MozKey2GConfKey(aMozKey), NULL);
     return NS_OK;
 }
 

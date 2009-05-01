@@ -15,7 +15,7 @@
  * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
+ * Netscape Communicationsm Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
@@ -40,9 +40,8 @@
 #include "nsITreeView.h"
 #include "nsIGenericFactory.h"
 #include "nsITreeSelection.h"
-#include "nsITreeColumns.h"
 #include "nsITreeBoxObject.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsString.h"
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
@@ -53,162 +52,10 @@
 #include "nsDateTimeFormatCID.h"
 #include "nsQuickSort.h"
 #include "nsIAtom.h"
-#include "nsIAutoCompleteResult.h"
-#include "nsIAutoCompleteSearch.h"
 #include "nsISimpleEnumerator.h"
-#include "nsAutoPtr.h"
 #include "nsArray.h"
 
 #include "nsWildCard.h"
-
-#define NS_FILECOMPLETE_CID { 0xcb60980e, 0x18a5, 0x4a77, \
-                            { 0x91, 0x10, 0x81, 0x46, 0x61, 0x4c, 0xa7, 0xf0 } }
-#define NS_FILECOMPLETE_CONTRACTID "@mozilla.org/autocomplete/search;1?name=file"
-
-class nsFileResult : public nsIAutoCompleteResult
-{
-public:
-  // aSearchString is the text typed into the autocomplete widget
-  // aSearchParam is the picker's currently displayed directory
-  nsFileResult(const nsAString& aSearchString, const nsAString& aSearchParam);
-
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIAUTOCOMPLETERESULT
-
-  nsStringArray mValues;
-  nsAutoString mSearchString;
-  PRInt32 mSlashPos;
-  PRUint16 mSearchResult;
-};
-
-NS_IMPL_ISUPPORTS1(nsFileResult, nsIAutoCompleteResult)
-
-nsFileResult::nsFileResult(const nsAString& aSearchString,
-                           const nsAString& aSearchParam):
-  mSearchString(aSearchString),
-  mSlashPos(mSearchString.RFindChar('/'))
-{
-  if (aSearchString.IsEmpty())
-    mSearchResult = RESULT_IGNORED;
-  else {
-    mSearchResult = RESULT_FAILURE;
-    nsCOMPtr<nsILocalFile> directory;
-    nsDependentSubstring parent(Substring(mSearchString, 0, mSlashPos + 1));
-    if (mSlashPos != kNotFound)
-      NS_NewLocalFile(parent, PR_TRUE, getter_AddRefs(directory));
-    if (!directory) {
-      if (NS_FAILED(NS_NewLocalFile(aSearchParam, PR_TRUE, getter_AddRefs(directory))))
-        return;
-      if (mSlashPos > 0)
-        directory->AppendRelativePath(Substring(mSearchString, 0, mSlashPos));
-    }
-    nsCOMPtr<nsISimpleEnumerator> dirEntries;
-    if (NS_FAILED(directory->GetDirectoryEntries(getter_AddRefs(dirEntries))))
-      return;
-    mSearchResult = RESULT_NOMATCH;
-    PRBool hasMore = PR_FALSE;
-    nsDependentSubstring prefix(Substring(mSearchString, mSlashPos + 1));
-    while (NS_SUCCEEDED(dirEntries->HasMoreElements(&hasMore)) && hasMore) {
-      nsCOMPtr<nsISupports> nextItem;
-      dirEntries->GetNext(getter_AddRefs(nextItem));
-      nsCOMPtr<nsILocalFile> nextFile(do_QueryInterface(nextItem));
-      nsAutoString fileName;
-      nextFile->GetLeafName(fileName);
-      if (StringBeginsWith(fileName, prefix)) {
-        fileName.Insert(parent, 0);
-        mValues.AppendString(fileName);
-        if (mSearchResult == RESULT_NOMATCH && fileName.Equals(mSearchString))
-          mSearchResult = RESULT_IGNORED;
-        else
-          mSearchResult = RESULT_SUCCESS;
-      }
-    }
-    mValues.Sort();
-  }
-}
-
-NS_IMETHODIMP nsFileResult::GetSearchString(nsAString & aSearchString)
-{
-  aSearchString.Assign(mSearchString);
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetSearchResult(PRUint16 *aSearchResult)
-{
-  NS_ENSURE_ARG_POINTER(aSearchResult);
-  *aSearchResult = mSearchResult;
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetDefaultIndex(PRInt32 *aDefaultIndex)
-{
-  NS_ENSURE_ARG_POINTER(aDefaultIndex);
-  *aDefaultIndex = -1;
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetErrorDescription(nsAString & aErrorDescription)
-{
-  aErrorDescription.Truncate();
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetMatchCount(PRUint32 *aMatchCount)
-{
-  NS_ENSURE_ARG_POINTER(aMatchCount);
-  *aMatchCount = mValues.Count();
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetValueAt(PRInt32 index, nsAString & aValue)
-{
-  mValues.StringAt(index, aValue);
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetCommentAt(PRInt32 index, nsAString & aComment)
-{
-  aComment.Truncate();
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::GetStyleAt(PRInt32 index, nsAString & aStyle)
-{
-  aStyle.Truncate();
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsFileResult::RemoveValueAt(PRInt32 rowIndex, PRBool removeFromDb)
-{
-  return NS_OK;
-}
-
-class nsFileComplete : public nsIAutoCompleteSearch
-{
-public:
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIAUTOCOMPLETESEARCH
-};
-
-NS_IMPL_ISUPPORTS1(nsFileComplete, nsIAutoCompleteSearch)
-
-NS_IMETHODIMP
-nsFileComplete::StartSearch(const nsAString& aSearchString,
-                            const nsAString& aSearchParam,
-                            nsIAutoCompleteResult *aPreviousResult,
-                            nsIAutoCompleteObserver *aListener)
-{
-  NS_ENSURE_ARG_POINTER(aListener);
-  nsRefPtr<nsFileResult> result = new nsFileResult(aSearchString, aSearchParam);
-  NS_ENSURE_TRUE(result, NS_ERROR_OUT_OF_MEMORY);
-  return aListener->OnSearchResult(this, result);
-}
-
-NS_IMETHODIMP
-nsFileComplete::StopSearch()
-{
-  return NS_OK;
-}
 
 #define NS_FILEVIEW_CID { 0xa5570462, 0x1dd1, 0x11b2, \
                          { 0x9d, 0x19, 0xdf, 0x30, 0xa2, 0x7f, 0xbd, 0xc4 } }
@@ -256,13 +103,10 @@ protected:
 };
 
 // Factory constructor
-NS_GENERIC_FACTORY_CONSTRUCTOR(nsFileComplete)
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsFileView, Init)
 
 static const nsModuleComponentInfo components[] =
 {
-  { "nsFileComplete", NS_FILECOMPLETE_CID,
-    NS_FILECOMPLETE_CONTRACTID, nsFileCompleteConstructor },
   { "nsFileView", NS_FILEVIEW_CID,
     NS_FILEVIEW_CONTRACTID, nsFileViewConstructor }
 };
@@ -345,11 +189,6 @@ nsFileView::SetShowOnlyDirectories(PRBool aOnlyDirs)
   } else {
     // Run the filter again to get the file list back
     FilterFiles();
-
-    SortArray(mFilteredFiles);
-    if (mReverseSort)
-      ReverseArray(mFilteredFiles);
-
     if (mTree)
       mTree->RowCountChanged(dirCount, mTotalRows - dirCount);
   }
@@ -571,7 +410,7 @@ nsFileView::GetRowProperties(PRInt32 aIndex,
 }
 
 NS_IMETHODIMP
-nsFileView::GetCellProperties(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::GetCellProperties(PRInt32 aRow, const PRUnichar* aColID,
                               nsISupportsArray* aProperties)
 {
   PRUint32 dirCount;
@@ -586,7 +425,8 @@ nsFileView::GetCellProperties(PRInt32 aRow, nsITreeColumn* aCol,
 }
 
 NS_IMETHODIMP
-nsFileView::GetColumnProperties(nsITreeColumn* aCol,
+nsFileView::GetColumnProperties(const PRUnichar* aColID, 
+                                nsIDOMElement* aColElement,
                                 nsISupportsArray* aProperties)
 {
   return NS_OK;
@@ -628,7 +468,15 @@ nsFileView::IsSorted(PRBool* aIsSorted)
 }
 
 NS_IMETHODIMP
-nsFileView::CanDrop(PRInt32 aIndex, PRInt32 aOrientation, PRBool* aCanDrop)
+nsFileView::CanDropOn(PRInt32 aIndex, PRBool* aCanDrop)
+{
+  *aCanDrop = PR_FALSE;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsFileView::CanDropBeforeAfter(PRInt32 aIndex, PRBool aBefore, 
+                               PRBool* aCanDrop)
 {
   *aCanDrop = PR_FALSE;
   return NS_OK;
@@ -663,28 +511,28 @@ nsFileView::GetLevel(PRInt32 aIndex, PRInt32* aLevel)
 }
 
 NS_IMETHODIMP
-nsFileView::GetImageSrc(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::GetImageSrc(PRInt32 aRow, const PRUnichar* aColID,
                         nsAString& aImageSrc)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsFileView::GetProgressMode(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::GetProgressMode(PRInt32 aRow, const PRUnichar* aColID,
                             PRInt32* aProgressMode)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsFileView::GetCellValue(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::GetCellValue(PRInt32 aRow, const PRUnichar* aColID,
                          nsAString& aCellValue)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsFileView::GetCellText(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::GetCellText(PRInt32 aRow, const PRUnichar* aColID,
                         nsAString& aCellText)
 {
   PRUint32 dirCount, fileCount;
@@ -706,11 +554,9 @@ nsFileView::GetCellText(PRInt32 aRow, nsITreeColumn* aCol,
     return NS_OK;
   }
 
-  const PRUnichar* colID;
-  aCol->GetIdConst(&colID);
-  if (NS_LITERAL_STRING("FilenameColumn").Equals(colID)) {
+  if (NS_LITERAL_STRING("FilenameColumn").Equals(aColID)) {
     curFile->GetLeafName(aCellText);
-  } else if (NS_LITERAL_STRING("LastModifiedColumn").Equals(colID)) {
+  } else if (NS_LITERAL_STRING("LastModifiedColumn").Equals(aColID)) {
     PRInt64 lastModTime;
     curFile->GetLastModifiedTime(&lastModTime);
     // XXX FormatPRTime could take an nsAString&
@@ -725,7 +571,7 @@ nsFileView::GetCellText(PRInt32 aRow, nsITreeColumn* aCol,
     else {
       PRInt64 fileSize;
       curFile->GetFileSize(&fileSize);
-      CopyUTF8toUTF16(nsPrintfCString("%lld", fileSize), aCellText);
+      aCellText = NS_ConvertUTF8toUCS2(nsPrintfCString("%lld", fileSize));
     }
   }
 
@@ -746,7 +592,7 @@ nsFileView::ToggleOpenState(PRInt32 aIndex)
 }
 
 NS_IMETHODIMP
-nsFileView::CycleHeader(nsITreeColumn* aCol)
+nsFileView::CycleHeader(const PRUnichar* aColID, nsIDOMElement* aElement)
 {
   return NS_OK;
 }
@@ -758,13 +604,13 @@ nsFileView::SelectionChanged()
 }
 
 NS_IMETHODIMP
-nsFileView::CycleCell(PRInt32 aRow, nsITreeColumn* aCol)
+nsFileView::CycleCell(PRInt32 aRow, const PRUnichar* aColID)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsFileView::IsEditable(PRInt32 aRow, nsITreeColumn* aCol,
+nsFileView::IsEditable(PRInt32 aRow, const PRUnichar* aColID,
                        PRBool* aIsEditable)
 {
   *aIsEditable = PR_FALSE;
@@ -772,15 +618,8 @@ nsFileView::IsEditable(PRInt32 aRow, nsITreeColumn* aCol,
 }
 
 NS_IMETHODIMP
-nsFileView::SetCellValue(PRInt32 aRow, nsITreeColumn* aCol,
-                         const nsAString& aValue)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsFileView::SetCellText(PRInt32 aRow, nsITreeColumn* aCol,
-                        const nsAString& aValue)
+nsFileView::SetCellText(PRInt32 aRow, const PRUnichar* aColID,
+                        const PRUnichar* aValue)
 {
   return NS_OK;
 }
@@ -799,7 +638,7 @@ nsFileView::PerformActionOnRow(const PRUnichar* aAction, PRInt32 aRow)
 
 NS_IMETHODIMP
 nsFileView::PerformActionOnCell(const PRUnichar* aAction, PRInt32 aRow,
-                                nsITreeColumn* aCol)
+                                const PRUnichar* aColID)
 {
   return NS_OK;
 }

@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Pierre Chanial <chanial@noos.fr>.
+ * The Initial Developer of the Original Code is 
+ *   Pierre Chanial <chanial@noos.fr>
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -39,6 +39,7 @@ var BookmarksMenu = {
   _selection:null,
   _target:null,
   _orientation:null,
+  
 
   //////////////////////////////////////////////////////////////////////////
   // Fill a context menu popup with menuitems appropriate for the current
@@ -46,26 +47,23 @@ var BookmarksMenu = {
   createContextMenu: function (aEvent)
   {
     var target = document.popupNode;
-    if (!this.isBTBookmark(target.id) && target.id != "bookmarks-ptf")
-      return false;
     target.focus() // buttons in the pt have -moz-user-focus: ignore -->
     this._selection   = this.getBTSelection(target);
     this._orientation = this.getBTOrientation(aEvent, target);
     this._target      = this.getBTTarget(target, this._orientation);
     BookmarksCommand.createContextMenu(aEvent, this._selection);
     this.onCommandUpdate();
-    aEvent.target.addEventListener("mousemove", BookmarksMenuController.onMouseMove, false);
-    return true;
+    aEvent.target.addEventListener("mousemove", BookmarksMenuController.onMouseMove, false)
   },
 
   /////////////////////////////////////////////////////////////////////////
   // Clean up after closing the context menu popup
   destroyContextMenu: function (aEvent)
   {
-    if (content)
-      content.focus();
+    if (content) 
+      content.focus()
     BookmarksMenuDNDObserver.onDragRemoveFeedBack(document.popupNode); // needed on cancel
-    aEvent.target.removeEventListener("mousemove", BookmarksMenuController.onMouseMove, false);
+    aEvent.target.removeEventListener("mousemove", BookmarksMenuController.onMouseMove, false)
   },
 
   /////////////////////////////////////////////////////////////////////////////
@@ -101,17 +99,21 @@ var BookmarksMenu = {
   getBTTarget: function (aNode, aOrientation)
   {
     var item, parent, index;
-
     switch (aNode.id) {
+    case "bookmarks-ptf":
+      parent = "NC:PersonalToolbarFolder";
+      item = BookmarksToolbar.getLastVisibleBookmark();
+      break;
     case "BookmarksMenu":
+      parent = "NC:BookmarksRoot";
+      break;
     case "bookmarks-button":
       parent = "NC:BookmarksRoot";
       break;
-    case "bookmarks-ptf":
-      item = BookmarksToolbar.getLastVisibleBookmark();
-      // Continue to next case.
     case "bookmarks-chevron":
       parent = "NC:PersonalToolbarFolder";
+      item = document.getElementById("bookmarks-ptf").lastChild;
+      aOrientation == BookmarksUtils.DROP_AFTER;
       break;
     default:
       if (aOrientation == BookmarksUtils.DROP_ON)
@@ -149,11 +151,12 @@ var BookmarksMenu = {
     parent = parent.id;
     switch (parent) {
     case "BookmarksMenu":
-    case "bookmarks-button":
       return "NC:BookmarksRoot";
     case "PersonalToolbar":
     case "bookmarks-chevron":
       return "NC:PersonalToolbarFolder";
+    case "bookmarks-button":
+      return "NC:BookmarksRoot";
     default:
       return parent;
     }
@@ -195,12 +198,10 @@ var BookmarksMenu = {
     if (target.localName == "menu"                 &&
         target.parentNode.localName != "menupopup")
       return BookmarksUtils.DROP_ON;
-    if (target.id == "bookmarks-ptf") {
-      return target.hasChildNodes() ?
-          BookmarksUtils.DROP_AFTER : BookmarksUtils.DROP_ON;
-    }
-    if (target.id == "bookmarks-chevron")
+    if (target.id == "bookmarks-ptf" || 
+        target.id == "bookmarks-chevron") {
       return BookmarksUtils.DROP_ON;
+    }
 
     var overButtonBoxObject = target.boxObject.QueryInterface(Components.interfaces.nsIBoxObject);
     var overParentBoxObject = target.parentNode.boxObject.QueryInterface(Components.interfaces.nsIBoxObject);
@@ -218,8 +219,8 @@ var BookmarksMenu = {
       case "menu":
       case "menuitem":
         size = overButtonBoxObject.height;
-        coordValue = overButtonBoxObject.screenY;
-        clientCoordValue = aEvent.screenY;
+        coordValue = overButtonBoxObject.y-overParentBoxObject.y;
+        clientCoordValue = aEvent.clientY;
         break;
       default: return BookmarksUtils.DROP_ON;
     }
@@ -234,7 +235,7 @@ var BookmarksMenu = {
         border = size/5;
     else
       border = size/2;
-
+    
     // in the first region?
     if (clientCoordValue-coordValue < border)
       return BookmarksUtils.DROP_BEFORE;
@@ -270,25 +271,14 @@ var BookmarksMenu = {
     }
   },
 
-  loadBookmark: function (aEvent, aDS)
+  loadBookmark: function (aTarget, aDS)
   {
-    if (this.isBTBookmark(aEvent.target.id))
-      BookmarksUtils.loadBookmarkBrowser(aEvent, aDS);
-  },
-
-  ////////////////////////////////////////////////
-  // loads a bookmark with the middle mouse button
-  loadBookmarkMiddleClick: function (aEvent, aDS)
-  {
-    if (aEvent.type != "click" || aEvent.button != 1)
+    // Check for invalid bookmarks (most likely a static menu item like "Manage Bookmarks")
+    if (!this.isBTBookmark(aTarget.id))
       return;
-    // unlike for command events, we have to close the menus manually
-    for (var node = aEvent.target; node != aEvent.currentTarget;
-         node = node.parentNode) {
-      if (node.nodeType == node.ELEMENT_NODE && node.tagName == "menupopup")
-        node.hidePopup();
-    }
-    this.loadBookmark(aEvent, aDS);
+    var rSource   = RDF.GetResource(aTarget.id);
+    var selection = BookmarksUtils.getSelectionFromResource(rSource);
+    BookmarksCommand.openBookmark(selection, "current", aDS)
   }
 }
 
@@ -313,7 +303,7 @@ var BookmarksMenuController = {
     var target    = BookmarksMenu._target;
     switch (aCommand) {
     case "cmd_bm_expandfolder":
-      setTimeout(BookmarksMenu.expandBTFolder, 0);
+      BookmarksMenu.expandBTFolder();
       break;
     default:
       BookmarksController.doCommand(aCommand, selection, target);
@@ -386,7 +376,7 @@ var BookmarksMenuDNDObserver = {
     }
     if (this.isPlatformNotSupported)
       return;
-    if (this.isTimerSupported || !aDragSession.sourceNode)
+    if (this.isTimerSupported)
       return;
     this.onDragOverCheckTimers();
   },
@@ -424,16 +414,6 @@ var BookmarksMenuDNDObserver = {
     var selection = BookmarksUtils.getSelectionFromXferData(aDragSession);
 
     var orientation = BookmarksMenu.getBTOrientation(aEvent);
-
-    // For RTL PersonalBar bookmarks buttons, orientation should be inverted (only in drop case)
-    // because "before" (to the left) on the screen translates to "after" in the collection of items.
-    if (target.localName == "toolbarbutton")
-      if (window.getComputedStyle(document.getElementById("PersonalToolbar"),'').direction == 'rtl')
-        if (orientation == BookmarksUtils.DROP_AFTER)
-          orientation = BookmarksUtils.DROP_BEFORE;
-        else if (orientation == BookmarksUtils.DROP_BEFORE)
-          orientation = BookmarksUtils.DROP_AFTER;
-
     var selTarget   = BookmarksMenu.getBTTarget(target, orientation);
 
     const kDSIID      = Components.interfaces.nsIDragService;
@@ -468,24 +448,12 @@ var BookmarksMenuDNDObserver = {
       var element = document.createElementNS(XUL_NS, "menuseparator");
       menuTarget.insertBefore(element, menuTarget.lastChild);
     }
+
   },
 
   canDrop: function (aEvent, aDragSession)
   {
     var target = aEvent.target;
-
-    // onDragStart calls this without a drag session
-    // There will be no sourceNode for drags from external apps
-    if (aDragSession && aDragSession.sourceNode) {
-      var orientation = BookmarksMenu.getBTOrientation(aEvent, target);
-      if (target == aDragSession.sourceNode ||
-          (target == aDragSession.sourceNode.previousSibling &&
-           orientation == BookmarksUtils.DROP_AFTER) ||
-          (target == aDragSession.sourceNode.nextSibling &&
-           orientation == BookmarksUtils.DROP_BEFORE))
-        return false;
-    }
-
     return BookmarksMenu.isBTBookmark(target.id)       && 
            target.id != "NC:SystemBookmarksStaticRoot" &&
            target.id.substring(0,5) != "find:"         ||
@@ -505,8 +473,8 @@ var BookmarksMenuDNDObserver = {
     flavourSet.appendFlavour("application/x-moz-file", "nsIFile");
     flavourSet.appendFlavour("text/unicode");
     return flavourSet;
-  },
-
+  }, 
+  
 
   ////////////////////////////////////
   // Private methods and properties //
@@ -514,7 +482,6 @@ var BookmarksMenuDNDObserver = {
 
   springLoadedMenuDelay: 350, // milliseconds
   isPlatformNotSupported: navigator.platform.indexOf("Mac") != -1, // see bug 136524
-  // Needs to be dynamically overridden (to |true|) in the case of an external drag: see bug 232795.
   isTimerSupported: navigator.platform.indexOf("Win") == -1,
 
   mCurrentDragOverTarget: null,
@@ -565,7 +532,7 @@ var BookmarksMenuDNDObserver = {
         if (children[i] != this.mCurrentDragOverTarget || this.mCurrentDropPosition != BookmarksUtils.DROP_ON)
           children[i].lastChild.hidePopup();
       }
-    }
+    } 
   },
 
   onDragCloseTarget: function ()
@@ -608,7 +575,7 @@ var BookmarksMenuDNDObserver = {
   {
     if (this.isPlatformNotSupported)
       return;
-    if (this.isTimerSupported || !aDragSession.sourceNode) {
+    if (this.isTimerSupported) {
       var targetToBeLoaded = aTarget;
       clearTimeout(this.loadTimer);
       if (aTarget == aDragSession.sourceNode)
@@ -627,7 +594,7 @@ var BookmarksMenuDNDObserver = {
     if (this.isPlatformNotSupported)
       return;
     var This = this;
-    if (this.isTimerSupported || !aDragSession.sourceNode) {
+    if (this.isTimerSupported) {
       clearTimeout(this.closeTimer)
       this.closeTimer=setTimeout(function () {This.onDragCloseTarget()}, This.springLoadedMenuDelay);
     } else {
@@ -636,7 +603,7 @@ var BookmarksMenuDNDObserver = {
       this.closeTarget = aTarget;
       this.loadTimer = null;
 
-      // If the user isn't rearranging within the menu, close it
+      // If user isn't rearranging within the menu, close it
       // To do so, we exploit a Mac bug: timeout set during
       // drag and drop on Windows and Mac are fired only after that the drop is released.
       // timeouts will pile up, we may have a better approach but for the moment, this one
@@ -694,7 +661,7 @@ var BookmarksMenuDNDObserver = {
   },
 
   onDragRemoveFeedBack: function (aTarget)
-  {
+  { 
     var newTarget;
     var bt;
     if (aTarget.id == "PersonalToolbar" || aTarget.id == "bookmarks-ptf") { 
@@ -724,29 +691,16 @@ var BookmarksMenuDNDObserver = {
 
 var BookmarksToolbar = 
 {
-  /////////////////////////////////////////////////////////////////////////////
-  // make bookmarks toolbar act like menus
-  openMenuButton: null,
-  autoOpenMenu: function (aTarget)
+  ////////////////////////////////////////////////
+  // loads a bookmark with the mouse middle button
+  loadBookmarkMiddleClick: function (aEvent, aDS)
   {
-    if (this.openMenuButton &&
-        this.openMenuButton != aTarget &&
-        aTarget.localName == "toolbarbutton" &&
-        (aTarget.type == "menu" ||
-         aTarget.type == "menu-button")) {
-      this.openMenuButton.open = false;
-      aTarget.open = true;
-    }
-  },
-  onMenuOpen: function (aTarget)
-  {
-    if (aTarget.parentNode.localName == "toolbarbutton")
-      this.openMenuButton = aTarget.parentNode;
-  },
-  onMenuClose: function (aTarget)
-  {
-    if (aTarget.parentNode.localName == "toolbarbutton")
-      this.openMenuButton = null;
+    if (aEvent.button != 1)
+      return;
+    // unlike for command events, we have to close the menus manually
+    BookmarksMenuDNDObserver.mCurrentDragOverTarget = null;
+    BookmarksMenuDNDObserver.onDragCloseTarget();
+    BookmarksUtils.loadBookmarkBrowser(aEvent, aEvent.target, aDS);
   },
 
   /////////////////////////////////////////////////////////////////////////////
@@ -777,12 +731,11 @@ var BookmarksToolbar =
   },
 
   resizeFunc: function(event) 
-  {
+  { 
     if (!event) // timer callback case
       BookmarksToolbarRDFObserver._overflowTimerInEffect = false;
-    // XXXcst - work around bug 295340 (broken event targets) on 1.8 branch
-    //else if (event.target != document)
-    //  return; // only interested in chrome resizes
+    else if (event.target != document)
+      return; // only interested in chrome resizes
 
     var buttons = document.getElementById("bookmarks-ptf");
     if (!buttons)
@@ -805,7 +758,7 @@ var BookmarksToolbar =
     for (var i=0; i<buttons.childNodes.length; i++) {
       var button = buttons.childNodes[i];
       button.collapsed = overflowed;
-
+      
       if (i == buttons.childNodes.length - 1)
         chevronWidth = 0;
       remainingWidth -= button.boxObject.width;
@@ -821,32 +774,33 @@ var BookmarksToolbar =
     }
   },
 
-  // Fill in tooltips for personal toolbar (and Bookmarks menu).
+  // Fill in tooltips for personal toolbar
   fillInBTTooltip: function (tipElement)
   {
-    // Don't show a tooltip for non bookmark related elements.
-    if (!/bookmark/.test(tipElement.className))
-      return false;
 
     var title = tipElement.label;
     var url = tipElement.statusText;
 
-    // Don't show a tooltip without any data.
-    if (!title && !url)
+    if (!title && !url) {
+      // bail out early if there is nothing to show
       return false;
+    }
 
-    var tooltipElement = document.getElementById("btTitleText");
-    tooltipElement.hidden = !title || (title == url);
-    if (!tooltipElement.hidden)
-      tooltipElement.setAttribute("value", title);
-
-    tooltipElement = document.getElementById("btUrlText");
-    tooltipElement.hidden = !url;
-    if (!tooltipElement.hidden)
-      tooltipElement.setAttribute("value", url);
-
-    // Show the tooltip.
-    return true;
+    var tooltipTitle = document.getElementById("btTitleText");
+    var tooltipUrl = document.getElementById("btUrlText"); 
+    if (title && title != url) {
+      tooltipTitle.removeAttribute("hidden");
+      tooltipTitle.setAttribute("value", title);
+    } else  {
+      tooltipTitle.setAttribute("hidden", "true");
+    }
+    if (url) {
+      tooltipUrl.removeAttribute("hidden");
+      tooltipUrl.setAttribute("value", url);
+    } else {
+      tooltipUrl.setAttribute("hidden", "true");
+    }
+    return true; // show tooltip
   }
 }
 
@@ -865,13 +819,13 @@ var BookmarksToolbarRDFObserver =
   onChange: function (aDataSource, aSource, aProperty, aOldTarget, aNewTarget) {},
   onMove: function (aDataSource, aOldSource, aNewSource, aProperty, aTarget) {},
   onBeginUpdateBatch: function (aDataSource) {},
-  onEndUpdateBatch: function (aDataSource)
-  {
+  onEndUpdateBatch:   function (aDataSource) {
     if (this._overflowTimerInEffect)
       return;
     this._overflowTimerInEffect = true;
     setTimeout(BookmarksToolbar.resizeFunc, 0, null);
   },
+
   _overflowTimerInEffect: false,
   setOverflowTimeout: function (aSource, aProperty)
   {

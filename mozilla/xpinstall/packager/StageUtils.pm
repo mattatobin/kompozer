@@ -322,8 +322,6 @@ sub GetProductBuildID
       $buildID =~ s/..*$aDefine\s+//;
       # strip out any quote characters
       $buildID =~ s/\"//g;
-      # get rid of whitespace - chomp misses ^M on cygwin
-      $buildID =~ s/\s//sg;
       chomp ($buildID);
     }
   }
@@ -444,15 +442,15 @@ sub GetProductMilestoneVersion
     print "   aDirConfigTopSrc: $aDirConfigTopSrc\n";
   }
 
-  #chdir("$aDirMozTopSrc/config");
-  $versionMilestone = `cat $aDirMozTopSrc/xpfe/bootstrap/version.txt`;
+  chdir("$aDirMozTopSrc/config");
+  $versionMilestone = `perl milestone.pl --topsrcdir $aDirConfigTopSrc`;
 
   if(defined($ENV{DEBUG_INSTALLER_BUILD}))
   {
     print "   versionMilestone: $versionMilestone\n";
   }
 
-  chomp($versionMilestone);
+  chop($versionMilestone);
   chdir($saveCwd);
 
   if(defined($initEmptyValues) && ($initEmptyValues eq 1))

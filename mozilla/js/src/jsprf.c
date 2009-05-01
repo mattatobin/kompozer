@@ -49,8 +49,6 @@
 #include "jsprf.h"
 #include "jslong.h"
 #include "jsutil.h" /* Added by JSIFY */
-#include "jspubtd.h"
-#include "jsstr.h"
 
 /*
 ** Note: on some platforms va_list is defined as an array,
@@ -107,7 +105,6 @@ struct NumArgState{
 #define TYPE_STRING     8
 #define TYPE_DOUBLE     9
 #define TYPE_INTSTR     10
-#define TYPE_WSTRING    11
 #define TYPE_UNKNOWN    20
 
 #define FLAG_LEFT       0x1
@@ -398,27 +395,6 @@ static int cvt_s(SprintfState *ss, const char *s, int width, int prec,
     return fill2(ss, s ? s : "(null)", slen, width, flags);
 }
 
-static int cvt_ws(SprintfState *ss, const jschar *ws, int width, int prec,
-                  int flags)
-{
-    int result;
-    /*
-     * Supply NULL as the JSContext; errors are not reported,
-     * and malloc() is used to allocate the buffer buffer.
-     */
-    if (ws) {
-        int slen = js_strlen(ws);
-        char *s = js_DeflateString(NULL, ws, slen);
-        if (!s)
-            return -1; /* JSStuffFunc error indicator. */
-        result = cvt_s(ss, s, width, prec, flags);
-        free(s);
-    } else {
-        result = cvt_s(ss, NULL, width, prec, flags);
-    }
-    return result;
-}
-
 /*
 ** BuildArgArray stands for Numbered Argument list Sprintf
 ** for example,
@@ -602,7 +578,7 @@ static struct NumArgState* BuildArgArray( const char *fmt, va_list ap, int* rv, 
             break;
 
         case 's':
-            nas[ cn ].type = (nas[ cn ].type == TYPE_UINT16) ? TYPE_WSTRING : TYPE_STRING;
+            nas[ cn ].type = TYPE_STRING;
             break;
 
         case 'n':
@@ -659,8 +635,6 @@ static struct NumArgState* BuildArgArray( const char *fmt, va_list ap, int* rv, 
 
         case TYPE_STRING:       (void)va_arg( ap, char* );              break;
 
-        case TYPE_WSTRING:      (void)va_arg( ap, jschar* );            break;
-
         case TYPE_INTSTR:       (void)va_arg( ap, JSIntn* );            break;
 
         case TYPE_DOUBLE:       (void)va_arg( ap, double );             break;
@@ -688,13 +662,11 @@ static int dosprintf(SprintfState *ss, const char *fmt, va_list ap)
     int flags, width, prec, radix, type;
     union {
         char ch;
-        jschar wch;
         int i;
         long l;
         JSInt64 ll;
         double d;
         const char *s;
-        const jschar* ws;
         int *ip;
     } u;
     const char *fmt0;
@@ -706,10 +678,7 @@ static int dosprintf(SprintfState *ss, const char *fmt, va_list ap)
     struct NumArgState nasArray[ NAS_DEFAULT_NUM ];
     char pattern[20];
     const char *dolPt = NULL;  /* in "%4$.2f", dolPt will poiont to . */
-#ifdef JS_C_STRINGS_ARE_UTF8
-    char utf8buf[6];
-    int utf8len;
-#endif
+
 
     /*
     ** build an argument array, IF the fmt is numbered argument
@@ -936,6 +905,7 @@ static int dosprintf(SprintfState *ss, const char *fmt, va_list ap)
             break;
 
           case 'c':
+            u.ch = va_arg(ap, int);
             if ((flags & FLAG_LEFT) == 0) {
                 while (width-- > 1) {
                     rv = (*ss->stuff)(ss, " ", 1);
@@ -944,20 +914,7 @@ static int dosprintf(SprintfState *ss, const char *fmt, va_list ap)
                     }
                 }
             }
-            switch (type) {
-              case TYPE_INT16:
-                /* Treat %hc as %c if JS_C_STRINGS_ARE_UTF8 is undefined. */
-#ifdef JS_C_STRINGS_ARE_UTF8
-                u.wch = va_arg(ap, int);
-                utf8len = js_OneUcs4ToUtf8Char (utf8buf, u.wch);
-                rv = (*ss->stuff)(ss, utf8buf, utf8len);
-                break;
-#endif
-              case TYPE_INTN:
-                u.ch = va_arg(ap, int);
-                rv = (*ss->stuff)(ss, &u.ch, 1);
-                break;
-            }
+            rv = (*ss->stuff)(ss, &u.ch, 1);
             if (rv < 0) {
                 return rv;
             }
@@ -996,17 +953,8 @@ static int dosprintf(SprintfState *ss, const char *fmt, va_list ap)
 #endif
 
           case 's':
-            if(type == TYPE_INT16) {
-                /*
-                 * This would do a simple string/byte conversion
-                 * if JS_C_STRINGS_ARE_UTF8 is not defined.
-                 */
-                u.ws = va_arg(ap, const jschar*);
-                rv = cvt_ws(ss, u.ws, width, prec, flags);
-            } else {
-                u.s = va_arg(ap, const char*);
-                rv = cvt_s(ss, u.s, width, prec, flags);
-            }
+            u.s = va_arg(ap, const char*);
+            rv = cvt_s(ss, u.s, width, prec, flags);
             if (rv < 0) {
                 return rv;
             }
@@ -1218,8 +1166,8 @@ JS_PUBLIC_API(JSUint32) JS_vsnprintf(char *out, JSUint32 outlen,const char *fmt,
     (void) dosprintf(&ss, fmt, ap);
 
     /* If we added chars, and we didn't append a null, do it now. */
-    if( (ss.cur != ss.base) && (ss.cur[-1] != '\0') )
-        ss.cur[-1] = '\0';
+    if( (ss.cur != ss.base) && (*(ss.cur - 1) != '\0') )
+        *(--ss.cur) = '\0';
 
     n = ss.cur - ss.base;
     return n ? n - 1 : n;

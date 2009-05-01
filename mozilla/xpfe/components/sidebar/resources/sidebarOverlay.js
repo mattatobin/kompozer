@@ -1,41 +1,23 @@
 /* -*- Mode: Java; tab-width: 4; insert-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+ * the License for the specific language governing rights and
+ * limitations under the License.
  *
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
+ */
 
 // xul/id summary:
 //
@@ -486,6 +468,7 @@ function (force_reload)
       this.node.removeAttribute('hidden');
   } else {
       no_panels_iframe.removeAttribute('hidden');
+      this.node.setAttribute('hidden','true');
   }
 
   this.initialized = true;
@@ -747,7 +730,7 @@ function sidebar_overlay_init() {
   sidebarObj.master_datasources = get_remote_datasource_url();
   sidebarObj.master_datasources += " chrome://communicator/content/sidebar/local-panels.rdf";
   sidebarObj.master_resource = 'urn:sidebar:master-panel-list';
-  sidebarObj.component = document.documentElement.getAttribute('windowtype');
+  sidebarObj.component = document.firstChild.getAttribute('windowtype');
   debug("sidebarObj.component is " + sidebarObj.component);
 
   // Initialize the display
@@ -905,14 +888,7 @@ function sidebar_get_panels_file() {
     // selected panels.
     // If <profile>/panels.rdf doesn't exist, GetFileLocation() will copy
     // bin/defaults/profile/panels.rdf to <profile>/panels.rdf
-    //
-    // <Kaze>  looks like PANELS_RDF_FILE (='UPnls') doesn't work any more (standalone composer + Gecko 1.8.x)
-    //         so let's use 'ProfD' and 'panels.rdf' to get the profile's panels
-    //var sidebar_file = locator_service.get(PANELS_RDF_FILE, Components.interfaces.nsIFile);
-    var sidebar_file = locator_service.get('ProfD', Components.interfaces.nsIFile);
-    sidebar_file.append('panels.rdf');
-    // </Kaze>
-    //
+    var sidebar_file = locator_service.get(PANELS_RDF_FILE, Components.interfaces.nsIFile);
     if (!sidebar_file.exists()) {
       // This should not happen, as GetFileLocation() should copy
       // defaults/panels.rdf to the users profile directory
@@ -1262,7 +1238,7 @@ function SidebarShowHide() {
   // Immediately save persistent values
   document.persist('sidebar-title-box', 'hidden');
   persist_width();
-  window.content.focus();
+  window._content.focus();
 }
 
 function SidebarBuildPickerPopup() {
@@ -1335,11 +1311,10 @@ function SidebarTogglePanel(panel_menuitem) {
     }
   }
 
-  var tabs = sidebarObj.panels.node.childNodes;
-
   if (did_exclude)
   {
     // if we excluded a tab in view then add another one
+    var tabs = sidebarObj.panels.node.childNodes;
     if (panel.is_in_view())
     {
       // we excluded one so let's try to bring a non-excluded one into view
@@ -1390,7 +1365,7 @@ function SidebarTogglePanel(panel_menuitem) {
 
   if (did_exclude && !sidebarObj.panels.visible_panels_exist())
     // surrender focus to main content area
-    window.content.focus();
+    window._content.focus();
   else
     // force all the sidebars to update
     refresh_all_sidebars();
@@ -1641,7 +1616,7 @@ if (!SB_DEBUG) {
     var indent = "| | | | | | | | | | | | | | | | | | | | | | | | | | | | + ";
     debug(indent.substr(indent.length - depth*2) + index +
           " " + node.nodeName);
-    if (node.nodeType != Node.TEXT_NODE) {
+    if (node.nodeName != "#text") {
       dump_attributes(node, depth);
     }
     var kids = node.childNodes;

@@ -158,7 +158,7 @@ C6=Component Uninstaller
 ;*** LOCALIZE ME BABY ***
 Description Short=C~omplete
 ;*** LOCALIZE ME BABY ***
-Description Long=Program will be installed with all the options available.
+Description Long=Program will be installed with the most common options.
 
 ; List of components to install/enable for this Setup Type.
 ; All other components not listed here will be disabled if
@@ -175,8 +175,6 @@ C8=Component En US lang pack
 C9=Component US region pack
 C10=Component DOM Inspector
 C11=Component Uninstaller
-C12=Component SRoaming
-C13=Component RPT
 ; Make sure Component QFA is LAST so 3rd party developers who might not want
 ; this component can easily remove it.
 ;C12=Component QFA
@@ -204,8 +202,6 @@ C8=Component En US lang pack
 C9=Component US region pack
 C10=Component DOM Inspector
 C11=Component Uninstaller
-C12=Component SRoaming
-C13=Component RPT
 ; Make sure Component QFA is LAST so 3rd party developers who might not want
 ; this component can easily remove it.
 ;C12=Component QFA
@@ -337,7 +333,7 @@ Show Dialog=AUTO
 
 [Check Instance0]
 ; If you create your own product, make sure to change this name to something else
-Class Name=SeaMonkeyMessageWindow
+Class Name=MozillaMessageWindow
 Window Name=
 ;*** LOCALIZE ME BABY ***
 Message=Download of $ProductName$ was successful. $ProductNameNoVersion$ must be closed to proceed with installation. Click OK to exit $ProductNameNoVersion$ automatically and to begin installation.
@@ -358,7 +354,7 @@ Extra Cmd0 Parameter=-u
 Message=Unable to close mozturbo.exe. Please press OK to try again. If this problem persists, press the Cancel button and close mozturbo.exe manually. To do this, go to the directory where $ProductName$ is installed and type 'mozturbo -u'.
 
 [Component XPCOM]
-Description Short=XPCOM
+Description Short=Mozilla XPCOM
 ;*** LOCALIZE ME BABY ***
 Description Long=Install Engine
 Archive=xpcom.xpi
@@ -526,16 +522,6 @@ $InstallSizeArchive$:inspector.xpi
 Attributes=SELECTED|FORCE_UPGRADE
 Force Upgrade File0=[SETUP PATH]\Chrome\inspector.jar
 
-[Component SRoaming]
-Description Short=Roaming
-;*** LOCALIZE ME BABY ***
-Description Long=Profile Roaming
-Archive=sroaming.xpi
-$InstallSize$:sroaming
-$InstallSizeArchive$:sroaming.xpi
-Attributes=SELECTED|FORCE_UPGRADE
-Force Upgrade File0=[SETUP PATH]\Chrome\sroaming.jar
-
 [Component US English Profile Defaults]
 Description Short=US English profile defaults
 ;*** LOCALIZE ME BABY ***
@@ -578,17 +564,6 @@ $InstallSizeArchive$:psm.xpi
 Attributes=SELECTED|INVISIBLE|FORCE_UPGRADE
 Force Upgrade File0=[SETUP PATH]\Components\pipnss.dll
 Force Upgrade File1=[SETUP PATH]\psm.exe
-
-[Component RPT]
-Description Short=Website Reporter
-;*** LOCALIZE ME BABY ***
-Description Long=Website Reporter
-Archive=reporter.xpi
-$InstallSize$:reporter
-$InstallSizeSystem$
-$InstallSizeArchive$:reporter.xpi
-Attributes=SELECTED|FORCE_UPGRADE
-Force Upgrade File0=[SETUP PATH]\chrome\reporter.jar
 
 [Core]
 Source=[XPI PATH]\xpcom.xpi
@@ -800,7 +775,7 @@ Timing=post smartupdate
 ClassName=WPFolder
 Title=$ProductName$
 Location=[DESKTOP]
-Object ID=<SEAMONKEYFLDR>
+Object ID=<MOZILLAFLDR>
 Attributes=FAIL
 
 [Component Navigator-Program Folder0]
@@ -814,7 +789,7 @@ Working Dir=[SETUP PATH]
 Location=[Default Folder]
 Association Filters=*.HTM,*.HTML
 Association Types=HTML,text/html
-Object ID=<SEAMONKEYEXE>
+Object ID=<MOZILLAEXE>
 Attributes=UPDATE
 
 [Component Navigator-Program Folder0-Object1]
@@ -824,7 +799,7 @@ File=[SETUP PATH]\$MainExeFile$
 Parameters=-ProfileManager
 Working Dir=[SETUP PATH]
 Location=[Default Folder]
-Object ID=<SEAMONKEYPROFMANAGER>
+Object ID=<MOZILLAPROFMANAGER>
 Attributes=UPDATE
 
 [Component Uninstaller-Program Folder0]
@@ -837,7 +812,7 @@ File=[SETUP PATH]\Uninstall\$UninstallFile$
 Parameters=/ua \"$UserAgent$\"
 Working Dir=[SETUP PATH]
 Location=[Default Folder]
-Object ID=<SEAMONKEY_UNINSTALL>
+Object ID=<MOZILLA_UNINSTALL>
 Attributes=UPDATE
 
 [Component MailNews-Program Folder0]
@@ -850,7 +825,7 @@ File=[SETUP PATH]\$MainExeFile$
 Parameters=-mail
 Working Dir=[SETUP PATH]
 Location=[Default Folder]
-Object ID=<SEAMONKEYMAIL>
+Object ID=<MOZILLAMAIL>
 Attributes=UPDATE
 
 [Strings]

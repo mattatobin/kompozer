@@ -1,40 +1,36 @@
 /* arcfour.c - the arc four algorithm.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.	Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.	If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /* See NOTES ON UMRs, Unititialized Memory Reads, below. */
 
@@ -51,11 +47,8 @@
 #define CONVERT_TO_WORDS
 #endif
 
-#if defined(AIX) || defined(OSF1) || defined(NSS_BEVAND_ARCFOUR)
-/* Treat array variables as longs, not bytes, on CPUs that take 
- * much longer to write bytes than to write longs, or when using 
- * assembler code that required it.
- */
+#if defined(AIX) || defined(OSF1)
+/* Treat array variables as longs, not bytes */
 #define USE_LONG
 #endif
 
@@ -64,7 +57,7 @@
 #define WORD ARC4WORD
 #endif
 
-#if defined(IS_64) && !defined(__sparc) && !defined(NSS_USE_64) 
+#if defined(NSS_USE_HYBRID) && !defined(SOLARIS) && !defined(NSS_USE_64) 
 typedef unsigned long long WORD;
 #else
 typedef unsigned long WORD;
@@ -91,15 +84,9 @@ typedef PRUint8 Stype;
  */
 struct RC4ContextStr
 {
-#if defined(NSS_ARCFOUR_IJ_B4_S) || defined(NSS_BEVAND_ARCFOUR)
-	Stype i;
-	Stype j;
 	Stype S[ARCFOUR_STATE_SIZE];
-#else
-	Stype S[ARCFOUR_STATE_SIZE];
-	Stype i;
-	Stype j;
-#endif
+	PRUint8 i;
+	PRUint8 j;
 };
 
 /*
@@ -140,30 +127,28 @@ static const Stype Kinit[256] = {
 	0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
+/*
+ * Initialize a new generator.
+ */
 RC4Context *
-RC4_AllocateContext(void)
-{
-    return PORT_ZNew(RC4Context);
-}
-
-SECStatus   
-RC4_InitContext(RC4Context *cx, const unsigned char *key, unsigned int len,
-	        const unsigned char * unused1, int unused2, 
-		unsigned int unused3, unsigned int unused4)
+RC4_CreateContext(const unsigned char *key, int len)
 {
 	int i;
 	PRUint8 j, tmp;
+	RC4Context *cx;
 	PRUint8 K[256];
 	PRUint8 *L;
 	/* verify the key length. */
 	PORT_Assert(len > 0 && len < ARCFOUR_STATE_SIZE);
 	if (len < 0 || len >= ARCFOUR_STATE_SIZE) {
 		PORT_SetError(SEC_ERROR_INVALID_ARGS);
-		return SECFailure;
+		return NULL;
 	}
+	/* Create space for the context. */
+	cx = (RC4Context *)PORT_ZAlloc(sizeof(RC4Context));
 	if (cx == NULL) {
-	    PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	    return SECFailure;
+		PORT_SetError(PR_OUT_OF_MEMORY_ERROR);
+		return NULL;
 	}
 	/* Initialize the state using array indices. */
 	memcpy(cx->S, Kinit, sizeof cx->S);
@@ -187,25 +172,7 @@ RC4_InitContext(RC4Context *cx, const unsigned char *key, unsigned int len,
 	}
 	cx->i = 0;
 	cx->j = 0;
-	return SECSuccess;
-}
-
-
-/*
- * Initialize a new generator.
- */
-RC4Context *
-RC4_CreateContext(const unsigned char *key, int len)
-{
-    RC4Context *cx = RC4_AllocateContext();
-    if (cx) {
-	SECStatus rv = RC4_InitContext(cx, key, len, NULL, 0, 0, 0);
-	if (rv != SECSuccess) {
-	    PORT_ZFree(cx, sizeof(*cx));
-	    cx = NULL;
-	}
-    }
-    return cx;
+	return cx;
 }
 
 void 
@@ -215,10 +182,6 @@ RC4_DestroyContext(RC4Context *cx, PRBool freeit)
 		PORT_ZFree(cx, sizeof(*cx));
 }
 
-#if defined(NSS_BEVAND_ARCFOUR)
-extern void ARCFOUR(RC4Context *cx, unsigned long inputLen, 
-	const unsigned char *input, unsigned char *output);
-#else
 /*
  * Generate the next byte in the stream.
  */
@@ -232,7 +195,7 @@ extern void ARCFOUR(RC4Context *cx, unsigned long inputLen,
 
 #ifdef CONVERT_TO_WORDS
 /*
- * Straight ARCFOUR op.  No optimization.
+ * Straight RC4 op.  No optimization.
  */
 static SECStatus 
 rc4_no_opt(RC4Context *cx, unsigned char *output,
@@ -264,7 +227,7 @@ rc4_no_opt(RC4Context *cx, unsigned char *output,
 
 #ifndef CONVERT_TO_WORDS
 /*
- * Byte-at-a-time ARCFOUR, unrolling the loop into 8 pieces.
+ * Byte-at-a-time RC4, unrolling the loop into 8 pieces.
  */
 static SECStatus 
 rc4_unrolled(RC4Context *cx, unsigned char *output,
@@ -351,7 +314,7 @@ rc4_unrolled(RC4Context *cx, unsigned char *output,
 	ARCFOUR_NEXT_BYTE(); streamWord |= (WORD)cx->S[t] << (n     );
 #endif
 
-#if (defined(IS_64) && !defined(__sparc)) || defined(NSS_USE_64)
+#if (defined(NSS_USE_HYBRID) && !defined(SOLARIS)) || defined(NSS_USE_64)
 /* 64-bit wordsize */
 #ifdef IS_LITTLE_ENDIAN
 #define ARCFOUR_NEXT_WORD() \
@@ -587,7 +550,6 @@ rc4_wordconv(RC4Context *cx, unsigned char *output,
 	return SECSuccess;
 }
 #endif
-#endif /* NSS_BEVAND_ARCFOUR */
 
 SECStatus 
 RC4_Encrypt(RC4Context *cx, unsigned char *output,
@@ -599,11 +561,7 @@ RC4_Encrypt(RC4Context *cx, unsigned char *output,
 		PORT_SetError(SEC_ERROR_INVALID_ARGS);
 		return SECFailure;
 	}
-#if defined(NSS_BEVAND_ARCFOUR)
-	ARCFOUR(cx, inputLen, input, output);
-        *outputLen = inputLen;
-	return SECSuccess;
-#elif defined( CONVERT_TO_WORDS )
+#ifdef CONVERT_TO_WORDS
 	/* Convert the byte-stream to a word-stream */
 	return rc4_wordconv(cx, output, outputLen, maxOutputLen, input, inputLen);
 #else
@@ -622,11 +580,7 @@ SECStatus RC4_Decrypt(RC4Context *cx, unsigned char *output,
 		return SECFailure;
 	}
 	/* decrypt and encrypt are same operation. */
-#if defined(NSS_BEVAND_ARCFOUR)
-	ARCFOUR(cx, inputLen, input, output);
-        *outputLen = inputLen;
-	return SECSuccess;
-#elif defined( CONVERT_TO_WORDS )
+#ifdef CONVERT_TO_WORDS
 	/* Convert the byte-stream to a word-stream */
 	return rc4_wordconv(cx, output, outputLen, maxOutputLen, input, inputLen);
 #else

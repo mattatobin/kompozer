@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,12 +14,13 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -27,11 +28,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -72,7 +73,10 @@ public:
     NS_IF_RELEASE(mBlock);
   }
   nsresult Init() {
-    return CallCreateInstance(NS_DIALOGPARAMBLOCK_CONTRACTID, &mBlock);
+    return nsComponentManager::CreateInstance(
+                                 NS_DIALOGPARAMBLOCK_CONTRACTID,
+                                 0, NS_GET_IID(nsIDialogParamBlock),
+                                 (void**) &mBlock);
   }
   nsIDialogParamBlock * operator->() const { return mBlock; }
   operator nsIDialogParamBlock * const () { return mBlock; }
@@ -85,8 +89,7 @@ private:
  ************************ nsPromptService ***********************
  ****************************************************************/
 
-NS_IMPL_ISUPPORTS3(nsPromptService, nsIPromptService,
-                   nsPIPromptService, nsINonBlockingAlertService)
+NS_IMPL_ISUPPORTS2(nsPromptService, nsIPromptService, nsPIPromptService)
 
 nsPromptService::nsPromptService() {
 }
@@ -290,10 +293,10 @@ nsPromptService::ConfirmEx(nsIDOMWindow *parent,
 
   block->SetInt(eDefaultButton, (buttonFlags & BUTTON_DEFAULT_MASK) >> 24);
   block->SetInt(eDelayButtonEnable, buttonFlags & BUTTON_DELAY_ENABLE);
- 
+
   PRInt32 numberButtons = 0;
   for (int i = 0; i < 3; i++) { 
-    
+
     nsXPIDLString buttonTextStr;
     const PRUnichar* buttonText = 0;
     switch (buttonFlags & 0xff) {
@@ -440,7 +443,7 @@ nsPromptService::PromptUsernameAndPassword(nsIDOMWindow *parent,
   nsXPIDLString stringOwner;
  
   if (!dialogTitle) {
-    rv = GetLocaleString("PromptUsernameAndPassword2", getter_Copies(stringOwner));
+    rv = GetLocaleString("PromptUsernameAndPassword", getter_Copies(stringOwner));
     if (NS_FAILED(rv)) return NS_ERROR_FAILURE;
     dialogTitle = stringOwner.get();
   }
@@ -510,7 +513,7 @@ NS_IMETHODIMP nsPromptService::PromptPassword(nsIDOMWindow *parent,
   nsXPIDLString stringOwner;
  
   if (!dialogTitle) {
-    rv = GetLocaleString("PromptPassword2", getter_Copies(stringOwner));
+    rv = GetLocaleString("PromptPassword", getter_Copies(stringOwner));
     if (NS_FAILED(rv)) return NS_ERROR_FAILURE;
     dialogTitle = stringOwner.get();
   }
@@ -604,32 +607,6 @@ nsPromptService::Select(nsIDOMWindow *parent, const PRUnichar *dialogTitle,
   *_retval = buttonPressed ? PR_FALSE : PR_TRUE;
 
   return rv;
-}
-
-/* void showNonBlockingAlert (in nsIDOMWindow aParent, in wstring aDialogTitle, in wstring aText); */
-NS_IMETHODIMP
-nsPromptService::ShowNonBlockingAlert(nsIDOMWindow *aParent,
-                                      const PRUnichar *aDialogTitle,
-                                      const PRUnichar *aText)
-{
-  NS_ENSURE_ARG(aParent);
-  if (!mWatcher)
-    return NS_ERROR_FAILURE;
-
-  nsCOMPtr<nsIDialogParamBlock> paramBlock(do_CreateInstance(NS_DIALOGPARAMBLOCK_CONTRACTID));
-  if (!paramBlock)
-    return NS_ERROR_FAILURE;
-
-  paramBlock->SetInt(nsPIPromptService::eNumberButtons, 1);
-  paramBlock->SetString(nsPIPromptService::eIconClass, NS_LITERAL_STRING("alert-icon").get());
-  paramBlock->SetString(nsPIPromptService::eDialogTitle, aDialogTitle);
-  paramBlock->SetString(nsPIPromptService::eMsg, aText);
-
-  nsCOMPtr<nsIDOMWindow> dialog;
-  mWatcher->OpenWindow(aParent, "chrome://global/content/commonDialog.xul",
-                       "_blank", "dependent,centerscreen,chrome,titlebar",
-                       paramBlock, getter_AddRefs(dialog));
-  return NS_OK;
 }
 
 nsresult

@@ -1,5 +1,4 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=8 sw=4 et tw=80:
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
@@ -42,7 +41,6 @@
 /* JavaScript JSClasses and JSOps for our Wrapped Native JS Objects. */
 
 #include "xpcprivate.h"
-#include "XPCNativeWrapper.h"
 
 /***************************************************************************/
 
@@ -124,7 +122,6 @@ XPC_WN_Shared_ToString(JSContext *cx, JSObject *obj,
                        uintN argc, jsval *argv, jsval *vp)
 {
     XPCCallContext ccx(JS_CALLER, cx, obj);
-    ccx.SetName(ccx.GetRuntime()->GetStringJSVal(XPCJSRuntime::IDX_TO_STRING));
     ccx.SetArgsAndResultPtr(argc, argv, vp);
     return ToStringGuts(ccx);
 }
@@ -433,11 +430,9 @@ DefinePropertyIfFound(XPCCallContext& ccx,
                                    propFlags, nsnull);
     }
 
-    if(idval == rt->GetStringJSVal(XPCJSRuntime::IDX_TO_STRING) ||
-       idval == rt->GetStringJSVal(XPCJSRuntime::IDX_TO_SOURCE) ||
-       (scriptableInfo &&
-        scriptableInfo->GetFlags().DontEnumQueryInterface() &&
-        idval == rt->GetStringJSVal(XPCJSRuntime::IDX_QUERY_INTERFACE)))
+    if(scriptableInfo &&
+       scriptableInfo->GetFlags().DontEnumQueryInterface() &&
+       idval == rt->GetStringJSVal(XPCJSRuntime::IDX_QUERY_INTERFACE))
         propFlags &= ~JSPROP_ENUMERATE;
 
     JSObject* funobj;
@@ -451,7 +446,7 @@ DefinePropertyIfFound(XPCCallContext& ccx,
     
         AUTO_MARK_JSVAL(ccx, funval);
 
-        funobj = xpc_CloneJSFunction(ccx, JSVAL_TO_OBJECT(funval), obj);
+        funobj = JS_CloneFunctionObject(ccx, JSVAL_TO_OBJECT(funval), obj);
         if(!funobj)
             return JS_FALSE;
     }
@@ -666,12 +661,6 @@ MarkScopeJSObjects(JSContext *cx, XPCWrappedNativeScope* scope, void *arg)
     {
         JS_MarkGCThing(cx, obj, "XPCWrappedNativeScope::mPrototypeJSObject", arg);
     }
-
-    obj = scope->GetPrototypeJSFunction();
-    if(obj)
-    {
-        JS_MarkGCThing(cx, obj, "XPCWrappedNativeScope::mPrototypeJSFunction", arg);
-    }
 }
 
 void
@@ -743,161 +732,31 @@ XPC_WN_NoHelper_Resolve(JSContext *cx, JSObject *obj, jsval idval)
                                  JSPROP_PERMANENT, nsnull);
 }
 
-nsISupports *
-GetIdentityObject(JSContext *cx, JSObject *obj)
-{
-    XPCWrappedNative *wrapper;
+JSClass XPC_WN_NoHelper_JSClass = {
+    "XPCWrappedNative_NoHelper",    // name;
+    JSCLASS_HAS_PRIVATE |
+    JSCLASS_PRIVATE_IS_NSISUPPORTS, // flags;
 
-    if(XPCNativeWrapper::IsNativeWrapper(cx, obj))
-        wrapper = XPCNativeWrapper::GetWrappedNative(cx, obj);
-    else
-        wrapper = XPCWrappedNative::GetWrappedNativeOfJSObject(cx, obj);
+    /* Mandatory non-null function pointer members. */
+    XPC_WN_OnlyIWrite_PropertyStub, // addProperty;
+    XPC_WN_CannotModifyPropertyStub,// delProperty;
+    JS_PropertyStub,                // getProperty;
+    XPC_WN_OnlyIWrite_PropertyStub, // setProperty;
 
-    if(!wrapper) {
-        return nsnull;
-    }
+    XPC_WN_Shared_Enumerate,        // enumerate;
+    XPC_WN_NoHelper_Resolve,        // resolve;
+    XPC_WN_Shared_Convert,          // convert;
+    XPC_WN_NoHelper_Finalize,       // finalize;
 
-    return wrapper->GetIdentityObject();
-}
-
-JS_STATIC_DLL_CALLBACK(JSBool)
-XPC_WN_Equality(JSContext *cx, JSObject *obj, jsval v, JSBool *bp)
-{
-    *bp = JS_FALSE;
-
-    XPCWrappedNative *wrapper =
-        XPCWrappedNative::GetWrappedNativeOfJSObject(cx, obj);
-    THROW_AND_RETURN_IF_BAD_WRAPPER(cx, wrapper);
-
-    XPCNativeScriptableInfo* si = wrapper->GetScriptableInfo();
-    if(si && si->GetFlags().WantEquality())
-    {
-        nsresult rv = si->GetCallback()->Equality(wrapper, cx, obj, v, bp);
-
-        if(NS_FAILED(rv))
-            return Throw(rv, cx);
-    }
-    else if(!JSVAL_IS_PRIMITIVE(v))
-    {
-        JSObject *other = JSVAL_TO_OBJECT(v);
-
-        *bp = (obj == other ||
-               GetIdentityObject(cx, obj) == GetIdentityObject(cx, other));
-    }
-
-    return JS_TRUE;
-}
-
-JS_STATIC_DLL_CALLBACK(JSObject *)
-XPC_WN_OuterObject(JSContext *cx, JSObject *obj)
-{
-    XPCWrappedNative *wrapper =
-        XPCWrappedNative::GetWrappedNativeOfJSObject(cx, obj);
-    if(!wrapper)
-    {
-        Throw(NS_ERROR_XPC_BAD_OP_ON_WN_PROTO, cx);
-
-        return nsnull;
-    }
-
-    if(!wrapper->IsValid())
-    {
-        Throw(NS_ERROR_XPC_HAS_BEEN_SHUTDOWN, cx);
-
-        return nsnull;
-    }
-
-    XPCNativeScriptableInfo* si = wrapper->GetScriptableInfo();
-    if(si && si->GetFlags().WantOuterObject())
-    {
-        JSObject *newThis;
-        nsresult rv =
-            si->GetCallback()->OuterObject(wrapper, cx, obj, &newThis);
-
-        if(NS_FAILED(rv))
-        {
-            Throw(rv, cx);
-
-            return nsnull;
-        }
-
-        obj = newThis;
-    }
-
-    return obj;
-}
-
-JS_STATIC_DLL_CALLBACK(JSObject *)
-XPC_WN_InnerObject(JSContext *cx, JSObject *obj)
-{
-    XPCWrappedNative *wrapper =
-        XPCWrappedNative::GetWrappedNativeOfJSObject(cx, obj);
-    if(!wrapper)
-    {
-        Throw(NS_ERROR_XPC_BAD_OP_ON_WN_PROTO, cx);
-
-        return nsnull;
-    }
-
-    if(!wrapper->IsValid())
-    {
-        Throw(NS_ERROR_XPC_HAS_BEEN_SHUTDOWN, cx);
-
-        return nsnull;
-    }
-
-    XPCNativeScriptableInfo* si = wrapper->GetScriptableInfo();
-    if(si && si->GetFlags().WantInnerObject())
-    {
-        JSObject *newThis;
-        nsresult rv =
-            si->GetCallback()->InnerObject(wrapper, cx, obj, &newThis);
-
-        if(NS_FAILED(rv))
-        {
-            Throw(rv, cx);
-
-            return nsnull;
-        }
-
-        obj = newThis;
-    }
-
-    return obj;
-}
-
-JSExtendedClass XPC_WN_NoHelper_JSClass = {
-    {
-        "XPCWrappedNative_NoHelper",    // name;
-        JSCLASS_HAS_PRIVATE |
-        JSCLASS_PRIVATE_IS_NSISUPPORTS |
-        JSCLASS_IS_EXTENDED, // flags;
-
-        /* Mandatory non-null function pointer members. */
-        XPC_WN_OnlyIWrite_PropertyStub, // addProperty;
-        XPC_WN_CannotModifyPropertyStub,// delProperty;
-        JS_PropertyStub,                // getProperty;
-        XPC_WN_OnlyIWrite_PropertyStub, // setProperty;
-
-        XPC_WN_Shared_Enumerate,        // enumerate;
-        XPC_WN_NoHelper_Resolve,        // resolve;
-        XPC_WN_Shared_Convert,          // convert;
-        XPC_WN_NoHelper_Finalize,       // finalize;
-
-        /* Optionally non-null members start here. */
-        nsnull,                         // getObjectOps;
-        nsnull,                         // checkAccess;
-        nsnull,                         // call;
-        nsnull,                         // construct;
-        nsnull,                         // xdrObject;
-        nsnull,                         // hasInstance;
-        XPC_WN_Shared_Mark,             // mark;
-        nsnull                          // spare;
-    },
-    XPC_WN_Equality,
-    XPC_WN_OuterObject,
-    XPC_WN_InnerObject,
-    nsnull,nsnull,nsnull,nsnull,nsnull
+    /* Optionally non-null members start here. */
+    nsnull,                         // getObjectOps;
+    nsnull,                         // checkAccess;
+    nsnull,                         // call;
+    nsnull,                         // construct;
+    nsnull,                         // xdrObject;
+    nsnull,                         // hasInstance;
+    XPC_WN_Shared_Mark,             // mark;
+    nsnull                          // spare;
 };
 
 
@@ -1240,22 +1099,6 @@ XPC_WN_JSOp_Enumerate(JSContext *cx, JSObject *obj, JSIterateOp enum_op,
     return js_ObjectOps.enumerate(cx, obj, enum_op, statep, idp);
 }
 
-JS_STATIC_DLL_CALLBACK(void)
-XPC_WN_JSOp_Clear(JSContext *cx, JSObject *obj)
-{
-    // If our scope is cleared, make sure we clear the scope of our
-    // native wrapper as well.
-    XPCWrappedNative *wrapper =
-        XPCWrappedNative::GetWrappedNativeOfJSObject(cx, obj);
-
-    if(wrapper && wrapper->IsValid())
-    {
-        XPCNativeWrapper::ClearWrappedNativeScopes(cx, wrapper);
-    }
-
-    js_ObjectOps.clear(cx, obj);
-}
-
 JSObjectOps * JS_DLL_CALLBACK
 XPC_WN_GetObjectOpsNoCall(JSContext *cx, JSClass *clazz)
 {
@@ -1277,11 +1120,9 @@ JSBool xpc_InitWrappedNativeJSOps()
 
         memcpy(&XPC_WN_WithCall_JSOps, &js_ObjectOps, sizeof(JSObjectOps));
         XPC_WN_WithCall_JSOps.enumerate = XPC_WN_JSOp_Enumerate;
-        XPC_WN_WithCall_JSOps.clear = XPC_WN_JSOp_Clear;
 
         XPC_WN_NoCall_JSOps.call = nsnull;
         XPC_WN_NoCall_JSOps.construct = nsnull;
-        XPC_WN_NoCall_JSOps.clear = XPC_WN_JSOp_Clear;
     }
     return JS_TRUE;
 }
@@ -1291,11 +1132,10 @@ JSBool xpc_InitWrappedNativeJSOps()
 // static
 XPCNativeScriptableInfo*
 XPCNativeScriptableInfo::Construct(XPCCallContext& ccx,
-                                   JSBool isGlobal,
                                    const XPCNativeScriptableCreateInfo* sci)
 {
-    NS_ASSERTION(sci, "bad param");
     NS_ASSERTION(sci->GetCallback(), "bad param");
+    NS_ASSERTION(sci, "bad param");
 
     XPCNativeScriptableInfo* newObj =
         new XPCNativeScriptableInfo(sci->GetCallback());
@@ -1315,7 +1155,7 @@ XPCNativeScriptableInfo::Construct(XPCCallContext& ccx,
     XPCNativeScriptableSharedMap* map = rt->GetNativeScriptableSharedMap();
     {   // scoped lock
         XPCAutoLock lock(rt->GetMapLock());
-        success = map->GetNewOrUsed(sci->GetFlags(), name, isGlobal, newObj);
+        success = map->GetNewOrUsed(sci->GetFlags(), name, newObj);
     }
 
     if(!success)
@@ -1328,79 +1168,75 @@ XPCNativeScriptableInfo::Construct(XPCCallContext& ccx,
 }
 
 void
-XPCNativeScriptableShared::PopulateJSClass(JSBool isGlobal)
+XPCNativeScriptableShared::PopulateJSClass()
 {
-    NS_ASSERTION(mJSClass.base.name, "bad state!");
+    NS_ASSERTION(mJSClass.name, "bad state!");
 
-    mJSClass.base.flags = JSCLASS_HAS_PRIVATE |
-                          JSCLASS_PRIVATE_IS_NSISUPPORTS |
-                          JSCLASS_NEW_RESOLVE |
-                          JSCLASS_IS_EXTENDED;
-
-    if(isGlobal)
-        mJSClass.base.flags |= JSCLASS_GLOBAL_FLAGS;
+    mJSClass.flags = JSCLASS_HAS_PRIVATE |
+                     JSCLASS_PRIVATE_IS_NSISUPPORTS |
+                     JSCLASS_NEW_RESOLVE;
 
     if(mFlags.WantAddProperty())
-        mJSClass.base.addProperty = XPC_WN_Helper_AddProperty;
+        mJSClass.addProperty = XPC_WN_Helper_AddProperty;
     else if(mFlags.UseJSStubForAddProperty())
-        mJSClass.base.addProperty = JS_PropertyStub;
+        mJSClass.addProperty = JS_PropertyStub;
     else if(mFlags.AllowPropModsDuringResolve())
-        mJSClass.base.addProperty = XPC_WN_MaybeResolvingPropertyStub;
+        mJSClass.addProperty = XPC_WN_MaybeResolvingPropertyStub;
     else
-        mJSClass.base.addProperty = XPC_WN_CannotModifyPropertyStub;
+        mJSClass.addProperty = XPC_WN_CannotModifyPropertyStub;
 
     if(mFlags.WantDelProperty())
-        mJSClass.base.delProperty = XPC_WN_Helper_DelProperty;
+        mJSClass.delProperty = XPC_WN_Helper_DelProperty;
     else if(mFlags.UseJSStubForDelProperty())
-        mJSClass.base.delProperty = JS_PropertyStub;
+        mJSClass.delProperty = JS_PropertyStub;
     else if(mFlags.AllowPropModsDuringResolve())
-        mJSClass.base.delProperty = XPC_WN_MaybeResolvingPropertyStub;
+        mJSClass.delProperty = XPC_WN_MaybeResolvingPropertyStub;
     else
-        mJSClass.base.delProperty = XPC_WN_CannotModifyPropertyStub;
+        mJSClass.delProperty = XPC_WN_CannotModifyPropertyStub;
 
     if(mFlags.WantGetProperty())
-        mJSClass.base.getProperty = XPC_WN_Helper_GetProperty;
+        mJSClass.getProperty = XPC_WN_Helper_GetProperty;
     else
-        mJSClass.base.getProperty = JS_PropertyStub;
+        mJSClass.getProperty = JS_PropertyStub;
 
     if(mFlags.WantSetProperty())
-        mJSClass.base.setProperty = XPC_WN_Helper_SetProperty;
+        mJSClass.setProperty = XPC_WN_Helper_SetProperty;
     else if(mFlags.UseJSStubForSetProperty())
-        mJSClass.base.setProperty = JS_PropertyStub;
+        mJSClass.setProperty = JS_PropertyStub;
     else if(mFlags.AllowPropModsDuringResolve())
-        mJSClass.base.setProperty = XPC_WN_MaybeResolvingPropertyStub;
+        mJSClass.setProperty = XPC_WN_MaybeResolvingPropertyStub;
     else
-        mJSClass.base.setProperty = XPC_WN_CannotModifyPropertyStub;
+        mJSClass.setProperty = XPC_WN_CannotModifyPropertyStub;
 
     // We figure out most of the enumerate strategy at call time.
 
     if(mFlags.WantNewEnumerate() || mFlags.WantEnumerate() ||
        mFlags.DontEnumStaticProps())
-        mJSClass.base.enumerate = JS_EnumerateStub;
+        mJSClass.enumerate = JS_EnumerateStub;
     else
-        mJSClass.base.enumerate = XPC_WN_Shared_Enumerate;
+        mJSClass.enumerate = XPC_WN_Shared_Enumerate;
 
     // We have to figure out resolve strategy at call time
-    mJSClass.base.resolve = (JSResolveOp) XPC_WN_Helper_NewResolve;
+    mJSClass.resolve = (JSResolveOp) XPC_WN_Helper_NewResolve;
 
     if(mFlags.WantConvert())
-        mJSClass.base.convert = XPC_WN_Helper_Convert;
+        mJSClass.convert = XPC_WN_Helper_Convert;
     else
-        mJSClass.base.convert = XPC_WN_Shared_Convert;
+        mJSClass.convert = XPC_WN_Shared_Convert;
 
     if(mFlags.WantFinalize())
-        mJSClass.base.finalize = XPC_WN_Helper_Finalize;
+        mJSClass.finalize = XPC_WN_Helper_Finalize;
     else
-        mJSClass.base.finalize = XPC_WN_NoHelper_Finalize;
+        mJSClass.finalize = XPC_WN_NoHelper_Finalize;
 
     // We let the rest default to nsnull unless the helper wants them...
     if(mFlags.WantCheckAccess())
-        mJSClass.base.checkAccess = XPC_WN_Helper_CheckAccess;
+        mJSClass.checkAccess = XPC_WN_Helper_CheckAccess;
 
     // Note that we *must* set
-    //   mJSClass.base.getObjectOps = XPC_WN_GetObjectOpsNoCall
+    //   mJSClass.getObjectOps = XPC_WN_GetObjectOpsNoCall
     // or
-    //   mJSClass.base.getObjectOps = XPC_WN_GetObjectOpsWithCall
+    //   mJSClass.getObjectOps = XPC_WN_GetObjectOpsWithCall
     // (even for the cases were it does not do much) because with these
     // dynamically generated JSClasses, the code in
     // XPCWrappedNative::GetWrappedNativeOfJSObject() needs to look for
@@ -1409,28 +1245,24 @@ XPCNativeScriptableShared::PopulateJSClass(JSBool isGlobal)
 
     if(mFlags.WantCall() || mFlags.WantConstruct())
     {
-        mJSClass.base.getObjectOps = XPC_WN_GetObjectOpsWithCall;
+        mJSClass.getObjectOps = XPC_WN_GetObjectOpsWithCall;
         if(mFlags.WantCall())
-            mJSClass.base.call = XPC_WN_Helper_Call;
+            mJSClass.call = XPC_WN_Helper_Call;
         if(mFlags.WantConstruct())
-            mJSClass.base.construct = XPC_WN_Helper_Construct;
+            mJSClass.construct = XPC_WN_Helper_Construct;
     }
     else
     {
-        mJSClass.base.getObjectOps = XPC_WN_GetObjectOpsNoCall;
+        mJSClass.getObjectOps = XPC_WN_GetObjectOpsNoCall;
     }
 
     if(mFlags.WantHasInstance())
-        mJSClass.base.hasInstance = XPC_WN_Helper_HasInstance;
+        mJSClass.hasInstance = XPC_WN_Helper_HasInstance;
 
     if(mFlags.WantMark())
-        mJSClass.base.mark = XPC_WN_Helper_Mark;
+        mJSClass.mark = XPC_WN_Helper_Mark;
     else
-        mJSClass.base.mark = XPC_WN_Shared_Mark;
-
-    mJSClass.equality = XPC_WN_Equality;
-    mJSClass.outerObject = XPC_WN_OuterObject;
-    mJSClass.innerObject = XPC_WN_InnerObject;
+        mJSClass.mark = XPC_WN_Shared_Mark;
 }
 
 /***************************************************************************/

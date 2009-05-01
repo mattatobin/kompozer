@@ -41,13 +41,8 @@ VPATH		= @srcdir@
 
 include $(DEPTH)/config/autoconf.mk
 
-MODULE = gksvggdiplus
-LIBRARY_NAME = gksvggdiplus
-EXPORT_LIBRARY = 1
-GRE_MODULE = 1
-FORCE_SHARED_LIB = 1
-MOZILLA_INTERNAL_API = 1
-
+MODULE = layout
+LIBRARY_NAME = gksvgrenderergdiplus_s
 REQUIRES = 	xpcom \
 			widget \
 			gfx \
@@ -56,19 +51,15 @@ REQUIRES = 	xpcom \
 			necko \
 			content \
 			unicharutil \
-			locale \
-			layout \
 			$(NULL)
 
 CPPSRCS = 	\
 			nsSVGGDIPlusCanvas.cpp \
 			nsSVGGDIPlusGlyphGeometry.cpp \
 			nsSVGGDIPlusGlyphMetrics.cpp \
-			nsSVGGDIPlusGradient.cpp \
 			nsSVGGDIPlusPathBuilder.cpp \
 			nsSVGGDIPlusPathGeometry.cpp \
 			nsSVGGDIPlusRegion.cpp \
-			nsSVGGDIPlusSurface.cpp \
 			nsSVGRendererGDIPlus.cpp \
 			$(NULL)
 
@@ -79,18 +70,8 @@ LOCAL_INCLUDES	= \
 
 include $(topsrcdir)/config/config.mk
 
-EXTRA_DSO_LIBS = \
-	gkgfx \
-	$(NULL)
-
-EXTRA_DSO_LDOPTS = \
-	$(EXTRA_DSO_LIBS) \
-	$(MOZ_UNICHARUTIL_LIBS) \
-	$(MOZ_COMPONENT_LIBS) \
-	$(NULL)
-
-OS_LIBS += \
-	Gdiplus.lib \
-	$(NULL)
+# we don't want the shared lib, but we want to force the creation of a static lib.
+FORCE_STATIC_LIB = 1
 
 include $(topsrcdir)/config/rules.mk
+

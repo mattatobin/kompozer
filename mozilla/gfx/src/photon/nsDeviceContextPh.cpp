@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -99,9 +100,9 @@ printf( "\n\n\n!!!!!!!!!!!!!!!!! ~nsDeviceContextPh is unloading the mFontLoadCa
 	}
 
 NS_IMETHODIMP nsDeviceContextPh :: Init( nsNativeWidget aWidget ) {
-    
+
   CommonInit(NULL);
- 
+
   // Call my base class
   return DeviceContextImpl::Init( aWidget );
 	}
@@ -180,7 +181,7 @@ void nsDeviceContextPh :: CommonInit( nsNativeDeviceContext aDC ) {
 
   if( !initialized ) {
     initialized = 1;
-    // Set prefVal the value of the preference "layout.css.dpi"
+    // Set prefVal the value of the preference "browser.display.screen_resolution"
     // or -1 if we can't get it.
     // If it's negative, we pretend it's not set.
     // If it's 0, it means force use of the operating system's logical resolution.
@@ -190,12 +191,12 @@ void nsDeviceContextPh :: CommonInit( nsNativeDeviceContext aDC ) {
 
     nsCOMPtr<nsIPref> prefs(do_GetService(kPrefCID, &res));
     if( NS_SUCCEEDED( res ) && prefs ) {
-      res = prefs->GetIntPref("layout.css.dpi", &prefVal);
+      res = prefs->GetIntPref("browser.display.screen_resolution", &prefVal);
       if( NS_FAILED( res ) ) {
         prefVal = 96;
       	}
 
-      prefs->RegisterCallback( "layout.css.dpi", prefChanged, (void *)this );
+      prefs->RegisterCallback( "browser.display.screen_resolution", prefChanged, (void *)this );
       if( prefVal >0 ) mDpi = prefVal;
     	}
   	}
@@ -540,7 +541,7 @@ int nsDeviceContextPh::prefChanged( const char *aPref, void *aClosure ) {
   nsDeviceContextPh *context = (nsDeviceContextPh*)aClosure;
   nsresult rv;
 
-  if( nsCRT::strcmp(aPref, "layout.css.dpi")==0 )  {
+  if( nsCRT::strcmp(aPref, "browser.display.screen_resolution")==0 )  {
     PRInt32 dpi;
     nsCOMPtr<nsIPref> prefs(do_GetService(kPrefCID, &rv));
     rv = prefs->GetIntPref(aPref, &dpi);

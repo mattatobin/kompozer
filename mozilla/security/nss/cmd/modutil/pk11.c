@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /* To edit this file, set TABSTOPS to 4 spaces. 
  * This is not the normal NSS convention. 
@@ -141,11 +138,11 @@ ChkFipsMode(char *arg)
  */
 
 typedef struct {
-    const char *name;
-    const unsigned long mask;
+    char *name;
+    unsigned long mask;
 } MaskString;
 
-static const MaskString mechanismStrings[] = {
+static MaskString mechanismStrings[] = {
     {"RSA", PUBLIC_MECH_RSA_FLAG},
     {"DSA", PUBLIC_MECH_DSA_FLAG},
     {"RC2", PUBLIC_MECH_RC2_FLAG},
@@ -159,19 +156,16 @@ static const MaskString mechanismStrings[] = {
     {"MD2", PUBLIC_MECH_MD2_FLAG},
     {"SSL", PUBLIC_MECH_SSL_FLAG},
     {"TLS", PUBLIC_MECH_TLS_FLAG},
-    {"AES", PUBLIC_MECH_AES_FLAG},
-    {"SHA256", PUBLIC_MECH_SHA256_FLAG},
-    {"SHA512", PUBLIC_MECH_SHA512_FLAG},
     {"RANDOM", PUBLIC_MECH_RANDOM_FLAG},
     {"FRIENDLY", PUBLIC_MECH_FRIENDLY_FLAG}
 };
-static const int numMechanismStrings =
+static int numMechanismStrings =
     sizeof(mechanismStrings) / sizeof(mechanismStrings[0]);
 
-static const MaskString cipherStrings[] = {
+static MaskString cipherStrings[] = {
     {"FORTEZZA", PUBLIC_CIPHER_FORTEZZA_FLAG}
 };
-static const int numCipherStrings =
+static int numCipherStrings =
     sizeof(cipherStrings) / sizeof(cipherStrings[0]);
 
 /* Maximum length of a colon-separated list of all the strings in an 
@@ -189,7 +183,7 @@ static const int numCipherStrings =
  * elements is the number of elements in array.
  */
 static unsigned long
-getFlagsFromString(char *string, const MaskString array[], int elements)
+getFlagsFromString(char *string, MaskString array[], int elements)
 {
     unsigned long ret = 0;
     short i = 0;
@@ -242,7 +236,7 @@ getFlagsFromString(char *string, const MaskString array[], int elements)
  * if you need it permanently or you want to change it.
  */
 static char *
-getStringFromFlags(unsigned long flags, const MaskString array[], int elements)
+getStringFromFlags(unsigned long flags, MaskString array[], int elements)
 {
     static char buf[MAX_STRING_LIST_LEN];
     int i;
@@ -742,7 +736,7 @@ loser:
 	PORT_Free(newpw);
     }
     if(newpw2) {
-	memset(newpw2, 0, strlen(newpw2));
+	memset(newpw2, 0, strlen(newpw));
 	PORT_Free(newpw2);
     }
     return ret;

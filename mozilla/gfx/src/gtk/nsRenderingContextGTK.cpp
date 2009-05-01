@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,21 +23,21 @@
  *   Tomi Leppikangas <tomi.leppikangas@oulu.fi>
  *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "nsFixedSizeAllocator.h"
 #include "nsRenderingContextGTK.h"
 #include "nsRegionGTK.h"
 #include "nsImageGTK.h"
@@ -60,6 +60,8 @@
 
 NS_IMPL_ISUPPORTS1(nsRenderingContextGTK, nsIRenderingContext)
 
+static NS_DEFINE_CID(kRegionCID, NS_REGION_CID);
+
 #define NSRECT_TO_GDKRECT(ns,gdk) \
   PR_BEGIN_MACRO \
   gdk.x = ns.x; \
@@ -69,7 +71,6 @@ NS_IMPL_ISUPPORTS1(nsRenderingContextGTK, nsIRenderingContext)
   PR_END_MACRO
 
 static nsGCCache *gcCache = nsnull;
-static nsFixedSizeAllocator *gStatePool = nsnull;
 
 nsRenderingContextGTK::nsRenderingContextGTK()
 {
@@ -96,16 +97,13 @@ nsRenderingContextGTK::~nsRenderingContextGTK()
   PRInt32 cnt = mStateCache.Count();
 
   while (--cnt >= 0)
-    PopState();
-
-  if (mTranMatrix) {
-    if (gStatePool) {
-      mTranMatrix->~nsTransform2D();
-      gStatePool->Free(mTranMatrix, sizeof(nsTransform2D));
-    } else {
-      delete mTranMatrix;
-    }
+  {
+    PRBool  clipstate;
+    PopState(clipstate);
   }
+
+  if (mTranMatrix)
+    delete mTranMatrix;
   NS_IF_RELEASE(mOffscreenSurface);
   NS_IF_RELEASE(mFontMetrics);
   NS_IF_RELEASE(mContext);
@@ -123,7 +121,6 @@ nsRenderingContextGTK::~nsRenderingContextGTK()
 nsRenderingContextGTK::Shutdown()
 {
   delete gcCache;
-  delete gStatePool;
   return NS_OK;
 }
 
@@ -183,7 +180,7 @@ NS_IMETHODIMP nsRenderingContextGTK::Init(nsIDeviceContext* aContext,
 }
 
 NS_IMETHODIMP nsRenderingContextGTK::Init(nsIDeviceContext* aContext,
-                                          nsIDrawingSurface* aSurface)
+                                          nsDrawingSurface aSurface)
 {
   mContext = aContext;
   NS_IF_ADDREF(mContext);
@@ -237,14 +234,15 @@ NS_IMETHODIMP nsRenderingContextGTK::LockDrawingSurface(PRInt32 aX, PRInt32 aY,
 
 NS_IMETHODIMP nsRenderingContextGTK::UnlockDrawingSurface(void)
 {
-  PopState();
+  PRBool  clipstate;
+  PopState(clipstate);
 
   mSurface->Unlock();
   
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::SelectOffScreenDrawingSurface(nsIDrawingSurface* aSurface)
+NS_IMETHODIMP nsRenderingContextGTK::SelectOffScreenDrawingSurface(nsDrawingSurface aSurface)
 {
   if (nsnull == aSurface)
     mSurface = mOffscreenSurface;
@@ -254,7 +252,7 @@ NS_IMETHODIMP nsRenderingContextGTK::SelectOffScreenDrawingSurface(nsIDrawingSur
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::GetDrawingSurface(nsIDrawingSurface* *aSurface)
+NS_IMETHODIMP nsRenderingContextGTK::GetDrawingSurface(nsDrawingSurface *aSurface)
 {
   *aSurface = mSurface;
   return NS_OK;
@@ -318,45 +316,24 @@ NS_IMETHODIMP nsRenderingContextGTK::PushState(PRInt32 aFlags)
   return NS_OK;
 }
 #endif
-
 NS_IMETHODIMP nsRenderingContextGTK::PushState(void)
 {
   //  Get a new GS
-  if (!gStatePool) {
-    gStatePool = new nsFixedSizeAllocator();
-    size_t sizes[] = {sizeof(nsGraphicsState), sizeof(nsTransform2D)};
-    if (gStatePool)
-      gStatePool->Init("GTKStatePool", sizes, sizeof(sizes)/sizeof(size_t),
-                       sizeof(nsGraphicsState)*64);
-  }
-
-  nsGraphicsState *state = nsnull;
-  if (gStatePool) {
-    void *space = gStatePool->Alloc(sizeof(nsGraphicsState));
-    if (space)
-      state = ::new(space) nsGraphicsState;
-  } else {
-    state = new nsGraphicsState;
-  }
-
+#ifdef USE_GS_POOL
+  nsGraphicsState *state = nsGraphicsStatePool::GetNewGS();
+#else
+  nsGraphicsState *state = new nsGraphicsState;
+#endif
   // Push into this state object, add to vector
   if (!state)
     return NS_ERROR_FAILURE;
 
   state->mMatrix = mTranMatrix;
 
-  if (gStatePool) {
-    void *space = gStatePool->Alloc(sizeof(nsTransform2D));
-    if (mTranMatrix)
-      mTranMatrix = ::new(space) nsTransform2D(mTranMatrix);
-    else
-      mTranMatrix = ::new(space) nsTransform2D();
-  } else {
-    if (mTranMatrix)
-      mTranMatrix = ::new nsTransform2D(mTranMatrix);
-    else
-      mTranMatrix = ::new nsTransform2D();
-  }
+  if (nsnull == mTranMatrix)
+    mTranMatrix = new nsTransform2D();
+  else
+    mTranMatrix = new nsTransform2D(mTranMatrix);
 
   // set state to mClipRegion.. SetClip{Rect,Region}() will do copy-on-write stuff
   state->mClipRegion = mClipRegion;
@@ -372,7 +349,7 @@ NS_IMETHODIMP nsRenderingContextGTK::PushState(void)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::PopState(void)
+NS_IMETHODIMP nsRenderingContextGTK::PopState(PRBool &aClipEmpty)
 {
   PRUint32 cnt = mStateCache.Count();
   nsGraphicsState * state;
@@ -383,18 +360,12 @@ NS_IMETHODIMP nsRenderingContextGTK::PopState(void)
 
     // Assign all local attributes from the state object just popped
     if (state->mMatrix) {
-      if (mTranMatrix) {
-        if (gStatePool) {
-          mTranMatrix->~nsTransform2D();
-          gStatePool->Free(mTranMatrix, sizeof(nsTransform2D));
-        } else {
-          delete mTranMatrix;
-        }
-      }
+      if (mTranMatrix)
+        delete mTranMatrix;
       mTranMatrix = state->mMatrix;
     }
 
-    mClipRegion.swap(state->mClipRegion);
+    mClipRegion = state->mClipRegion;
 
     if (state->mFontMetrics && (mFontMetrics != state->mFontMetrics))
       SetFont(state->mFontMetrics);
@@ -406,13 +377,17 @@ NS_IMETHODIMP nsRenderingContextGTK::PopState(void)
       SetLineStyle(state->mLineStyle);
 
     // Delete this graphics state object
-    if (gStatePool) {
-      state->~nsGraphicsState();
-      gStatePool->Free(state, sizeof(nsGraphicsState));
-    } else {
-      delete state;
-    }
+#ifdef USE_GS_POOL
+    nsGraphicsStatePool::ReleaseGS(state);
+#else
+    delete state;
+#endif
   }
+
+  if (mClipRegion)
+    aClipEmpty = mClipRegion->IsEmpty();
+  else
+    aClipEmpty = PR_TRUE;
 
   return NS_OK;
 }
@@ -474,54 +449,38 @@ nsClipCombine_to_string(nsClipCombine aCombine)
 }
 #endif // TRACE_SET_CLIP
 
-void
-nsRenderingContextGTK::CreateClipRegion()
-{
-  // We have 3 cases to deal with:
-  //  1 - There is no mClipRegion -> Create one
-  //  2 - There is an mClipRegion shared w/ stack -> Duplicate and unshare
-  //  3 - There is an mClipRegion and its not shared -> return
-
-  if (mClipRegion) {
-    PRUint32 cnt = mStateCache.Count();
-
-    if (cnt > 0) {
-      nsGraphicsState *state;
-      state = (nsGraphicsState *)mStateCache.ElementAt(cnt - 1);
-
-      if (state->mClipRegion == mClipRegion) {
-        mClipRegion = new nsRegionGTK;
-        if (mClipRegion) {
-          mClipRegion->SetTo(*state->mClipRegion);
-        }
-      }
-    }
-  } else {
-
-    PRUint32 w, h;
-    mSurface->GetSize(&w, &h);
-
-    mClipRegion = new nsRegionGTK;
-    if (mClipRegion) {
-      mClipRegion->Init();
-      mClipRegion->SetTo(0, 0, w, h);
-    }
-  }
-}
-
 NS_IMETHODIMP nsRenderingContextGTK::SetClipRect(const nsRect& aRect,
-                                                 nsClipCombine aCombine)
+                                                 nsClipCombine aCombine,
+                                                 PRBool &aClipEmpty)
 {
   nsRect trect = aRect;
   mTranMatrix->TransformCoord(&trect.x, &trect.y,
                               &trect.width, &trect.height);
-  SetClipRectInPixels(trect, aCombine);
+  SetClipRectInPixels(trect, aCombine, aClipEmpty);
   return NS_OK;
 }
 
 void nsRenderingContextGTK::SetClipRectInPixels(const nsRect& aRect,
-                                                nsClipCombine aCombine)
+                                                nsClipCombine aCombine,
+                                                PRBool &aClipEmpty)
 {
+  PRUint32 cnt = mStateCache.Count();
+  nsGraphicsState *state = nsnull;
+
+  if (cnt > 0) {
+    state = (nsGraphicsState *)mStateCache.ElementAt(cnt - 1);
+  }
+
+  if (state) {
+    if (state->mClipRegion) {
+      if (state->mClipRegion == mClipRegion) {
+        nsCOMPtr<nsIRegion> tmpRgn;
+        GetClipRegion(getter_AddRefs(tmpRgn));
+        mClipRegion = tmpRgn;
+      }
+    }
+  }
+
   CreateClipRegion();
 
 #ifdef TRACE_SET_CLIP
@@ -550,6 +509,7 @@ void nsRenderingContextGTK::SetClipRectInPixels(const nsRect& aRect,
   FillRect(aRect);
   SetColor(color);
 #endif
+  aClipEmpty = mClipRegion->IsEmpty();
 }
 
 void nsRenderingContextGTK::UpdateGC()
@@ -564,9 +524,6 @@ void nsRenderingContextGTK::UpdateGC()
 
   values.foreground.pixel =
     gdk_rgb_xpixel_from_rgb(NS_TO_GDK_RGB(mCurrentColor));
-  values.foreground.red = (NS_GET_R(mCurrentColor) << 8) | NS_GET_R(mCurrentColor);
-  values.foreground.green = (NS_GET_G(mCurrentColor) << 8) | NS_GET_G(mCurrentColor);
-  values.foreground.blue = (NS_GET_B(mCurrentColor) << 8) | NS_GET_B(mCurrentColor);
   valuesMask = GDK_GC_FOREGROUND;
 
 #ifdef MOZ_ENABLE_COREXFONTS
@@ -595,7 +552,7 @@ void nsRenderingContextGTK::UpdateGC()
     if (!gcCache) return;
   }
 
-  mGC = gcCache->GetGC(mOffscreenSurface->GetDrawable(),
+  mGC = gcCache->GetGC(mSurface->GetDrawable(),
                        &values,
                        valuesMask,
                        rgn);
@@ -606,8 +563,27 @@ void nsRenderingContextGTK::UpdateGC()
 }
 
 NS_IMETHODIMP nsRenderingContextGTK::SetClipRegion(const nsIRegion& aRegion,
-                                                   nsClipCombine aCombine)
+                                                   nsClipCombine aCombine,
+                                                   PRBool &aClipEmpty)
 {
+
+  PRUint32 cnt = mStateCache.Count();
+  nsGraphicsState *state = nsnull;
+
+  if (cnt > 0) {
+    state = (nsGraphicsState *)mStateCache.ElementAt(cnt - 1);
+  }
+
+  if (state) {
+    if (state->mClipRegion) {
+      if (state->mClipRegion == mClipRegion) {
+        nsCOMPtr<nsIRegion> tmpRgn;
+        GetClipRegion(getter_AddRefs(tmpRgn));
+        mClipRegion = tmpRgn;
+      }
+    }
+  }
+
   CreateClipRegion();
 
   switch(aCombine)
@@ -625,6 +601,8 @@ NS_IMETHODIMP nsRenderingContextGTK::SetClipRegion(const nsIRegion& aRegion,
       mClipRegion->SetTo(aRegion);
       break;
   }
+
+  aClipEmpty = mClipRegion->IsEmpty();
 
   return NS_OK;
 }
@@ -653,8 +631,8 @@ NS_IMETHODIMP nsRenderingContextGTK::GetClipRegion(nsIRegion **aRegion)
       (*aRegion)->SetTo(*mClipRegion);
       rv = NS_OK;
     } else {
-      nsCOMPtr<nsIRegion> newRegion = new nsRegionGTK;
-      if (newRegion) {
+      nsCOMPtr<nsIRegion> newRegion = do_CreateInstance(kRegionCID, &rv);
+      if (NS_SUCCEEDED(rv)) {
         newRegion->Init();
         newRegion->SetTo(*mClipRegion);
         NS_ADDREF(*aRegion = newRegion);
@@ -795,7 +773,7 @@ NS_IMETHODIMP nsRenderingContextGTK::GetCurrentTransform(nsTransform2D *&aTransf
 
 NS_IMETHODIMP nsRenderingContextGTK::CreateDrawingSurface(const nsRect &aBounds,
                                                           PRUint32 aSurfFlags,
-                                                          nsIDrawingSurface* &aSurface)
+                                                          nsDrawingSurface &aSurface)
 {
   if (nsnull == mSurface) {
     aSurface = nsnull;
@@ -814,17 +792,18 @@ NS_IMETHODIMP nsRenderingContextGTK::CreateDrawingSurface(const nsRect &aBounds,
     mClipRegion = nsnull;
     UpdateGC();
     rv = surf->Init(mGC, aBounds.width, aBounds.height, aSurfFlags);
-    PopState();
+    PRBool empty;
+    PopState(empty);
   } else {
     rv = NS_ERROR_FAILURE;
   }
 
-  aSurface = surf;
+  aSurface = (nsDrawingSurface)surf;
 
   return rv;
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::DestroyDrawingSurface(nsIDrawingSurface* aDS)
+NS_IMETHODIMP nsRenderingContextGTK::DestroyDrawingSurface(nsDrawingSurface aDS)
 {
   nsDrawingSurfaceGTK *surf = (nsDrawingSurfaceGTK *) aDS;
 
@@ -863,6 +842,31 @@ NS_IMETHODIMP nsRenderingContextGTK::DrawLine(nscoord aX0, nscoord aY0, nscoord 
 
   return NS_OK;
 }
+
+NS_IMETHODIMP nsRenderingContextGTK::DrawStdLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1)
+{
+  nscoord diffX,diffY;
+
+  g_return_val_if_fail(mTranMatrix != NULL, NS_ERROR_FAILURE);
+  g_return_val_if_fail(mSurface != NULL, NS_ERROR_FAILURE);
+
+  diffX = aX1 - aX0;
+  diffY = aY1 - aY0;
+
+  if (0!=diffX) {
+    diffX = (diffX>0?1:-1);
+  }
+  if (0!=diffY) {
+    diffY = (diffY>0?1:-1);
+  }
+
+  UpdateGC();
+
+  ::gdk_draw_line(mSurface->GetDrawable(),mGC,aX0, aY0, aX1-diffX, aY1-diffY);
+
+  return NS_OK;
+}
+
 
 NS_IMETHODIMP nsRenderingContextGTK::DrawPolyline(const nsPoint aPoints[], PRInt32 aNumPoints)
 {
@@ -980,10 +984,6 @@ NS_IMETHODIMP nsRenderingContextGTK::InvertRect(nscoord aX, nscoord aY, nscoord 
     return NS_ERROR_FAILURE;
   }
 
-  // Back up the current color, and use GXxor against white to get a
-  // visible result.
-  nscolor backupColor = mCurrentColor;
-  mCurrentColor = NS_RGB(255, 255, 255);
   nscoord x,y,w,h;
 
   x = aX;
@@ -998,7 +998,7 @@ NS_IMETHODIMP nsRenderingContextGTK::InvertRect(nscoord aX, nscoord aY, nscoord 
   // It's all way off the screen anyway.
   ConditionRect(x,y,w,h);
 
-  mFunction = GDK_XOR;
+  mFunction = GDK_INVERT;
 
   UpdateGC();
 
@@ -1009,9 +1009,6 @@ NS_IMETHODIMP nsRenderingContextGTK::InvertRect(nscoord aX, nscoord aY, nscoord 
 
   // Back to normal copy drawing mode
   mFunction = GDK_COPY;
-
-  // Restore current color
-  mCurrentColor = backupColor;
 
   return NS_OK;
 }
@@ -1211,8 +1208,21 @@ nsRenderingContextGTK::GetWidth(PRUnichar aC, nscoord& aWidth,
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetWidthInternal(const char* aString, PRUint32 aLength,
-                                        nscoord& aWidth)
+nsRenderingContextGTK::GetWidth(const nsString& aString,
+                                nscoord& aWidth, PRInt32* aFontID)
+{
+  return GetWidth(aString.get(), aString.Length(), aWidth, aFontID);
+}
+
+NS_IMETHODIMP
+nsRenderingContextGTK::GetWidth(const char* aString, nscoord& aWidth)
+{
+  return GetWidth(aString, strlen(aString), aWidth);
+}
+
+NS_IMETHODIMP
+nsRenderingContextGTK::GetWidth(const char* aString, PRUint32 aLength,
+                                nscoord& aWidth)
 {
   if (0 == aLength) {
     aWidth = 0;
@@ -1225,8 +1235,8 @@ nsRenderingContextGTK::GetWidthInternal(const char* aString, PRUint32 aLength,
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetWidthInternal(const PRUnichar* aString, PRUint32 aLength,
-                                        nscoord& aWidth, PRInt32* aFontID)
+nsRenderingContextGTK::GetWidth(const PRUnichar* aString, PRUint32 aLength,
+                                nscoord& aWidth, PRInt32* aFontID)
 {
   if (0 == aLength) {
     aWidth = 0;
@@ -1239,8 +1249,8 @@ nsRenderingContextGTK::GetWidthInternal(const PRUnichar* aString, PRUint32 aLeng
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetTextDimensionsInternal(const char* aString, PRUint32 aLength,
-                                                 nsTextDimensions& aDimensions)
+nsRenderingContextGTK::GetTextDimensions(const char* aString, PRUint32 aLength,
+                                         nsTextDimensions& aDimensions)
 {
   mFontMetrics->GetMaxAscent(aDimensions.ascent);
   mFontMetrics->GetMaxDescent(aDimensions.descent);
@@ -1248,25 +1258,25 @@ nsRenderingContextGTK::GetTextDimensionsInternal(const char* aString, PRUint32 a
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetTextDimensionsInternal(const PRUnichar* aString,
-                                                 PRUint32 aLength,
-                                                 nsTextDimensions& aDimensions, 
-                                                 PRInt32* aFontID)
+nsRenderingContextGTK::GetTextDimensions(const PRUnichar* aString,
+                                         PRUint32 aLength,
+                                         nsTextDimensions& aDimensions, 
+                                         PRInt32* aFontID)
 {
   return mFontMetrics->GetTextDimensions(aString, aLength, aDimensions,
                                          aFontID, this);
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetTextDimensionsInternal(const char*       aString,
-                                                 PRInt32           aLength,
-                                                 PRInt32           aAvailWidth,
-                                                 PRInt32*          aBreaks,
-                                                 PRInt32           aNumBreaks,
-                                                 nsTextDimensions& aDimensions,
-                                                 PRInt32&          aNumCharsFit,
-                                                 nsTextDimensions& aLastWordDimensions,
-                                                 PRInt32*          aFontID)
+nsRenderingContextGTK::GetTextDimensions(const char*       aString,
+                                         PRInt32           aLength,
+                                         PRInt32           aAvailWidth,
+                                         PRInt32*          aBreaks,
+                                         PRInt32           aNumBreaks,
+                                         nsTextDimensions& aDimensions,
+                                         PRInt32&          aNumCharsFit,
+                                         nsTextDimensions& aLastWordDimensions,
+                                         PRInt32*          aFontID)
 {
   return mFontMetrics->GetTextDimensions(aString, aLength, aAvailWidth,
                                          aBreaks, aNumBreaks, aDimensions,
@@ -1275,15 +1285,15 @@ nsRenderingContextGTK::GetTextDimensionsInternal(const char*       aString,
                                          this);
 }
 NS_IMETHODIMP
-nsRenderingContextGTK::GetTextDimensionsInternal(const PRUnichar*  aString,
-                                                 PRInt32           aLength,
-                                                 PRInt32           aAvailWidth,
-                                                 PRInt32*          aBreaks,
-                                                 PRInt32           aNumBreaks,
-                                                 nsTextDimensions& aDimensions,
-                                                 PRInt32&          aNumCharsFit,
-                                                 nsTextDimensions& aLastWordDimensions,
-                                                 PRInt32*          aFontID)
+nsRenderingContextGTK::GetTextDimensions(const PRUnichar*  aString,
+                                         PRInt32           aLength,
+                                         PRInt32           aAvailWidth,
+                                         PRInt32*          aBreaks,
+                                         PRInt32           aNumBreaks,
+                                         nsTextDimensions& aDimensions,
+                                         PRInt32&          aNumCharsFit,
+                                         nsTextDimensions& aLastWordDimensions,
+                                         PRInt32*          aFontID)
 {
   return mFontMetrics->GetTextDimensions(aString, aLength, aAvailWidth,
                                          aBreaks, aNumBreaks, aDimensions,
@@ -1293,26 +1303,36 @@ nsRenderingContextGTK::GetTextDimensionsInternal(const PRUnichar*  aString,
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::DrawStringInternal(const char *aString, PRUint32 aLength,
-                                          nscoord aX, nscoord aY,
-                                          const nscoord* aSpacing)
+nsRenderingContextGTK::DrawString(const char *aString, PRUint32 aLength,
+                                  nscoord aX, nscoord aY,
+                                  const nscoord* aSpacing)
 {
   return mFontMetrics->DrawString(aString, aLength, aX, aY, aSpacing,
                                   this, mSurface);
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::DrawStringInternal(const PRUnichar* aString, PRUint32 aLength,
-                                          nscoord aX, nscoord aY,
-                                          PRInt32 aFontID,
-                                          const nscoord* aSpacing)
+nsRenderingContextGTK::DrawString(const PRUnichar* aString, PRUint32 aLength,
+                                  nscoord aX, nscoord aY,
+                                  PRInt32 aFontID,
+                                  const nscoord* aSpacing)
 {
   return mFontMetrics->DrawString(aString, aLength, aX, aY, aFontID,
                                   aSpacing, this, mSurface);
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::CopyOffScreenBits(nsIDrawingSurface* aSrcSurf,
+nsRenderingContextGTK::DrawString(const nsString& aString,
+                                  nscoord aX, nscoord aY,
+                                  PRInt32 aFontID,
+                                  const nscoord* aSpacing)
+{
+  return DrawString(aString.get(), aString.Length(),
+                    aX, aY, aFontID, aSpacing);
+}
+
+NS_IMETHODIMP
+nsRenderingContextGTK::CopyOffScreenBits(nsDrawingSurface aSrcSurf,
                                          PRInt32 aSrcX, PRInt32 aSrcY,
                                          const nsRect &aDestBounds,
                                          PRUint32 aCopyFlags)
@@ -1362,7 +1382,7 @@ nsRenderingContextGTK::CopyOffScreenBits(nsIDrawingSurface* aSrcSurf,
     mTranMatrix->TransformCoord(&drect.x, &drect.y, &drect.width, &drect.height);
 
 #if 0
-  // XXX implement me
+  // XXX impliment me
   if (aCopyFlags & NS_COPYBITS_USE_SOURCE_CLIP_REGION)
   {
     // we should use the source clip region if this flag is used...
@@ -1390,34 +1410,27 @@ nsRenderingContextGTK::CopyOffScreenBits(nsIDrawingSurface* aSrcSurf,
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::RetrieveCurrentNativeGraphicData(void** ngd)
+NS_IMETHODIMP nsRenderingContextGTK::RetrieveCurrentNativeGraphicData(PRUint32 * ngd)
 {
-  if (ngd) {
-    if (mSurface)
-      *ngd = (void*) mSurface->GetDrawable();
-    else
-      *ngd = nsnull;
-  }
-
   return NS_OK;
 }
 
 #ifdef MOZ_MATHML
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetBoundingMetricsInternal(const char*        aString, 
-                                                  PRUint32           aLength,
-                                                  nsBoundingMetrics& aBoundingMetrics)
+nsRenderingContextGTK::GetBoundingMetrics(const char*        aString, 
+                                          PRUint32           aLength,
+                                          nsBoundingMetrics& aBoundingMetrics)
 {
   return mFontMetrics->GetBoundingMetrics(aString, aLength, aBoundingMetrics,
                                           this);
 }
 
 NS_IMETHODIMP
-nsRenderingContextGTK::GetBoundingMetricsInternal(const PRUnichar*   aString, 
-                                                  PRUint32           aLength,
-                                                  nsBoundingMetrics& aBoundingMetrics,
-                                                  PRInt32*           aFontID)
+nsRenderingContextGTK::GetBoundingMetrics(const PRUnichar*   aString, 
+                                          PRUint32           aLength,
+                                          nsBoundingMetrics& aBoundingMetrics,
+                                          PRInt32*           aFontID)
 {
   return mFontMetrics->GetBoundingMetrics(aString, aLength, aBoundingMetrics,
                                           aFontID, this);
@@ -1425,65 +1438,23 @@ nsRenderingContextGTK::GetBoundingMetricsInternal(const PRUnichar*   aString,
 
 #endif /* MOZ_MATHML */
 
-NS_IMETHODIMP nsRenderingContextGTK::SetRightToLeftText(PRBool aIsRTL)
-{
-  return mFontMetrics->SetRightToLeftText(aIsRTL);
-}
-
-NS_IMETHODIMP nsRenderingContextGTK::GetRightToLeftText(PRBool* aIsRTL)
-{
-  *aIsRTL = mFontMetrics->GetRightToLeftText();
-  return NS_OK;
-}
-
-PRInt32 nsRenderingContextGTK::GetMaxStringLength()
-{
-  if (!mFontMetrics)
-    return 1;
-  return mFontMetrics->GetMaxStringLength();
-}
-
-NS_IMETHODIMP nsRenderingContextGTK::GetClusterInfo(const PRUnichar *aText,
-                                                    PRUint32 aLength,
-                                                    PRUint8 *aClusterStarts)
-{
-  return mFontMetrics->GetClusterInfo(aText, aLength, aClusterStarts);
-}
-
-PRInt32 nsRenderingContextGTK::GetPosition(const PRUnichar *aText, PRUint32 aLength,
-                                           nsPoint aPt)
-{
-  return mFontMetrics->GetPosition(aText, aLength, aPt);
-}
-
-NS_IMETHODIMP nsRenderingContextGTK::GetRangeWidth(const PRUnichar *aText, PRUint32 aLength,
-                                                   PRUint32 aStart, PRUint32 aEnd,
-                                                   PRUint32 &aWidth)
-{
-  return mFontMetrics->GetRangeWidth(aText, aLength, aStart, aEnd, aWidth);
-}
-
-NS_IMETHODIMP nsRenderingContextGTK::GetRangeWidth(const char *aText, PRUint32 aLength,
-                                                   PRUint32 aStart, PRUint32 aEnd,
-                                                   PRUint32 &aWidth)
-{
-  return mFontMetrics->GetRangeWidth(aText, aLength, aStart, aEnd, aWidth);
-}
-
-NS_IMETHODIMP nsRenderingContextGTK::DrawImage(imgIContainer *aImage, const nsRect & aSrcRect, const nsRect & aDestRect)
+NS_IMETHODIMP nsRenderingContextGTK::DrawImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsPoint * aDestPoint)
 {
   UpdateGC();
-  return nsRenderingContextImpl::DrawImage(aImage, aSrcRect, aDestRect);
+  return nsRenderingContextImpl::DrawImage(aImage, aSrcRect, aDestPoint);
 }
 
-NS_IMETHODIMP nsRenderingContextGTK::GetBackbuffer(const nsRect &aRequestedSize,
-                                                   const nsRect &aMaxSize,
-                                                   PRBool aForBlending,
-                                                   nsIDrawingSurface* &aBackbuffer)
+NS_IMETHODIMP nsRenderingContextGTK::DrawScaledImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsRect * aDestRect)
+{
+  UpdateGC();
+  return nsRenderingContextImpl::DrawScaledImage(aImage, aSrcRect, aDestRect);
+}
+
+NS_IMETHODIMP nsRenderingContextGTK::GetBackbuffer(const nsRect &aRequestedSize, const nsRect &aMaxSize, nsDrawingSurface &aBackbuffer)
 {
   // Do not cache the backbuffer. On GTK it is more efficient to allocate
   // the backbuffer as needed and it doesn't cause a performance hit. @see bug 95952
-  return AllocateBackbuffer(aRequestedSize, aMaxSize, aBackbuffer, PR_FALSE, 0);
+  return AllocateBackbuffer(aRequestedSize, aMaxSize, aBackbuffer, PR_FALSE);
 }
  
 NS_IMETHODIMP nsRenderingContextGTK::ReleaseBackbuffer(void) {

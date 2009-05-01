@@ -556,7 +556,7 @@ int CStringTester::TestLogical(){
   }
 
   {
-    nsString foo("#text");
+    nsString foo("__moz_text");
     PRInt32 cmp=foo.Compare("pre",PR_FALSE,-1);
     cmp=cmp;
   }

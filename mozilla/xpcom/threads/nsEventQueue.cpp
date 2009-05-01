@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -39,7 +39,6 @@
 #include "nsEventQueue.h"
 #include "nsIEventQueueService.h"
 #include "nsIThread.h"
-#include "nsIEventQueueListener.h"
 
 #include "nsIServiceManager.h"
 #include "nsIObserverService.h"
@@ -67,36 +66,11 @@ static PRThread *gEventQueueLogThread = 0;
 static const char gActivatedNotification[] = "nsIEventQueueActivated";
 static const char gDestroyedNotification[] = "nsIEventQueueDestroyed";
 
-class ListenerCaller {
-public:
-  ListenerCaller(nsIEventQueue* aQueue, nsresult* rv) : mQueue(aQueue)
-  {
-    mListener = do_GetService(NS_EVENT_QUEUE_LISTENER_CONTRACTID);
-    // There might be no listener...  but if so, warn
-    if (mListener) {
-      *rv = mListener->WillProcessEvents(mQueue);
-    } else {
-      NS_WARNING("No event queue listener?");
-      *rv = NS_OK;
-    }
-  }
-
-  ~ListenerCaller() {
-    if (mListener) {
-      mListener->DidProcessEvents(mQueue);
-    }
-  }
-  
-private:
-  nsIEventQueue* mQueue;
-  nsCOMPtr<nsIEventQueueListener> mListener;
-};
-
 nsEventQueueImpl::nsEventQueueImpl()
 {
   NS_ADDREF_THIS();
   /* The slightly weird ownership model for eventqueues goes like this:
-
+   
      General:
        There's an addref from the factory generally held by whoever asked for
      the queue. The queue addrefs itself (right here) and releases itself
@@ -161,14 +135,12 @@ nsEventQueueImpl::~nsEventQueueImpl()
 #endif
 
   if (mEventQueue) {
-    // Perhaps CheckForDeactivation wasn't called...
-    if (mCouldHaveEvents)
-      NotifyObservers(gDestroyedNotification);
+    NotifyObservers(gDestroyedNotification);
     PL_DestroyEventQueue(mEventQueue);
   }
 }
 
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsEventQueueImpl::Init(PRBool aNative)
 {
   PRThread *thread = PR_GetCurrentThread();
@@ -176,39 +148,34 @@ nsEventQueueImpl::Init(PRBool aNative)
     mEventQueue = PL_CreateNativeEventQueue("Thread event queue...", thread);
   else
     mEventQueue = PL_CreateMonitoredEventQueue("Thread event queue...", thread);
-  if (!mEventQueue)
-    return NS_ERROR_FAILURE;
   NotifyObservers(gActivatedNotification);
   return NS_OK;
 }
 
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsEventQueueImpl::InitFromPRThread(PRThread* thread, PRBool aNative)
 {
-  if (thread == NS_CURRENT_THREAD)
+  if (thread == NS_CURRENT_THREAD) 
   {
      thread = PR_GetCurrentThread();
   }
-  else if (thread == NS_UI_THREAD)
+  else if (thread == NS_UI_THREAD) 
   {
     nsCOMPtr<nsIThread>  mainIThread;
     nsresult rv;
-
+  
     // Get the primordial thread
     rv = nsIThread::GetMainThread(getter_AddRefs(mainIThread));
     if (NS_FAILED(rv)) return rv;
 
     rv = mainIThread->GetPRThread(&thread);
     if (NS_FAILED(rv)) return rv;
-  }
+  }  
 
   if (aNative)
     mEventQueue = PL_CreateNativeEventQueue("Thread event queue...", thread);
   else
     mEventQueue = PL_CreateMonitoredEventQueue("Thread event queue...", thread);
-  if (!mEventQueue)
-    return NS_ERROR_FAILURE;
-
   NotifyObservers(gActivatedNotification);
   return NS_OK;
 }
@@ -252,15 +219,8 @@ nsEventQueueImpl::StopAcceptingEvents()
 void
 nsEventQueueImpl::NotifyObservers(const char *aTopic)
 {
-  // only send out this notification for native event queues
-  if (!PL_IsQueueNative(mEventQueue))
-    return;
-
-  // we should not call out to the observer service from background threads!
-  NS_ASSERTION(nsIThread::IsMainThread(),
-               "Native event queues should only be used on the main thread");
-
   nsresult rv;
+
   nsCOMPtr<nsIObserverService> os = do_GetService("@mozilla.org/observer-service;1", &rv);
   if (NS_SUCCEEDED(rv)) {
     nsCOMPtr<nsIEventQueue> kungFuDeathGrip(this);
@@ -269,28 +229,15 @@ nsEventQueueImpl::NotifyObservers(const char *aTopic)
   }
 }
 
-void
-nsEventQueueImpl::CheckForDeactivation()
-{
-  if (mCouldHaveEvents && !mAcceptingEvents && !PL_EventAvailable(mEventQueue)) {
-    if (PL_IsQueueOnCurrentThread(mEventQueue)) {
-      mCouldHaveEvents = PR_FALSE;
-      NotifyObservers(gDestroyedNotification);
-      NS_RELEASE_THIS(); // balance ADDREF from the constructor
-    } else
-      NS_ERROR("CheckForDeactivation called from wrong thread!");
-  }
-}
-
 
 NS_IMETHODIMP
 nsEventQueueImpl::InitEvent(PLEvent* aEvent,
-                            void* owner,
+                            void* owner, 
                             PLHandleEventProc handler,
                             PLDestroyEventProc destructor)
 {
-  PL_InitEvent(aEvent, owner, handler, destructor);
-  return NS_OK;
+	PL_InitEvent(aEvent, owner, handler, destructor);
+	return NS_OK;
 }
 
 
@@ -372,12 +319,13 @@ nsEventQueueImpl::ExitMonitor()
 NS_IMETHODIMP
 nsEventQueueImpl::RevokeEvents(void* owner)
 {
-  nsCOMPtr<nsIEventQueue> youngest;
-  GetYoungest(getter_AddRefs(youngest));
-  NS_ASSERTION(youngest, "How could we possibly not have a youngest queue?");
-  nsCOMPtr<nsPIEventQueueChain> youngestAsChain(do_QueryInterface(youngest));
-  NS_ASSERTION(youngestAsChain, "RevokeEvents won't work; expect crashes");
-  return youngestAsChain->RevokeEventsInternal(owner);
+  PL_RevokeEvents(mEventQueue, owner);
+  if (mElderQueue) {
+    nsCOMPtr<nsIEventQueue> elder(do_QueryInterface(mElderQueue));
+    if (elder)
+      elder->RevokeEvents(owner);
+  }
+  return NS_OK;
 }
 
 
@@ -423,16 +371,11 @@ NS_IMETHODIMP
 nsEventQueueImpl::ProcessPendingEvents()
 {
   PRBool correctThread = PL_IsQueueOnCurrentThread(mEventQueue);
-
+  
   NS_ASSERTION(correctThread, "attemping to process events on the wrong thread");
 
   if (!correctThread)
     return NS_ERROR_FAILURE;
-
-  nsresult rv;
-  ListenerCaller caller(this, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-  
 #if defined(PR_LOGGING) && defined(DEBUG_danm)
   ++gEventQueueLogPPLevel;
   if ((gEventQueueLogQueue != mEventQueue || gEventQueueLogThread != PR_GetCurrentThread() ||
@@ -502,10 +445,6 @@ nsEventQueueImpl::HandleEvent(PLEvent* aEvent)
   if (!correctThread)
     return NS_ERROR_FAILURE;
 
-  nsresult rv;
-  ListenerCaller caller(this, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-  
 #if defined(PR_LOGGING) && defined(DEBUG_danm)
   PR_LOG(gEventQueueLog, PR_LOG_DEBUG,
          ("EventQueue: handle event [queue=%lx, accept=%d, could=%d]",
@@ -519,24 +458,24 @@ nsEventQueueImpl::HandleEvent(PLEvent* aEvent)
 NS_IMETHODIMP
 nsEventQueueImpl::WaitForEvent(PLEvent** aResult)
 {
-  PRBool correctThread = PL_IsQueueOnCurrentThread(mEventQueue);
-  NS_ASSERTION(correctThread, "attemping to process events on the wrong thread");
-  if (!correctThread)
-    return NS_ERROR_FAILURE;
+    PRBool correctThread = PL_IsQueueOnCurrentThread(mEventQueue);
+    NS_ASSERTION(correctThread, "attemping to process events on the wrong thread");
+    if (!correctThread)
+      return NS_ERROR_FAILURE;
 
 #if defined(PR_LOGGING) && defined(DEBUG_danm)
-PR_LOG(gEventQueueLog, PR_LOG_DEBUG,
-       ("EventQueue: wait for event [queue=%lx, accept=%d, could=%d]",
-       (long)mEventQueue,(int)mAcceptingEvents,(int)mCouldHaveEvents));
-++gEventQueueLogCount;
+  PR_LOG(gEventQueueLog, PR_LOG_DEBUG,
+         ("EventQueue: wait for event [queue=%lx, accept=%d, could=%d]",
+         (long)mEventQueue,(int)mAcceptingEvents,(int)mCouldHaveEvents));
+  ++gEventQueueLogCount;
 #endif
-  *aResult = PL_WaitForEvent(mEventQueue);
-  CheckForDeactivation();
-  return NS_OK;
+    *aResult = PL_WaitForEvent(mEventQueue);
+    CheckForDeactivation();
+    return NS_OK;
 }
 
-NS_IMETHODIMP_(PRInt32)
-nsEventQueueImpl::GetEventQueueSelectFD()
+NS_IMETHODIMP_(PRInt32) 
+nsEventQueueImpl::GetEventQueueSelectFD() 
 {
   return PL_GetEventQueueSelectFD(mEventQueue);
 }
@@ -691,12 +630,3 @@ nsEventQueueImpl::GetElder(nsIEventQueue **aQueue)
   return mElderQueue->QueryInterface(NS_GET_IID(nsIEventQueue), (void**)&aQueue);
 }
 
-NS_IMETHODIMP
-nsEventQueueImpl::RevokeEventsInternal(void* aOwner)
-{
-  PL_RevokeEvents(mEventQueue, aOwner);
-  if (mElderQueue) {
-    mElderQueue->RevokeEventsInternal(aOwner);
-  }
-  return NS_OK;
-}

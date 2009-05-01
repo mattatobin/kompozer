@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,17 +25,18 @@
  *   Charles Manske <cmanske@netscape.com>
  *   Kathleen Brade <brade@netscape.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,14 +45,15 @@
 #include "nsIEditingSession.h"
 #include "nsIPlaintextEditor.h"
 #include "nsIHTMLEditor.h"
-#include "nsIHTMLObjectResizer.h"
+#include "nsIHTMLAbsPosEditor.h"
 #include "nsIHTMLInlineTableEditor.h"
+#include "nsIHTMLObjectResizer.h"
 
 #include "nsIDOMDocument.h"
 #include "nsIDocument.h"
 #include "nsISelectionController.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIDocShell.h"
 #include "nsIURI.h"
 
@@ -68,7 +70,7 @@
 
 static
 nsresult
-GetPresContextFromEditor(nsIEditor *aEditor, nsPresContext **aResult)
+GetPresContextFromEditor(nsIEditor *aEditor, nsIPresContext **aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   *aResult = nsnull;
@@ -82,7 +84,11 @@ GetPresContextFromEditor(nsIEditor *aEditor, nsPresContext **aResult)
   nsCOMPtr<nsIPresShell> presShell = do_QueryInterface(selCon);
   if (!presShell) return NS_ERROR_FAILURE;
 
-  NS_IF_ADDREF(*aResult = presShell->GetPresContext());
+  nsCOMPtr<nsIPresContext> presContext;
+  rv = presShell->GetPresContext(getter_AddRefs(presContext));
+  if (NS_FAILED(rv)) return rv;
+  *aResult = presContext;
+  NS_IF_ADDREF(*aResult);
   return NS_OK;
 }
 
@@ -114,7 +120,7 @@ nsSetDocumentOptionsCommand::DoCommandParams(const char *aCommandName,
   nsCOMPtr<nsIEditor> editor = do_QueryInterface(refCon);
   if (!editor) return NS_ERROR_INVALID_ARG;
 
-  nsCOMPtr<nsPresContext> presContext;
+  nsCOMPtr<nsIPresContext> presContext;
   nsresult rv = GetPresContextFromEditor(editor, getter_AddRefs(presContext));
   if (NS_FAILED(rv)) return rv;
   if (!presContext) return NS_ERROR_FAILURE;
@@ -165,7 +171,7 @@ nsSetDocumentOptionsCommand::GetCommandStateParams(const char *aCommandName,
   NS_ENSURE_SUCCESS(rv, rv);
 
   // get pres context
-  nsCOMPtr<nsPresContext> presContext;
+  nsCOMPtr<nsIPresContext> presContext;
   rv = GetPresContextFromEditor(editor, getter_AddRefs(presContext));
   if (NS_FAILED(rv)) return rv;
   if (!presContext) return NS_ERROR_FAILURE;
@@ -252,11 +258,10 @@ nsSetDocumentStateCommand::DoCommandParams(const char *aCommandName,
 
     if (modified)
       return editor->IncrementModificationCount(1);
-
-    return editor->ResetModificationCount();
+    else 
+      return editor->ResetModificationCount();
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentReadOnly"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentReadOnly"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
     PRBool isReadOnly; 
@@ -273,8 +278,7 @@ nsSetDocumentStateCommand::DoCommandParams(const char *aCommandName,
 
     return editor->SetFlags(flags);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentUseCSS"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentUseCSS"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
     nsCOMPtr<nsIHTMLEditor> htmleditor = do_QueryInterface(refCon);
@@ -288,51 +292,47 @@ nsSetDocumentStateCommand::DoCommandParams(const char *aCommandName,
 
     return htmleditor->SetIsCSSEnabled(desireCSS);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_insertBrOnReturn"))
+  else if (!nsCRT::strcmp(aCommandName, "setDocumentEnableAbsolutePositioning"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLEditor> htmleditor = do_QueryInterface(refCon);
-    if (!htmleditor) 
+    nsCOMPtr<nsIHTMLAbsPosEditor> absPosEditor = do_QueryInterface(refCon);
+    if (!absPosEditor) 
       return NS_ERROR_INVALID_ARG;
 
-    PRBool insertBrOnReturn;
-    nsresult rvBR = aParams->GetBooleanValue(STATE_ATTRIBUTE,
-                                              &insertBrOnReturn);
-    if (NS_FAILED(rvBR))
-      return rvBR;
+    PRBool desireAbsPos;
+    nsresult rvAbsPos = aParams->GetBooleanValue(STATE_ATTRIBUTE, &desireAbsPos);
+    if (NS_FAILED(rvAbsPos))
+      return rvAbsPos;
 
-    return htmleditor->SetReturnInParagraphCreatesNewParagraph(!insertBrOnReturn);
+    return absPosEditor->SetAbsolutePositioningEnabled(desireAbsPos);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_enableObjectResizing"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentEnableObjectResizing"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLObjectResizer> resizer = do_QueryInterface(refCon);
-    if (!resizer)
+    nsCOMPtr<nsIHTMLObjectResizer> objectResizer = do_QueryInterface(refCon);
+    if (!objectResizer) 
       return NS_ERROR_INVALID_ARG;
 
-    PRBool enabled;
-    nsresult rvOR = aParams->GetBooleanValue(STATE_ATTRIBUTE, &enabled);
-    if (NS_FAILED(rvOR))
-      return rvOR;
+    PRBool desireResizeObject;
+    nsresult rvResizeObject = aParams->GetBooleanValue(STATE_ATTRIBUTE, &desireResizeObject);
+    if (NS_FAILED(rvResizeObject))
+      return rvResizeObject;
 
-    return resizer->SetObjectResizingEnabled(enabled);
+    return objectResizer->SetObjectResizingEnabled(desireResizeObject);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_enableInlineTableEditing"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentEnableInlineTableEditing"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLInlineTableEditor> editor = do_QueryInterface(refCon);
-    if (!editor)
+    nsCOMPtr<nsIHTMLInlineTableEditor> inlineTableEditor = do_QueryInterface(refCon);
+    if (!inlineTableEditor) 
       return NS_ERROR_INVALID_ARG;
 
-    PRBool enabled;
-    nsresult rvOR = aParams->GetBooleanValue(STATE_ATTRIBUTE, &enabled);
-    if (NS_FAILED(rvOR))
-      return rvOR;
+    PRBool desireInlineTableEditing;
+    nsresult rvInlineTableEditing = aParams->GetBooleanValue(STATE_ATTRIBUTE, &desireInlineTableEditing);
+    if (NS_FAILED(rvInlineTableEditing))
+      return rvInlineTableEditing;
 
-    return editor->SetInlineTableEditingEnabled(enabled);
+    return inlineTableEditor->SetInlineTableEditingEnabled(desireInlineTableEditing);
   }
 
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -365,8 +365,7 @@ nsSetDocumentStateCommand::GetCommandStateParams(const char *aCommandName,
 
     return aParams->SetBooleanValue(STATE_ATTRIBUTE, modified);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentReadOnly"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentReadOnly"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
 
@@ -375,8 +374,7 @@ nsSetDocumentStateCommand::GetCommandStateParams(const char *aCommandName,
     PRBool isReadOnly = flags & nsIPlaintextEditor::eEditorReadonlyMask;
     return aParams->SetBooleanValue(STATE_ATTRIBUTE, isReadOnly);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentUseCSS"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentUseCSS"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
     nsCOMPtr<nsIHTMLEditor> htmleditor = do_QueryInterface(refCon);
@@ -387,41 +385,38 @@ nsSetDocumentStateCommand::GetCommandStateParams(const char *aCommandName,
     htmleditor->GetIsCSSEnabled(&isCSS);
     return aParams->SetBooleanValue(STATE_ATTRIBUTE, isCSS);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_insertBrOnReturn"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentEnableAbsolutePositioning"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLEditor> htmleditor = do_QueryInterface(refCon);
-    if (!htmleditor)
+    nsCOMPtr<nsIHTMLAbsPosEditor> absPosEditor = do_QueryInterface(refCon);
+    if (!absPosEditor)
       return NS_ERROR_INVALID_ARG;
 
-    PRBool createPOnReturn;
-    htmleditor->GetReturnInParagraphCreatesNewParagraph(&createPOnReturn);
-    return aParams->SetBooleanValue(STATE_ATTRIBUTE, !createPOnReturn);
+    PRBool isAbsPosEnabled;
+    absPosEditor->GetAbsolutePositioningEnabled(&isAbsPosEnabled);
+    return aParams->SetBooleanValue(STATE_ATTRIBUTE, isAbsPosEnabled);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_enableObjectResizing"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentEnableObjectResizing"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLObjectResizer> resizer = do_QueryInterface(refCon);
-    if (!resizer)
+    nsCOMPtr<nsIHTMLObjectResizer> objectResizer = do_QueryInterface(refCon);
+    if (!objectResizer)
       return NS_ERROR_INVALID_ARG;
 
-    PRBool enabled;
-    resizer->GetObjectResizingEnabled(&enabled);
-    return aParams->SetBooleanValue(STATE_ATTRIBUTE, enabled);
+    PRBool isObjectResizingEnabled;
+    objectResizer->GetObjectResizingEnabled(&isObjectResizingEnabled);
+    return aParams->SetBooleanValue(STATE_ATTRIBUTE, isObjectResizingEnabled);
   }
-
-  if (!nsCRT::strcmp(aCommandName, "cmd_enableInlineTableEditing"))
+  else if (!nsCRT::strcmp(aCommandName, "cmd_setDocumentEnableInlineTableEditing"))
   {
     NS_ENSURE_ARG_POINTER(aParams);
-    nsCOMPtr<nsIHTMLInlineTableEditor> editor = do_QueryInterface(refCon);
-    if (!editor)
+    nsCOMPtr<nsIHTMLInlineTableEditor> inlineTableEditor = do_QueryInterface(refCon);
+    if (!inlineTableEditor)
       return NS_ERROR_INVALID_ARG;
 
-    PRBool enabled;
-    editor->GetInlineTableEditingEnabled(&enabled);
-    return aParams->SetBooleanValue(STATE_ATTRIBUTE, enabled);
+    PRBool isInlineTableEditingEnabled;
+    inlineTableEditor->GetInlineTableEditingEnabled(&isInlineTableEditingEnabled);
+    return aParams->SetBooleanValue(STATE_ATTRIBUTE, isInlineTableEditingEnabled);
   }
 
   return NS_ERROR_NOT_IMPLEMENTED;

@@ -1,46 +1,30 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla MathML Project.
- *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is The University Of 
+ * Queensland.  Portions created by The University Of Queensland are
+ * Copyright (C) 1999 The University Of Queensland.  All Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Roger B. Sidje <rbs@maths.uq.edu.au>
  *   David J. Fiddes <D.J.Fiddes@hw.ac.uk>
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 
 #include "nsCOMPtr.h"
 #include "nsFrame.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsUnitConversion.h"
 #include "nsStyleContext.h"
 #include "nsStyleConsts.h"
@@ -78,10 +62,11 @@ nsMathMLmfencedFrame::~nsMathMLmfencedFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmfencedFrame::InheritAutomaticData(nsIFrame* aParent)
+nsMathMLmfencedFrame::InheritAutomaticData(nsIPresContext* aPresContext,
+                                           nsIFrame*       aParent)
 {
   // let the base class get the default from our parent
-  nsMathMLContainerFrame::InheritAutomaticData(aParent);
+  nsMathMLContainerFrame::InheritAutomaticData(aPresContext, aParent);
 
   mPresentationData.flags |= NS_MATHML_STRETCH_ALL_CHILDREN_VERTICALLY;
 
@@ -89,7 +74,7 @@ nsMathMLmfencedFrame::InheritAutomaticData(nsIFrame* aParent)
 }
 
 NS_IMETHODIMP
-nsMathMLmfencedFrame::SetInitialChildList(nsPresContext* aPresContext,
+nsMathMLmfencedFrame::SetInitialChildList(nsIPresContext* aPresContext,
                                           nsIAtom*        aListName,
                                           nsIFrame*       aChildList)
 {
@@ -104,26 +89,28 @@ nsMathMLmfencedFrame::SetInitialChildList(nsPresContext* aPresContext,
 }
 
 NS_IMETHODIMP
-nsMathMLmfencedFrame::AttributeChanged(nsIContent*     aContent,
+nsMathMLmfencedFrame::AttributeChanged(nsIPresContext* aPresContext,
+                                       nsIContent*     aContent,
                                        PRInt32         aNameSpaceID,
                                        nsIAtom*        aAttribute,
                                        PRInt32         aModType)
 {
   RemoveFencesAndSeparators();
-  CreateFencesAndSeparators(GetPresContext());
+  CreateFencesAndSeparators(aPresContext);
 
   return nsMathMLContainerFrame::
-         AttributeChanged(aContent, aNameSpaceID,
+         AttributeChanged(aPresContext, aContent, aNameSpaceID,
                           aAttribute, aModType);
 }
 
 nsresult
-nsMathMLmfencedFrame::ChildListChanged(PRInt32 aModType)
+nsMathMLmfencedFrame::ChildListChanged(nsIPresContext* aPresContext,
+                                       PRInt32         aModType)
 {
   RemoveFencesAndSeparators();
-  CreateFencesAndSeparators(GetPresContext());
+  CreateFencesAndSeparators(aPresContext);
 
-  return nsMathMLContainerFrame::ChildListChanged(aModType);
+  return nsMathMLContainerFrame::ChildListChanged(aPresContext, aModType);
 }
 
 void
@@ -140,7 +127,7 @@ nsMathMLmfencedFrame::RemoveFencesAndSeparators()
 }
 
 nsresult
-nsMathMLmfencedFrame::CreateFencesAndSeparators(nsPresContext* aPresContext)
+nsMathMLmfencedFrame::CreateFencesAndSeparators(nsIPresContext* aPresContext)
 {
   nsresult rv;
   nsAutoString value, data;
@@ -227,7 +214,7 @@ nsMathMLmfencedFrame::CreateFencesAndSeparators(nsPresContext* aPresContext)
 }
 
 NS_IMETHODIMP
-nsMathMLmfencedFrame::Paint(nsPresContext*      aPresContext,
+nsMathMLmfencedFrame::Paint(nsIPresContext*      aPresContext,
                             nsIRenderingContext& aRenderingContext,
                             const nsRect&        aDirtyRect,
                             nsFramePaintLayer    aWhichLayer,
@@ -253,7 +240,7 @@ nsMathMLmfencedFrame::Paint(nsPresContext*      aPresContext,
 }
 
 NS_IMETHODIMP
-nsMathMLmfencedFrame::Reflow(nsPresContext*          aPresContext,
+nsMathMLmfencedFrame::Reflow(nsIPresContext*          aPresContext,
                              nsHTMLReflowMetrics&     aDesiredSize,
                              const nsHTMLReflowState& aReflowState,
                              nsReflowStatus&          aStatus)
@@ -265,7 +252,7 @@ nsMathMLmfencedFrame::Reflow(nsPresContext*          aPresContext,
 // exported routine that both mfenced and mfrac share.
 // mfrac uses this when its bevelled attribute is set.
 /*static*/ nsresult
-nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
+nsMathMLmfencedFrame::doReflow(nsIPresContext*          aPresContext,
                                const nsHTMLReflowState& aReflowState,
                                nsHTMLReflowMetrics&     aDesiredSize,
                                nsReflowStatus&          aStatus,
@@ -320,10 +307,8 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
     fm->GetMaxDescent(aDesiredSize.descent);
   }
   while (childFrame) {
-    nsReflowReason reason = (childFrame->GetStateBits() & NS_FRAME_FIRST_REFLOW)
-      ? eReflowReason_Initial : aReflowState.reason;
     nsHTMLReflowState childReflowState(aPresContext, aReflowState,
-                                       childFrame, availSize, reason);
+                                       childFrame, availSize);
     rv = mathMLFrame->ReflowChild(childFrame, aPresContext, childDesiredSize,
                                   childReflowState, childStatus);
     //NS_ASSERTION(NS_FRAME_IS_COMPLETE(childStatus), "bad status");
@@ -362,7 +347,7 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
   }
   else {
     // case when the call is made for mfenced
-    mathMLFrame->GetPreferredStretchSize(*aReflowState.rendContext,
+    mathMLFrame->GetPreferredStretchSize(aPresContext, *aReflowState.rendContext,
                                          0, /* i.e., without embellishments */
                                          stretchDir, containerSize);
     childFrame = firstChild;
@@ -373,7 +358,7 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
         // retrieve the metrics that was stored at the previous pass
         GetReflowAndBoundingMetricsFor(childFrame, childDesiredSize, childDesiredSize.mBoundingMetrics);
 
-        mathmlChild->Stretch(*aReflowState.rendContext, 
+        mathmlChild->Stretch(aPresContext, *aReflowState.rendContext, 
                              stretchDir, containerSize, childDesiredSize);
         // store the updated metrics
         childFrame->SetRect(nsRect(childDesiredSize.descent, childDesiredSize.ascent,
@@ -387,7 +372,7 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
       childFrame = childFrame->GetNextSibling();
     }
     // bug 121748: for surrounding fences & separators, use a size that covers everything
-    mathMLFrame->GetPreferredStretchSize(*aReflowState.rendContext,
+    mathMLFrame->GetPreferredStretchSize(aPresContext, *aReflowState.rendContext,
                                          STRETCH_CONSIDER_EMBELLISHMENTS,
                                          stretchDir, containerSize);
   }
@@ -481,9 +466,6 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
   mathMLFrame->SetBoundingMetrics(aDesiredSize.mBoundingMetrics);
   mathMLFrame->SetReference(nsPoint(0, aDesiredSize.ascent));
 
-  // see if we should fix the spacing
-  mathMLFrame->FixInterFrameSpacing(aDesiredSize);
-
   aStatus = NS_FRAME_COMPLETE;
   NS_FRAME_SET_TRUNCATION(aStatus, aReflowState, aDesiredSize);
   return NS_OK;
@@ -491,7 +473,7 @@ nsMathMLmfencedFrame::doReflow(nsPresContext*          aPresContext,
 
 // helper functions to perform the common task of formatting our chars
 /*static*/ nsresult
-nsMathMLmfencedFrame::ReflowChar(nsPresContext*      aPresContext,
+nsMathMLmfencedFrame::ReflowChar(nsIPresContext*      aPresContext,
                                  nsIRenderingContext& aRenderingContext,
                                  nsMathMLChar*        aMathMLChar,
                                  nsOperatorFlags      aForm,
@@ -592,31 +574,6 @@ nsMathMLmfencedFrame::PlaceChar(nsMathMLChar*      aMathMLChar,
   // return rect.width since it includes lspace and rspace
   bm.width = rect.width;
   dx += rect.width;
-}
-
-nscoord
-nsMathMLmfencedFrame::FixInterFrameSpacing(nsHTMLReflowMetrics& aDesiredSize)
-{
-  nscoord gap = nsMathMLContainerFrame::FixInterFrameSpacing(aDesiredSize);
-  if (!gap) return 0;
-
-  nsRect rect;
-  if (mOpenChar) {
-    mOpenChar->GetRect(rect);
-    rect.MoveBy(gap, 0);
-    mOpenChar->SetRect(rect);
-  }
-  if (mCloseChar) {
-    mCloseChar->GetRect(rect);
-    rect.MoveBy(gap, 0);
-    mCloseChar->SetRect(rect);
-  }
-  for (PRInt32 i = 0; i < mSeparatorsCount; i++) {
-    mSeparatorsChar[i].GetRect(rect);
-    rect.MoveBy(gap, 0);
-    mSeparatorsChar[i].SetRect(rect);
-  }
-  return gap;
 }
 
 // ----------------------

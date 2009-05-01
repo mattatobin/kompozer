@@ -12,19 +12,9 @@
     </menupopup>
   </toolbarbutton>
 
-  <!-- toolbarbutton id="openButton" class="toolbarbutton-1"
-                 label="&openToolbarCmd.label;" observes="cmd_openInTab"
-                 tooltiptext="&openToolbarCmd.tooltip;"/ -->
-  <!-- Kaze: let's be consistant with the "new" button -->
   <toolbarbutton id="openButton" class="toolbarbutton-1"
-                 label="&openToolbarCmd.label;" type="menu-button"
-                 observes="cmd_openInTab"
-                 tooltiptext="&openToolbarCmd.tooltip;">
-    <menupopup>
-      <menuitem label="&newTab.label;"          command="cmd_openInTab" default="true"/>
-      <menuitem label="&newBlankPageCmd.label;" command="cmd_open"/>
-    </menupopup>
-  </toolbarbutton>
+                 label="&openToolbarCmd.label;" observes="cmd_openInTab"
+                 tooltiptext="&openToolbarCmd.tooltip;"/>
 
   <toolbarbutton id="saveButton" class="toolbarbutton-1" observes="cmd_save"
                  tooltiptext="&saveToolbarCmd.tooltip;"/>

@@ -81,7 +81,8 @@ nsISupports*
 OS2Uni::GetUconvObject(int aCodePage, ConverterRequest aReq)
 {
   if (gCharsetManager == nsnull) {
-    CallGetService(kCharsetConverterManagerCID, &gCharsetManager);
+    nsServiceManager::GetService(kCharsetConverterManagerCID,
+      NS_GET_IID(nsICharsetConverterManager), (nsISupports**) &gCharsetManager);
   }
 
   nsresult rv;

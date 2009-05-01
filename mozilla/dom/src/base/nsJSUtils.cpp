@@ -1,12 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ts=2 sw=2 et tw=78: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,26 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Vidur Apparao <vidur@netscape.com>
- *   L. David Baron <dbaron@mozillafoundation.org>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -55,16 +54,11 @@
 #include "nsIServiceManager.h"
 #include "nsIXPConnect.h"
 #include "nsCOMPtr.h"
-#include "nsContentUtils.h"
-#include "nsDOMClassInfo.h"
-#include "nsIDOMGCParticipant.h"
-#include "nsIWeakReference.h"
-#include "nsIScriptSecurityManager.h"
 
 
 JSBool
 nsJSUtils::GetCallingLocation(JSContext* aContext, const char* *aFilename,
-                              PRUint32* aLineno, nsIPrincipal* aPrincipal)
+                              PRUint32 *aLineno)
 {
   // Get the current filename and line number
   JSStackFrame* frame = nsnull;
@@ -78,31 +72,6 @@ nsJSUtils::GetCallingLocation(JSContext* aContext, const char* *aFilename,
   } while (frame && !script);
 
   if (script) {
-    // If aPrincipals is non-null then our caller is asking us to ensure
-    // that the filename we return does not have elevated privileges.
-    if (aPrincipal) {
-      uint32 flags = JS_GetScriptFilenameFlags(script);
-
-      // Use the principal for the filename if it shouldn't be receiving
-      // implicit XPCNativeWrappers.
-      if (flags & JSFILENAME_SYSTEM) {
-        nsIScriptSecurityManager *ssm = nsContentUtils::GetSecurityManager();
-
-        nsCOMPtr<nsIPrincipal> sysPrin;
-        ssm->GetSystemPrincipal(getter_AddRefs(sysPrin));
-
-        if (aPrincipal != sysPrin) {
-          JSPrincipals* jsprins;
-          aPrincipal->GetJSPrincipals(aContext, &jsprins);
-
-          *aFilename = jsprins->codebase;
-          *aLineno = 0;
-          JSPRINCIPALS_DROP(aContext, jsprins);
-          return JS_TRUE;
-        }
-      }
-    }
-
     const char* filename = ::JS_GetScriptFilename(aContext, script);
 
     if (filename) {
@@ -142,13 +111,20 @@ nsJSUtils::ConvertJSValToXPCObject(nsISupports** aSupports, REFNSIID aIID,
   if (JSVAL_IS_NULL(aValue)) {
     return JS_TRUE;
   }
+  else if (JSVAL_IS_OBJECT(aValue)) {
+    nsresult rv;
+    nsCOMPtr<nsIXPConnect> xpc(do_GetService(nsIXPConnect::GetCID(), &rv));
+    if (NS_FAILED(rv))
+      return JS_FALSE;
 
-  if (JSVAL_IS_OBJECT(aValue)) {
     // WrapJS does all the work to recycle an existing wrapper and/or do a QI
-    nsresult rv = nsContentUtils::XPConnect()->
-      WrapJS(aContext, JSVAL_TO_OBJECT(aValue), aIID, (void**)aSupports);
+    rv = xpc->WrapJS(aContext, JSVAL_TO_OBJECT(aValue), aIID,
+                     (void**)aSupports);
 
-    return NS_SUCCEEDED(rv);
+    if (NS_FAILED(rv))
+      return JS_FALSE;
+
+    return JS_TRUE;
   }
 
   return JS_FALSE;
@@ -211,7 +187,10 @@ nsJSUtils::GetStaticScriptGlobal(JSContext* aContext, JSObject* aObj)
   nsCOMPtr<nsIXPConnectWrappedNative> wrapper(do_QueryInterface(supports));
   NS_ENSURE_TRUE(wrapper, nsnull);
 
-  nsCOMPtr<nsIScriptGlobalObject> sgo(do_QueryWrappedNative(wrapper));
+  nsCOMPtr<nsISupports> native;
+  wrapper->GetNative(getter_AddRefs(native));
+
+  nsCOMPtr<nsIScriptGlobalObject> sgo(do_QueryInterface(native));
 
   // We're returning a pointer to something that's about to be
   // released, but that's ok here.
@@ -243,100 +222,3 @@ nsJSUtils::GetDynamicScriptContext(JSContext *aContext)
   return GetScriptContextFromJSContext(aContext);
 }
 
-#define MARKED_OBJECT_BIT (PRWord(1<<0))
-
-void
-nsMarkedJSFunctionHolder_base::Set(nsISupports *aPotentialFunction,
-                                   nsIDOMGCParticipant *aParticipant)
-{
-  if (PRWord(mObject) & MARKED_OBJECT_BIT) {
-    nsDOMClassInfo::ReleaseWrapper(this);
-  }
-  nsISupports *oldVal = (nsISupports*)(PRWord(mObject) & ~MARKED_OBJECT_BIT);
-  if (!TryMarkedSet(aPotentialFunction, aParticipant)) {
-    NS_ASSERTION((PRWord(aPotentialFunction) & MARKED_OBJECT_BIT) == 0,
-                 "low bit set");
-    NS_IF_ADDREF(aPotentialFunction);
-    mObject = aPotentialFunction;
-  }
-  NS_IF_RELEASE(oldVal);
-}
-
-static nsIXPConnectJSObjectHolder* HolderToWrappedJS(void *aKey)
-{
-  nsMarkedJSFunctionHolder_base *holder = NS_STATIC_CAST(
-    nsMarkedJSFunctionHolder_base*, aKey);
-
-  NS_ASSERTION(PRWord(holder->mObject) & MARKED_OBJECT_BIT,
-               "yikes, not a marked object");
-
-  nsIWeakReference* weakRef =
-    (nsIWeakReference*)(PRWord(holder->mObject) & ~MARKED_OBJECT_BIT);
-
-  // This entire interface is a hack to avoid reference counting, so
-  // this actually doesn't do any reference counting, and we don't leak
-  // anything.  This is needed so we don't add and remove GC roots in
-  // the middle of GC.
-  nsWeakRefToIXPConnectWrappedJS *result;
-  if (NS_FAILED(CallQueryReferent(weakRef, &result)))
-    result = nsnull;
-  return result;
-}
-
-PRBool
-nsMarkedJSFunctionHolder_base::TryMarkedSet(nsISupports *aPotentialFunction,
-                                            nsIDOMGCParticipant *aParticipant)
-{
-  if (!aParticipant)
-    return PR_FALSE;
-
-  nsCOMPtr<nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH> wrappedJS =
-    do_QueryInterface(aPotentialFunction);
-  if (!wrappedJS) // a non-JS implementation
-    return PR_FALSE;
-
-  // XXX We really only need to pass PR_TRUE for
-  // root-if-externally-referenced if this is an onload, onerror,
-  // onreadystatechange, etc., so we could pass the responsibility for
-  // choosing that to the caller.
-  nsresult rv =
-    nsDOMClassInfo::PreserveWrapper(this, HolderToWrappedJS, aParticipant,
-                                    PR_TRUE);
-  NS_ENSURE_SUCCESS(rv, PR_FALSE);
-
-  nsIWeakReference* weakRef; // [STRONG]
-  wrappedJS->GetWeakReference(&weakRef);
-  NS_ENSURE_TRUE(weakRef, PR_FALSE);
-
-  NS_ASSERTION((PRWord(weakRef) & MARKED_OBJECT_BIT) == 0, "low bit set");
-  mObject = (nsISupports*)(PRWord(weakRef) | MARKED_OBJECT_BIT);
-  return PR_TRUE;
-}
-
-already_AddRefed<nsISupports>
-nsMarkedJSFunctionHolder_base::Get(REFNSIID aIID)
-{
-  nsISupports *result;
-  if (PRWord(mObject) & MARKED_OBJECT_BIT) {
-    nsIWeakReference* weakRef =
-      (nsIWeakReference*)(PRWord(mObject) & ~MARKED_OBJECT_BIT);
-    nsresult rv =
-      weakRef->QueryReferent(aIID, NS_REINTERPRET_CAST(void**, &result));
-    if (NS_FAILED(rv)) {
-      NS_NOTREACHED("GC preservation didn't work");
-      result = nsnull;
-    }
-  } else {
-    NS_IF_ADDREF(result = mObject);
-  }
-  return result;
-}
-
-nsMarkedJSFunctionHolder_base::~nsMarkedJSFunctionHolder_base()
-{
-  if (PRWord(mObject) & MARKED_OBJECT_BIT) {
-    nsDOMClassInfo::ReleaseWrapper(this);
-  }
-  nsISupports *obj = (nsISupports*)(PRWord(mObject) & ~MARKED_OBJECT_BIT);
-  NS_IF_RELEASE(obj);
-}

@@ -1,40 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Darin Fisher <darin@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef nsHttpHandler_h__
 #define nsHttpHandler_h__
@@ -56,10 +41,12 @@
 #include "nsIObserver.h"
 #include "nsIObserverService.h"
 #include "nsIProxyObjectManager.h"
+#include "nsIProxy.h"
 #include "nsIStreamConverterService.h"
 #include "nsICacheSession.h"
 #include "nsIEventQueueService.h"
 #include "nsICookieService.h"
+#include "nsIMIMEService.h"
 #include "nsIIDNService.h"
 #include "nsITimer.h"
 
@@ -130,16 +117,9 @@ public:
     // Called to kick-off a new transaction, by default the transaction
     // will be put on the pending transaction queue if it cannot be 
     // initiated at this time.  Callable from any thread.
-    nsresult InitiateTransaction(nsHttpTransaction *trans, PRInt32 priority)
+    nsresult InitiateTransaction(nsHttpTransaction *trans)
     {
-        return mConnMgr->AddTransaction(trans, priority);
-    }
-
-    // Called to change the priority of an existing transaction that has
-    // already been initiated.
-    nsresult RescheduleTransaction(nsHttpTransaction *trans, PRInt32 priority)
-    {
-        return mConnMgr->RescheduleTransaction(trans, priority);
+        return mConnMgr->AddTransaction(trans);
     }
 
     // Called to cancel a transaction, which may or may not be assigned to
@@ -170,8 +150,9 @@ public:
     // The HTTP handler caches pointers to specific XPCOM services, and
     // provides the following helper routines for accessing those services:
     //
-    nsresult GetCurrentEventQ(nsIEventQueue **);
+    nsresult GetEventQueueService(nsIEventQueueService **);
     nsresult GetStreamConverterService(nsIStreamConverterService **);
+    nsresult GetMimeService(nsIMIMEService **);
     nsresult GetIOService(nsIIOService** service);
     nsICookieService * GetCookieService(); // not addrefed
 
@@ -193,10 +174,6 @@ public:
         NotifyObservers(chan, NS_HTTP_ON_EXAMINE_MERGED_RESPONSE_TOPIC);
     }
 
-    // Called by channels before a redirect happens. This notifies both the
-    // channel's and the global redirect observers.
-    nsresult OnChannelRedirect(nsIChannel* oldChan, nsIChannel* newChan,
-                               PRUint32 flags);
 private:
 
     //
@@ -225,6 +202,7 @@ private:
     nsCOMPtr<nsIStreamConverterService> mStreamConvSvc;
     nsCOMPtr<nsIObserverService>        mObserverService;
     nsCOMPtr<nsICookieService>          mCookieService;
+    nsCOMPtr<nsIMIMEService>            mMimeService;
     nsCOMPtr<nsIIDNService>             mIDNConverter;
     nsCOMPtr<nsITimer>                  mTimer;
 
@@ -278,18 +256,17 @@ private:
     // useragent components
     nsXPIDLCString mAppName;
     nsXPIDLCString mAppVersion;
-    nsCString      mPlatform;
-    nsCString      mOscpu;
+    nsXPIDLCString mPlatform;
+    nsXPIDLCString mOscpu;
     nsXPIDLCString mSecurity;
-    nsCString      mLanguage;
-    nsCString      mMisc;
+    nsXPIDLCString mLanguage;
+    nsXPIDLCString mMisc;
     nsXPIDLCString mVendor;
     nsXPIDLCString mVendorSub;
     nsXPIDLCString mVendorComment;
     nsXPIDLCString mProduct;
     nsXPIDLCString mProductSub;
     nsXPIDLCString mProductComment;
-    nsCString      mExtraUA;
 
     nsCString      mUserAgent;
     nsXPIDLCString mUserAgentOverride;

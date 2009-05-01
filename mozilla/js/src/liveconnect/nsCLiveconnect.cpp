@@ -110,20 +110,22 @@ AutoPushJSContext::AutoPushJSContext(nsISupports* aSecuritySupports,
                                      JSContext *cx) 
                                      : mContext(cx), mPushResult(NS_OK)
 {
-    nsCOMPtr<nsIJSContextStack> contextStack =
-        do_GetService("@mozilla.org/js/xpc/ContextStack;1");
+    mContextStack = do_GetService("@mozilla.org/js/xpc/ContextStack;1");
 
-    JSContext* currentCX;
-    if(contextStack &&
-       // Don't push if the current context is already on the stack.
-       (NS_FAILED(contextStack->Peek(&currentCX)) ||
-        cx != currentCX) )
+    if(mContextStack)
     {
-        if (NS_SUCCEEDED(contextStack->Push(cx)))
+        JSContext* currentCX;
+        if(NS_SUCCEEDED(mContextStack->Peek(&currentCX)))
         {
-            // Leave the reference in mContextStack to
-            // indicate that we need to pop it in our dtor.
-            mContextStack.swap(contextStack);
+            // Is the current context already on the stack?
+            if(cx == currentCX)
+                mContextStack = nsnull;
+            else
+            {
+                mContextStack->Push(cx);
+                // Leave the reference to the mContextStack to
+                // indicate that we need to pop it in our dtor.                                               
+            }
         }
     }
 
@@ -241,7 +243,7 @@ nsCLiveconnect::AggregatedQueryInterface(const nsIID& aIID, void** aInstancePtr)
  *                     wrapped up as java wrapper netscape.javascript.JSObject.
  */
 NS_METHOD	
-nsCLiveconnect::GetMember(JNIEnv *jEnv, lcjsobject obj, const jchar *name, jsize length, void* principalsArray[], 
+nsCLiveconnect::GetMember(JNIEnv *jEnv, jsobject obj, const jchar *name, jsize length, void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports, jobject *pjobj)
 {
     if(jEnv == NULL || obj == 0)
@@ -299,7 +301,7 @@ done:
  *                     the member. 
  */
 NS_METHOD	
-nsCLiveconnect::GetSlot(JNIEnv *jEnv, lcjsobject obj, jint slot, void* principalsArray[], 
+nsCLiveconnect::GetSlot(JNIEnv *jEnv, jsobject obj, jint slot, void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports,  jobject *pjobj)
 {
     if(jEnv == NULL || obj == 0)
@@ -352,7 +354,7 @@ done:
  *                     then a internal mapping is consulted to convert to a NJSObject.
  */
 NS_METHOD	
-nsCLiveconnect::SetMember(JNIEnv *jEnv, lcjsobject obj, const jchar *name, jsize length, jobject java_obj, void* principalsArray[], 
+nsCLiveconnect::SetMember(JNIEnv *jEnv, jsobject obj, const jchar *name, jsize length, jobject java_obj, void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports)
 {
     if(jEnv == NULL || obj == 0)
@@ -402,7 +404,7 @@ done:
  *                     then a internal mapping is consulted to convert to a NJSObject.
  */
 NS_METHOD	
-nsCLiveconnect::SetSlot(JNIEnv *jEnv, lcjsobject obj, jint slot, jobject java_obj,  void* principalsArray[], 
+nsCLiveconnect::SetSlot(JNIEnv *jEnv, jsobject obj, jint slot, jobject java_obj,  void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports)
 {
     if(jEnv == NULL || obj == 0)
@@ -443,7 +445,7 @@ done:
  * @param name       - Name of a member.
  */
 NS_METHOD	
-nsCLiveconnect::RemoveMember(JNIEnv *jEnv, lcjsobject obj, const jchar *name, jsize length,  void* principalsArray[], 
+nsCLiveconnect::RemoveMember(JNIEnv *jEnv, jsobject obj, const jchar *name, jsize length,  void* principalsArray[], 
                              int numPrincipals, nsISupports *securitySupports)
 {
     if(jEnv == NULL || obj == 0)
@@ -489,7 +491,7 @@ done:
  * @param pjobj      - return value.
  */
 NS_METHOD	
-nsCLiveconnect::Call(JNIEnv *jEnv, lcjsobject obj, const jchar *name, jsize length, jobjectArray java_args, void* principalsArray[], 
+nsCLiveconnect::Call(JNIEnv *jEnv, jsobject obj, const jchar *name, jsize length, jobjectArray java_args, void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports, jobject *pjobj)
 {
     if(jEnv == NULL || obj == 0)
@@ -539,10 +541,8 @@ nsCLiveconnect::Call(JNIEnv *jEnv, lcjsobject obj, const jchar *name, jsize leng
     /* Convert arguments from Java to JS values */
     for (arg_num = 0; arg_num < argc; arg_num++) {
         jobject arg = jEnv->GetObjectArrayElement(java_args, arg_num);
-        JSBool ret = jsj_ConvertJavaObjectToJSValue(cx, jEnv, arg, &argv[arg_num]);
-		
-        jEnv->DeleteLocalRef(arg);
-        if (!ret)
+
+        if (!jsj_ConvertJavaObjectToJSValue(cx, jEnv, arg, &argv[arg_num]))
             goto cleanup_argv;
         JS_AddRoot(cx, &argv[arg_num]);
     }
@@ -573,7 +573,7 @@ done:
 }
 
 NS_METHOD	
-nsCLiveconnect::Eval(JNIEnv *jEnv, lcjsobject obj, const jchar *script, jsize length, void* principalsArray[], 
+nsCLiveconnect::Eval(JNIEnv *jEnv, jsobject obj, const jchar *script, jsize length, void* principalsArray[], 
                      int numPrincipals, nsISupports *securitySupports, jobject *pjobj)
 {
     if(jEnv == NULL || obj == 0)
@@ -648,7 +648,7 @@ done:
  */
 NS_METHOD	
 nsCLiveconnect::GetWindow(JNIEnv *jEnv, void *pJavaObject,  void* principalsArray[], 
-                     int numPrincipals, nsISupports *securitySupports, lcjsobject *pobj)
+                     int numPrincipals, nsISupports *securitySupports, jsobject *pobj)
 {
     if(jEnv == NULL || JSJ_callbacks == NULL)
     {
@@ -695,7 +695,7 @@ nsCLiveconnect::GetWindow(JNIEnv *jEnv, void *pJavaObject,  void* principalsArra
       handle->js_obj = js_obj;
       handle->rt = JS_GetRuntime(cx);
     }
-    *pobj = (lcjsobject)handle;
+    *pobj = (jsobject)NS_PTR_TO_INT32(handle);
     /* FIXME:  what if the window is explicitly disposed of, how do we
        notify Java? */
 #endif
@@ -713,7 +713,7 @@ done:
  * @param obj        - A Native JS Object.
  */
 NS_METHOD	
-nsCLiveconnect::FinalizeJSObject(JNIEnv *jEnv, lcjsobject obj)
+nsCLiveconnect::FinalizeJSObject(JNIEnv *jEnv, jsobject obj)
 {
     if(jEnv == NULL || obj == 0)
     {
@@ -731,7 +731,7 @@ nsCLiveconnect::FinalizeJSObject(JNIEnv *jEnv, lcjsobject obj)
 
 
 NS_METHOD	
-nsCLiveconnect::ToString(JNIEnv *jEnv, lcjsobject obj, jstring *pjstring)
+nsCLiveconnect::ToString(JNIEnv *jEnv, jsobject obj, jstring *pjstring)
 {
     if(jEnv == NULL || obj == 0)
     {

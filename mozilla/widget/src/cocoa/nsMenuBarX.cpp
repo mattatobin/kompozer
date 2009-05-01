@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -201,13 +201,14 @@ nsMenuBarX::SetRebuild(PRBool aNeedsRebuild)
 }
 
 void
-nsMenuBarX :: GetDocument ( nsIDocShell* inDocShell, nsIDocument** outDocument )
+nsMenuBarX :: GetDocument ( nsIWebShell* inWebShell, nsIDocument** outDocument )
 {
   *outDocument = nsnull;
   
-  if ( inDocShell ) {
-    nsCOMPtr<nsIContentViewer> cv;
-    inDocShell->GetContentViewer(getter_AddRefs(cv));
+  nsCOMPtr<nsIDocShell> docShell ( do_QueryInterface(inWebShell) );
+  nsCOMPtr<nsIContentViewer> cv;
+  if ( docShell ) {
+    docShell->GetContentViewer(getter_AddRefs(cv));
     if (cv) {
       // get the document
       nsCOMPtr<nsIDocumentViewer> docv(do_QueryInterface(cv));
@@ -225,17 +226,17 @@ nsMenuBarX :: GetDocument ( nsIDocShell* inDocShell, nsIDocument** outDocument )
 // Name says it all.
 //
 void
-nsMenuBarX :: RegisterAsDocumentObserver ( nsIDocShell* inDocShell )
+nsMenuBarX :: RegisterAsDocumentObserver ( nsIWebShell* inWebShell )
 {
   nsCOMPtr<nsIDocument> doc;
-  GetDocument(inDocShell, getter_AddRefs(doc));
+  GetDocument(inWebShell, getter_AddRefs(doc));
   if (!doc)
     return;
 
   // register ourselves
   nsCOMPtr<nsIDocumentObserver> observer ( do_QueryInterface(NS_STATIC_CAST(nsIMenuBar*,this)) );
   doc->AddObserver(observer);
-  // also get pointer to doc, just in case docshell goes away
+  // also get pointer to doc, just in case webshell goes away
   // we can still remove ourself as doc observer directly from doc
   mDocument = doc;
 } // RegisterAsDocumentObesrver
@@ -395,13 +396,13 @@ nsMenuBarX :: ExecuteCommand ( nsIContent* inDispatchTo )
 {
   nsEventStatus status = nsEventStatus_eIgnore;
   if ( inDispatchTo ) {
-    nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-    if (!docShell)
+    nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+    if (!webShell)
       return nsEventStatus_eConsumeNoDefault;
-    nsCOMPtr<nsPresContext> presContext;
-    MenuHelpersX::DocShellToPresContext(docShell, getter_AddRefs(presContext));
+    nsCOMPtr<nsIPresContext> presContext;
+    MenuHelpersX::WebShellToPresContext(webShell, getter_AddRefs(presContext));
 
-    nsXULCommandEvent event(PR_TRUE, NS_XUL_COMMAND, nsnull);
+    nsMouseEvent event(NS_XUL_COMMAND);
 
     inDispatchTo->HandleDOMEvent(presContext, &event, nsnull, NS_EVENT_FLAG_INIT, &status);
 	}
@@ -436,9 +437,9 @@ nsMenuBarX :: HideItem ( nsIDOMDocument* inDoc, const nsAString & inID, nsIConte
 
 nsEventStatus
 nsMenuBarX::MenuConstruct( const nsMenuEvent & aMenuEvent, nsIWidget* aParentWindow, 
-                            void * menubarNode, void * aDocShell )
+                            void * menubarNode, void * aWebShell )
 {
-  mDocShellWeakRef = do_GetWeakReference(NS_STATIC_CAST(nsIDocShell*, aDocShell));
+  mWebShellWeakRef = do_GetWeakReference(NS_STATIC_CAST(nsIWebShell*, aWebShell));
   nsIDOMNode* aDOMNode  = NS_STATIC_CAST(nsIDOMNode*, menubarNode);
   mMenuBarContent = do_QueryInterface(aDOMNode);           // strong ref
   NS_ASSERTION ( mMenuBarContent, "No content specified for this menubar" );
@@ -457,8 +458,8 @@ nsMenuBarX::MenuConstruct( const nsMenuEvent & aMenuEvent, nsIWidget* aParentWin
   if ( err )
     return nsEventStatus_eIgnore;
 
-  nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-  if (docShell) RegisterAsDocumentObserver(docShell);
+  nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+  if (webShell) RegisterAsDocumentObserver(webShell);
 
   // set this as a nsMenuListener on aParentWindow
   aParentWindow->AddMenuListener((nsIMenuListener *)this);
@@ -481,16 +482,19 @@ nsMenuBarX::MenuConstruct( const nsMenuEvent & aMenuEvent, nsIWidget* aParentWin
         if ( pnsMenu ) {
           pnsMenu->Create(NS_STATIC_CAST(nsIMenuBar*, this), menuName, menuAccessKey, 
                           NS_STATIC_CAST(nsIChangeManager *, this), 
-                          NS_REINTERPRET_CAST(nsIDocShell*, aDocShell), menu);
+                          NS_REINTERPRET_CAST(nsIWebShell*, aWebShell), menu);
 
           // Make nsMenu a child of nsMenuBar. nsMenuBar takes ownership
           AddMenu(pnsMenu); 
                   
           nsAutoString menuIDstring;
           menu->GetAttr(kNameSpaceID_None, nsWidgetAtoms::id, menuIDstring);
-          if ( menuIDstring.EqualsLiteral("menu_Help") ) {
-            nsMenuEvent event(PR_TRUE, 0, nsnull);
+          if ( menuIDstring == NS_LITERAL_STRING("menu_Help") ) {
+            nsMenuEvent event;
             MenuHandle handle = nsnull;
+#if !TARGET_CARBON
+            ::HMGetHelpMenuHandle(&handle);
+#endif
             event.mCommand = (unsigned int) handle;
             nsCOMPtr<nsIMenuListener> listener(do_QueryInterface(pnsMenu));
             listener->MenuSelected(event);
@@ -568,18 +572,22 @@ NS_METHOD nsMenuBarX::AddMenu(nsIMenu * aMenu)
   MenuRef menuRef = nsnull;
   aMenu->GetNativeData((void**)&menuRef);
 
-  nsCOMPtr<nsIContent> menu;
-  aMenu->GetMenuContent(getter_AddRefs(menu));
-  nsAutoString menuHidden;
-  menu->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, menuHidden);
-  if (!menuHidden.EqualsLiteral("true")) {
-    // make sure we only increment |mNumMenus| if the menu is visible, since
-    // we use it as an index of where to insert the next menu.
-    mNumMenus++;
-    
-    ::InsertMenuItem(mRootMenu, "\pPlaceholder", mNumMenus);
-    OSStatus status = ::SetMenuItemHierarchicalMenu(mRootMenu, mNumMenus, menuRef);
-    NS_ASSERTION(status == noErr, "nsMenuBarX::AddMenu: SetMenuItemHierarchicalMenu failed.");
+  PRBool helpMenu;
+  aMenu->IsHelpMenu(&helpMenu);
+  if(!helpMenu) {
+    nsCOMPtr<nsIContent> menu;
+    aMenu->GetMenuContent(getter_AddRefs(menu));
+    nsAutoString menuHidden;
+    menu->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, menuHidden);
+    if( menuHidden != NS_LITERAL_STRING("true")) {
+    	// make sure we only increment |mNumMenus| if the menu is visible, since
+    	// we use it as an index of where to insert the next menu.
+      mNumMenus++;
+      
+      ::InsertMenuItem(mRootMenu, "\pPlaceholder", mNumMenus);
+      OSStatus status = ::SetMenuItemHierarchicalMenu(mRootMenu, mNumMenus, menuRef);
+      NS_ASSERTION(status == noErr, "nsMenuBarX::AddMenu: SetMenuItemHierarchicalMenu failed.");
+    }
   }
 
   return NS_OK;
@@ -754,6 +762,12 @@ nsMenuBarX::ContentAppended( nsIDocument * aDocument, nsIContent  * aContainer,
 }
 
 void
+nsMenuBarX::ContentReplaced( nsIDocument * aDocument, nsIContent * aContainer, nsIContent * aOldChild,
+                          nsIContent * aNewChild, PRInt32 aIndexInContainer)
+{
+}
+
+void
 nsMenuBarX::DocumentWillBeDestroyed( nsIDocument * aDocument )
 {
   mDocument = nsnull;
@@ -916,24 +930,25 @@ nsMenuBarX :: Unregister ( PRUint32 inCommandID )
 
 
 //
-// DocShellToPresContext
+// WebShellToPresContext
 //
-// Helper to dig out a pres context from a docshell. A common thing to do before
+// Helper to dig out a pres context from a webshell. A common thing to do before
 // sending an event into the dom.
 //
-// XXXbz this should be using DOM event apis!
 nsresult
-MenuHelpersX::DocShellToPresContext (nsIDocShell* inDocShell, nsPresContext** outContext )
+MenuHelpersX::WebShellToPresContext (nsIWebShell* inWebShell, nsIPresContext** outContext )
 {
   NS_ENSURE_ARG_POINTER(outContext);
   *outContext = nsnull;
-  if (!inDocShell)
+  if (!inWebShell)
     return NS_ERROR_INVALID_ARG;
   
   nsresult retval = NS_OK;
   
+  nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(inWebShell));
+
   nsCOMPtr<nsIContentViewer> contentViewer;
-  inDocShell->GetContentViewer(getter_AddRefs(contentViewer));
+  docShell->GetContentViewer(getter_AddRefs(contentViewer));
   if ( contentViewer ) {
     nsCOMPtr<nsIDocumentViewer> docViewer ( do_QueryInterface(contentViewer) );
     if ( docViewer )
@@ -946,7 +961,7 @@ MenuHelpersX::DocShellToPresContext (nsIDocShell* inDocShell, nsPresContext** ou
   
   return retval;
   
-} // DocShellToPresContext
+} // WebShellToPresContext
 
 
 

@@ -344,7 +344,7 @@
 
         </row>
 
-	<hbox align="center">
+	<hbox valign="middle" autostretch="never">
  	     <button label="collapse/uncollapse grid" flex="1" oncommand="collapseGrid()"/>
  	     <button label="collapse/uncollapse element" flex="1" oncommand="collapseElement()"/>
         </hbox>

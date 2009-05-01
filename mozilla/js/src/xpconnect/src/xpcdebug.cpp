@@ -292,11 +292,11 @@ xpc_DumpJSStack(JSContext* cx, JSBool showArgs, JSBool showLocals, JSBool showTh
     buf = FormatJSStackDump(cx, nsnull, showArgs, showLocals, showThisProps);
     if(buf)
     {
-        fputs(buf, stdout);
+        printf(buf);
         JS_smprintf_free(buf);
     }
     else
-        puts("Failed to format JavaScript stack for dump");
+        printf("Failed to format JavaScript stack for dump\n");
     return JS_TRUE;
 }
 
@@ -318,7 +318,7 @@ xpc_DumpEvalInJSStackFrame(JSContext* cx, JSUint32 frameno, const char* text)
 
     if(!cx || !text)
     {
-        puts("invalid params passed to xpc_DumpEvalInJSStackFrame!");
+        printf("invalid params passed to xpc_DumpEvalInJSStackFrame!\n");
         return JS_FALSE;
     }
 
@@ -333,7 +333,7 @@ xpc_DumpEvalInJSStackFrame(JSContext* cx, JSUint32 frameno, const char* text)
 
     if(!fp)
     {
-        puts("invalid frame number!");
+        printf("invalid frame number!\n");
         return JS_FALSE;
     }
 
@@ -350,7 +350,7 @@ xpc_DumpEvalInJSStackFrame(JSContext* cx, JSUint32 frameno, const char* text)
         printf("%s\n", chars);
     }
     else
-        puts("eval failed!");
+        printf("eval failed!\n");
     JS_SetErrorReporter(cx, older);
     JS_RestoreExceptionState(cx, exceptionState);
     return JS_TRUE;
@@ -363,11 +363,11 @@ xpc_DebuggerKeywordHandler(JSContext *cx, JSScript *script, jsbytecode *pc,
                            jsval *rval, void *closure)
 {
     static const char line[] =
-    "------------------------------------------------------------------------";
-    puts(line);
-    puts("Hit JavaScript \"debugger\" keyword. JS call stack...");
+    "------------------------------------------------------------------------\n";
+    printf(line);
+    printf("Hit JavaScript \"debugger\" keyword. JS call stack...\n");
     xpc_DumpJSStack(cx, JS_TRUE, JS_TRUE, JS_FALSE);
-    puts(line);
+    printf(line);
     return JSTRAP_CONTINUE;
 }
 
@@ -415,11 +415,11 @@ static const int tab_width = 2;
 static void PrintObjectBasics(JSObject* obj)
 {
     if(OBJ_IS_NATIVE(obj))
-        printf("%p 'native' <%s>",
-               (void *)obj,
+        printf("%#p 'native' <%s>",
+               obj,
                ((JSClass*)(obj->slots[JSSLOT_CLASS]-1))->name);
     else
-        printf("%p 'host'", (void *)obj);
+        printf("%#p 'host'", obj);
 
 }
 
@@ -430,13 +430,13 @@ static void PrintObject(JSObject* obj, int depth, ObjectPile* pile)
     switch(pile->Visit(obj))
     {
     case ObjectPile::primary:
-        puts("");
+        printf("\n");
         break;
     case ObjectPile::seen:
-        puts(" (SEE ABOVE)");
+        printf(" (SEE ABOVE)\n");
         return;
     case ObjectPile::overflow:
-        puts(" (TOO MANY OBJECTS)");
+        printf(" (TOO MANY OBJECTS)\n");
         return;
     }
 
@@ -450,12 +450,12 @@ static void PrintObject(JSObject* obj, int depth, ObjectPile* pile)
     if(parent)
         PrintObject(parent, depth+1, pile);
     else
-        puts("null");
+        printf("null\n");
     printf("%*sproto: ", INDENT(depth+1));
     if(proto)
         PrintObject(proto, depth+1, pile);
     else
-        puts("null");
+        printf("null\n");
 }
 
 JSBool
@@ -463,16 +463,16 @@ xpc_DumpJSObject(JSObject* obj)
 {
     ObjectPile pile;
 
-    puts("Debugging reminders...");
-    puts("  class:  (JSClass*)(obj->slots[2]-1)");
-    puts("  parent: (JSObject*)(obj->slots[1])");
-    puts("  proto:  (JSObject*)(obj->slots[0])");
-    puts("");
+    printf("Debugging reminders...\n");
+    printf("  class:  (JSClass*)(obj->slots[2]-1)\n");
+    printf("  parent: (JSObject*)(obj->slots[1])\n");
+    printf("  proto:  (JSObject*)(obj->slots[0])\n");
+    printf("\n");
 
     if(obj)
         PrintObject(obj, 0, &pile);
     else
-        puts("xpc_DumpJSObject passed null!");
+        printf("xpc_DumpJSObject passed null!\n");
 
     return JS_TRUE;
 }

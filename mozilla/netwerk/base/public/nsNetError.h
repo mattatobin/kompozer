@@ -200,18 +200,10 @@
 
 
 /**
- * This request is not resumable, but it was tried to resume it, or to
- * request resume-specific data.
+ * XXX document me
  */
 #define NS_ERROR_NOT_RESUMABLE \
     NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_NETWORK, 25)
-
-/**
- * It was attempted to resume the request, but the entity has changed in the
- * meantime.
- */
-#define NS_ERROR_ENTITY_CHANGED \
-    NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_NETWORK, 32)
 
 /**
  * The request failed as a result of a detected redirection loop.
@@ -219,13 +211,6 @@
 #define NS_ERROR_REDIRECT_LOOP \
     NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_NETWORK, 31)
 
-/**
- * The request failed because the content type returned by the server was
- * not a type expected by the channel (for nested channels such as the JAR
- * channel).
- */
-#define NS_ERROR_UNSAFE_CONTENT_TYPE \
-    NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_NETWORK, 74)
 
 /******************************************************************************
  * FTP specific error codes:

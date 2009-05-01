@@ -181,7 +181,7 @@ function onAccept()
       editor.setShouldTxnSetSelection(false);
 
       while (textareaElement.hasChildNodes())
-        editor.deleteNode(textareaElement.lastChild);
+        editor.DeleteNodeSafe(textareaElement.lastChild);
       if (initialText) {
         var textNode = editor.document.createTextNode(initialText);
         editor.insertNode(textNode, textareaElement, 0);

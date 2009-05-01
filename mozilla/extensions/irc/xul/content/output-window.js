@@ -1,41 +1,37 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/ 
+ * 
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
  * for the specific language governing rights and limitations under the
- * License.
+ * License. 
  *
- * The Original Code is ChatZilla.
- *
+ * The Original Code is ChatZilla
+ * 
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * Netscape Communications Corporation
+ * Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation.
+ *
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU Public License (the "GPL"), in which case the
+ * provisions of the GPL are applicable instead of those above.
+ * If you wish to allow use of your version of this file only
+ * under the terms of the GPL and not to allow others to use your
+ * version of this file under the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice
+ * and other provisions required by the GPL.  If you do not delete
+ * the provisions above, a recipient may use your version of this
+ * file under either the MPL or the GPL.
  *
  * Contributor(s):
- *   Robert Ginda, <rginda@netscape.com>, original author
+ *  Robert Ginda, <rginda@netscape.com>, original author
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 var initialized = false;
 
@@ -75,18 +71,6 @@ var headers = {
         fields: ["container", "url-anchor", "serverstr", "title",
                  "descnodes"],
         update: updateUser
-    },
-    
-    IRCDCCChat: {
-        prefix: "dcc-chat-",
-        fields: ["container", "remotestr", "title"],
-        update: updateDCCChat
-    },
-    
-    IRCDCCFileTransfer: {
-        prefix: "dcc-file-",
-        fields: ["container", "file", "progress", "progressbar"],
-        update: updateDCCFile
     }
 };
 
@@ -116,22 +100,8 @@ function stock_initOutputWindow(newClient, newView, newClickHandler)
     getObjectDetails = mainWindow.getObjectDetails;
     dd = mainWindow.dd;
 
-    // Wheee... localize stuff!
-    //var nodes = document.getElementsByAttribute("localize", "*");
-    var nodes = document.getElementsByTagName("*");
-    for (var i = 0; i < nodes.length; i++)
-    {
-        if (nodes[i].hasAttribute("localize"))
-        {
-            var msg = nodes[i].getAttribute("localize");
-            msg = getMsg("msg." + msg);
-            nodes[i].appendChild(document.createTextNode(msg));
-        }
-    }
-
     changeCSS(view.prefs["motif.current"]);
-    updateMotifSettings();
-
+    
     var output = document.getElementById("output");
     output.appendChild(view.messages);
 
@@ -146,6 +116,8 @@ function stock_initOutputWindow(newClient, newView, newClickHandler)
     var name;
     if ("unicodeName" in view)
         name = view.unicodeName;
+    else if ("properNick" in view)
+        name = view.properNick;
     else
         name = view.name;
     splash.appendChild(document.createTextNode(name));
@@ -184,13 +156,13 @@ function onTopicKeypress(e)
             break;
             
         default:
-            client.mainWindow.onInputKeyPress(e);
+            client.mainWindow.onInputKeypress(header["topicinput"]);
     }
 }
 
 function startTopicEdit()
 {
-    var me = view.getUser(view.parent.me.unicodeName);
+    var me = view.getUser(view.parent.me.nick);
     if (!me || (!view.mode.publicTopic && !me.isOp && !me.isHalfOp) ||
         !header["topicinput"].hasAttribute("hidden"))
     {
@@ -251,46 +223,6 @@ function changeCSS(url, id)
     window.scrollTo(0, window.document.height);
 }
 
-function updateMotifSettings(existingTimeout)
-{
-    // Try... catch with a repeat to cope with the style sheet not being loaded
-    const TIMEOUT = 100;
-    try
-    {
-        existingTimeout += TIMEOUT;
-        view.motifSettings = getMotifSettings();
-    }
-    catch(ex) 
-    {
-        if (existingTimeout >= 30000) // Stop after trying for 30 seconds
-            return;
-        if (ex.name == "NS_ERROR_DOM_INVALID_ACCESS_ERR") //not ready, try again
-            setTimeout(updateMotifSettings, TIMEOUT, existingTimeout);
-        else // something else, panic!
-            dd(ex);
-    }
-}
-
-function getMotifSettings()
-{
-    var re = new RegExp("czsettings\\.(\\w*)", "i");
-    var rules = document.getElementById("main-css").sheet.cssRules;
-    var rv = new Object();
-    var ary;
-    // Copy any settings, which are available in the motif using the
-    // "CZSETTINGS" selector. We only store the regexp match after checking
-    // the rule type because selectorText is not defined on other rule types.
-    for (var i = 0; i < rules.length; i++)
-    {
-        if ((rules[i].type == CSSRule.STYLE_RULE) &&
-            ((ary = rules[i].selectorText.match(re)) != null))
-        {
-            rv[ary[1]] = true;
-        }
-    }
-    return rv;
-}
-
 function setText(field, text, checkCondition)
 {
     if (!header[field].firstChild)
@@ -346,8 +278,6 @@ function setHeaderState(state)
 
 function updateHeader()
 {
-    document.title = view.getURL();
-    
     if (!header || hasAttribute("container", "hidden"))
         return;
 
@@ -390,7 +320,7 @@ function updateClient()
 
 function updateNetwork()
 {
-    if (view.state == client.mainWindow.NET_CONNECTING)
+    if (view.connecting)
     {
         setText("status", MSG_CONNECTING);
         setAttribute("status","condition", "yellow");
@@ -402,7 +332,7 @@ function updateNetwork()
         setText("status", MSG_CONNECTED);
         setAttribute("status","condition", "green");
         setAttribute("status", "title",
-                     getMsg(MSG_CONNECT_VIA, view.primServ.unicodeName));
+                     getMsg(MSG_CONNECT_VIA, view.primServ.name));
         if (view.primServ.lag != -1)
             setText("lag", getMsg(MSG_FMT_SECONDS, view.primServ.lag));
         else
@@ -437,9 +367,8 @@ function updateChannel()
 
         if (view.topic)
         {
-            var data = getObjectDetails(view);
-            data.dontLogURLs = true;
-            var nodes = client.munger.munge(view.topic, null, data);
+            var nodes = client.munger.munge(view.topic, null,
+                                            getObjectDetails(view));
             header["topicnodes"].appendChild(nodes);
         }
         else
@@ -471,41 +400,17 @@ function updateUser()
     else
         setText("serverstr", null, true);
 
-    setText("title", getMsg(MSG_TITLE_USER, [view.unicodeName, source]));
+    setText("title", getMsg(MSG_TITLE_USER, [view.properNick, source]));
 
     header["descnodes"].removeChild(header["descnodes"].firstChild);
     if (typeof view.desc != "undefined")
     {
-        var data = getObjectDetails(view);
-        data.dontLogURLs = true;
-        var nodes = client.munger.munge(view.desc, null, data);
-        header["descnodes"].appendChild(nodes);
+        var nodes = client.munger.munge(view.desc, null,
+                                        getObjectDetails(view));
+            header["descnodes"].appendChild(nodes);
     }
     else
     {
         setText("descnodes", "");
     }
-}
-
-function updateDCCChat()
-{
-    if (view.state.state == 4)
-        setText("remotestr", view.remoteIP + ":" + view.port, true);
-    else
-        setText("remotestr", null, true);
-
-    setText("title", getMsg(MSG_TITLE_DCCCHAT, view.user.unicodeName));
-}
-
-function updateDCCFile()
-{
-    var pcent = Math.floor(100 * view.position / view.size);
-    
-    setText("file", view.filename);
-    setText("progress", getMsg(MSG_DCCFILE_PROGRESS,
-                               [pcent, mainWindow.getSISize(view.position),
-                                mainWindow.getSISize(view.size),
-                                mainWindow.getSISpeed(view.speed)]));
-
-    setAttribute("progressbar", "width", pcent + "%");
 }

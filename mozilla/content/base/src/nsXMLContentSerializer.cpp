@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -55,7 +56,9 @@
 #include "nsUnicharUtils.h"
 #include "nsCRT.h"
 #include "nsContentUtils.h"
-#include "nsLayoutAtoms.h"
+#include "nsIDocumentEncoder.h"
+#include "nsIDOMRange.h"
+#include "nsISelection.h"
 
 typedef struct {
   nsString mPrefix;
@@ -76,7 +79,12 @@ nsresult NS_NewXMLContentSerializer(nsIContentSerializer** aSerializer)
 nsXMLContentSerializer::nsXMLContentSerializer()
   : mPrefixIndex(0),
     mInAttribute(PR_FALSE),
-    mAddNewline(PR_FALSE)
+    mAddNewline(PR_FALSE),
+    mFlags(0),
+    mStartSelectionContainer(nsnull),
+    mEndSelectionContainer(nsnull),
+    mStartSelectionOffset(0),
+    mEndSelectionOffset(0)
 {
 }
  
@@ -87,9 +95,10 @@ nsXMLContentSerializer::~nsXMLContentSerializer()
 NS_IMPL_ISUPPORTS1(nsXMLContentSerializer, nsIContentSerializer)
 
 NS_IMETHODIMP 
-nsXMLContentSerializer::Init(PRUint32 flags, PRUint32 aWrapColumn,
+nsXMLContentSerializer::Init(PRUint32 aFlags, PRUint32 aWrapColumn,
                              const char* aCharSet, PRBool aIsCopying)
 {
+  mFlags = aFlags;
   return NS_OK;
 }
 
@@ -103,30 +112,36 @@ nsXMLContentSerializer::AppendTextData(nsIDOMNode* aNode,
 {
   nsCOMPtr<nsITextContent> content(do_QueryInterface(aNode));
   if (!content) return NS_ERROR_FAILURE;
+  
+  const nsTextFragment* frag;
+  content->GetText(&frag);
 
-  const nsTextFragment* frag = content->Text();
-
-  PRInt32 endoffset = (aEndOffset == -1) ? frag->GetLength() : aEndOffset;
-  PRInt32 length = endoffset - aStartOffset;
-
-  NS_ASSERTION(aStartOffset >= 0, "Negative start offset for text fragment!");
-  NS_ASSERTION(aStartOffset <= endoffset, "A start offset is beyond the end of the text fragment!");
-
-  if (length <= 0) {
-    // XXX Zero is a legal value, maybe non-zero values should be an
-    // error.
-
-    return NS_OK;
-  }
+  if (frag) {
+    PRInt32 endoffset = (aEndOffset == -1) ? frag->GetLength() : aEndOffset;
+    PRInt32 length = endoffset - aStartOffset;
     
-  if (frag->Is2b()) {
-    const PRUnichar *strStart = frag->Get2b() + aStartOffset;
-    AppendToString(Substring(strStart, strStart + length), aStr,
-                   aTranslateEntities, aIncrColumn);
-  }
-  else {
-    AppendToString(NS_ConvertASCIItoUCS2(frag->Get1b()+aStartOffset, length),
-                   aStr, aTranslateEntities, aIncrColumn);
+    NS_ASSERTION(aStartOffset >= 0, "Negative start offset for text fragment!");
+    NS_ASSERTION(aStartOffset <= endoffset, "A start offset is beyond the end of the text fragment!");
+
+
+    if (length <= 0) {
+      return NS_OK;  // XXX Zero is a legal value, maybe non-zero values should
+                     //     be an error.
+    }
+    
+    if (frag->Is2b()) {
+      const PRUnichar *strStart = frag->Get2b() + aStartOffset;
+      AppendToString(Substring(strStart, strStart + length),
+                     aStr,
+                     aTranslateEntities,
+                     aIncrColumn);
+    }
+    else {
+      AppendToString(NS_ConvertASCIItoUCS2(frag->Get1b()+aStartOffset, length),
+                     aStr,
+                     aTranslateEntities,
+                     aIncrColumn);
+    }
   }
 
   return NS_OK;
@@ -152,10 +167,22 @@ nsXMLContentSerializer::AppendCDATASection(nsIDOMCDATASection* aCDATASection,
   NS_ENSURE_ARG(aCDATASection);
   nsresult rv;
 
-  AppendToString(NS_LITERAL_STRING("<![CDATA["), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='cdata'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;![CDATA["), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("<![CDATA["), aStr);
   rv = AppendTextData(aCDATASection, aStartOffset, aEndOffset, aStr, PR_FALSE, PR_TRUE);
   if (NS_FAILED(rv)) return NS_ERROR_FAILURE;  
-  AppendToString(NS_LITERAL_STRING("]]>"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("]]>"), aStr);
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("]]>"), aStr);
 
   return NS_OK;
 }
@@ -178,13 +205,27 @@ nsXMLContentSerializer::AppendProcessingInstruction(nsIDOMProcessingInstruction*
   rv = aPI->GetData(data);
   if (NS_FAILED(rv)) return NS_ERROR_FAILURE;
 
-  AppendToString(NS_LITERAL_STRING("<?"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='pi'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;?"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("<?"), aStr);
+
   AppendToString(target, aStr);
   if (!data.IsEmpty()) {
     AppendToString(NS_LITERAL_STRING(" "), aStr);
-    AppendToString(data, aStr);
+    AppendToString(data, aStr, 0 != (mFlags & nsIDocumentEncoder::OutputForColoredSourceView),
+                   PR_TRUE, PR_TRUE);
   }
-  AppendToString(NS_LITERAL_STRING("?>"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("?>"), aStr);
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("?>"), aStr);
   MaybeFlagNewline(aPI);
   
   return NS_OK;
@@ -205,7 +246,13 @@ nsXMLContentSerializer::AppendComment(nsIDOMComment* aComment,
 
   MaybeAddNewline(aStr);
 
-  AppendToString(NS_LITERAL_STRING("<!--"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='comment'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;!--"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("<!--"), aStr);
   if (aStartOffset || (aEndOffset != -1)) {
     PRInt32 length = (aEndOffset == -1) ? data.Length() : aEndOffset;
     length -= aStartOffset;
@@ -215,9 +262,16 @@ nsXMLContentSerializer::AppendComment(nsIDOMComment* aComment,
     AppendToString(frag, aStr);
   }
   else {
-    AppendToString(data, aStr);
+    AppendToString(data, aStr, 0 != (mFlags & nsIDocumentEncoder::OutputForColoredSourceView),
+                   PR_TRUE, PR_TRUE);
   }
-  AppendToString(NS_LITERAL_STRING("-->"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("--&gt;"), aStr);
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("-->"), aStr);
   MaybeFlagNewline(aComment);
   
   return NS_OK;
@@ -242,7 +296,13 @@ nsXMLContentSerializer::AppendDoctype(nsIDOMDocumentType *aDoctype,
 
   MaybeAddNewline(aStr);
 
-  AppendToString(NS_LITERAL_STRING("<!DOCTYPE "), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='doctype'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;!DOCTYPE "), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("<!DOCTYPE "), aStr);
   AppendToString(name, aStr);
   PRUnichar quote;
   if (!publicId.IsEmpty()) {
@@ -289,13 +349,19 @@ nsXMLContentSerializer::AppendDoctype(nsIDOMDocumentType *aDoctype,
     AppendToString(PRUnichar(']'), aStr);
   }
     
-  AppendToString(PRUnichar('>'), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("&gt;"), aStr);
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
+  }
+  else
+    AppendToString(PRUnichar('>'), aStr);
   MaybeFlagNewline(aDoctype);
 
   return NS_OK;
 }
 
-#define kXMLNS "xmlns"
+#define kXMLNS NS_LITERAL_STRING("xmlns")
 
 nsresult
 nsXMLContentSerializer::PushNameSpaceDecl(const nsAString& aPrefix,
@@ -331,28 +397,26 @@ nsXMLContentSerializer::PopNameSpaceDeclsFor(nsIDOMElement* aOwner)
   }
 }
 
+/* ConfirmPrefix() is needed for cases where scripts have 
+ * moved/modified elements/attributes 
+ */
 PRBool
 nsXMLContentSerializer::ConfirmPrefix(nsAString& aPrefix,
-                                      const nsAString& aURI,
-                                      nsIDOMElement* aElement,
-                                      PRBool aMustHavePrefix)
+                                      const nsAString& aURI)
 {
-  if (aPrefix.EqualsLiteral(kXMLNS) ||
-      (aPrefix.EqualsLiteral("xml") &&
-       aURI.EqualsLiteral("http://www.w3.org/XML/1998/namespace"))) {
+  if (aPrefix.Equals(kXMLNS)) {
     return PR_FALSE;
   }
   if (aURI.IsEmpty()) {
     aPrefix.Truncate();
     return PR_FALSE;
   }
-
+  PRInt32 index, count;
   nsAutoString closestURIMatch;
   PRBool uriMatch = PR_FALSE;
 
-  PRInt32 count = mNameSpaceStack.Count();
-  PRInt32 index = count - 1;
-  while (index >= 0) {
+  count = mNameSpaceStack.Count();
+  for (index = count - 1; index >= 0; index--) {
     NameSpaceDecl* decl = (NameSpaceDecl*)mNameSpaceStack.ElementAt(index);
     // Check if we've found a prefix match
     if (aPrefix.Equals(decl->mPrefix)) {
@@ -361,88 +425,35 @@ nsXMLContentSerializer::ConfirmPrefix(nsAString& aPrefix,
       if (aURI.Equals(decl->mURI)) {
         return PR_FALSE;
       }
-
-      // If they don't, and either:
-      // 1) We have a prefix (so we'd be redeclaring this prefix to point to a
-      //    different namespace) or
-      // 2) We're looking at an existing default namespace decl on aElement (so
-      //    we can't create a new default namespace decl for this URI)
-      // then generate a new prefix.  Note that we do NOT generate new prefixes
-      // if we happen to have aPrefix == decl->mPrefix == "" and mismatching
-      // URIs when |decl| doesn't have aElement as its owner.  In that case we
-      // can simply push the new namespace URI as the default namespace for
-      // aElement.
-      if (!aPrefix.IsEmpty() ||
-          (decl->mPrefix.IsEmpty() && decl->mOwner == aElement)) {
-        GenerateNewPrefix(aPrefix);
-        // Now we need to validate our new prefix/uri combination; check it
-        // against the full namespace stack again.  Note that just restarting
-        // the while loop is ok, since we haven't changed aURI, so the
-        // closestURIMatch state is not affected.
-        index = count - 1;
-        continue;
+      // If they don't, we can't use this prefix
+      else {
+        aPrefix.Truncate();
       }
     }
-    
     // If we've found a URI match, then record the first one
-    if (!uriMatch && aURI.Equals(decl->mURI)) {
-      // Need to check that decl->mPrefix is not declared anywhere closer to
-      // us.  If it is, we can't use it.
-      PRBool prefixOK = PR_TRUE;
-      PRInt32 index2;
-      for (index2 = count-1; index2 > index && prefixOK; --index2) {
-        NameSpaceDecl* decl2 =
-          (NameSpaceDecl*)mNameSpaceStack.ElementAt(index2);
-        prefixOK = (decl2->mPrefix != decl->mPrefix);
-      }
-      
-      if (prefixOK) {
-        uriMatch = PR_TRUE;
-        closestURIMatch.Assign(decl->mPrefix);
-      }
+    else if (!uriMatch && aURI.Equals(decl->mURI)) {
+      uriMatch = PR_TRUE;
+      closestURIMatch.Assign(decl->mPrefix);
     }
-    
-    --index;
   }
 
-  // At this point the following invariants hold:
-  // 1) There is nothing on the namespace stack that matches the pair
-  //    (aPrefix, aURI)
-  // 2) There is nothing on the namespace stack that has aPrefix as the prefix
-  //    and a _different_ URI, except for the case aPrefix.IsEmpty (and
-  //    possible default namespaces on ancestors)
-  // 3) The prefix in closestURIMatch is mapped to aURI in our scope if
-  //    uriMatch is set.
-  
-  // So if uriMatch is set it's OK to use the closestURIMatch prefix.  The one
-  // exception is when closestURIMatch is actually empty (default namespace
-  // decl) and we must have a prefix.
-  if (uriMatch && (!aMustHavePrefix || !closestURIMatch.IsEmpty())) {
+  // There are no namespace declarations that match the prefix, uri pair. 
+  // If there's another prefix that matches that URI, us it.
+  if (uriMatch) {
     aPrefix.Assign(closestURIMatch);
     return PR_FALSE;
   }
-  
-  // At this point, if aPrefix is empty (which means we never had a prefix to
-  // start with) and we must have a prefix, just generate a new prefix and then
-  // send it back through the namespace stack checks to make sure it's OK.
-  if (aPrefix.IsEmpty() && aMustHavePrefix) {
-    GenerateNewPrefix(aPrefix);
-    return ConfirmPrefix(aPrefix, aURI, aElement, aMustHavePrefix);
+  // If we don't have a prefix, create one
+  else if (aPrefix.IsEmpty()) {
+    aPrefix.Assign(NS_LITERAL_STRING("a"));
+    char buf[128];
+    PR_snprintf(buf, sizeof(buf), "%d", mPrefixIndex++);
+    AppendASCIItoUTF16(buf, aPrefix);
   }
-  // else we will just set aURI as the new default namespace URI
 
   // Indicate that we need to create a namespace decl for the
   // final prefix
   return PR_TRUE;
-}
-
-void
-nsXMLContentSerializer::GenerateNewPrefix(nsAString& aPrefix)
-{
-  aPrefix.AssignLiteral("a");
-  char buf[128];
-  PR_snprintf(buf, sizeof(buf), "%d", mPrefixIndex++);
-  AppendASCIItoUTF16(buf, aPrefix);
 }
 
 void
@@ -463,11 +474,15 @@ nsXMLContentSerializer::SerializeAttr(const nsAString& aPrefix,
     // if problem characters are turned into character entity references
     // then there will be no problem with the value delimiter characters
     AppendToString(NS_LITERAL_STRING("=\""), aStr);
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      AppendToString(NS_LITERAL_STRING("<span class='attribute-value'>"), aStr, PR_FALSE, PR_FALSE);
 
     mInAttribute = PR_TRUE;
     AppendToString(aValue, aStr, PR_TRUE);
     mInAttribute = PR_FALSE;
 
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      AppendToString(NS_LITERAL_STRING("</span>"), aStr);
     AppendToString(PRUnichar('"'), aStr);
   }
   else {
@@ -511,18 +526,40 @@ nsXMLContentSerializer::SerializeAttr(const nsAString& aPrefix,
         (bIncludesDouble && !bIncludesSingle) ? PRUnichar('\'') : PRUnichar('"');
     AppendToString(PRUnichar('='), aStr);
     AppendToString(cDelimiter, aStr);
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      AppendToString(NS_LITERAL_STRING("<span class='attribute-value'>"), aStr, PR_FALSE, PR_FALSE);
     if (bIncludesDouble && bIncludesSingle) {
       nsAutoString sValue(aValue);
-      sValue.ReplaceSubstring(NS_LITERAL_STRING("\"").get(), NS_LITERAL_STRING("&quot;").get());
+      if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+        sValue.ReplaceSubstring(NS_LITERAL_STRING("\"").get(), NS_LITERAL_STRING("&amp;quot;").get());
+      else
+        sValue.ReplaceSubstring(NS_LITERAL_STRING("\"").get(), NS_LITERAL_STRING("&quot;").get());
       mInAttribute = PR_TRUE;
-      AppendToString(sValue, aStr, PR_FALSE);
+      if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      {
+        nsAutoString dummyStr;
+        AppendToString(sValue, dummyStr, PR_TRUE);
+        AppendToString(dummyStr, aStr, PR_TRUE);
+      }
+      else
+        AppendToString(sValue, aStr, PR_FALSE);
       mInAttribute = PR_FALSE;
     }
     else {
       mInAttribute = PR_TRUE;
-      AppendToString(aValue, aStr, PR_FALSE);
+      if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      {
+        nsAutoString dummyStr;
+        mFlags -= nsIDocumentEncoder::OutputForColoredSourceView;
+        AppendToString(aValue, aStr, PR_TRUE);
+        mFlags += nsIDocumentEncoder::OutputForColoredSourceView;
+      }
+      else
+        AppendToString(aValue, aStr, PR_FALSE);
       mInAttribute = PR_FALSE;
     }
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+      AppendToString(NS_LITERAL_STRING("</span>"), aStr);
     AppendToString(cDelimiter, aStr);
   }
 }
@@ -536,7 +573,9 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
 
   nsAutoString tagPrefix, tagLocalName, tagNamespaceURI;
   nsAutoString xmlnsStr;
-  xmlnsStr.AssignLiteral(kXMLNS);
+  xmlnsStr.Assign(kXMLNS);
+
+  NS_NAMED_LITERAL_STRING(_mozStr, "_moz");
 
   nsCOMPtr<nsIContent> content(do_QueryInterface(aElement));
   if (!content) return NS_ERROR_FAILURE;
@@ -561,19 +600,12 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
                            getter_AddRefs(attrName),
                            getter_AddRefs(attrPrefix));
     
-    if (namespaceID == kNameSpaceID_XMLNS ||
-        // Also push on the stack attrs named "xmlns" in the null
-        // namespace... because once we serialize those out they'll look like
-        // namespace decls.  :(
-        // XXXbz what if we have both "xmlns" in the null namespace and "xmlns"
-        // in the xmlns namespace?
-        (namespaceID == kNameSpaceID_None &&
-         attrName == nsLayoutAtoms::xmlnsNameSpace)) {
+    if (namespaceID == kNameSpaceID_XMLNS) {
       content->GetAttr(namespaceID, attrName, uriStr);
 
       if (!attrPrefix) {
         // Default NS attribute does not have prefix (and the name is "xmlns")
-        PushNameSpaceDecl(EmptyString(), uriStr, aElement);
+        PushNameSpaceDecl(nsString(), uriStr, aElement);
       } else {
         attrName->ToString(nameStr);
         PushNameSpaceDecl(nameStr, uriStr, aElement);
@@ -585,25 +617,27 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
     
   MaybeAddNewline(aStr);
 
-  addNSAttr = ConfirmPrefix(tagPrefix, tagNamespaceURI, aElement, PR_FALSE);
+  addNSAttr = ConfirmPrefix(tagPrefix, tagNamespaceURI);
   // Serialize the qualified name of the element
-  AppendToString(NS_LITERAL_STRING("<"), aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='start-tag'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("<"), aStr);
   if (!tagPrefix.IsEmpty()) {
     AppendToString(tagPrefix, aStr);
     AppendToString(NS_LITERAL_STRING(":"), aStr);
   }
   AppendToString(tagLocalName, aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
     
   // If we had to add a new namespace declaration, serialize
   // and push it on the namespace stack
   if (addNSAttr) {
-    if (tagPrefix.IsEmpty()) {
-      // Serialize default namespace decl
-      SerializeAttr(EmptyString(), xmlnsStr, tagNamespaceURI, aStr, PR_TRUE);
-    } else {
-      // Serialize namespace decl
-      SerializeAttr(xmlnsStr, tagPrefix, tagNamespaceURI, aStr, PR_TRUE);
-    }
+    SerializeAttr(xmlnsStr, tagPrefix, tagNamespaceURI, aStr, PR_TRUE);
     PushNameSpaceDecl(tagPrefix, tagNamespaceURI, aElement);
   }
 
@@ -627,8 +661,7 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
     if (kNameSpaceID_XMLNS != namespaceID) {
       nsContentUtils::GetNSManagerWeakRef()->GetNameSpaceURI(namespaceID,
                                                              uriStr);
-      addNSAttr = ConfirmPrefix(prefixStr, uriStr, aElement,
-                                namespaceID != kNameSpaceID_None);
+      addNSAttr = ConfirmPrefix(prefixStr, uriStr);
     }
     
     content->GetAttr(namespaceID, attrName, valueStr);
@@ -640,8 +673,14 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
     if (!nameStr.IsEmpty() && nameStr.First() == '-')
       continue;
 
+    // XXX Hack so _moz_* attributes are not serialized
+    if (StringBeginsWith(nameStr, _mozStr))
+      continue;
+
     if (namespaceID == kNameSpaceID_None) {
-      if (content->GetNameSpaceID() == kNameSpaceID_XHTML) {
+      PRInt32 elementNsID;
+      content->GetNameSpaceID(&elementNsID);
+      if (elementNsID == kNameSpaceID_XHTML) {
         if (IsShorthandAttr(attrName, content->Tag()) &&
             valueStr.IsEmpty()) {
           valueStr = nameStr;
@@ -651,8 +690,6 @@ nsXMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
     SerializeAttr(prefixStr, nameStr, valueStr, aStr, PR_TRUE);
     
     if (addNSAttr) {
-      NS_ASSERTION(!prefixStr.IsEmpty(),
-                   "Namespaced attributes must have a prefix");
       SerializeAttr(xmlnsStr, prefixStr, uriStr, aStr, PR_TRUE);
       PushNameSpaceDecl(prefixStr, uriStr, aElement);
     }
@@ -680,7 +717,7 @@ nsXMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
   PRBool hasChildren;
   if (NS_SUCCEEDED(node->HasChildNodes(&hasChildren)) && !hasChildren) {
     PopNameSpaceDeclsFor(aElement);
-  
+
     return NS_OK;
   }
   
@@ -693,18 +730,23 @@ nsXMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
   aElement->GetLocalName(tagLocalName);
   aElement->GetNamespaceURI(tagNamespaceURI);
 
-#ifdef DEBUG
-  PRBool debugNeedToPushNamespace =
-#endif
-  ConfirmPrefix(tagPrefix, tagNamespaceURI, aElement, PR_FALSE);
-  NS_ASSERTION(!debugNeedToPushNamespace, "Can't push namespaces in closing tag!");
-
-  AppendToString(NS_LITERAL_STRING("</"), aStr);
+  ConfirmPrefix(tagPrefix, tagNamespaceURI);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("<span class='end-tag'>"), aStr, PR_FALSE, PR_FALSE);
+    AppendToString(NS_LITERAL_STRING("&lt;/"), aStr);
+  }
+  else
+    AppendToString(NS_LITERAL_STRING("</"), aStr);
   if (!tagPrefix.IsEmpty()) {
     AppendToString(tagPrefix, aStr);
     AppendToString(NS_LITERAL_STRING(":"), aStr);
   }
   AppendToString(tagLocalName, aStr);
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    AppendToString(NS_LITERAL_STRING("</span>"), aStr);
+  }
   AppendToString(NS_LITERAL_STRING(">"), aStr);
   MaybeFlagNewline(aElement);
   
@@ -755,7 +797,8 @@ void
 nsXMLContentSerializer::AppendToString(const nsAString& aStr,
                                        nsAString& aOutputStr,
                                        PRBool aTranslateEntities,
-                                       PRBool aIncrColumn)
+                                       PRBool aIncrColumn,
+                                       PRBool aAsInCDATA)
 {
   if (aTranslateEntities) {
     nsReadingIterator<PRUnichar> done_reading;
@@ -930,8 +973,13 @@ nsXMLContentSerializer::AppendDocumentStart(nsIDOMDocument *aDocument,
     return NS_OK; // A declaration must have version, or there is no decl
 
   NS_NAMED_LITERAL_STRING(endQuote, "\"");
-
-  aStr += NS_LITERAL_STRING("<?xml version=\"") + version + endQuote;
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    aStr += NS_LITERAL_STRING("<span class='markupdeclaration'>");
+    aStr += NS_LITERAL_STRING("&lt;?xml version=\"") + version + endQuote;
+  }
+  else
+    aStr += NS_LITERAL_STRING("<?xml version=\"") + version + endQuote;
   
   if (!encoding.IsEmpty()) {
     aStr += NS_LITERAL_STRING(" encoding=\"") + encoding + endQuote;
@@ -941,8 +989,47 @@ nsXMLContentSerializer::AppendDocumentStart(nsIDOMDocument *aDocument,
     aStr += NS_LITERAL_STRING(" standalone=\"") + standalone + endQuote;
   }
 
-  aStr.AppendLiteral("?>");
+  aStr += NS_LITERAL_STRING("?>");
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+    aStr += NS_LITERAL_STRING("</span>");
   mAddNewline = PR_TRUE;
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsXMLContentSerializer::PreserveSelection(nsIDOMNode * aStartContainer,
+                                          PRInt32 aStartOffset,
+                                          nsIDOMNode * aEndContainer,
+                                          PRInt32 aEndOffset)
+{
+  PRUint16 type;
+  aStartContainer->GetNodeType(&type);
+  if (type == nsIDOMNode::ELEMENT_NODE)
+  {
+    nsCOMPtr<nsIContent> parent = do_QueryInterface(aStartContainer);
+    nsCOMPtr<nsIDOMNode> theNode = do_QueryInterface(parent->GetChildAt(aStartOffset));
+
+    mStartSelectionContainer = theNode;
+  }
+  else
+  {
+    mStartSelectionContainer = aStartContainer;
+    mStartSelectionOffset = aStartOffset;
+  }
+
+  aEndContainer->GetNodeType(&type);
+  if (type == nsIDOMNode::ELEMENT_NODE)
+  {
+    nsCOMPtr<nsIContent> parent = do_QueryInterface(aEndContainer);
+    nsCOMPtr<nsIDOMNode> theNode = do_QueryInterface(parent->GetChildAt(aEndOffset- 1));
+    mEndSelectionContainer = theNode;
+  }
+  else
+  {
+    mEndSelectionContainer = aEndContainer;
+    mEndSelectionOffset = aEndOffset;
+  }
 
   return NS_OK;
 }

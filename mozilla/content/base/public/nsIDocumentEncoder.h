@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -115,64 +116,53 @@ public:
     // Implies wrap (except inside <pre>), since html wraps.
     // HTML output: always do prettyprinting, ignoring existing formatting.
     // (Probably not well tested for HTML output.)
-    OutputFormatted     = 2,
+    OutputFormatted     = 1 << 1,
 
-    // Don't do prettyprinting of HTML.  Don't do any wrapping that's not in
-    // the existing HTML source.  This option overrides OutputFormatted if both
-    // are set.  Note that this option does not affect entity conversion.
-    OutputRaw           = 4,
+    // OutputRaw is used by copying text from widgets
+    OutputRaw           = 1 << 2,
 
     // No html head tags
-    OutputBodyOnly      = 8,
+    OutputBodyOnly      = 1 << 3,
 
     // Wrap even if we're not doing formatted output (e.g. for text fields)
-    // XXXbz this doesn't seem to be used by all serializers... document?  How
-    // does this interact with
-    // OutputFormatted/OutputRaw/OutputWrap/OutputFormatFlowed?
-    OutputPreformatted  = 16,
+    OutputPreformatted  = 1 << 4,
 
     // Output as though the content is preformatted
     // (e.g. maybe it's wrapped in a MOZ_PRE or MOZ_PRE_WRAP style tag)
-    // XXXbz this doesn't seem to be used by all serializers... document?  How
-    // does this interact with
-    // OutputFormatted/OutputRaw/OutputPreformatted/OutputFormatFlowed?
-    OutputWrap          = 32,
+    OutputWrap          = 1 << 5,
 
     // Output for format flowed (RFC 2646). This is used when converting
     // to text for mail sending. This differs just slightly
     // but in an important way from normal formatted, and that is that
     // lines are space stuffed. This can't (correctly) be done later.
-    // XXXbz this doesn't seem to be used by all serializers... document?  How
-    // does this interact with
-    // OutputFormatted/OutputRaw/OutputPreformatted/OutputWrap?
-    OutputFormatFlowed  = 64,
+    OutputFormatFlowed  = 1 << 6,
 
     // Convert links, image src, and script src to absolute URLs when possible
-    OutputAbsoluteLinks = 128,
+    OutputAbsoluteLinks = 1 << 7,
 
     // Attempt to encode entities standardized at W3C (HTML, MathML, etc).
     // This is a catch-all flag for documents with mixed contents. Beware of
     // interoperability issues. See below for other flags which might likely
     // do what you want.
-    OutputEncodeW3CEntities = 256,
+    OutputEncodeW3CEntities = 1 << 8,
 
     // LineBreak processing: we can do either platform line breaks,
     // CR, LF, or CRLF.  If neither of these flags is set, then we
     // will use platform line breaks.
-    OutputCRLineBreak = 512,
-    OutputLFLineBreak = 1024,
+    OutputCRLineBreak = 1 << 9,
+    OutputLFLineBreak = 1 << 10,
 
     // Output the content of noscript elements (only for serializing
     // to plaintext).
-    OutputNoScriptContent = 2048,
+    OutputNoScriptContent = 1 << 11,
 
     // Output the content of noframes elements (only for serializing
     // to plaintext).
-    OutputNoFramesContent = 4096,
+    OutputNoFramesContent = 1 << 12,
 
     // Don't allow any formatting nodes (e.g. <br>, <b>) inside a <pre>.
     // This is used primarily by mail.
-    OutputNoFormattingInPre = 8192,
+    OutputNoFormattingInPre = 1 << 13,
 
     // Encode entities when outputting to a string.
     // E.g. If set, we'll output &nbsp; if clear, we'll output 0xa0.
@@ -182,9 +172,20 @@ public:
     // between 128 and 255.
     // The HTML entity set additionally includes accented letters, greek
     // letters, and other special markup symbols as defined in HTML4.
-    OutputEncodeBasicEntities = 16384,
-    OutputEncodeLatin1Entities = 32768,
-    OutputEncodeHTMLEntities = 65536
+    OutputEncodeBasicEntities = 1 << 14,
+    OutputEncodeLatin1Entities = 1 << 15,
+    OutputEncodeHTMLEntities = 1 << 16,
+
+    // Output as an editable colored source, to be viewed in an HTML
+    // editor instance
+    OutputForColoredSourceView = 1 << 17,
+
+    // Encode all non-ascii characters as XML &#...; character references
+    OutputEncodeCharacterEntities = 1 << 18,
+
+    OutputLineBreaksWhenClosingLI = 1 << 19,
+    PreserveNvuElements = 1 << 20,
+    DontEncodeGreatherThan = 1 << 21
   };
 
   /**

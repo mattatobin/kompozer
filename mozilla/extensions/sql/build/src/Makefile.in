@@ -18,7 +18,6 @@
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
-#   Valia Vaneeva <fattie@altlinux.ru>
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -42,13 +41,11 @@ VPATH			= @srcdir@
 include $(DEPTH)/config/autoconf.mk
 
 MODULE			= sql
-MODULE_NAME    		= mozSqlModule
+MODULE_NAME    		= sqlModule
 LIBRARY_NAME		= sql
 SHORT_LIBNAME		= sql
 EXPORT_LIBRARY  	= 1
 IS_COMPONENT		= 1
-MOZILLA_INTERNAL_API = 1
-
 REQUIRES		= xpcom \
 		  	  string \
 		  	  rdf \
@@ -61,8 +58,8 @@ SHARED_LIBRARY_LIBS	= \
 		 	  $(DIST)/lib/$(LIB_PREFIX)sqlbase_s.$(LIB_SUFFIX)
 
 EXTRA_DSO_LDOPTS	= \
-			  $(MOZ_UNICHARUTIL_LIBS) \
 			  $(MOZ_COMPONENT_LIBS) \
+			  $(MOZ_UNICHARUTIL_LIBS) \
     			  $(NULL)
 
 ifdef MOZ_ENABLE_PGSQL
@@ -71,28 +68,8 @@ SHARED_LIBRARY_LIBS 	+= $(DIST)/lib/$(LIB_PREFIX)sqlpgsql_s.$(LIB_SUFFIX)
 EXTRA_DSO_LDOPTS    	+= -L$(MOZ_PGSQL_LIBS) -lpq
 endif
 
-ifdef MOZ_ENABLE_SQLITE
-DEFINES                 += -DMOZ_ENABLE_SQLITE
-SHARED_LIBRARY_LIBS     += $(DIST)/lib/$(LIB_PREFIX)sqlsqlite_s.$(LIB_SUFFIX)
-EXTRA_DSO_LDOPTS        += -L$(MOZ_SQLITE_LIBS) -lsqlite3
-endif
-
-ifdef MOZ_ENABLE_MYSQL
-DEFINES             	+= -DMOZ_ENABLE_MYSQL
-SHARED_LIBRARY_LIBS 	+= $(DIST)/lib/$(LIB_PREFIX)sqlmysql_s.$(LIB_SUFFIX)
-EXTRA_DSO_LDOPTS    	+= -L$(MOZ_MYSQL_LIBS) -lmysqlclient -lz
-endif
-
 include $(topsrcdir)/config/rules.mk
 
 ifdef MOZ_ENABLE_PGSQL
 INCLUDES		+= -I$(MOZ_PGSQL_INCLUDES)
-endif
-
-ifdef MOZ_ENABLE_SQLITE
-INCLUDES                += -I$(MOZ_SQLITE_INCLUDES)
-endif
-
-ifdef MOZ_ENABLE_MYSQL
-INCLUDES		+= -I$(MOZ_MYSQL_INCLUDES)
 endif

@@ -1,4 +1,5 @@
 <?xml version="1.0"?>
+
 <!-- ***** BEGIN LICENSE BLOCK *****
    - Version: MPL 1.1/GPL 2.0/LGPL 2.1
    -
@@ -41,7 +42,7 @@
 <?xml-stylesheet href="chrome://mozapps/skin/plugins/pluginInstallerWizard.css"?>
 
 <!DOCTYPE wizard [
-<!ENTITY % brandDTD SYSTEM "chrome://branding/locale/brand.dtd">
+<!ENTITY % brandDTD SYSTEM "chrome://global/locale/brand.dtd">
 %brandDTD;
 <!ENTITY % pluginsDTD SYSTEM "chrome://mozapps/locale/plugins/plugins.dtd">
 %pluginsDTD;
@@ -49,7 +50,7 @@
 
 <wizard id="plugin-installer-wizard" title="&pluginWizard.title;"
         xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
-        persist="width height screenX screenY sizemode"
+        persist="width height screenX screenY sizeMode"
         style="width: 50em; min-height: 40em;"
         onload="wizardInit()"
         onwizardfinish="return wizardFinish();">
@@ -59,18 +60,18 @@
   <script type="application/x-javascript" src="chrome://mozapps/content/plugins/pluginInstallerService.js"/>
 
   <stringbundleset id="pluginSet">
-    <stringbundle id="brandStrings" src="chrome://branding/locale/brand.properties"/>
+    <stringbundle id="brandStrings" src="chrome://global/locale/brand.properties"/>
     <stringbundle id="xpinstallStrings" src="chrome://global/locale/xpinstall/xpinstall.properties"/>
     <stringbundle id="pluginWizardString" src="chrome://mozapps/locale/plugins/plugins.properties"/>
   </stringbundleset>
 
-  <wizardpage label="&pluginWizard.firstPage.title;">
+  <wizardpage>
     <description value="&pluginWizard.checkingForPlugins.description.label;"/>
     <separator />
     <progressmeter id="ws_request_progress" mode="undetermined"/>
   </wizardpage>
 
-  <wizardpage label="&pluginWizard.availablePluginsPage.title;"
+ <wizardpage label="&pluginWizard.availablePluginsPage.title;"  
               onpageshow="gPluginInstaller.showPluginList()">
 
     <description value="&pluginWizard.availablePluginsPage.description.label;"/>
@@ -98,12 +99,10 @@
 
     <radiogroup id="licenseRadioGroup">
       <radio id="licenseRadioGroup1" disabled="true"
-             oncommand="gPluginInstaller.licenseRadioGroupChange(true)"
              label="&pluginWizard.licensePage.accept.label;"/>
       <radio id="licenseRadioGroup2" disabled="true" selected="true"
-             oncommand="gPluginInstaller.licenseRadioGroupChange(false)"
              label="&pluginWizard.licensePage.deny.label;"/>
-    </radiogroup>
+    </radiogroup>    
   </wizardpage>
 
   <wizardpage label="&pluginWizard.installPluginsPage.title;" 
@@ -139,10 +138,10 @@
     <description id="pluginSummaryRestartNeeded" style="padding-top:10px;"
                  value="&pluginWizard.finalPage.restart.label;"/>
     <spacer flex="1" />
-    <description id="moreInfoLink"
+    <description id="moreInfoLink" 
+      onclick="gPluginInstaller.loadURL('https://update.mozilla.org/plugins/')"
       style="color:rgb(0, 0, 255); cursor:pointer; text-decoration:underline;"
       value="&pluginWizard.finalPage.moreInfo.label;"/>
   </wizardpage>
 
 </wizard>
-

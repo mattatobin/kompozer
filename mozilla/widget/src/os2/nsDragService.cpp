@@ -1,9 +1,9 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -13,7 +13,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * IBM Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,7 +22,7 @@
  *   Rich Walsh <dragtext@e-vertise.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
@@ -52,15 +52,10 @@
 #include "nsOS2Uni.h"
 #include "nsdefs.h"
 #include "wdgtos2rc.h"
-#include "nsILocalFileOS2.h"
-#include "nsIDocument.h"
 
 NS_IMPL_ADDREF_INHERITED(nsDragService, nsBaseDragService)
 NS_IMPL_RELEASE_INHERITED(nsDragService, nsBaseDragService)
-NS_IMPL_QUERY_INTERFACE4(nsDragService,
-                         nsIDragService,
-                         nsIDragService_1_8_BRANCH,
-                         nsIDragSession,
+NS_IMPL_QUERY_INTERFACE3(nsDragService, nsIDragService, nsIDragSession, \
                          nsIDragSessionOS2)
 
 // --------------------------------------------------------------------------
@@ -96,11 +91,9 @@ nsresult GetAtom( ATOM aAtom, char** outText);
 nsresult GetFileName(PDRAGITEM pditem, char** outText);
 nsresult GetFileContents(PCSZ pszPath, char** outText);
 nsresult GetTempFileName(char** outText);
-void     SaveTypeAndSource(nsILocalFile * file, nsIDOMDocument * domDoc,
-                           PCSZ pszType);
+void     WriteTypeEA(PCSZ filename, PCSZ type);
 int      UnicodeToCodepage( const nsAString& inString, char **outText);
 int      CodepageToUnicode( const nsACString& inString, PRUnichar **outText);
-void     RemoveCarriageReturns(char * pszText);
 
 // --------------------------------------------------------------------------
 // Global data
@@ -144,13 +137,8 @@ NS_IMETHODIMP nsDragService::InvokeDragSession(nsIDOMNode *aDOMNode,
                                             nsIScriptableRegion *aRegion,
                                             PRUint32 aActionType)
 {
-  if (mDoingDrag)
-    return NS_ERROR_UNEXPECTED;
-
-  nsresult rv = nsBaseDragService::InvokeDragSession(aDOMNode, aTransferables,
-                                                     aRegion, aActionType );
-  NS_ENSURE_SUCCESS(rv, rv);
-
+  nsBaseDragService::InvokeDragSession ( aDOMNode, aTransferables,
+                                         aRegion, aActionType );
   mSourceDataItems = aTransferables;
   WinSetCapture(HWND_DESKTOP, NULLHANDLE);
 
@@ -173,7 +161,7 @@ NS_IMETHODIMP nsDragService::InvokeDragSession(nsIDOMNode *aDOMNode,
   dragitem.hstrContainerName   = NULLHANDLE;
   dragitem.hstrSourceName      = NULLHANDLE;
 
-  rv = NS_ERROR_FAILURE;
+  nsresult rv = NS_ERROR_FAILURE;
   ULONG idIcon = 0;
 
     // bracket this to reduce our footprint before the drag begins
@@ -345,24 +333,6 @@ MRESULT EXPENTRY nsDragWindowProc(HWND hWnd, ULONG msg, MPARAM mp1, MPARAM mp2)
   return ::WinDefWindowProc(hWnd, msg, mp1, mp2);
 }
 
-//-------------------------------------------------------------------------
-
-// if the versions of Start & EndDragSession in nsBaseDragService
-// were called (and they shouldn't be), they'd break nsIDragSessionOS2;
-// they're overridden here and turned into no-ops to prevent this
-
-NS_IMETHODIMP nsDragService::StartDragSession()
-{
-  NS_ASSERTION(0, "OS/2 version of StartDragSession() should never be called!");
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsDragService::EndDragSession()
-{
-  NS_ASSERTION(0, "OS/2 version of EndDragSession() should never be called!");
-  return NS_OK;
-}
-
 // --------------------------------------------------------------------------
 
 NS_IMETHODIMP nsDragService::GetNumDropItems(PRUint32 *aNumDropItems)
@@ -497,30 +467,27 @@ NS_IMETHODIMP nsDragService::IsDataFlavorSupported(const char *aDataFlavor,
 
 nsresult nsDragService::SaveAsContents(PCSZ pszDest, nsIURL* aURL)
 {
-  nsCOMPtr<nsIURI> linkURI (do_QueryInterface(aURL));
-  if (!linkURI)
-    return NS_ERROR_FAILURE;
-
-  nsCOMPtr<nsIWebBrowserPersist> webPersist(
-    do_CreateInstance("@mozilla.org/embedding/browser/nsWebBrowserPersist;1"));
-  if (!webPersist)
-    return NS_ERROR_FAILURE;
-
+  nsresult rv = NS_ERROR_FAILURE;
   nsCOMPtr<nsILocalFile> file;
-  NS_NewNativeLocalFile(nsDependentCString(pszDest), PR_TRUE,
-                        getter_AddRefs(file));
-  if (!file)
-    return NS_ERROR_FAILURE;
+  if (NS_SUCCEEDED( NS_NewNativeLocalFile(nsDependentCString(pszDest),
+                                          TRUE, getter_AddRefs(file)))) {
+    nsCOMPtr<nsIURI> linkURI (do_QueryInterface(aURL));
+    if (linkURI) {
+      nsCOMPtr<nsIWebBrowserPersist> webPersist(
+ do_CreateInstance("@mozilla.org/embedding/browser/nsWebBrowserPersist;1"));
+      if (webPersist) {
+        nsCAutoString temp;
+        file->GetNativePath(temp);
+        FILE* fp = fopen(temp.get(), "wb+");
+        fwrite("", 0, 1, fp);
+        fclose(fp);
+        webPersist->SaveURI(linkURI, nsnull, nsnull, nsnull, nsnull, file);
+        rv = NS_OK;
+      }
+    }
+  }
 
-  FILE* fp;
-  if (NS_FAILED(file->OpenANSIFileDesc("wb+", &fp)))
-    return NS_ERROR_FAILURE;
-
-  fwrite("", 0, 1, fp);
-  fclose(fp);
-  webPersist->SaveURI(linkURI, nsnull, nsnull, nsnull, nsnull, file);
-
-  return NS_OK;
+  return rv;
 }
 
 // --------------------------------------------------------------------------
@@ -529,30 +496,21 @@ nsresult nsDragService::SaveAsContents(PCSZ pszDest, nsIURL* aURL)
 
 nsresult nsDragService::SaveAsURL(PCSZ pszDest, nsIURI* aURI)
 {
+  nsresult rv = NS_ERROR_FAILURE;
   nsCAutoString strUri;
   aURI->GetSpec(strUri);
 
-  if (strUri.IsEmpty())
-    return NS_ERROR_FAILURE;
+  if (!strUri.IsEmpty()) {
+    FILE* fp = fopen(pszDest, "wb+");
+    if (fp) {
+      fwrite(strUri.get(), strUri.Length(), 1, fp);
+      fclose(fp);
+      WriteTypeEA(pszDest, "UniformResourceLocator");
+      rv = NS_OK;
+    }
+  }
 
-  nsCOMPtr<nsILocalFile> file;
-  NS_NewNativeLocalFile(nsDependentCString(pszDest), PR_TRUE,
-                        getter_AddRefs(file));
-  if (!file)
-    return NS_ERROR_FAILURE;
-
-  FILE* fp;
-  if (NS_FAILED(file->OpenANSIFileDesc("wb+", &fp)))
-    return NS_ERROR_FAILURE;
-
-  fwrite(strUri.get(), strUri.Length(), 1, fp);
-  fclose(fp);
-
-  nsCOMPtr<nsIDOMDocument> domDoc;
-  GetSourceDocument(getter_AddRefs(domDoc));
-  SaveTypeAndSource(file, domDoc, "UniformResourceLocator");
-
-  return NS_OK;
+  return rv;
 }
 
 // --------------------------------------------------------------------------
@@ -561,35 +519,24 @@ nsresult nsDragService::SaveAsURL(PCSZ pszDest, nsIURI* aURI)
 
 nsresult nsDragService::SaveAsText(PCSZ pszDest, nsISupportsString* aString)
 {
+  nsresult rv = NS_ERROR_FAILURE;
   nsAutoString strData;
   aString->GetData(strData);
 
-  if (strData.IsEmpty())
-    return NS_ERROR_FAILURE;
+  if (!strData.IsEmpty()) {
+    nsXPIDLCString textStr;
+    int cnt = UnicodeToCodepage( strData, getter_Copies(textStr));
+    if (cnt) {
+      FILE* fp = fopen(pszDest, "wb+");
+      if (fp) {
+        fwrite(textStr.get(), cnt, 1, fp);
+        fclose(fp);
+        rv = NS_OK;
+      }
+    }
+  }
 
-  nsCOMPtr<nsILocalFile> file;
-  NS_NewNativeLocalFile(nsDependentCString(pszDest), PR_TRUE,
-                        getter_AddRefs(file));
-  if (!file)
-    return NS_ERROR_FAILURE;
-
-  nsXPIDLCString textStr;
-  int cnt = UnicodeToCodepage( strData, getter_Copies(textStr));
-  if (!cnt)
-    return NS_ERROR_FAILURE;
-
-  FILE* fp;
-  if (NS_FAILED(file->OpenANSIFileDesc("wb+", &fp)))
-    return NS_ERROR_FAILURE;
-
-  fwrite(textStr.get(), cnt, 1, fp);
-  fclose(fp);
-
-  nsCOMPtr<nsIDOMDocument> domDoc;
-  GetSourceDocument(getter_AddRefs(domDoc));
-  SaveTypeAndSource(file, domDoc, "Plain Text");
-
-  return NS_OK;
+  return rv;
 }
 
 // --------------------------------------------------------------------------
@@ -655,7 +602,7 @@ nsresult  nsDragService::GetUrlAndTitle(nsISupports *aGenericData,
     urlObj->GetHost(strTitle);
     urlObj->GetFileName(strFile);
     if (!strFile.IsEmpty()) {
-      strTitle.AppendLiteral("/");
+      strTitle.Append(NS_LITERAL_CSTRING("/"));
       strTitle.Append(strFile);
     }
     else {
@@ -1366,10 +1313,10 @@ NS_IMETHODIMP nsDragService::NativeDataToTransferable( PCSZ pszText,
           nsCAutoString extension;
           url->GetFileExtension(extension);
           if (!extension.IsEmpty()) {
-            if (extension.LowerCaseEqualsLiteral("gif") ||
-                extension.LowerCaseEqualsLiteral("jpg") ||
-                extension.LowerCaseEqualsLiteral("png") ||
-                extension.LowerCaseEqualsLiteral("jpeg"))
+            if (!stricmp(extension.get(), "gif") ||
+                !stricmp(extension.get(), "jpg") ||
+                !stricmp(extension.get(), "png") ||
+                !stricmp(extension.get(), "jpeg"))
               rv = NS_OK;
           }
         }
@@ -1508,7 +1455,6 @@ nsresult RenderToDTShareComplete(PDRAGTRANSFER pdxfer, USHORT usResult,
       pszText = (char*)nsMemory::Alloc( ((ULONG*)pMem)[0] + 1);
       if (pszText) {
         strcpy(pszText, &((char*)pMem)[sizeof(ULONG)] );
-        RemoveCarriageReturns(pszText);
         *outText = pszText;
         rv = NS_OK;
       }
@@ -1572,7 +1518,6 @@ nsresult GetAtom( ATOM aAtom, char** outText)
     char* pszText = (char*)nsMemory::Alloc(++ulInLength);
     if (pszText) {
       DrgQueryStrName(aAtom, ulInLength, pszText);
-      RemoveCarriageReturns(pszText);
       *outText = pszText;
       rv = NS_OK;
     }
@@ -1625,7 +1570,6 @@ nsresult GetFileContents(PCSZ pszPath, char** outText)
           readsize = fread((void *)pszText, 1, readsize, fp);
           if (readsize) {
             pszText[readsize] = '\0';
-            RemoveCarriageReturns(pszText);
             *outText = pszText;
             rv = NS_OK;
           }
@@ -1669,57 +1613,55 @@ nsresult GetTempFileName(char** outText)
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
 
-// set the file's .TYPE and .SUBJECT EAs;  since this is non-critical
-// (though highly desirable), errors aren't reported
-
-void    SaveTypeAndSource(nsILocalFile * file, nsIDOMDocument * domDoc,
-                          PCSZ pszType)
+void WriteTypeEA(PCSZ filename, PCSZ type)
 {
-  if (!file)
+// this struct combines an FEA2LIST, an FEA2, plus a custom struct
+// needed to write a single .TYPE EA in the correct MVMT format;
+
+#pragma pack(1)
+  struct {
+    struct {
+      ULONG   ulcbList;
+      ULONG   uloNextEntryOffset;
+      BYTE    bfEA;
+      BYTE    bcbName;
+      USHORT  uscbValue;
+      char    chszName[sizeof(".TYPE")];
+    } hdr;
+    struct {
+      USHORT  usEAType;
+      USHORT  usCodePage;
+      USHORT  usNumEntries;
+      USHORT  usDataType;
+      USHORT  usDataLth;
+    } info;
+    char    data[64];
+  } ea;  
+#pragma pack()
+
+  USHORT lth = (USHORT)strlen(type);
+  if (lth >= sizeof(ea.data))
     return;
 
-  nsCOMPtr<nsILocalFileOS2> os2file (do_QueryInterface(file));
-  if (!os2file ||
-      NS_FAILED(os2file->SetFileTypes(nsDependentCString(pszType))))
-    return;
+  ea.hdr.ulcbList = sizeof(ea.hdr) + sizeof(ea.info) + lth;
+  ea.hdr.uloNextEntryOffset = 0;
+  ea.hdr.bfEA = 0;
+  ea.hdr.bcbName = sizeof(".TYPE") - 1;
+  ea.hdr.uscbValue = sizeof(ea.info) + lth;
+  strcpy(ea.hdr.chszName, ".TYPE");
 
-  // since the filetype has to be saved, this function
-  // may be called even if there isn't any document
-  if (!domDoc)
-    return;
+  ea.info.usEAType = EAT_MVMT;
+  ea.info.usCodePage = 0;
+  ea.info.usNumEntries = 1;
+  ea.info.usDataType = EAT_ASCII;
+  ea.info.usDataLth = lth;
+  strcpy(ea.data, type);
 
-  nsCOMPtr<nsIDocument> doc (do_QueryInterface(domDoc));
-  if (!doc)
-    return;
+  EAOP2 eaop2;
+  eaop2.fpGEA2List = 0;
+  eaop2.fpFEA2List = (PFEA2LIST)&ea;
 
-  // this gets the top-level content URL when frames are used;
-  // when nextDoc is zero, currDoc is the browser window, and
-  // prevDoc points to the content;
-  // note:  neither GetParentDocument() nor GetDocumentURI()
-  // refcount the pointers they return, so nsCOMPtr isn't needed
-  nsIDocument * prevDoc;
-  nsIDocument * currDoc = doc;
-  nsIDocument * nextDoc = doc;
-  do {
-    prevDoc = currDoc;
-    currDoc = nextDoc;
-    nextDoc = currDoc->GetParentDocument();
-  } while (nextDoc);
-
-  nsIURI* srcUri = prevDoc->GetDocumentURI();
-  if (!srcUri)
-    return;
-
-  // identifying content as coming from chrome is none too useful...
-  PRBool ignore = PR_FALSE;
-  srcUri->SchemeIs("chrome", &ignore);
-  if (ignore)
-    return;
-
-  nsCAutoString url;
-  srcUri->GetSpec(url);
-  os2file->SetFileSource(url);
-
+  DosSetPathInfo(filename, FIL_QUERYEASIZE, &eaop2, sizeof(eaop2), 0);
   return;
 }
 
@@ -1744,41 +1686,11 @@ int CodepageToUnicode(const nsACString& aString, PRUnichar **aResult)
 {
   nsAutoChar16Buffer buffer;
   PRInt32 bufLength;
-  MultiByteToWideChar(0, PromiseFlatCString(aString).get(),
-                      aString.Length(), buffer, bufLength);
+  nsresult rv = MultiByteToWideChar(0, PromiseFlatCString(aString).get(),
+                                    aString.Length(), buffer, bufLength);
   *aResult = ToNewUnicode(nsDependentString(buffer.get()));
   return bufLength;
 }
 
 // --------------------------------------------------------------------------
 
-// removes carriage returns in-place;  it should only be used on
-// raw text buffers that haven't been assigned to a string object
-
-void RemoveCarriageReturns(char * pszText)
-{
-  ULONG  cnt;
-  char * next;
-  char * source;
-  char * target;
-
-  target = strchr(pszText, 0x0d);
-  if (!target)
-    return;
-
-  source = target + 1;
-
-  while ((next = strchr(source, 0x0d)) != 0) {
-
-    cnt = next - source;
-    memcpy(target, source, cnt);
-    target += cnt;
-    source = next + 1;
-
-  }
-
-  strcpy(target, source);
-  return;
-}
-
-// --------------------------------------------------------------------------

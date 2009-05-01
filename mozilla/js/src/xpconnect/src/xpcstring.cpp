@@ -53,25 +53,7 @@
  */
 
 #include "xpcprivate.h"
-#include "nsStringBuffer.h"
 
-static int sDOMStringFinalizerIndex = -1;
-
-static void JS_DLL_CALLBACK
-DOMStringFinalizer(JSContext *cx, JSString *str)
-{
-    nsStringBuffer::FromData(JS_GetStringChars(str))->Release();
-}
-
-void
-XPCStringConvert::ShutdownDOMStringFinalizer()
-{
-    if (sDOMStringFinalizerIndex == -1)
-        return;
-
-    JS_RemoveExternalStringFinalizer(DOMStringFinalizer);
-    sDOMStringFinalizerIndex = -1;
-}
 
 // convert a readable to a JSString, copying string data
 // static
@@ -81,52 +63,29 @@ XPCStringConvert::ReadableToJSString(JSContext *cx,
 {
     JSString *str;
 
+    // blech, have to copy.
+
     PRUint32 length = readable.Length();
+    jschar *chars = NS_REINTERPRET_CAST(jschar *,
+                                        JS_malloc(cx, (length + 1) *
+                                                  sizeof(jschar)));
+    if (!chars)
+        return NULL;
 
-    nsStringBuffer *buf = nsStringBuffer::FromString(readable);
-    if (buf)
+    if (length && !CopyUnicodeTo(readable, 0,
+                                 NS_REINTERPRET_CAST(PRUnichar *, chars),
+                                 length))
     {
-        // yay, we can share the string's buffer!
-
-        if (sDOMStringFinalizerIndex == -1)
-        {
-            sDOMStringFinalizerIndex =
-                    JS_AddExternalStringFinalizer(DOMStringFinalizer);
-            if (sDOMStringFinalizerIndex == -1)
-                return NULL;
-        }
-
-        str = JS_NewExternalString(cx, 
-                                   NS_REINTERPRET_CAST(jschar *, buf->Data()),
-                                   length, sDOMStringFinalizerIndex);
-
-        if (str)
-            buf->AddRef();
+        JS_free(cx, chars);
+        return NULL;
     }
-    else
-    {
-        // blech, have to copy.
 
-        jschar *chars = NS_REINTERPRET_CAST(jschar *,
-                                            JS_malloc(cx, (length + 1) *
-                                                      sizeof(jschar)));
-        if (!chars)
-            return NULL;
+    chars[length] = 0;
 
-        if (length && !CopyUnicodeTo(readable, 0,
-                                     NS_REINTERPRET_CAST(PRUnichar *, chars),
-                                     length))
-        {
-            JS_free(cx, chars);
-            return NULL;
-        }
+    str = JS_NewUCString(cx, chars, length);
+    if (!str)
+        JS_free(cx, chars);
 
-        chars[length] = 0;
-
-        str = JS_NewUCString(cx, chars, length);
-        if (!str)
-            JS_free(cx, chars);
-    }
     return str;
 }
 

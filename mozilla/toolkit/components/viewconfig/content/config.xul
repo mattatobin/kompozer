@@ -44,8 +44,6 @@
 
 <window id="config"
         xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" 
-        title="&window.title;"
-        windowtype="Preferences:ConfigManager"
         width="750"
         height="500"
         onunload="onConfigUnload();"
@@ -75,14 +73,14 @@
   <key keycode="VK_RETURN" oncommand="ModifySelected();"/>
 </keyset>
 
-<hbox id="filterRow" align="center">
+<hbox align="center">
   <label value="&filterPrefs.label;" accesskey="&filterPrefs.accesskey;" control="textbox"/>
   <textbox id="textbox" flex="1" type="timed" timeout="500" oncommand="FilterPrefs();"/>
   <button id="button" label="&showAll.label;" accesskey="&showAll.accesskey;" oncommand="ClearFilter();" disabled="true"/>
 </hbox>
 
-<tree id="configTree" flex="1" seltype="single" enableColumnDrag="true" 
-      context="configContext">
+<tree id="configTree" flex="1" class="plain focusring" seltype="single"
+      enableColumnDrag="true" context="configContext">
   <treecols>
     <treecol id="prefCol" label="&prefColumn.label;" flex="7"
         class="sortDirectionIndicator"

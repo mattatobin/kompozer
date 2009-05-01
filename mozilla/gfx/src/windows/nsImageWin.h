@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,11 +41,6 @@
 
 #include <windows.h>
 #include "nsIImage.h"
-#include "nsCOMPtr.h"
-#include "nsITimer.h"
-
-// Remove DDB after 60s of non-use
-#define GFX_MS_REMOVE_DBB          60000
 
 /* for compatibility with VC++ 5 */
 #if !defined(AC_SRC_OVER)
@@ -73,11 +69,6 @@ typedef BOOL (WINAPI *ALPHABLENDPROC)(
   int nHeightSrc,
   BLENDFUNCTION blendFunction);
 
-/* For gOsMajorVersion */
-#define VER_OSMAJOR_WINNT31        3
-#define VER_OSMAJOR_WIN9598MENT    4
-#define VER_OSMAJOR_WIN2KXP        5
-
 class nsImageWin : public nsIImage{
 public:
   nsImageWin();
@@ -97,16 +88,15 @@ public:
 
   virtual PRBool      GetHasAlphaMask()   { return mAlphaBits != nsnull; }
 
-  NS_IMETHOD          Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface, PRInt32 aX, PRInt32 aY,
+  NS_IMETHOD          Draw(nsIRenderingContext &aContext, nsDrawingSurface aSurface, PRInt32 aX, PRInt32 aY,
                            PRInt32 aWidth, PRInt32 aHeight);
-  NS_IMETHOD          Draw(nsIRenderingContext &aContext, nsIDrawingSurface* aSurface, PRInt32 aSX, PRInt32 aSY,
+  NS_IMETHOD          Draw(nsIRenderingContext &aContext, nsDrawingSurface aSurface, PRInt32 aSX, PRInt32 aSY,
                            PRInt32 aSWidth, PRInt32 aSHeight,
                            PRInt32 aDX, PRInt32 aDY, PRInt32 aDWidth, PRInt32 aDHeight);
   NS_IMETHOD          DrawToImage(nsIImage* aDstImage, nscoord aDX, nscoord aDY,
                                   nscoord aDWidth, nscoord aDHeight);
   virtual nsColorMap* GetColorMap() {return mColorMap;}
   virtual void        ImageUpdated(nsIDeviceContext *aContext, PRUint8 aFlags, nsRect *aUpdateRect);
-  virtual PRBool      GetIsImageComplete();
   virtual nsresult    Init(PRInt32 aWidth, PRInt32 aHeight, PRInt32 aDepth, nsMaskRequirements aMaskRequirements);
   virtual nsresult    Optimize(nsIDeviceContext* aContext);
   virtual PRUint8*    GetAlphaBits()      { return mAlphaBits; }
@@ -114,7 +104,7 @@ public:
 
 
   NS_IMETHOD DrawTile(nsIRenderingContext &aContext,
-                      nsIDrawingSurface* aSurface,
+                      nsDrawingSurface aSurface,
                       PRInt32 aSXOffset, PRInt32 aSYOffset,
                       PRInt32 aPadX, PRInt32 aPadY,
                       const nsRect &aTileRect);
@@ -159,14 +149,6 @@ public:
   // VER_PLATFORM_WIN32_WINDOWS == Win 95/98/ME
   // VER_PLATFORM_WIN32_NT == Win NT/2K/XP/.NET Server
   static PRInt32 gPlatform;
-  static PRInt32 gOsMajorVersion;
-
-  /** Create a DDB out of the imagebits, and destroy the imagebits
-   */
-  NS_IMETHOD CreateDDB();
-  /** Removes the DBB, restoring the imagebits if necessary
-   */
-  NS_IMETHOD RemoveDDB();
 
 private:
   /** 
@@ -183,6 +165,13 @@ private:
 
   void CreateImageWithAlphaBits(HDC TheHDC);
 
+  /** 
+   * Create a Device Dependent bitmap from a drawing surface
+   * @update dc - 10/29/98
+   * @param aSurface - The drawingsurface to create the DDB from.
+   */
+  void CreateDDB(nsDrawingSurface aSurface);
+
   void DrawComposited24(unsigned char *aBits,
                         PRUint8 *aImageRGB, PRUint32 aStrideRGB,
                         PRUint8 *aImageAlpha, PRUint32 aStrideAlpha,
@@ -193,8 +182,9 @@ private:
   static PRBool CanAlphaBlend(void);
 
   /** 
-   * Recreate a device independent image from a device dependent image (DDB)
-   * Does not remove the DDB
+   * Create a Device Dependent bitmap from a drawing surface
+   * @update dc - 05/20/99
+   * @param aSurface - The drawingsurface to create the DIB from.
    */
   nsresult ConvertDDBtoDIB();
 
@@ -213,20 +203,19 @@ private:
    * @param aSWidth - width of rect to use
    * @param aSHeight - height of rect to use
    */
-  nsresult PrintDDB(nsIDrawingSurface* aSurface,
+  nsresult PrintDDB(nsDrawingSurface aSurface,
                     PRInt32 aDX, PRInt32 aDY,
                     PRInt32 aDWidth, PRInt32 aDHeight,
                     PRInt32 aSX, PRInt32 aSY,
                     PRInt32 aSWidth, PRInt32 aSHeight,
                     PRUint32 aROP);
 
-
   /** 
    * Progressively double the bitmap size as we blit.. very fast way to tile
    * @return if TRUE, no errors
    */
   PRBool ProgressiveDoubleBlit(nsIDeviceContext *aContext,
-                               nsIDrawingSurface* aSurface,
+                               nsDrawingSurface aSurface,
                                PRInt32 aSXOffset, PRInt32 aSYOffset,
                                nsRect aDestRect);
 
@@ -264,11 +253,9 @@ private:
   PRUint8 PaletteMatch(PRUint8 r, PRUint8 g, PRUint8 b);
 
   PRPackedBool        mInitialized;
-  PRPackedBool        mWantsOptimization;
   PRPackedBool        mIsOptimized;       // Did we convert our DIB to a HBITMAP
   PRPackedBool        mIsLocked;          // variable to keep track of the locking
   PRPackedBool        mDIBTemp;           // boolean to let us know if DIB was created as temp
-  PRPackedBool        mImagePreMultiplied;// Are the image bits pre-multiplied with alpha?
   PRInt8              mNumBytesPixel;     // number of bytes per pixel
   PRInt16             mNumPaletteColors;  // Number of colors in the pallete 256 
   PRInt32             mSizeImage;         // number of bytes
@@ -291,8 +278,6 @@ private:
 
   static ALPHABLENDPROC gAlphaBlend;      // AlphaBlend function pointer
 
-  nsCOMPtr<nsITimer>  mTimer;             // Timer for releasing DDB
-  static void TimerCallBack(nsITimer *aTimer, void *aClosure);
 };
 
 #endif

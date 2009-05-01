@@ -41,13 +41,11 @@
    ========================================================================== */
 
 @import url("chrome://global/skin/");
-/*
- *@import url("chrome://communicator/content/communicator.css");
- *@import url("chrome://communicator/skin/formatting.css");
- *@import url("chrome://communicator/skin/brand.css");
- *@import url("chrome://communicator/skin/button.css");
- *@import url("chrome://communicator/skin/formatting.css");
- */
+@import url("chrome://communicator/content/communicator.css");
+@import url("chrome://communicator/skin/formatting.css");
+@import url("chrome://communicator/skin/brand.css");
+@import url("chrome://communicator/skin/button.css");
+@import url("chrome://communicator/skin/formatting.css");
 
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
@@ -66,20 +64,20 @@
   padding: 0px !important;
   min-width: 0;
   background-color: transparent;
-  list-style-image: url("chrome://editor/skin/icons/throbber.png");
+  list-style-image: url("chrome://editor/skin/icons/throbber-single.png");
 }
 
 #navigator-throbber[busy="true"] {
-  list-style-image: url("chrome://editor/skin/icons/throbber.png");
+  list-style-image: url("chrome://editor/skin/icons/throbber-single.png");
 }
 
 toolbar[iconsize="small"] #navigator-throbber,
 toolbar[mode="text"] #navigator-throbber {
-  list-style-image: url("chrome://editor/skin/icons/throbber.png") !important;
+  list-style-image: url("chrome://editor/skin/icons/throbber-small.png") !important;
 }
 toolbar[iconsize="small"] #navigator-throbber[busy="true"],
 toolbar[mode="text"] #navigator-throbber[busy="true"] {
-  list-style-image: url("chrome://editor/skin/icons/throbber.png") !important;
+  list-style-image: url("chrome://editor/skin/icons/throbber-small.png") !important;
 }
 
 .sidebarTree {

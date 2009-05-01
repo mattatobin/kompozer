@@ -1,46 +1,28 @@
 /* -*- Mode: C++; tab-width: 3; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Scott MacGregor <mscott@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsOSHelperAppService.h"
 #include "nsISupports.h"
 #include "nsString.h"
-#include "nsAutoBuffer.h"
 #include "nsXPIDLString.h"
 #include "nsIURL.h"
 #include "nsILocalFile.h"
@@ -53,19 +35,14 @@
 #include "nsMIMEInfoMac.h"
 
 #include "nsIInternetConfigService.h"
-#include "nsEmbedCID.h"
+
 #include <LaunchServices.h>
 
 // chrome URL's
 #define HELPERAPPLAUNCHER_BUNDLE_URL "chrome://global/locale/helperAppLauncher.properties"
-#define BRAND_BUNDLE_URL "chrome://branding/locale/brand.properties"
+#define BRAND_BUNDLE_URL "chrome://global/locale/brand.properties"
 
-extern "C" {
-  // Returns the CFURL for application currently set as the default opener for
-  // the given URL scheme. appURL must be released by the caller.
-  extern OSStatus _LSCopyDefaultSchemeHandlerURL(CFStringRef scheme,
-                                                 CFURLRef *appURL);
-}
+#define NS_PROMPTSERVICE_CONTRACTID "@mozilla.org/embedcomp/prompt-service;1"
 
 nsOSHelperAppService::nsOSHelperAppService() : nsExternalHelperAppService()
 {
@@ -121,51 +98,6 @@ NS_IMETHODIMP nsOSHelperAppService::ExternalProtocolHandlerExists(const char * a
       }
     }
   }
-  return rv;
-}
-
-NS_IMETHODIMP nsOSHelperAppService::GetApplicationDescription(const nsACString& aScheme, nsAString& _retval)
-{
-  nsresult rv = NS_ERROR_NOT_AVAILABLE;
-
-  CFStringRef schemeCFString = 
-    ::CFStringCreateWithBytes(kCFAllocatorDefault,
-                              (const UInt8 *)PromiseFlatCString(aScheme).get(),
-                              aScheme.Length(),
-                              kCFStringEncodingUTF8,
-                              false);
-  if (schemeCFString) {
-    // Since the public API (LSGetApplicationForURL) fails every now and then,
-    // we're using undocumented _LSCopyDefaultSchemeHandlerURL
-    CFURLRef handlerBundleURL;
-    OSStatus err = ::_LSCopyDefaultSchemeHandlerURL(schemeCFString,
-                                                    &handlerBundleURL);
-    if (err == noErr) {
-      CFBundleRef handlerBundle = ::CFBundleCreate(NULL, handlerBundleURL);
-      if (handlerBundle) {
-        // Get the human-readable name of the default handler bundle
-        CFStringRef bundleName =
-          (CFStringRef)::CFBundleGetValueForInfoDictionaryKey(handlerBundle,
-                                                              kCFBundleNameKey);
-        if (bundleName) {
-          nsAutoBuffer<UniChar, 255> buffer;
-          CFIndex bundleNameLength = ::CFStringGetLength(bundleName);
-          buffer.EnsureElemCapacity(bundleNameLength);
-          ::CFStringGetCharacters(bundleName, CFRangeMake(0, bundleNameLength),
-                                  buffer.get());
-          _retval.Assign(buffer.get(), bundleNameLength);
-          rv = NS_OK;
-        }
-
-        ::CFRelease(handlerBundle);
-      }
-
-      ::CFRelease(handlerBundleURL);
-    }
-
-    ::CFRelease(schemeCFString);
-  }
-
   return rv;
 }
 
@@ -244,7 +176,7 @@ nsresult nsOSHelperAppService::GetFileTokenForPath(const PRUnichar * aPlatformAp
 // method overrides --> use internet config information for mime type lookup.
 ///////////////////////////
 
-NS_IMETHODIMP nsOSHelperAppService::GetFromTypeAndExtension(const nsACString& aType, const nsACString& aFileExt, nsIMIMEInfo ** aMIMEInfo)
+NS_IMETHODIMP nsOSHelperAppService::GetFromTypeAndExtension(const char * aType, const char * aFileExt, nsIMIMEInfo ** aMIMEInfo)
 {
   // first, ask our base class....
   nsresult rv = nsExternalHelperAppService::GetFromTypeAndExtension(aType, aFileExt, aMIMEInfo);
@@ -256,38 +188,31 @@ NS_IMETHODIMP nsOSHelperAppService::GetFromTypeAndExtension(const nsACString& aT
 }
 
 already_AddRefed<nsIMIMEInfo>
-nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aMIMEType,
-                                        const nsACString& aFileExt,
+nsOSHelperAppService::GetMIMEInfoFromOS(const char * aMIMEType,
+                                        const char * aFileExt,
                                         PRBool * aFound)
 {
   nsIMIMEInfo* mimeInfo = nsnull;
   *aFound = PR_TRUE;
 
-  const nsCString& flatType = PromiseFlatCString(aMIMEType);
-  const nsCString& flatExt = PromiseFlatCString(aFileExt);
-
   // ask the internet config service to look it up for us...
   nsCOMPtr<nsIInternetConfigService> icService (do_GetService(NS_INTERNETCONFIGSERVICE_CONTRACTID));
   PR_LOG(mLog, PR_LOG_DEBUG, ("Mac: HelperAppService lookup for type '%s' ext '%s' (IC: 0x%p)\n",
-                              flatType.get(), flatExt.get(), icService.get()));
+                              aMIMEType, aFileExt, icService.get()));
   if (icService)
   {
     nsCOMPtr<nsIMIMEInfo> miByType, miByExt;
-    if (!aMIMEType.IsEmpty())
-      icService->FillInMIMEInfo(flatType.get(), flatExt.get(), getter_AddRefs(miByType));
+    if (aMIMEType && *aMIMEType)
+      icService->FillInMIMEInfo(aMIMEType, aFileExt, getter_AddRefs(miByType));
 
     PRBool hasDefault = PR_FALSE;
     if (miByType)
       miByType->GetHasDefaultHandler(&hasDefault);
 
-    if (!aFileExt.IsEmpty() && (!hasDefault || !miByType)) {
-      icService->GetMIMEInfoFromExtension(flatExt.get(), getter_AddRefs(miByExt));
-      if (miByExt && !aMIMEType.IsEmpty()) {
-        // XXX see XXX comment below
-        nsIMIMEInfo* pByExt = miByExt.get();
-        nsMIMEInfoBase* byExt = NS_STATIC_CAST(nsMIMEInfoBase*, pByExt);
-        byExt->SetMIMEType(aMIMEType);
-      }
+    if (aFileExt && *aFileExt && (!hasDefault || !miByType)) {
+      icService->GetMIMEInfoFromExtension(aFileExt, getter_AddRefs(miByExt));
+      if (miByExt && aMIMEType)
+        miByExt->SetMIMEType(aMIMEType);
     }
     PR_LOG(mLog, PR_LOG_DEBUG, ("OS gave us: By Type: 0x%p By Ext: 0x%p type has default: %s\n",
                                 miByType.get(), miByExt.get(), hasDefault ? "true" : "false"));
@@ -321,12 +246,14 @@ nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aMIMEType,
   if (!mimeInfo) {
     *aFound = PR_FALSE;
     PR_LOG(mLog, PR_LOG_DEBUG, ("Creating new mimeinfo\n"));
-    mimeInfo = new nsMIMEInfoMac(aMIMEType);
+    mimeInfo = new nsMIMEInfoMac();
     if (!mimeInfo)
       return nsnull;
     NS_ADDREF(mimeInfo);
 
-    if (!aFileExt.IsEmpty())
+    if (aMIMEType && *aMIMEType)
+      mimeInfo->SetMIMEType(aMIMEType);
+    if (aFileExt && *aFileExt)
       mimeInfo->AppendExtension(aFileExt);
   }
   
@@ -345,13 +272,13 @@ void nsOSHelperAppService::UpdateCreatorInfo(nsIMIMEInfo * aMIMEInfo)
   if (macFileType == 0 || macCreatorType == 0)
   {
     // okay these values haven't been initialized yet so fetch a mime object from internet config.
-    nsCAutoString mimeType;
-    aMIMEInfo->GetMIMEType(mimeType);
+    nsXPIDLCString mimeType;
+    aMIMEInfo->GetMIMEType(getter_Copies(mimeType));
     nsCOMPtr<nsIInternetConfigService> icService (do_GetService(NS_INTERNETCONFIGSERVICE_CONTRACTID));
     if (icService)
     {
       nsCOMPtr<nsIMIMEInfo> osMimeObject;
-      icService->FillInMIMEInfo(mimeType.get(), nsnull, getter_AddRefs(osMimeObject));
+      icService->FillInMIMEInfo(mimeType, nsnull, getter_AddRefs(osMimeObject));
       if (osMimeObject)
       {
         osMimeObject->GetMacType(&macFileType);

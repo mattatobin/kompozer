@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Darin Fisher (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -93,14 +93,12 @@ nsBaseURLParser::ParseURL(const char *spec, PRInt32 specLen,
     const char *colon = nsnull;
     const char *slash = nsnull;
     const char *p;
-    PRUint32 offset = 0;
     PRInt32 len = specLen;
     for (p = spec; len && *p && !colon && !slash; ++p, --len) {
-        // skip leading whitespace
-        if (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') {
+        // skip leading whitespace and control characters
+        if (*p > '\0' && *p <= ' ') {
             spec++;
             specLen--;
-            offset++;
             continue;
         }
         switch (*p) {
@@ -126,7 +124,7 @@ nsBaseURLParser::ParseURL(const char *spec, PRInt32 specLen,
     if (colon && stop && colon > stop)
         colon = nsnull;
 
-    // if the spec only contained whitespace ...
+    // if the spec only contained whitespace or control characters...
     if (specLen == 0) {
         SET_RESULT(scheme, 0, -1);
         SET_RESULT(authority, 0, 0);
@@ -153,11 +151,10 @@ nsBaseURLParser::ParseURL(const char *spec, PRInt32 specLen,
             NS_WARNING("malformed uri");
             return NS_ERROR_MALFORMED_URI;
         }
-        SET_RESULT(scheme, offset, colon - spec);
+        SET_RESULT(scheme, 0, colon - spec);
         if (authorityLen || pathLen) {
-            PRUint32 schemeLen = colon + 1 - spec;
-            offset += schemeLen;
-            ParseAfterScheme(colon + 1, specLen - schemeLen,
+            PRUint32 offset = colon + 1 - spec;
+            ParseAfterScheme(colon + 1, specLen - offset,
                              authorityPos, authorityLen,
                              pathPos, pathLen);
             OFFSET_RESULT(authority, offset);
@@ -184,8 +181,6 @@ nsBaseURLParser::ParseURL(const char *spec, PRInt32 specLen,
             ParseAfterScheme(spec, specLen,
                              authorityPos, authorityLen,
                              pathPos, pathLen);
-            OFFSET_RESULT(authority, offset);
-            OFFSET_RESULT(path, offset);
     }
     return NS_OK;
 }
@@ -536,19 +531,9 @@ nsAuthURLParser::ParseUserInfo(const char *userinfo, PRInt32 userinfoLen,
     if (userinfoLen < 0)
         userinfoLen = strlen(userinfo);
 
-    if (userinfoLen == 0) {
-        SET_RESULT(username, 0, -1);
-        SET_RESULT(password, 0, -1);
-        return NS_OK;
-    }
-
     const char *p = (const char *) memchr(userinfo, ':', userinfoLen);
     if (p) {
         // userinfo = <username:password>
-        if (p == userinfo) {
-            // must have a username!
-            return NS_ERROR_MALFORMED_URI;
-        }
         SET_RESULT(username, 0, p - userinfo);
         SET_RESULT(password, p - userinfo + 1, userinfoLen - (p - userinfo + 1));
     }
@@ -631,7 +616,7 @@ nsAuthURLParser::ParseAfterScheme(const char *spec, PRInt32 specLen,
     const char *end = spec + specLen;
     const char *p;
     for (p = spec + nslash; p < end; ++p) {
-        if (*p == '/' || *p == '?' || *p == '#' || *p == ';')
+        if (strchr("/?#;", *p))
             break;
     }
     if (p < end) {

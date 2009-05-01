@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation.
+ * All Rights Reserved.
+ * 
  * Contributor(s):
  *   Stuart Parmenter <pavlov@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "imgRequest.h"
 
@@ -59,10 +43,8 @@
 #include "nsIHttpChannel.h"
 
 #include "nsIComponentManager.h"
-#include "nsIInterfaceRequestorUtils.h"
 #include "nsIProxyObjectManager.h"
 #include "nsIServiceManager.h"
-#include "nsISupportsPrimitives.h"
 
 #include "nsAutoLock.h"
 #include "nsString.h"
@@ -73,15 +55,14 @@
 PRLogModuleInfo *gImgLog = PR_NewLogModule("imgRequest");
 #endif
 
-NS_IMPL_THREADSAFE_ISUPPORTS8(imgRequest, imgILoad,
+NS_IMPL_THREADSAFE_ISUPPORTS6(imgRequest, imgILoad,
                               imgIDecoderObserver, imgIContainerObserver,
                               nsIStreamListener, nsIRequestObserver,
-                              nsISupportsWeakReference, nsIChannelEventSink,
-                              nsIInterfaceRequestor)
+                              nsISupportsWeakReference)
 
 imgRequest::imgRequest() : 
   mObservers(0),
-  mLoading(PR_FALSE), mProcessing(PR_FALSE), mHadLastPart(PR_FALSE),
+  mLoading(PR_FALSE), mProcessing(PR_FALSE),
   mImageStatus(imgIRequest::STATUS_NONE), mState(0),
   mCacheId(0), mValidator(nsnull), mIsMultiPartChannel(PR_FALSE)
 {
@@ -103,17 +84,7 @@ nsresult imgRequest::Init(nsIChannel *aChannel,
   NS_ASSERTION(!mImage, "imgRequest::Init -- Multiple calls to init");
   NS_ASSERTION(aChannel, "imgRequest::Init -- No channel");
 
-  mProperties = do_CreateInstance("@mozilla.org/properties;1");
-  if (!mProperties)
-    return NS_ERROR_OUT_OF_MEMORY;
-
   mChannel = aChannel;
-  mChannel->GetNotificationCallbacks(getter_AddRefs(mPrevChannelSink));
-
-  NS_ASSERTION(mPrevChannelSink != this,
-               "Initializing with a channel that already calls back to us!");
-
-  mChannel->SetNotificationCallbacks(this);
 
   /* set our loading flag to true here.
      Setting it here lets checks to see if the load is in progress
@@ -165,16 +136,16 @@ nsresult imgRequest::RemoveProxy(imgRequestProxy *proxy, nsresult aStatus, PRBoo
 
   // make sure that observer gets an OnStopRequest message sent to it
   if (!(mState & onStopRequest)) {
-    proxy->OnStopRequest(nsnull, nsnull, NS_BINDING_ABORTED, PR_TRUE);
-  }
-
-  if (mImage && !HaveProxyWithObserver(nsnull)) {
-    LOG_MSG(gImgLog, "imgRequest::RemoveProxy", "stopping animation");
-
-    mImage->StopAnimation();
+    proxy->OnStopRequest(nsnull, nsnull, NS_BINDING_ABORTED);
   }
 
   if (mObservers.Count() == 0) {
+    if (mImage) {
+      LOG_MSG(gImgLog, "imgRequest::RemoveProxy", "stopping animation");
+
+      mImage->StopAnimation();
+    }
+
     /* If |aStatus| is a failure code, then cancel the load if it is still in progress.
        Otherwise, let the load continue, keeping 'this' in the cache with no observers.
        This way, if a proxy is destroyed without calling cancel on it, it won't leak
@@ -195,7 +166,7 @@ nsresult imgRequest::RemoveProxy(imgRequestProxy *proxy, nsresult aStatus, PRBoo
   // If a proxy is removed for a reason other than its owner being
   // changed, remove the proxy from the loadgroup.
   if (aStatus != NS_IMAGELIB_CHANGING_OWNER)
-    proxy->RemoveFromLoadGroup(PR_TRUE);
+    proxy->RemoveFromLoadGroup();
 
   return NS_OK;
 }
@@ -203,10 +174,6 @@ nsresult imgRequest::RemoveProxy(imgRequestProxy *proxy, nsresult aStatus, PRBoo
 nsresult imgRequest::NotifyProxyListener(imgRequestProxy *proxy)
 {
   nsCOMPtr<imgIRequest> kungFuDeathGrip(proxy);
-
-  // OnStartRequest
-  if (mState & onStartRequest)
-    proxy->OnStartRequest(nsnull, nsnull);
 
   // OnStartDecode
   if (mState & onStartDecode)
@@ -233,12 +200,12 @@ nsresult imgRequest::NotifyProxyListener(imgRequestProxy *proxy)
 
     if (!(mState & onStopContainer)) {
       // OnDataAvailable
-      nsIntRect r;
+      nsRect r;
       frame->GetRect(r);  // XXX we should only send the currently decoded rectangle here.
       proxy->OnDataAvailable(frame, &r);
     } else {
       // OnDataAvailable
-      nsIntRect r;
+      nsRect r;
       frame->GetRect(r);  // We're done loading this image, send the the whole rect
       proxy->OnDataAvailable(frame, &r);
 
@@ -255,16 +222,14 @@ nsresult imgRequest::NotifyProxyListener(imgRequestProxy *proxy)
   if (mState & onStopDecode)
     proxy->OnStopDecode(GetResultFromImageStatus(mImageStatus), nsnull);
 
-  if (mImage && !HaveProxyWithObserver(proxy) && proxy->HasObserver()) {
+  if (mImage && (mObservers.Count() == 1)) {
     LOG_MSG(gImgLog, "imgRequest::AddProxy", "resetting animation");
 
     mImage->ResetAnimation();
   }
 
   if (mState & onStopRequest) {
-    proxy->OnStopRequest(nsnull, nsnull,
-                         GetResultFromImageStatus(mImageStatus),
-                         mHadLastPart);
+    proxy->OnStopRequest(nsnull, nsnull, GetResultFromImageStatus(mImageStatus));
   }
 
   return NS_OK;
@@ -319,23 +284,6 @@ nsresult imgRequest::GetURI(nsIURI **aURI)
   return NS_ERROR_FAILURE;
 }
 
-nsresult
-imgRequest::GetCurrentURI(nsIURI **aURI)
-{
-  LOG_FUNC(gImgLog, "imgRequest::GetCurrentURI");
-
-  if (mChannel)
-    return mChannel->GetURI(aURI);
-
-  if (mCurrentURI) {
-    *aURI = mCurrentURI;
-    NS_ADDREF(*aURI);
-    return NS_OK;
-  }
-
-  return NS_ERROR_FAILURE;
-}
-
 void imgRequest::RemoveFromCache()
 {
   LOG_SCOPE(gImgLog, "imgRequest::RemoveFromCache");
@@ -346,47 +294,6 @@ void imgRequest::RemoveFromCache()
   }
 }
 
-PRBool imgRequest::HaveProxyWithObserver(imgRequestProxy* aProxyToIgnore) const
-{
-  for (PRInt32 i = 0; i < mObservers.Count(); ++i) {
-    imgRequestProxy *proxy = NS_STATIC_CAST(imgRequestProxy*, mObservers[i]);
-    if (proxy == aProxyToIgnore) {
-      continue;
-    }
-    
-    if (proxy->HasObserver()) {
-      return PR_TRUE;
-    }
-  }
-  
-  return PR_FALSE;
-}
-
-PRInt32 imgRequest::Priority() const
-{
-  PRInt32 priority = nsISupportsPriority::PRIORITY_NORMAL;
-  nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mChannel);
-  if (p)
-    p->GetPriority(&priority);
-  return priority;
-}
-
-void imgRequest::AdjustPriority(imgRequestProxy *proxy, PRInt32 delta)
-{
-  // only the first proxy is allowed to modify the priority of this image load.
-  //
-  // XXX(darin): this is probably not the most optimal algorithm as we may want
-  // to increase the priority of requests that have a lot of proxies.  the key
-  // concern though is that image loads remain lower priority than other pieces
-  // of content such as link clicks, CSS, and JS.
-  //
-  if (mObservers[0] != proxy)
-    return;
-
-  nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mChannel);
-  if (p)
-    p->AdjustPriority(delta);
-}
 
 /** imgILoad methods **/
 
@@ -419,10 +326,10 @@ NS_IMETHODIMP imgRequest::GetIsMultiPartChannel(PRBool *aIsMultiPartChannel)
 
 /** imgIContainerObserver methods **/
 
-/* [noscript] void frameChanged (in imgIContainer container, in gfxIImageFrame newframe, in nsIntRect dirtyRect); */
+/* [noscript] void frameChanged (in imgIContainer container, in gfxIImageFrame newframe, in nsRect dirtyRect); */
 NS_IMETHODIMP imgRequest::FrameChanged(imgIContainer *container,
                                        gfxIImageFrame *newframe,
-                                       nsIntRect * dirtyRect)
+                                       nsRect * dirtyRect)
 {
   LOG_SCOPE(gImgLog, "imgRequest::FrameChanged");
 
@@ -518,10 +425,10 @@ NS_IMETHODIMP imgRequest::OnStartFrame(imgIRequest *request,
   return NS_OK;
 }
 
-/* [noscript] void onDataAvailable (in imgIRequest request, in gfxIImageFrame frame, [const] in nsIntRect rect); */
+/* [noscript] void onDataAvailable (in imgIRequest request, in gfxIImageFrame frame, [const] in nsRect rect); */
 NS_IMETHODIMP imgRequest::OnDataAvailable(imgIRequest *request,
                                           gfxIImageFrame *frame,
-                                          const nsIntRect * rect)
+                                          const nsRect * rect)
 {
   LOG_SCOPE(gImgLog, "imgRequest::OnDataAvailable");
 
@@ -629,6 +536,7 @@ NS_IMETHODIMP imgRequest::OnStopDecode(imgIRequest *aRequest,
   return NS_OK;
 }
 
+
 /** nsIRequestObserver methods **/
 
 /* void onStartRequest (in nsIRequest request, in nsISupports ctxt); */
@@ -647,26 +555,23 @@ NS_IMETHODIMP imgRequest::OnStartRequest(nsIRequest *aRequest, nsISupports *ctxt
      Cancel() gets called, we have a channel to cancel and we don't leave the channel
      open forever.
    */
-  nsCOMPtr<nsIMultiPartChannel> mpchan(do_QueryInterface(aRequest));
   if (!mChannel) {
+    nsCOMPtr<nsIMultiPartChannel> mpchan(do_QueryInterface(aRequest));
     if (mpchan)
       mpchan->GetBaseChannel(getter_AddRefs(mChannel));
-    else {
+    else
       mChannel = do_QueryInterface(aRequest);
-      if (mChannel) {
-        mChannel->GetNotificationCallbacks(getter_AddRefs(mPrevChannelSink));
-        mChannel->SetNotificationCallbacks(this);
-      }
-    }
   }
 
-  if (mpchan)
+  nsCAutoString contentType;
+  mChannel->GetContentType(contentType);
+  if (contentType.Equals(NS_LITERAL_CSTRING("multipart/x-mixed-replace"),
+                         nsCaseInsensitiveCStringComparator()))
       mIsMultiPartChannel = PR_TRUE;
 
-  /* set our state variables to their initial values, but advance mState
-     to onStartRequest. */
+  /* set our state variables to their initial values. */
   mImageStatus = imgIRequest::STATUS_NONE;
-  mState = onStartRequest;
+  mState = 0;
 
   /* set our loading flag to true */
   mLoading = PR_TRUE;
@@ -692,7 +597,7 @@ NS_IMETHODIMP imgRequest::OnStartRequest(nsIRequest *aRequest, nsISupports *ctxt
       nsCOMPtr<nsISupports> cacheToken;
       cacheChannel->GetCacheToken(getter_AddRefs(cacheToken));
       if (cacheToken) {
-        nsCOMPtr<nsICacheEntryInfo> entryDesc(do_QueryInterface(cacheToken));
+        nsCOMPtr<nsICacheEntryDescriptor> entryDesc(do_QueryInterface(cacheToken));
         if (entryDesc) {
           PRUint32 expiration;
           /* get the expiration time from the caching channel's token */
@@ -758,23 +663,9 @@ NS_IMETHODIMP imgRequest::OnStopRequest(nsIRequest *aRequest, nsISupports *ctxt,
   /* set our processing flag to false */
   mProcessing = PR_FALSE;
 
-  mHadLastPart = PR_TRUE;
-  nsCOMPtr<nsIMultiPartChannel> mpchan(do_QueryInterface(aRequest));
-  if (mpchan) {
-    PRBool lastPart;
-    nsresult rv = mpchan->GetIsLastPart(&lastPart);
-    if (NS_SUCCEEDED(rv))
-      mHadLastPart = lastPart;
-  }
-
-  // XXXldb What if this is a non-last part of a multipart request?
   if (mChannel) {
     mChannel->GetOriginalURI(getter_AddRefs(mURI));
-    mChannel->GetURI(getter_AddRefs(mCurrentURI));
-
-    mChannel->SetNotificationCallbacks(nsnull);
-    mChannel = nsnull;
-    mPrevChannelSink = nsnull;
+    mChannel = nsnull; // we no longer need the channel
   }
 
   // If mImage is still null, we didn't properly load the image.
@@ -803,7 +694,7 @@ NS_IMETHODIMP imgRequest::OnStopRequest(nsIRequest *aRequest, nsISupports *ctxt,
     /* calling OnStopRequest may result in the death of |proxy| so don't use the
        pointer after this call.
      */
-    if (proxy) proxy->OnStopRequest(aRequest, ctxt, status, mHadLastPart);
+    if (proxy) proxy->OnStopRequest(aRequest, ctxt, status);
   }
 
   return NS_OK;
@@ -863,32 +754,6 @@ NS_IMETHODIMP imgRequest::OnDataAvailable(nsIRequest *aRequest, nsISupports *ctx
       }
 
       LOG_MSG(gImgLog, "imgRequest::OnDataAvailable", "Got content type from the channel");
-    }
-
-    /* set our mimetype as a property */
-    nsCOMPtr<nsISupportsCString> contentType(do_CreateInstance("@mozilla.org/supports-cstring;1"));
-    if (contentType) {
-      contentType->SetData(mContentType);
-      mProperties->Set("type", contentType);
-    }
-
-    /* set our content disposition as a property */
-    nsCAutoString disposition;
-    nsCOMPtr<nsIHttpChannel> httpChannel(do_QueryInterface(aRequest));
-    if (httpChannel) {
-      httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("content-disposition"), disposition);
-    } else {
-      nsCOMPtr<nsIMultiPartChannel> multiPartChannel(do_QueryInterface(aRequest));
-      if (multiPartChannel) {
-        multiPartChannel->GetContentDisposition(disposition);
-      }
-    }
-    if (!disposition.IsEmpty()) {
-      nsCOMPtr<nsISupportsCString> contentDisposition(do_CreateInstance("@mozilla.org/supports-cstring;1"));
-      if (contentDisposition) {
-        contentDisposition->SetData(disposition);
-        mProperties->Set("content-disposition", contentDisposition);
-      }
     }
 
     LOG_MSG_WITH_PARAM(gImgLog, "imgRequest::OnDataAvailable", "content type", mContentType.get());
@@ -965,52 +830,3 @@ imgRequest::SniffMimeType(const char *buf, PRUint32 len)
 {
   imgLoader::GetMimeTypeFromContent(buf, len, mContentType);
 }
-
-/** nsIInterfaceRequestor methods **/
-
-NS_IMETHODIMP
-imgRequest::GetInterface(const nsIID & aIID, void **aResult)
-{
-  if (!mPrevChannelSink || aIID.Equals(NS_GET_IID(nsIChannelEventSink)))
-    return QueryInterface(aIID, aResult);
-
-  NS_ASSERTION(mPrevChannelSink != this, 
-               "Infinite recursion - don't keep track of channel sinks that are us!");  
-  return mPrevChannelSink->GetInterface(aIID, aResult);
-}
-
-/** nsIChannelEventSink methods **/
-
-/* void onChannelRedirect (in nsIChannel oldChannel, in nsIChannel newChannel, in unsigned long flags); */
-NS_IMETHODIMP
-imgRequest::OnChannelRedirect(nsIChannel *oldChannel, nsIChannel *newChannel, PRUint32 flags)
-{
-  NS_ASSERTION(mChannel, "Got an OnChannelRedirect after we nulled out mChannel!");
-  NS_ASSERTION(mChannel == oldChannel, "Got a channel redirect for an unknown channel!");
-  NS_ASSERTION(newChannel, "Got a redirect to a NULL channel!");
-
-  nsresult rv = NS_OK;
-  nsCOMPtr<nsIChannelEventSink> sink(do_GetInterface(mPrevChannelSink));
-  if (sink) {
-    rv = sink->OnChannelRedirect(oldChannel, newChannel, flags);
-
-    if (NS_FAILED(rv))
-      return rv;
-  }
-
-  RemoveFromCache();
-
-  nsCOMPtr<nsIURI> uri;
-  if (NS_SUCCEEDED(newChannel->GetURI(getter_AddRefs(uri))) && uri)
-    mCurrentURI = uri;
-
-  mChannel = newChannel;
-
-  // If we don't still have a cache entry, we don't want to refresh the cache.
-  if (uri && mCacheEntry) {
-    imgCache::Put(uri, this, getter_AddRefs(mCacheEntry));
-  }
-
-  return rv;
-}
-

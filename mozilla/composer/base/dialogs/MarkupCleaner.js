@@ -19,8 +19,8 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Daniel Glazman  (glazman@disruptive-innovations.com), on behalf of Linspire Inc.
- *   Fabien Cazenave (kaze@kompozer.net)
+ *   Daniel Glazman (glazman@disruptive-innovations.com), on behalf of Linspire Inc.
+ *   Fabien Cazenave (Kaze) http://fabiwan.kenobi.free.fr/
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -309,7 +309,7 @@ var gMarkupCleaner = {
     gMarkupCleanerData.localUrls   = gMarkupCleanerData.localUrlsCheckbox.checked;
       
     this.cleanupDocument();
-    window.opener.ResetStructToolbar();
+    window.opener.RefreshStructToolbar();
     return false;
   }
 };

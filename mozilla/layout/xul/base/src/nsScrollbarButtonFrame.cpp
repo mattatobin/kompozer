@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +43,7 @@
 //
 
 #include "nsScrollbarButtonFrame.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIContent.h"
 #include "nsCOMPtr.h"
 #include "nsUnitConversion.h"
@@ -98,9 +98,9 @@ nsScrollbarButtonFrame::QueryInterface(REFNSIID aIID, void** aInstancePtr)
 }
 
 NS_IMETHODIMP
-nsScrollbarButtonFrame::HandleEvent(nsPresContext* aPresContext, 
-                                    nsGUIEvent* aEvent,
-                                    nsEventStatus* aEventStatus)
+nsScrollbarButtonFrame::HandleEvent(nsIPresContext* aPresContext, 
+                                      nsGUIEvent* aEvent,
+                                      nsEventStatus* aEventStatus)
 {  
   // XXX hack until handle release is actually called in nsframe.
   if (aEvent->message == NS_MOUSE_EXIT_SYNTH|| aEvent->message == NS_MOUSE_RIGHT_BUTTON_UP || aEvent->message == NS_MOUSE_LEFT_BUTTON_UP)
@@ -111,9 +111,9 @@ nsScrollbarButtonFrame::HandleEvent(nsPresContext* aPresContext,
 
 
 NS_IMETHODIMP
-nsScrollbarButtonFrame::HandlePress(nsPresContext* aPresContext, 
-                                    nsGUIEvent*     aEvent,
-                                    nsEventStatus*  aEventStatus)
+nsScrollbarButtonFrame::HandlePress(nsIPresContext* aPresContext, 
+                     nsGUIEvent*     aEvent,
+                     nsEventStatus*  aEventStatus)
 {
   MouseClicked();
   nsRepeatService::GetInstance()->Start(this);
@@ -121,9 +121,9 @@ nsScrollbarButtonFrame::HandlePress(nsPresContext* aPresContext,
 }
 
 NS_IMETHODIMP 
-nsScrollbarButtonFrame::HandleRelease(nsPresContext* aPresContext, 
-                                      nsGUIEvent*     aEvent,
-                                      nsEventStatus*  aEventStatus)
+nsScrollbarButtonFrame::HandleRelease(nsIPresContext* aPresContext, 
+                                 nsGUIEvent*     aEvent,
+                                 nsEventStatus*  aEventStatus)
 {
   nsRepeatService::GetInstance()->Stop();
   return NS_OK;
@@ -137,7 +137,7 @@ NS_IMETHODIMP nsScrollbarButtonFrame::Notify(nsITimer *timer)
 }
 
 void
-nsScrollbarButtonFrame::MouseClicked(nsPresContext* aPresContext, nsGUIEvent* aEvent) 
+nsScrollbarButtonFrame::MouseClicked(nsIPresContext* aPresContext, nsGUIEvent* aEvent) 
 {
   nsButtonBoxFrame::MouseClicked(aPresContext, aEvent);
   //MouseClicked();
@@ -156,7 +156,7 @@ nsScrollbarButtonFrame::MouseClicked()
        return;
 
    // get the scrollbars content node
-   nsCOMPtr<nsIContent> content = scrollbar->GetContent();
+   nsIContent* content = scrollbar->GetContent();
 
    // get the current pos
    PRInt32 curpos = nsSliderFrame::GetCurrentPosition(content);
@@ -179,9 +179,9 @@ nsScrollbarButtonFrame::MouseClicked()
    {
      // if our class is DecrementButton subtract the current pos by increment amount
      // if our class is IncrementButton increment the current pos by the decrement amount
-     if (value.EqualsLiteral("decrement"))
+     if (value.Equals(NS_LITERAL_STRING("decrement")))
          curpos -= increment;
-     else if (value.EqualsLiteral("increment"))
+     else if (value.Equals(NS_LITERAL_STRING("increment")))
          curpos += increment;
 
       // make sure the current positon is between the current and max positions
@@ -195,7 +195,7 @@ nsScrollbarButtonFrame::MouseClicked()
       nsCOMPtr<nsIScrollbarMediator> m;
       sb->GetScrollbarMediator(getter_AddRefs(m));
       if (m) {
-        m->ScrollbarButtonPressed(sb, oldpos, curpos);
+        m->ScrollbarButtonPressed(oldpos, curpos);
         return;
       }
     }
@@ -211,7 +211,7 @@ nsScrollbarButtonFrame::MouseClicked()
 }
 
 nsresult
-nsScrollbarButtonFrame::GetChildWithTag(nsPresContext* aPresContext,
+nsScrollbarButtonFrame::GetChildWithTag(nsIPresContext* aPresContext,
                                         nsIAtom* atom, nsIFrame* start,
                                         nsIFrame*& result)
 {
@@ -268,7 +268,7 @@ nsScrollbarButtonFrame::GetParentWithTag(nsIAtom* toFind, nsIFrame* start,
 }
 
 NS_IMETHODIMP
-nsScrollbarButtonFrame::Destroy(nsPresContext* aPresContext)
+nsScrollbarButtonFrame::Destroy(nsIPresContext* aPresContext)
 {
   // Ensure our repeat service isn't going... it's possible that a scrollbar can disappear out
   // from under you while you're in the process of scrolling.

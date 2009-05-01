@@ -1,41 +1,38 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is this file as it was released on
+ * May 1 2001.
  *
- * The Original Code is this file as it was released on May 1 2001.
- *
- * The Initial Developer of the Original Code is
- * Jonas Sicking.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Jonas Sicking.
+ * Portions created by Jonas Sicking are Copyright (C) 2001
+ * Jonas Sicking.  All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <sicking@bigfoot.com> (Original Author)
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable
+ * instead of those above.  If you wish to allow use of your
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 /*
  * nsTreeWalker.cpp: Implementation of the nsIDOMTreeWalker object.
@@ -84,11 +81,11 @@ nsTreeWalker::nsTreeWalker(nsIDOMNode *aRoot,
                            PRBool aExpandEntityReferences) :
     mRoot(aRoot),
     mWhatToShow(aWhatToShow),
+    mFilter(aFilter),
     mExpandEntityReferences(aExpandEntityReferences),
     mCurrentNode(aRoot),
     mPossibleIndexesPos(-1)
 {
-    mFilter.Set(aFilter, this);
 
     NS_ASSERTION(aRoot, "invalid root in call to nsTreeWalker constructor");
 }
@@ -105,8 +102,7 @@ nsTreeWalker::~nsTreeWalker()
 // QueryInterface implementation for nsTreeWalker
 NS_INTERFACE_MAP_BEGIN(nsTreeWalker)
     NS_INTERFACE_MAP_ENTRY(nsIDOMTreeWalker)
-    NS_INTERFACE_MAP_ENTRY(nsIDOMGCParticipant)
-    NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDOMTreeWalker)
+    NS_INTERFACE_MAP_ENTRY(nsISupports)
     NS_INTERFACE_MAP_ENTRY_CONTENT_CLASSINFO(TreeWalker)
 NS_INTERFACE_MAP_END
 
@@ -137,10 +133,8 @@ NS_IMETHODIMP nsTreeWalker::GetWhatToShow(PRUint32 *aWhatToShow)
 NS_IMETHODIMP nsTreeWalker::GetFilter(nsIDOMNodeFilter * *aFilter)
 {
     NS_ENSURE_ARG_POINTER(aFilter);
-
-    nsCOMPtr<nsIDOMNodeFilter> filter = mFilter.Get();
-    filter.swap((*aFilter = nsnull));
-
+    *aFilter = mFilter;
+    NS_IF_ADDREF(*aFilter);
     return NS_OK;
 }
 
@@ -270,29 +264,6 @@ NS_IMETHODIMP nsTreeWalker::NextNode(nsIDOMNode **_retval)
                                  PR_FALSE,
                                  mPossibleIndexesPos,
                                  _retval);
-}
-
-/*
- * nsIDOMGCParticipant functions
- */
-/* virtual */ nsIDOMGCParticipant*
-nsTreeWalker::GetSCCIndex()
-{
-    return this;
-}
-
-/* virtual */ void
-nsTreeWalker::AppendReachableList(nsCOMArray<nsIDOMGCParticipant>& aArray)
-{
-    nsCOMPtr<nsIDOMGCParticipant> gcp;
-    
-    gcp = do_QueryInterface(mRoot);
-    if (gcp)
-        aArray.AppendObject(gcp);
-
-    gcp = do_QueryInterface(mCurrentNode);
-    if (gcp)
-        aArray.AppendObject(gcp);
 }
 
 /*
@@ -434,8 +405,7 @@ nsTreeWalker::NextInDocumentOrderOf(nsIDOMNode* aNode,
         if (*_retval)
             return NS_OK;
     }
-
-    if (aNode == mRoot){
+    else if (aNode == mRoot){
         *_retval = nsnull;
         return NS_OK;
     }
@@ -620,9 +590,8 @@ nsresult nsTreeWalker::TestNode(nsIDOMNode* aNode, PRInt16* _filtered)
         return NS_OK;
     }
 
-    nsCOMPtr<nsIDOMNodeFilter> filter = mFilter.Get();
-    if (filter)
-        return filter->AcceptNode(aNode, _filtered);
+    if (mFilter)
+        return mFilter->AcceptNode(aNode, _filtered);
 
     *_filtered = nsIDOMNodeFilter::FILTER_ACCEPT;
     return NS_OK;

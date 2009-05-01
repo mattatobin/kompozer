@@ -1,42 +1,39 @@
 /*
  * This file contains prototypes for the public SSL functions.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: ssl.h,v 1.24.2.1 2007/06/23 01:33:33 neil.williams%sun.com Exp $ */
+ * $Id: ssl.h,v 1.17 2003/10/19 01:31:41 nelsonb%netscape.com Exp $
+ */
 
 #ifndef __ssl_h_
 #define __ssl_h_
@@ -110,8 +107,6 @@ SSL_IMPORT PRFileDesc *SSL_ImportFD(PRFileDesc *model, PRFileDesc *fd);
                                           /* if step-down keys are needed.  */
 					  /* default: off, generate         */
 					  /* step-down keys if needed.      */
-#define SSL_BYPASS_PKCS11              16 /* use PKCS#11 for pub key only   */
-#define SSL_NO_LOCKS                   17 /* Don't use locks for protection */
 
 #ifdef SSL_DEPRECATED_FUNCTION 
 /* Old deprecated function names */
@@ -173,12 +168,6 @@ SSL_IMPORT SECStatus SSL_ResetHandshake(PRFileDesc *fd, PRBool asServer);
 SSL_IMPORT SECStatus SSL_ForceHandshake(PRFileDesc *fd);
 
 /*
-** Same as above, but with an I/O timeout.
- */
-SSL_IMPORT SECStatus SSL_ForceHandshakeWithTimeout(PRFileDesc *fd,
-                                                   PRIntervalTime timeout);
-
-/*
 ** Query security status of socket. *on is set to one if security is
 ** enabled. *keySize will contain the stream key size used. *issuer will
 ** contain the RFC1485 verison of the name of the issuer of the
@@ -198,7 +187,7 @@ SSL_IMPORT SECStatus SSL_SecurityStatus(PRFileDesc *fd, int *on, char **cipher,
 #define SSL_SECURITY_STATUS_OFF		0
 #define SSL_SECURITY_STATUS_ON_HIGH	1
 #define SSL_SECURITY_STATUS_ON_LOW	2
-#define SSL_SECURITY_STATUS_FORTEZZA	3 /* NO LONGER SUPPORTED */
+#define SSL_SECURITY_STATUS_FORTEZZA	3
 
 /*
 ** Return the certificate for our SSL peer. If the client calls this
@@ -343,14 +332,6 @@ SSL_IMPORT SECStatus SSL_HandshakeCallback(PRFileDesc *fd,
 */
 SSL_IMPORT SECStatus SSL_ReHandshake(PRFileDesc *fd, PRBool flushCache);
 
-/*
-** Same as above, but with an I/O timeout.
- */
-SSL_IMPORT SECStatus SSL_ReHandshakeWithTimeout(PRFileDesc *fd,
-                                                PRBool flushCache,
-                                                PRIntervalTime timeout);
-
-
 #ifdef SSL_DEPRECATED_FUNCTION 
 /* deprecated!
 ** For the server, request a new handshake.  For the client, begin a new
@@ -473,37 +454,6 @@ SSL_IMPORT SECStatus SSL_GetCipherSuiteInfo(PRUint16 cipherSuite,
 ** to the peer on this SSL/TLS connection, or NULL if none has been sent.
 */
 SSL_IMPORT CERTCertificate * SSL_LocalCertificate(PRFileDesc *fd);
-
-/* Test an SSL configuration to see if  SSL_BYPASS_PKCS11 can be turned on.
-** Check the key exchange algorithm for each cipher in the list to see if
-** a master secret key can be extracted after being derived with the mechanism
-** required by the protocolmask argument. If the KEA will use keys from the
-** specified cert make sure the extract operation is attempted from the slot
-** where the private key resides.
-** If MS can be extracted for all ciphers, (*pcanbypass) is set to TRUE and
-** SECSuccess is returned. In all other cases but one (*pcanbypass) is
-** set to FALSE and SECFailure is returned.
-** In that last case Derive() has been called successfully but the MS is null,
-** CanBypass sets (*pcanbypass) to FALSE and returns SECSuccess indicating the
-** arguments were all valid but the slot cannot be bypassed.
-**
-** Note: A TRUE return code from CanBypass means "Your configuration will perform
-** NO WORSE with the bypass enabled than without"; it does NOT mean that every
-** cipher suite listed will work properly with the selected protocols.
-**
-** Caveat: If export cipher suites are included in the argument list Canbypass
-** will return FALSE.
-**/
-
-/* protocol mask bits */
-#define SSL_CBP_SSL3	0x0001	        /* test SSL v3 mechanisms */
-#define SSL_CBP_TLS1_0	0x0002		/* test TLS v1.0 mechanisms */
-
-SSL_IMPORT SECStatus SSL_CanBypass(CERTCertificate *cert,
-                                   SECKEYPrivateKey *privKey,
-				   PRUint32 protocolmask,
-				   PRUint16 *ciphers, int nciphers,
-                                   PRBool *pcanbypass, void *pwArg);
 
 SEC_END_PROTOS
 

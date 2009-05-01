@@ -41,17 +41,12 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#ifdef MOZ_LOGGING
-#define FORCE_PR_LOG
-#endif
-
 #include "prlog.h"
 
 #include "nsCOMPtr.h"
 #include "nsICategoryManager.h"
 #include "nsIComponentLoader.h"
 #include "nsIComponentManager.h"
-#include "nsIComponentManagerObsolete.h"
 #include "nsIGenericFactory.h"
 #include "nsILocalFile.h"
 #include "nsIModule.h"
@@ -69,59 +64,52 @@
 #include "nsString.h"
 #ifndef XPCONNECT_STANDALONE
 #include "nsIScriptSecurityManager.h"
-#include "nsIURI.h"
+#include "nsIScriptObjectPrincipal.h"
+#include "nsIPrincipalObsolete.h"
+#include "nsIURL.h"
+#include "nsIStandardURL.h"
 #include "nsNetUtil.h"
 #endif
 #include "nsIComponentLoaderManager.h"
-#include "jsxdrapi.h"
-#include "nsIFastLoadFileControl.h"
 // For reporting errors with the console service
 #include "nsIScriptError.h"
 #include "nsIConsoleService.h"
 
-static const char kJSRuntimeServiceContractID[] = "@mozilla.org/js/xpc/RuntimeService;1";
-static const char kXPConnectServiceContractID[] = "@mozilla.org/js/xpc/XPConnect;1";
-static const char kObserverServiceContractID[] = "@mozilla.org/observer-service;1";
+const char mozJSComponentLoaderContractID[] = "@mozilla.org/moz/jsloader;1";
+const char jsComponentTypeName[] = "text/javascript";
 
-/* Some platforms don't have an implementation of PR_MemMap(). */
-/* See bug 318077 for WinCE.                                   */
-#if !defined(XP_BEOS) && !defined(XP_OS2) && !defined(WINCE)
-#define HAVE_PR_MEMMAP
+// same as in nsComponentManager.cpp (but without the JS)
+const char JSfileSizeValueName[] = "FileSize";
+const char JSlastModValueName[] = "LastModTimeStamp";
+const char JSxpcomKeyName[] = "software/mozilla/XPCOM/components";
+
+const char kJSRuntimeServiceContractID[] = "@mozilla.org/js/xpc/RuntimeService;1";
+const char kXPConnectServiceContractID[] = "@mozilla.org/js/xpc/XPConnect;1";
+const char kJSContextStackContractID[] =   "@mozilla.org/js/xpc/ContextStack;1";
+const char kConsoleServiceContractID[] =   "@mozilla.org/consoleservice;1";
+const char kScriptErrorContractID[] =      "@mozilla.org/scripterror;1";
+const char kObserverServiceContractID[] = "@mozilla.org/observer-service;1";
+#ifndef XPCONNECT_STANDALONE
+const char kScriptSecurityManagerContractID[] = NS_SCRIPTSECURITYMANAGER_CONTRACTID;
+const char kStandardURLContractID[] = "@mozilla.org/network/standard-url;1";
 #endif
 
-/**
- * Buffer sizes for serialization and deserialization of scripts.
- * These should be tuned at some point.
- */
-#define XPC_SERIALIZATION_BUFFER_SIZE   (64 * 1024)
-#define XPC_DESERIALIZATION_BUFFER_SIZE (8 * 1024)
-
-// Inactivity delay before closing our fastload file stream.
-static const int kFastLoadWriteDelay = 5000;   // 5 seconds
-
-#ifdef PR_LOGGING
-// NSPR_LOG_MODULES=JSComponentLoader:5
-static PRLogModuleInfo *gJSCLLog;
-#endif
-
-#define LOG(args) PR_LOG(gJSCLLog, PR_LOG_DEBUG, args)
-
-void JS_DLL_CALLBACK
-mozJSLoaderErrorReporter(JSContext *cx, const char *message, JSErrorReport *rep)
+JS_STATIC_DLL_CALLBACK(void)
+Reporter(JSContext *cx, const char *message, JSErrorReport *rep)
 {
     nsresult rv;
 
     /* Use the console service to register the error. */
     nsCOMPtr<nsIConsoleService> consoleService =
-        do_GetService(NS_CONSOLESERVICE_CONTRACTID);
+        do_GetService(kConsoleServiceContractID);
 
     /*
      * Make an nsIScriptError, populate it with information from this
      * error, then log it with the console service.  The UI can then
-     * poll the service to update the Error console.
+     * poll the service to update the JavaScript console.
      */
     nsCOMPtr<nsIScriptError> errorObject = 
-        do_CreateInstance(NS_SCRIPTERROR_CONTRACTID);
+        do_CreateInstance(kScriptErrorContractID);
     
     if (consoleService && errorObject) {
         /*
@@ -178,6 +166,11 @@ Dump(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
     char *bytes = JS_GetStringBytes(str);
     bytes = nsCRT::strdup(bytes);
 
+#ifdef XP_MAC
+    for (char *c = bytes; *c; c++)
+        if (*c == '\r')
+            *c = '\n';
+#endif
     fputs(bytes, stderr);
     nsMemory::Free(bytes);
     return JS_TRUE;
@@ -193,209 +186,235 @@ Debug(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 #endif
 }
 
-static JSFunctionSpec gGlobalFun[] = {
+#ifndef XPCONNECT_STANDALONE
+
+static JSFunctionSpec gSandboxFun[] = {
     {"dump", Dump, 1 },
     {"debug", Debug, 1 },
     {0}
 };
 
-class JSCLContextHelper
+JS_STATIC_DLL_CALLBACK(JSBool)
+sandbox_enumerate(JSContext *cx, JSObject *obj)
 {
-public:
-    JSCLContextHelper(JSContext* cx);
-    ~JSCLContextHelper();
+    return JS_EnumerateStandardClasses(cx, obj);
+}
 
-    operator JSContext*() const {return mContext;}
+JS_STATIC_DLL_CALLBACK(JSBool)
+sandbox_resolve(JSContext *cx, JSObject *obj, jsval id)
+{
+    JSBool resolved;
+    return JS_ResolveStandardClass(cx, obj, id, &resolved);
+}
 
-    JSCLContextHelper(); // not implemnted
-private:
-    JSContext* mContext;
-    intN       mContextThread; 
+static JSClass js_SandboxClass = {
+    "Sandbox", 0,
+    JS_PropertyStub,   JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
+    sandbox_enumerate, sandbox_resolve, JS_ConvertStub,  JS_FinalizeStub,
+    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
-
-class JSCLAutoErrorReporterSetter
+JS_STATIC_DLL_CALLBACK(JSBool)
+NewSandbox(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-public:
-    JSCLAutoErrorReporterSetter(JSContext* cx, JSErrorReporter reporter)
-        {mContext = cx; mOldReporter = JS_SetErrorReporter(cx, reporter);}
-    ~JSCLAutoErrorReporterSetter()
-        {JS_SetErrorReporter(mContext, mOldReporter);} 
-    JSCLAutoErrorReporterSetter(); // not implemented
-private:
-    JSContext* mContext;
-    JSErrorReporter mOldReporter;
-};
-
-NS_IMPL_ISUPPORTS1(nsXPCFastLoadIO, nsIFastLoadFileIO)
-
-NS_IMETHODIMP
-nsXPCFastLoadIO::GetInputStream(nsIInputStream **_retval)
-{
-    if (! mInputStream) {
-        nsCOMPtr<nsIInputStream> fileInput;
-        nsresult rv = NS_NewLocalFileInputStream(getter_AddRefs(fileInput),
-                                                 mFile);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = NS_NewBufferedInputStream(getter_AddRefs(mInputStream),
-                                       fileInput,
-                                       XPC_DESERIALIZATION_BUFFER_SIZE);
-        NS_ENSURE_SUCCESS(rv, rv);
+    nsresult rv;
+    nsCOMPtr<nsIXPConnect> xpc = do_GetService(kXPConnectServiceContractID,
+                                               &rv);
+    if (!xpc) {
+        JS_ReportError(cx, "Unable to get XPConnect service: %08lx", rv);
+        return JS_FALSE;
+    }
+    
+    /*
+     * We're not likely to see much action on this context, so keep stack-arena
+     * chunk size small to reduce bloat.
+     */
+    JSContext *sandcx = JS_NewContext(JS_GetRuntime(cx), 1024);
+    if (!sandcx) {
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
     }
 
-    NS_ADDREF(*_retval = mInputStream);
-    return NS_OK;
-}
+    JSBool ok = JS_FALSE;
+    JSObject *sandbox = JS_NewObject(sandcx, &js_SandboxClass, nsnull, nsnull);
+    if (!sandbox)
+        goto out;
 
-NS_IMETHODIMP
-nsXPCFastLoadIO::GetOutputStream(nsIOutputStream **_retval)
+    JS_SetGlobalObject(sandcx, sandbox);
+
+    ok = JS_DefineFunctions(sandcx, sandbox, gSandboxFun) &&
+        NS_SUCCEEDED(xpc->InitClasses(sandcx, sandbox));
+    
+    *rval = OBJECT_TO_JSVAL(sandbox);
+ out:
+    JS_DestroyContext(sandcx);
+    return ok;
+}        
+
+JS_STATIC_DLL_CALLBACK(JSBool)
+EvalInSandbox(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, 
+              jsval *rval)
 {
-    if (! mOutputStream) {
-        PRInt32 ioFlags = PR_WRONLY;
-        if (! mInputStream) {
-            ioFlags |= PR_CREATE_FILE | PR_TRUNCATE;
-        }
+    JSPrincipals* jsPrincipals;
+    JSString* source;
+    const jschar * URL;
+    JSObject* sandbox;
+    
+    if (!JS_ConvertArguments(cx, argc, argv, "SoW", &source, &sandbox, &URL))
+        return JS_FALSE;
 
-        nsCOMPtr<nsIOutputStream> fileOutput;
-        nsresult rv = NS_NewLocalFileOutputStream(getter_AddRefs(fileOutput),
-                                                  mFile, ioFlags, 0644);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = NS_NewBufferedOutputStream(getter_AddRefs(mOutputStream),
-                                        fileOutput,
-                                        XPC_SERIALIZATION_BUFFER_SIZE);
-        NS_ENSURE_SUCCESS(rv, rv);
+    if (!JS_InstanceOf(cx, sandbox, &js_SandboxClass, NULL)) {
+        JSClass *clasp = JS_GetClass(cx, sandbox);
+        const char *className = clasp ? clasp->name : "<unknown!>";
+        JS_ReportError(cx,
+      "evalInSandbox passed object of class %s instead of Sandbox", className);
+        return JS_FALSE;
     }
 
-    NS_ADDREF(*_retval = mOutputStream);
-    return NS_OK;
-}
-
-static nsresult
-ReadScriptFromStream(JSContext *cx, nsIObjectInputStream *stream,
-                     JSScript **script)
-{
-    *script = nsnull;
-
-    PRUint32 size;
-    nsresult rv = stream->Read32(&size);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    char *data;
-    rv = stream->ReadBytes(size, &data);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    JSXDRState *xdr = JS_XDRNewMem(cx, JSXDR_DECODE);
-    NS_ENSURE_TRUE(xdr, NS_ERROR_OUT_OF_MEMORY);
-
-    xdr->userdata = stream;
-    JS_XDRMemSetData(xdr, data, size);
-
-    if (!JS_XDRScript(xdr, script)) {
-        rv = NS_ERROR_FAILURE;
+    NS_ConvertUCS2toUTF8 URL8((const PRUnichar *)URL);
+    nsCOMPtr<nsIURL> iURL;
+    nsCOMPtr<nsIStandardURL> stdUrl =
+        do_CreateInstance(kStandardURLContractID);
+    if (!stdUrl ||
+        NS_FAILED(stdUrl->Init(nsIStandardURL::URLTYPE_STANDARD, 80,
+                               URL8, nsnull, nsnull)) ||
+        !(iURL = do_QueryInterface(stdUrl))) {
+        JS_ReportError(cx, "Can't create URL for evalInSandbox");
+        return JS_FALSE;
     }
-
-    // Update data in case ::JS_XDRScript called back into C++ code to
-    // read an XPCOM object.
-    //
-    // In that case, the serialization process must have flushed a run
-    // of counted bytes containing JS data at the point where the XPCOM
-    // object starts, after which an encoding C++ callback from the JS
-    // XDR code must have written the XPCOM object directly into the
-    // nsIObjectOutputStream.
-    //
-    // The deserialization process will XDR-decode counted bytes up to
-    // but not including the XPCOM object, then call back into C++ to
-    // read the object, then read more counted bytes and hand them off
-    // to the JSXDRState, so more JS data can be decoded.
-    //
-    // This interleaving of JS XDR data and XPCOM object data may occur
-    // several times beneath the call to ::JS_XDRScript, above.  At the
-    // end of the day, we need to free (via nsMemory) the data owned by
-    // the JSXDRState.  So we steal it back, nulling xdr's buffer so it
-    // doesn't get passed to ::JS_free by ::JS_XDRDestroy.
-
-    uint32 length;
-    data = NS_STATIC_CAST(char*, JS_XDRMemGetData(xdr, &length));
-    if (data) {
-        JS_XDRMemSetData(xdr, nsnull, 0);
+    
+    nsCOMPtr<nsIPrincipal> principal;
+    nsCOMPtr<nsIScriptSecurityManager> secman = 
+        do_GetService(kScriptSecurityManagerContractID);
+    if (!secman ||
+        NS_FAILED(secman->GetCodebasePrincipal(iURL,
+                                               getter_AddRefs(principal))) ||
+        !principal ||
+        NS_FAILED(principal->GetJSPrincipals(cx, &jsPrincipals)) ||
+        !jsPrincipals) {
+        JS_ReportError(cx, "Can't get principals for evalInSandbox");
+        return JS_FALSE;
     }
-
-    JS_XDRDestroy(xdr);
-
-    // If data is null now, it must have been freed while deserializing an
-    // XPCOM object (e.g., a principal) beneath ::JS_XDRScript.
-    if (data) {
-        nsMemory::Free(data);
-    }
-
-    return rv;
-}
-
-static nsresult
-WriteScriptToStream(JSContext *cx, JSScript *script,
-                    nsIObjectOutputStream *stream)
-{
-    JSXDRState *xdr = JS_XDRNewMem(cx, JSXDR_ENCODE);
-    NS_ENSURE_TRUE(xdr, NS_ERROR_OUT_OF_MEMORY);
-
-    xdr->userdata = stream;
-    nsresult rv = NS_OK;
-
-    if (JS_XDRScript(xdr, &script)) {
-        // Get the encoded JSXDRState data and write it.  The JSXDRState owns
-        // this buffer memory and will free it beneath ::JS_XDRDestroy.
-        //
-        // If an XPCOM object needs to be written in the midst of the JS XDR
-        // encoding process, the C++ code called back from the JS engine (e.g.,
-        // nsEncodeJSPrincipals in caps/src/nsJSPrincipals.cpp) will flush data
-        // from the JSXDRState to aStream, then write the object, then return
-        // to JS XDR code with xdr reset so new JS data is encoded at the front
-        // of the xdr's data buffer.
-        //
-        // However many XPCOM objects are interleaved with JS XDR data in the
-        // stream, when control returns here from ::JS_XDRScript, we'll have
-        // one last buffer of data to write to aStream.
-
-        uint32 size;
-        const char* data = NS_REINTERPRET_CAST(const char*,
-                                               JS_XDRMemGetData(xdr, &size));
-        NS_ASSERTION(data, "no decoded JSXDRState data!");
-
-        rv = stream->Write32(size);
-        if (NS_SUCCEEDED(rv)) {
-            rv = stream->WriteBytes(data, size);
-        }
+    
+    JSBool ok;
+    JSContext *sandcx = JS_NewContext(JS_GetRuntime(cx), 8192);
+    if (!sandcx) {
+        JS_ReportError(cx, "Can't prepare context for evalInSandbox");
+        ok = JS_FALSE;
     } else {
-        rv = NS_ERROR_FAILURE; // likely to be a principals serialization error
-    }
+        JS_SetGlobalObject(sandcx, sandbox);
+        JS_SetErrorReporter(sandcx, Reporter);
 
-    JS_XDRDestroy(xdr);
-    return rv;
+        ok = JS_EvaluateUCScriptForPrincipals(sandcx, sandbox, jsPrincipals,
+                                              JS_GetStringChars(source),
+                                              JS_GetStringLength(source),
+                                              URL8.get(), 1, rval);
+        JS_DestroyContext(sandcx);
+    }
+    JSPRINCIPALS_DROP(cx, jsPrincipals);
+    return ok;
+}        
+
+#endif /* XPCONNECT_STANDALONE */
+
+static JSFunctionSpec gGlobalFun[] = {
+    {"dump", Dump, 1 },
+    {"debug", Debug, 1 },
+#ifndef XPCONNECT_STANDALONE
+    {"Sandbox", NewSandbox, 0 },
+    {"evalInSandbox", EvalInSandbox, 3 },
+#endif
+    {0}
+};
+
+#ifndef XPCONNECT_STANDALONE
+class BackstagePass : public nsIScriptObjectPrincipal, public nsIXPCScriptable
+{
+public:
+  NS_DECL_ISUPPORTS
+  NS_DECL_NSIXPCSCRIPTABLE
+  
+  NS_IMETHOD GetPrincipalObsolete(nsIPrincipalObsolete **aPrincipal) {
+    return CallQueryInterface(mPrincipal, aPrincipal);
+  }
+
+  NS_IMETHOD GetPrincipal(nsIPrincipal **aPrincipal) {
+    NS_ADDREF(*aPrincipal = mPrincipal);
+    return NS_OK;
+  }
+
+  BackstagePass(nsIPrincipal *prin) :
+    mPrincipal(prin)
+  {
+  }
+
+  virtual ~BackstagePass() { }
+
+private:
+  nsCOMPtr<nsIPrincipal> mPrincipal;
+};
+
+NS_IMPL_THREADSAFE_ISUPPORTS2(BackstagePass, nsIScriptObjectPrincipal, nsIXPCScriptable)
+
+#else
+
+class BackstagePass : public nsIXPCScriptable
+{
+public:
+  NS_DECL_ISUPPORTS
+  NS_DECL_NSIXPCSCRIPTABLE
+
+  BackstagePass()
+  {
+  }
+
+  virtual ~BackstagePass() { }
+};
+
+NS_IMPL_THREADSAFE_ISUPPORTS1(BackstagePass, nsIXPCScriptable)
+
+#endif
+
+// The nsIXPCScriptable map declaration that will generate stubs for us...
+#define XPC_MAP_CLASSNAME           BackstagePass
+#define XPC_MAP_QUOTED_CLASSNAME   "BackstagePass"
+#define                             XPC_MAP_WANT_NEWRESOLVE
+#define XPC_MAP_FLAGS       nsIXPCScriptable::USE_JSSTUB_FOR_ADDPROPERTY   | \
+                            nsIXPCScriptable::USE_JSSTUB_FOR_DELPROPERTY   | \
+                            nsIXPCScriptable::USE_JSSTUB_FOR_SETPROPERTY   | \
+                            nsIXPCScriptable::DONT_ENUM_STATIC_PROPS       | \
+                            nsIXPCScriptable::DONT_ENUM_QUERY_INTERFACE    | \
+                            nsIXPCScriptable::DONT_REFLECT_INTERFACE_NAMES
+#include "xpc_map_end.h" /* This will #undef the above */
+
+/* PRBool newResolve (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in JSVal id, in PRUint32 flags, out JSObjectPtr objp); */
+NS_IMETHODIMP
+BackstagePass::NewResolve(nsIXPConnectWrappedNative *wrapper,
+                          JSContext * cx, JSObject * obj,
+                          jsval id, PRUint32 flags, 
+                          JSObject * *objp, PRBool *_retval)
+{
+    JSBool resolved;
+
+    *_retval = JS_ResolveStandardClass(cx, obj, id, &resolved);
+    if (*_retval && resolved)
+        *objp = obj;
+    return NS_OK;
 }
 
 mozJSComponentLoader::mozJSComponentLoader()
     : mRuntime(nsnull),
-      mContext(nsnull),
       mModules(nsnull),
       mGlobals(nsnull),
       mInitialized(PR_FALSE)
 {
-#ifdef PR_LOGGING
-    if (!gJSCLLog) {
-        gJSCLLog = PR_NewLogModule("JSComponentLoader");
-    }
-#endif
 }
 
 static PRIntn PR_CALLBACK
 UnrootGlobals(PLHashEntry *he, PRIntn i, void *arg)
 {
-    JSContext *cx = (JSContext *)arg;
-    JSObject *global = (JSObject *)he->value;
-    JS_ClearScope(cx, global);
-    JS_RemoveRoot(cx, &he->value);
+    JSRuntime *rt = (JSRuntime *)arg;
+    JS_RemoveRootRT(rt, &he->value);
     nsCRT::free((char *)he->key);
     return HT_ENUMERATE_REMOVE;
 }
@@ -419,11 +438,9 @@ UnloadAndReleaseModules(PLHashEntry *he, PRIntn i, void *arg)
 
 mozJSComponentLoader::~mozJSComponentLoader()
 {
-    NS_ASSERTION(!mFastLoadTimer,
-                 "Fastload file should have been closed via xpcom-shutdown");
 }
 
-NS_IMPL_ISUPPORTS2(mozJSComponentLoader, nsIComponentLoader, nsIObserver)
+NS_IMPL_THREADSAFE_ISUPPORTS1(mozJSComponentLoader, nsIComponentLoader)
 
 NS_IMETHODIMP
 mozJSComponentLoader::GetFactory(const nsIID &aCID,
@@ -440,17 +457,17 @@ mozJSComponentLoader::GetFactory(const nsIID &aCID,
     delete [] cidString;
 #endif
     
-    nsresult rv;
-    nsIModule *module = ModuleForLocation(aLocation, 0, &rv);
-    if (NS_FAILED(rv)) {
+    nsIModule * module = ModuleForLocation(aLocation, 0);
+    if (!module) {
 #ifdef DEBUG_shaver_off
         fprintf(stderr, "ERROR: couldn't get module for %s\n", aLocation);
 #endif
-        return rv;
+        return NS_ERROR_FACTORY_NOT_LOADED;
     }
     
-    rv = module->GetClassObject(mCompMgr, aCID, NS_GET_IID(nsIFactory),
-                                (void **)_retval);
+    nsresult rv = module->GetClassObject(mCompMgr, aCID,
+                                         NS_GET_IID(nsIFactory),
+                                         (void **)_retval);
 #ifdef DEBUG_shaver_off
     fprintf(stderr, "GetClassObject %s\n", NS_FAILED(rv) ? "FAILED" : "ok");
 #endif
@@ -461,7 +478,7 @@ NS_IMETHODIMP
 mozJSComponentLoader::Init(nsIComponentManager *aCompMgr, nsISupports *aReg)
 {
     mCompMgr = aCompMgr;
-
+         
     nsresult rv;
     mLoaderManager = do_QueryInterface(mCompMgr, &rv);
     if (NS_FAILED(rv))
@@ -486,20 +503,9 @@ mozJSComponentLoader::ReallyInit()
         NS_FAILED(rv = mRuntimeService->GetRuntime(&mRuntime)))
         return rv;
 
-    // Create our compilation context.
-    mContext = JS_NewContext(mRuntime, 256);
-    if (!mContext)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-    uint32 options = JS_GetOptions(mContext);
-    JS_SetOptions(mContext, options | JSOPTION_XML);
-
-    // enable Javascript 1.7 features (let, yield, etc. - see bug#351515)
-    JS_SetVersion(mContext, JSVERSION_1_7);
-    
 #ifndef XPCONNECT_STANDALONE
     nsCOMPtr<nsIScriptSecurityManager> secman = 
-        do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID);
+        do_GetService(kScriptSecurityManagerContractID);
     if (!secman)
         return NS_ERROR_FAILURE;
 
@@ -518,28 +524,9 @@ mozJSComponentLoader::ReallyInit()
     if (!mGlobals)
         return NS_ERROR_OUT_OF_MEMORY;
 
-    // Set up our fastload file
-    nsCOMPtr<nsIFastLoadService> flSvc = do_GetFastLoadService(&rv);
-    if (flSvc)
-    {
-        rv = flSvc->NewFastLoadFile("XPC", getter_AddRefs(mFastLoadFile));
-        if (NS_FAILED(rv)) {
-            LOG(("Could not get fastload file location\n"));
-        }
-        // Listen for xpcom-shutdown so that we can close out our fastload file
-        // at that point (after that we can no longer create an input stream).
-        nsCOMPtr<nsIObserverService> obsSvc =
-            do_GetService(kObserverServiceContractID, &rv);
-        NS_ENSURE_SUCCESS(rv, rv);
-        
-        rv = obsSvc->AddObserver(this, NS_XPCOM_SHUTDOWN_OBSERVER_ID, PR_FALSE);
-        NS_ENSURE_SUCCESS(rv, rv);
-        
 #ifdef DEBUG_shaver_off
-        fprintf(stderr, "mJCL: ReallyInit success!\n");
+    fprintf(stderr, "mJCL: ReallyInit success!\n");
 #endif
-    }
-
     mInitialized = PR_TRUE;
 
     return NS_OK;
@@ -744,6 +731,7 @@ mozJSComponentLoader::AttemptRegistration(nsIFile *component,
 {
     nsXPIDLCString registryLocation;
     nsresult rv;
+    nsIModule *module;
     
     // what I want to do here is QI for a Component Registration Manager.  Since this 
     // has not been invented yet, QI to the obsolete manager.  Kids, don't do this at home.
@@ -758,52 +746,53 @@ mozJSComponentLoader::AttemptRegistration(nsIFile *component,
     if (!deferred && !HasChanged(registryLocation, component))
         return NS_OK;
     
-    nsIModule *module = ModuleForLocation(registryLocation, component, &rv);
-    if (NS_FAILED(rv)) {
-        SetRegistryInfo(registryLocation, component);
-        return rv;
+    module = ModuleForLocation(registryLocation, component);
+    if (!module)
+        goto out;
+    
+    {
+      // Notify observers, if any, of autoregistration work
+      nsCOMPtr<nsIObserverService> observerService = 
+            do_GetService(kObserverServiceContractID);
+      if (observerService)
+      {
+        nsCOMPtr<nsIServiceManager> mgr;
+        rv = NS_GetServiceManager(getter_AddRefs(mgr));
+        if (NS_SUCCEEDED(rv))
+        {
+          // this string can't come from a string bundle, because we
+          // don't have string bundles yet.
+          NS_ConvertASCIItoUCS2 fileName("(no name)");
+
+          // get the file name
+          if (component)
+          {
+            component->GetLeafName(fileName);
+          }
+          
+          // this string can't come from a string bundle, because we
+          // don't have string bundles yet.
+          (void) observerService->
+            NotifyObservers(mgr,
+                            NS_XPCOM_AUTOREGISTRATION_OBSERVER_ID,
+                            PromiseFlatString(NS_LITERAL_STRING("Registering JS component ") +
+                                              fileName).get());
+        }
+      }
     }
-
-    // Notify observers, if any, of autoregistration work
-    nsCOMPtr<nsIObserverService> observerService = 
-        do_GetService(kObserverServiceContractID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    nsCOMPtr<nsIServiceManager> mgr;
-    rv = NS_GetServiceManager(getter_AddRefs(mgr));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    // this string can't come from a string bundle, because we
-    // don't have string bundles yet.
-    NS_ConvertASCIItoUCS2 fileName("(no name)");
-
-    // get the file name
-    if (component) {
-        component->GetLeafName(fileName);
-    }
-
-    // this string can't come from a string bundle, because we
-    // don't have string bundles yet.
-    const nsPromiseFlatString &msg =
-        PromiseFlatString(NS_LITERAL_STRING("Registering JS component ") +
-                          fileName);
-
-    observerService->NotifyObservers(mgr,
-                                     NS_XPCOM_AUTOREGISTRATION_OBSERVER_ID,
-                                     msg.get());
     
     rv = module->RegisterSelf(mCompMgr, component, registryLocation,
-                              MOZJSCOMPONENTLOADER_TYPE_NAME);
+                              jsComponentTypeName);
     if (rv == NS_ERROR_FACTORY_REGISTER_AGAIN) {
-        if (!deferred) {
+        if (!deferred)
             mDeferredComponents.AppendElement(component);
-        }
         /*
          * we don't enter in the registry because we may want to
          * try again on a later autoreg, in case a dependency has
          * become available. 
          */
-    } else {
+    } else{ 
+ out:
         SetRegistryInfo(registryLocation, component);
     }
 
@@ -815,6 +804,7 @@ mozJSComponentLoader::UnregisterComponent(nsIFile *component)
 {
     nsXPIDLCString registryLocation;
     nsresult rv;
+    nsIModule *module;
     
     // what I want to do here is QI for a Component Registration Manager.  Since this 
     // has not been invented yet, QI to the obsolete manager.  Kids, don't do this at home.
@@ -825,25 +815,31 @@ mozJSComponentLoader::UnregisterComponent(nsIFile *component)
     if (NS_FAILED(rv))
         return rv;
     
-    nsIModule *module = ModuleForLocation(registryLocation, component, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    module = ModuleForLocation(registryLocation, component);
+    if (!module)
+        return NS_ERROR_FAILURE;
     
-    // Notify observers, if any, of autoregistration work
-    nsCOMPtr<nsIObserverService> observerService = 
-        do_GetService(kObserverServiceContractID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    nsCOMPtr<nsIServiceManager> mgr;
-    rv = NS_GetServiceManager(getter_AddRefs(mgr));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    const nsAFlatString &msg = NS_LITERAL_STRING("Unregistering JS component");
-    observerService->NotifyObservers(mgr,
-                                     NS_XPCOM_AUTOREGISTRATION_OBSERVER_ID,
-                                     msg.get());
+    {
+      // Notify observers, if any, of autoregistration work
+      nsCOMPtr<nsIObserverService> observerService = 
+            do_GetService(kObserverServiceContractID);
+      if (observerService)
+      {
+        nsCOMPtr<nsIServiceManager> mgr;
+        rv = NS_GetServiceManager(getter_AddRefs(mgr));
+        if (NS_SUCCEEDED(rv))
+        {
+            (void) observerService->NotifyObservers(mgr,
+                                                    NS_XPCOM_AUTOREGISTRATION_OBSERVER_ID,
+                                                    NS_LITERAL_STRING("Unregistering JS component").get());
+        }
+      }
+    }
     
     rv = module->UnregisterSelf(mCompMgr, component, registryLocation);
-    if (NS_SUCCEEDED(rv)) {
+
+    if (NS_SUCCEEDED(rv))
+    {
         // Remove any autoreg specific info. Ignore error.
         RemoveRegistryInfo(component, registryLocation);
     }
@@ -897,46 +893,38 @@ mozJSComponentLoader::RegisterDeferredComponents(PRInt32 aWhen,
 }
 
 
-nsIModule*
+nsIModule *
 mozJSComponentLoader::ModuleForLocation(const char *registryLocation,
-                                        nsIFile *component, nsresult *status)
+                                        nsIFile *component)
 {
     nsresult rv;
-    if (!mInitialized) {
-        rv = ReallyInit();
-        if (NS_FAILED(rv)) {
-            *status = rv;
-            return nsnull;
-        }
-    }
+    nsIModule *module = nsnull;
+    if (!mInitialized &&
+        NS_FAILED(ReallyInit()))
+        return nsnull;
 
     PLHashNumber hash = PL_HashString(registryLocation);
     PLHashEntry **hep = PL_HashTableRawLookup(mModules, hash,
-                                              registryLocation);
+                                              (void *)registryLocation);
     PLHashEntry *he = *hep;
-    if (he) {
-        *status = NS_OK;
-        return NS_STATIC_CAST(nsIModule*, he->value);
-    }
+    if (he)
+        return (nsIModule *)he->value;
 
-    JSObject *global;
-    rv = GlobalForLocation(registryLocation, component, &global);
-    if (NS_FAILED(rv)) {
+    JSObject *global = GlobalForLocation(registryLocation, component);
+    if (!global) {
 #ifdef DEBUG_shaver
         fprintf(stderr, "GlobalForLocation failed!\n");
 #endif
-        *status = rv;
         return nsnull;
     }
 
-    nsCOMPtr<nsIXPConnect> xpc = do_GetService(kXPConnectServiceContractID,
-                                               &rv);
-    if (NS_FAILED(rv)) {
-        *status = rv;
+    nsCOMPtr<nsIXPConnect> xpc = do_GetService(kXPConnectServiceContractID);
+    if (!xpc)
         return nsnull;
-    }
 
-    JSCLContextHelper cx(mContext);
+    JSCLAutoContext cx(mRuntime);
+    if(NS_FAILED(cx.GetError()))
+        return nsnull;
 
     JSObject* cm_jsobj;
     nsCOMPtr<nsIXPConnectJSObjectHolder> cm_holder;
@@ -949,7 +937,6 @@ mozJSComponentLoader::ModuleForLocation(const char *registryLocation,
         fprintf(stderr, "WrapNative(%p,%p,nsIComponentManager) failed: %x\n",
                 (void *)(JSContext*)cx, (void *)mCompMgr, rv);
 #endif
-        *status = rv;
         return nsnull;
     }
 
@@ -958,31 +945,20 @@ mozJSComponentLoader::ModuleForLocation(const char *registryLocation,
 #ifdef DEBUG_shaver
         fprintf(stderr, "GetJSObject of ComponentManager failed\n");
 #endif
-        *status = rv;
         return nsnull;
     }
 
-    JSCLAutoErrorReporterSetter aers(cx, mozJSLoaderErrorReporter);
+    JSCLAutoErrorReporterSetter aers(cx, Reporter);
 
-    jsval argv[2], retval, NSGetModule_val;
-
-    if (!JS_GetProperty(cx, global, "NSGetModule", &NSGetModule_val) ||
-        JSVAL_IS_VOID(NSGetModule_val)) {
-        *status = NS_ERROR_FAILURE;
-        return nsnull;
-    }
-
-    if (JS_TypeOfValue(cx, NSGetModule_val) != JSTYPE_FUNCTION) {
-        JS_ReportError(cx, "%s has NSGetModule property that is not a function",
-                       registryLocation);
-        *status = NS_ERROR_FAILURE;
-        return nsnull;
-    }
-    
+    jsval argv[2], retval;
     argv[0] = OBJECT_TO_JSVAL(cm_jsobj);
     argv[1] = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, registryLocation));
-    if (!JS_CallFunctionValue(cx, global, NSGetModule_val, 2, argv, &retval)) {
-        *status = NS_ERROR_FAILURE;
+    if (!JS_CallFunctionName(cx, global, "NSGetModule", 2, argv,
+                             &retval)) {
+#ifdef DEBUG_shaver_off
+        fprintf(stderr, "mJCL: NSGetModule failed for %s\n",
+                registryLocation);
+#endif
         return nsnull;
     }
 
@@ -999,18 +975,15 @@ mozJSComponentLoader::ModuleForLocation(const char *registryLocation,
         fprintf(stderr, "mJCL: couldn't convert %s's nsIModule to obj\n",
                 registryLocation);
 #endif
-        *status = NS_ERROR_FAILURE;
         return nsnull;
     }
 
-    nsIModule *module;
-    rv = xpc->WrapJS(cx, jsModuleObj, NS_GET_IID(nsIModule), (void**)&module);
-    if (NS_FAILED(rv)) {
+    if (NS_FAILED(xpc->WrapJS(cx, jsModuleObj, NS_GET_IID(nsIModule),
+                              (void **)&module))) {
         /* XXX report error properly */
 #ifdef DEBUG
         fprintf(stderr, "mJCL: couldn't get nsIModule from jsval\n");
 #endif
-        *status = rv;
         return nsnull;
     }
 
@@ -1018,597 +991,159 @@ mozJSComponentLoader::ModuleForLocation(const char *registryLocation,
     he = PL_HashTableRawAdd(mModules, hep, hash,
                             nsCRT::strdup(registryLocation), module);
 
-    *status = NS_OK;
     return module;
 }
 
-// Some stack based classes for cleaning up on early return
-#ifdef HAVE_PR_MEMMAP
-class FileAutoCloser
-{
- public:
-    explicit FileAutoCloser(PRFileDesc *file) : mFile(file) {}
-    ~FileAutoCloser() { PR_Close(mFile); }
- private:
-    PRFileDesc *mFile;
-};
-
-class FileMapAutoCloser
-{
- public:
-    explicit FileMapAutoCloser(PRFileMap *map) : mMap(map) {}
-    ~FileMapAutoCloser() { PR_CloseFileMap(mMap); }
- private:
-    PRFileMap *mMap;
-};
-#endif
-
-class JSPrincipalsHolder
-{
- public:
-    JSPrincipalsHolder(JSContext *cx, JSPrincipals *principals)
-        : mCx(cx), mPrincipals(principals) {}
-    ~JSPrincipalsHolder() { JSPRINCIPALS_DROP(mCx, mPrincipals); }
- private:
-    JSContext *mCx;
-    JSPrincipals *mPrincipals;
-};
-
-class JSScriptHolder
-{
- public:
-    JSScriptHolder(JSContext *cx, JSScript *script)
-        : mCx(cx), mScript(script) {}
-    ~JSScriptHolder() { ::JS_DestroyScript(mCx, mScript); }
- private:
-    JSContext *mCx;
-    JSScript *mScript;
-};
-
-class FastLoadStateHolder
-{
- public:
-    explicit FastLoadStateHolder(nsIFastLoadService *service);
-    ~FastLoadStateHolder() { pop(); }
-
-    void pop();
-
- private:
-    nsCOMPtr<nsIFastLoadService> mService;
-    nsCOMPtr<nsIFastLoadFileIO> mIO;
-    nsCOMPtr<nsIObjectInputStream> mInputStream;
-    nsCOMPtr<nsIObjectOutputStream> mOutputStream;
-};
-
-FastLoadStateHolder::FastLoadStateHolder(nsIFastLoadService *service)
-{
-    if (!service)
-        return;
-
-    mService = service;
-    service->GetFileIO(getter_AddRefs(mIO));
-    service->GetInputStream(getter_AddRefs(mInputStream));
-    service->GetOutputStream(getter_AddRefs(mOutputStream));
-}
-
-void
-FastLoadStateHolder::pop()
-{
-    if (!mService)
-        return;
-
-    mService->SetFileIO(mIO);
-    mService->SetInputStream(mInputStream);
-    mService->SetOutputStream(mOutputStream);
-
-    mService = nsnull;
-}
-
-/* static */
-void
-mozJSComponentLoader::CloseFastLoad(nsITimer *timer, void *closure)
-{
-    NS_STATIC_CAST(mozJSComponentLoader*, closure)->CloseFastLoad();
-}
-
-void
-mozJSComponentLoader::CloseFastLoad()
-{
-    // Close our fastload streams
-    LOG(("Closing fastload file\n"));
-    if (mFastLoadOutput) {
-        nsresult rv = mFastLoadOutput->Close();
-        if (NS_SUCCEEDED(rv)) {
-            nsCOMPtr<nsIFastLoadService> flSvc = do_GetFastLoadService(&rv);
-            if (NS_SUCCEEDED(rv)) {
-                flSvc->CacheChecksum(mFastLoadFile, mFastLoadOutput);
-            }
-        }
-        mFastLoadOutput = nsnull;
-    }
-    if (mFastLoadInput) {
-        mFastLoadInput->Close();
-        mFastLoadInput = nsnull;
-    }
-
-    mFastLoadIO = nsnull;
-    mFastLoadTimer = nsnull;
-}
-
-nsresult
-mozJSComponentLoader::StartFastLoad(nsIFastLoadService *flSvc)
-{
-    if (!mFastLoadFile || !flSvc) {
-        return NS_ERROR_NOT_AVAILABLE;
-    }
-
-    // Now set our IO object as current, and create our streams.
-    if (!mFastLoadIO) {
-        mFastLoadIO = new nsXPCFastLoadIO(mFastLoadFile);
-        NS_ENSURE_TRUE(mFastLoadIO, NS_ERROR_OUT_OF_MEMORY);
-    }
-
-    nsresult rv = flSvc->SetFileIO(mFastLoadIO);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    if (!mFastLoadInput && !mFastLoadOutput) {
-        // First time accessing the fastload file
-        PRBool exists;
-        mFastLoadFile->Exists(&exists);
-        if (exists) {
-            LOG(("trying to use existing fastload file\n"));
-
-            nsCOMPtr<nsIInputStream> input;
-            rv = mFastLoadIO->GetInputStream(getter_AddRefs(input));
-            NS_ENSURE_SUCCESS(rv, rv);
-
-            rv = flSvc->NewInputStream(input, getter_AddRefs(mFastLoadInput));
-            if (NS_SUCCEEDED(rv)) {
-                LOG(("opened fastload file for reading\n"));
-
-                nsCOMPtr<nsIFastLoadReadControl>
-                    readControl(do_QueryInterface(mFastLoadInput));
-                if (readControl) {
-                    // Verify checksum, using the FastLoadService's
-                    // checksum cache to avoid computing more than once
-                    // per session.
-                    PRUint32 checksum;
-                    rv = readControl->GetChecksum(&checksum);
-                    if (NS_SUCCEEDED(rv)) {
-                        PRUint32 verified;
-                        rv = flSvc->ComputeChecksum(mFastLoadFile,
-                                                    readControl, &verified);
-                        if (NS_SUCCEEDED(rv) && verified != checksum) {
-                            LOG(("Incorrect checksum detected"));
-                            rv = NS_ERROR_FAILURE;
-                        }
-                    }
-                }
-
-                if (NS_SUCCEEDED(rv)) {
-                    /* Get the JS bytecode version number and validate it. */
-                    PRUint32 version;
-                    rv = mFastLoadInput->Read32(&version);
-                    if (NS_SUCCEEDED(rv) && version != JSXDR_BYTECODE_VERSION) {
-                        LOG(("Bad JS bytecode version\n"));
-                        rv = NS_ERROR_UNEXPECTED;
-                    }
-                }
-            }
-            if (NS_FAILED(rv)) {
-                LOG(("Invalid fastload file detected, removing it\n"));
-                if (mFastLoadInput) {
-                    mFastLoadInput->Close();
-                    mFastLoadInput = nsnull;
-                } else {
-                    input->Close();
-                }
-                mFastLoadIO->SetInputStream(nsnull);
-                mFastLoadFile->Remove(PR_FALSE);
-                exists = PR_FALSE;
-            }
-        }
-
-        if (!exists) {
-            LOG(("Creating new fastload file\n"));
-
-            nsCOMPtr<nsIOutputStream> output;
-            rv = mFastLoadIO->GetOutputStream(getter_AddRefs(output));
-            NS_ENSURE_SUCCESS(rv, rv);
-
-            rv = flSvc->NewOutputStream(output,
-                                        getter_AddRefs(mFastLoadOutput));
-
-            if (NS_SUCCEEDED(rv))
-                rv = mFastLoadOutput->Write32(JSXDR_BYTECODE_VERSION);
-
-            if (NS_FAILED(rv)) {
-                LOG(("Fatal error, could not create fastload file\n"));
-
-                if (mFastLoadOutput) {
-                    mFastLoadOutput->Close();
-                    mFastLoadOutput = nsnull;
-                } else {
-                    output->Close();
-                }
-                mFastLoadIO->SetOutputStream(nsnull);
-                mFastLoadFile->Remove(PR_FALSE);
-                return rv;
-            }
-        }
-    }
-
-    flSvc->SetInputStream(mFastLoadInput);
-    flSvc->SetOutputStream(mFastLoadOutput);
-
-    // Start our update timer.  This allows us to keep the stream open
-    // when many components are loaded in succession, but close it once
-    // there has been a period of inactivity.
-
-    if (!mFastLoadTimer) {
-        mFastLoadTimer = do_CreateInstance(NS_TIMER_CONTRACTID, &rv);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = mFastLoadTimer->InitWithFuncCallback(&mozJSComponentLoader::CloseFastLoad,
-                                                  this,
-                                                  kFastLoadWriteDelay,
-                                                  nsITimer::TYPE_ONE_SHOT);
-    } else {
-        rv = mFastLoadTimer->SetDelay(kFastLoadWriteDelay);
-    }
-
-    return rv;
-}
-
-nsresult
-mozJSComponentLoader::ReadScript(nsIFastLoadService *flSvc,
-                                 const char *nativePath, nsIURI *uri,
-                                 JSContext *cx, JSScript **script)
-{
-    NS_ASSERTION(flSvc, "fastload not initialized");
-
-    nsresult rv = flSvc->StartMuxedDocument(uri, nativePath,
-                                            nsIFastLoadService::NS_FASTLOAD_READ);
-    if (NS_FAILED(rv)) {
-        return rv; // don't warn since NOT_AVAILABLE is an ok error
-    }
-
-    LOG(("Found %s in fastload file\n", nativePath));
-
-    nsCOMPtr<nsIURI> oldURI;
-    rv = flSvc->SelectMuxedDocument(uri, getter_AddRefs(oldURI));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    NS_ASSERTION(mFastLoadInput,
-                 "FASTLOAD_READ should only succeed with an input stream");
-
-    rv = ReadScriptFromStream(cx, mFastLoadInput, script);
-    if (NS_SUCCEEDED(rv)) {
-        rv = flSvc->EndMuxedDocument(uri);
-    }
-
-    return rv;
-}
-
-nsresult
-mozJSComponentLoader::WriteScript(nsIFastLoadService *flSvc, JSScript *script,
-                                  nsIFile *component, const char *nativePath,
-                                  nsIURI *uri, JSContext *cx)
-{
-    NS_ASSERTION(flSvc, "fastload not initialized");
-    nsresult rv;
-
-    if (!mFastLoadOutput) {
-        // Trying to read a URI that was not in the fastload file will have
-        // created an output stream for us.  But, if we haven't tried to
-        // load anything that was missing, it will still be null.
-        rv = flSvc->GetOutputStream(getter_AddRefs(mFastLoadOutput));
-        NS_ENSURE_SUCCESS(rv, rv);
-    }
-
-    NS_ASSERTION(mFastLoadOutput, "must have an output stream here");
-
-    LOG(("Writing %s to fastload\n", nativePath));
-    rv = flSvc->AddDependency(component);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = flSvc->StartMuxedDocument(uri, nativePath,
-                                   nsIFastLoadService::NS_FASTLOAD_WRITE);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    nsCOMPtr<nsIURI> oldURI;
-    rv = flSvc->SelectMuxedDocument(uri, getter_AddRefs(oldURI));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = WriteScriptToStream(cx, script, mFastLoadOutput);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    return flSvc->EndMuxedDocument(uri);
-}
-
-nsresult
+JSObject *
 mozJSComponentLoader::GlobalForLocation(const char *aLocation,
-                                        nsIFile *aComponent,
-                                        JSObject **aGlobal)
+                                        nsIFile *component)
 {
-    nsresult rv;
-    if (!mInitialized) {
-        rv = ReallyInit();
-        NS_ENSURE_SUCCESS(rv, rv);
-    }
-
+    JSObject *global = nsnull;
+    PRBool needRelease = PR_FALSE;
+    JSScript *script = nsnull;
     PLHashNumber hash = PL_HashString(aLocation);
-    PLHashEntry **hep = PL_HashTableRawLookup(mGlobals, hash, aLocation);
+    PLHashEntry **hep = PL_HashTableRawLookup(mGlobals, hash,
+                                              (void *)aLocation);
     PLHashEntry *he = *hep;
-    if (he) {
-        *aGlobal = NS_STATIC_CAST(JSObject*, he->value);
-        return NS_OK;
-    }
+    if (he)
+        return (JSObject *)he->value;
 
-    *aGlobal = nsnull;
-
+    if (!mInitialized && NS_FAILED(ReallyInit()))
+        return nsnull;
+    
+    nsresult rv;
     JSPrincipals* jsPrincipals = nsnull;
-    JSCLContextHelper cx(mContext);
+
+    JSCLAutoContext cx(mRuntime);
+    if (NS_FAILED(cx.GetError()))
+        return nsnull;
 
 #ifndef XPCONNECT_STANDALONE
-    rv = mSystemPrincipal->GetJSPrincipals(cx, &jsPrincipals);
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIScriptObjectPrincipal> backstagePass =
+      new BackstagePass(mSystemPrincipal);
 
-    JSPrincipalsHolder princHolder(mContext, jsPrincipals);
+    rv = mSystemPrincipal->GetJSPrincipals(cx, &jsPrincipals);
+    if (NS_FAILED(rv) || !jsPrincipals)
+        return nsnull;
+
+#else
+    nsCOMPtr<nsISupports> backstagePass = new BackstagePass();
 #endif
 
-    nsCOMPtr<nsIXPCScriptable> backstagePass;
-    rv = mRuntimeService->GetBackstagePass(getter_AddRefs(backstagePass));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    JSCLAutoErrorReporterSetter aers(cx, mozJSLoaderErrorReporter);
-
-    nsCOMPtr<nsIXPConnect> xpc =
-        do_GetService(kXPConnectServiceContractID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    // Make sure InitClassesWithNewWrappedGlobal() installs the
-    // backstage pass as the global in our compilation context.
-    JS_SetGlobalObject(cx, nsnull);
-
+    JSCLAutoErrorReporterSetter aers(cx, Reporter);
     nsCOMPtr<nsIXPConnectJSObjectHolder> holder;
+
+    nsCOMPtr<nsIXPConnect> xpc = do_GetService(kXPConnectServiceContractID);
+    if (!xpc)
+        goto out;
+
     rv = xpc->InitClassesWithNewWrappedGlobal(cx, backstagePass,
                                               NS_GET_IID(nsISupports),
-                                              nsIXPConnect::
-                                                  FLAG_SYSTEM_GLOBAL_OBJECT,
+                                              PR_FALSE,
                                               getter_AddRefs(holder));
-    NS_ENSURE_SUCCESS(rv, rv);
+    if (NS_FAILED(rv))
+        goto out;
 
-    JSObject *global;
     rv = holder->GetJSObject(&global);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    if (!JS_DefineFunctions(cx, global, gGlobalFun)) {
-        return NS_ERROR_FAILURE;
+    if (NS_FAILED(rv)) {
+        NS_ASSERTION(global == nsnull, "bad GetJSObject?");
+        goto out;
     }
 
-    nsCOMPtr<nsIFile> component = aComponent;
+    if (!JS_DefineFunctions(cx, global, gGlobalFun)) {
+        global = nsnull;
+        goto out;
+    }
+
     if (!component) {
         // what I want to do here is QI for a Component Registration Manager.  Since this 
         // has not been invented yet, QI to the obsolete manager.  Kids, don't do this at home.
-        nsCOMPtr<nsIComponentManagerObsolete> mgr = do_QueryInterface(mCompMgr,
-                                                                      &rv);
-        NS_ENSURE_SUCCESS(rv, rv);
+        nsCOMPtr<nsIComponentManagerObsolete> obsoleteManager = do_QueryInterface(mCompMgr, &rv);
+        if (!obsoleteManager) {
+            global = nsnull;
+            goto out;
+        }
 
-        rv = mgr->SpecForRegistryLocation(aLocation,
-                                          getter_AddRefs(component));
-        NS_ENSURE_SUCCESS(rv, rv);
+        if (NS_FAILED(obsoleteManager->SpecForRegistryLocation(aLocation, &component))) {
+            global = nsnull;
+            goto out;
+        }
+        needRelease = PR_TRUE;
     }
 
-    nsCOMPtr<nsILocalFile> localFile = do_QueryInterface(component, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    {
+        nsCOMPtr<nsILocalFile> localFile = do_QueryInterface(component);
+        if (!localFile) {
+            global = nsnull;
+            goto out;
+        }
 
-    nsCOMPtr<nsIXPConnectJSObjectHolder> locationHolder;
-    rv = xpc->WrapNative(cx, global, localFile,
-                         NS_GET_IID(nsILocalFile),
-                         getter_AddRefs(locationHolder));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    JSObject *locationObj;
-    rv = locationHolder->GetJSObject(&locationObj);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    if (!JS_DefineProperty(cx, global, "__LOCATION__",
-                           OBJECT_TO_JSVAL(locationObj), nsnull, nsnull, 0)) {
-        return NS_ERROR_FAILURE;
-    }
-
-    nsCAutoString nativePath;
-    // Quick hack to unbust XPCONNECT_STANDALONE.
-    // This leaves the jsdebugger with a non-URL pathname in the 
-    // XPCONNECT_STANDALONE case - but at least it builds and runs otherwise.
-    // See: http://bugzilla.mozilla.org/show_bug.cgi?id=121438
+        // Quick hack to unbust XPCONNECT_STANDALONE.
+        // This leaves the jsdebugger with a non-URL pathname in the 
+        // XPCONNECT_STANDALONE case - but at least it builds and runs otherwise.
+        // See: http://bugzilla.mozilla.org/show_bug.cgi?id=121438
+        {
+            nsCAutoString nativePath;
+            FILE* fileHandle;
 #ifdef XPCONNECT_STANDALONE
-    localFile->GetNativePath(nativePath);
+            localFile->GetNativePath(nativePath);
 #else
-    NS_GetURLSpecFromFile(localFile, nativePath);
+            NS_GetURLSpecFromFile(localFile, nativePath);
 #endif
-
-    // Before compiling the script, first check to see if we have it in
-    // the fastload file.  Note: as a rule, fastload errors are not fatal
-    // to loading the script, since we can always slow-load.
-    nsCOMPtr<nsIFastLoadService> flSvc = do_GetFastLoadService(&rv);
-
-    // Save the old state and restore it upon return
-    FastLoadStateHolder flState(flSvc);
-    PRBool fastLoading = PR_FALSE;
-
-    if (NS_SUCCEEDED(rv)) {
-        rv = StartFastLoad(flSvc);
-        if (NS_SUCCEEDED(rv)) {
-            fastLoading = PR_TRUE;
-        }
-    }
-
-    nsCOMPtr<nsIURI> uri;
-    rv = NS_NewURI(getter_AddRefs(uri), nativePath);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    JSScript *script = nsnull;
-
-    if (fastLoading) {
-        rv = ReadScript(flSvc, nativePath.get(), uri, cx, &script);
-        if (NS_SUCCEEDED(rv)) {
-            LOG(("Successfully loaded %s from fastload\n", nativePath.get()));
-            fastLoading = PR_FALSE; // no need to write out the script
-        } else if (rv == NS_ERROR_NOT_AVAILABLE) {
-            // This is ok, it just means the script is not yet in the
-            // fastload file.
-            rv = NS_OK;
-        } else {
-            LOG(("Failed to deserialize %s\n", nativePath.get()));
-
-            // Remove the fastload file, it may be corrupted.
-            LOG(("Invalid fastload file detected, removing it\n"));
-            nsCOMPtr<nsIObjectOutputStream> objectOutput;
-            flSvc->GetOutputStream(getter_AddRefs(objectOutput));
-            if (objectOutput) {
-                flSvc->SetOutputStream(nsnull);
-                objectOutput->Close();
+            rv = localFile->OpenANSIFileDesc("r", &fileHandle);
+            if (NS_FAILED(rv)) {
+                global = nsnull;
+                goto out;
             }
-            nsCOMPtr<nsIObjectInputStream> objectInput;
-            flSvc->GetInputStream(getter_AddRefs(objectInput));
-            if (objectInput) {
-                flSvc->SetInputStream(nsnull);
-                objectInput->Close();
-            }
-            if (mFastLoadFile) {
-                mFastLoadFile->Remove(PR_FALSE);
-            }
-            fastLoading = PR_FALSE;
-        }
-    }
 
+            script = 
+                JS_CompileFileHandleForPrincipals(cx, global, nativePath.get(),
+                                                  fileHandle, jsPrincipals);
+    
+            /* JS will close the filehandle after compilation is complete. */
 
-    if (!script || NS_FAILED(rv)) {
-        // The script wasn't in the fastload cache, so compile it now.
-        LOG(("Slow loading %s\n", nativePath.get()));
-
-#ifdef HAVE_PR_MEMMAP
-        PRInt64 fileSize;
-        localFile->GetFileSize(&fileSize);
-
-        PRInt64 maxSize;
-        LL_UI2L(maxSize, PR_UINT32_MAX);
-        if (LL_CMP(fileSize, >, maxSize)) {
-            NS_ERROR("file too large");
-            return NS_ERROR_FAILURE;
-        }
-
-        PRFileDesc *fileHandle;
-        rv = localFile->OpenNSPRFileDesc(PR_RDONLY, 0, &fileHandle);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        // Make sure the file is closed, no matter how we return.
-        FileAutoCloser fileCloser(fileHandle);
-
-        PRFileMap *map = PR_CreateFileMap(fileHandle, fileSize,
-                                          PR_PROT_READONLY);
-        if (!map) {
-            NS_ERROR("Failed to create file map");
-            return NS_ERROR_FAILURE;
-        }
-
-        // Make sure the file map is closed, no matter how we return.
-        FileMapAutoCloser mapCloser(map);
-
-        PRUint32 fileSize32;
-        LL_L2UI(fileSize32, fileSize);
-
-        char *buf = NS_STATIC_CAST(char*, PR_MemMap(map, 0, fileSize32));
-        if (!buf) {
-            NS_WARNING("Failed to map file");
-            return NS_ERROR_FAILURE;
-        }
-
-        script = JS_CompileScriptForPrincipals(cx, global,
-                                               jsPrincipals,
-                                               buf, fileSize32,
-                                               nativePath.get(), 0);
-        PR_MemUnmap(buf, fileSize32);
-
-#else  /* HAVE_PR_MEMMAP */
-
-        /**
-         * No memmap implementation, so fall back to using
-         * JS_CompileFileHandleForPrincipals().
-         */
-
-        FILE *fileHandle;
-        rv = localFile->OpenANSIFileDesc("r", &fileHandle);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        script = JS_CompileFileHandleForPrincipals(cx, global,
-                                                   nativePath.get(),
-                                                   fileHandle, jsPrincipals);
-
-        /* JS will close the filehandle after compilation is complete. */
-
-#endif /* HAVE_PR_MEMMAP */
-    }
-
-    if (!script) {
+            if (!script) {
 #ifdef DEBUG_shaver_off
-        fprintf(stderr, "mJCL: script compilation of %s FAILED\n",
-                nativePath.get());
+                fprintf(stderr, "mJCL: script compilation of %s FAILED\n",
+                        nativePath.get());
 #endif
-        return NS_ERROR_FAILURE;
-    }
-
-    // Ensure that we clean up the script on return.
-    JSScriptHolder scriptHolder(cx, script);
-
-    // Flag this script as a system script
-    // FIXME: BUG 346139: We actually want to flag this exact filename, not
-    // anything that starts with this filename... Maybe we need a way to do
-    // that?  On the other hand, the fact that this is in our components dir
-    // means that if someone snuck a malicious file into this dir we're screwed
-    // anyway...  So maybe flagging as a prefix is fine.
-    xpc->FlagSystemFilenamePrefix(nativePath.get());
+                global = nsnull;
+                goto out;
+            }
 
 #ifdef DEBUG_shaver_off
-    fprintf(stderr, "mJCL: compiled JS component %s\n",
-            nativePath.get());
+            fprintf(stderr, "mJCL: compiled JS component %s\n",
+                    nativePath.get());
 #endif
 
-    if (fastLoading) {
-        // We successfully compiled the script, so cache it in fastload.
-        rv = WriteScript(flSvc, script, component, nativePath.get(), uri, cx);
-
-        // Don't treat failure to write as fatal, since we might be working
-        // with a read-only fastload file.
-        if (NS_SUCCEEDED(rv)) {
-            LOG(("Successfully wrote to fastload\n"));
-        } else {
-            LOG(("Failed to write to fastload\n"));
+            jsval retval;
+            if (!JS_ExecuteScript(cx, global, script, &retval)) {
+#ifdef DEBUG_shaver_off
+                fprintf(stderr, "mJCL: failed to execute %s\n",
+                        nativePath.get());
+#endif
+                global = nsnull;
+                goto out;
+            }
         }
     }
 
-    // Restore the old state of the fastload service.
-    flState.pop();
-
-    jsval retval;
-    if (!JS_ExecuteScript(cx, global, script, &retval)) {
-#ifdef DEBUG_shaver_off
-        fprintf(stderr, "mJCL: failed to execute %s\n", nativePath.get());
-#endif
-        return NS_ERROR_FAILURE;
+    {
+        /* freed when we remove from the table */
+        char *location = nsCRT::strdup(aLocation);
+        he = PL_HashTableRawAdd(mGlobals, hep, hash, location, global);
+        JS_AddNamedRoot(cx, &he->value, location);
     }
 
-    *aGlobal = global;
+ out:
+    if (jsPrincipals)
+        JSPRINCIPALS_DROP(cx, jsPrincipals);
+    if (script)
+        JS_DestroyScript(cx, script);
+    if (needRelease)
+        NS_RELEASE(component);
 
-    /* Freed when we remove from the table. */
-    char *location = nsCRT::strdup(aLocation);
-    NS_ENSURE_TRUE(location, NS_ERROR_OUT_OF_MEMORY);
-
-    he = PL_HashTableRawAdd(mGlobals, hep, hash, location, global);
-    JS_AddNamedRoot(cx, &he->value, location);
-    return NS_OK;
+    return global;
 }
 
 NS_IMETHODIMP
@@ -1640,13 +1175,15 @@ mozJSComponentLoader::UnloadAll(PRInt32 aWhen)
         PL_HashTableDestroy(mModules);
         mModules = nsnull;
 
-        PL_HashTableEnumerateEntries(mGlobals, UnrootGlobals, mContext);
+        PL_HashTableEnumerateEntries(mGlobals, UnrootGlobals, mRuntime);
         PL_HashTableDestroy(mGlobals);
         mGlobals = nsnull;
 
-        // Destroying our context will force a GC.
-        JS_DestroyContext(mContext);
-        mContext = nsnull;
+        JSContext* cx = JS_NewContext(mRuntime, 256);
+        if (cx) {
+            JS_GC(cx);
+            JS_DestroyContext(cx);
+        }
 
         mRuntimeService = nsnull;
     }
@@ -1658,37 +1195,52 @@ mozJSComponentLoader::UnloadAll(PRInt32 aWhen)
     return NS_OK;
 }
 
-NS_IMETHODIMP
-mozJSComponentLoader::Observe(nsISupports *subject, const char *topic,
-                              const PRUnichar *data)
-{
-    NS_ASSERTION(!strcmp(topic, NS_XPCOM_SHUTDOWN_OBSERVER_ID),
-                 "Unexpected observer topic");
-
-    if (mFastLoadTimer) {
-        mFastLoadTimer->Cancel();
-    }
-
-    CloseFastLoad();
-    return NS_OK;
-}
-
 //----------------------------------------------------------------------
 
-JSCLContextHelper::JSCLContextHelper(JSContext *cx)
-    : mContext(cx), mContextThread(0)
+JSCLAutoContext::JSCLAutoContext(JSRuntime* rt)
+    : mContext(nsnull), mError(NS_OK), mPopNeeded(JS_FALSE), mContextThread(0)
 {
-    mContextThread = JS_GetContextThread(mContext);
-    if (mContextThread) {
-        JS_BeginRequest(mContext);
-    } 
+    nsCOMPtr<nsIThreadJSContextStack> cxstack = 
+        do_GetService(kJSContextStackContractID, &mError);
+    
+    if (NS_SUCCEEDED(mError)) {
+        mError = cxstack->GetSafeJSContext(&mContext);
+        if (NS_SUCCEEDED(mError) && mContext) {
+            mError = cxstack->Push(mContext);
+            if (NS_SUCCEEDED(mError)) {
+                mPopNeeded = JS_TRUE;   
+            } 
+        } 
+    }
+    
+    if (mContext) {
+        mContextThread = JS_GetContextThread(mContext);
+        if (mContextThread) {
+            JS_BeginRequest(mContext);
+        } 
+    } else {
+        if (NS_SUCCEEDED(mError)) {
+            mError = NS_ERROR_FAILURE;
+        }
+    }
 }
 
-JSCLContextHelper::~JSCLContextHelper()
+JSCLAutoContext::~JSCLAutoContext()
 {
-    JS_ClearNewbornRoots(mContext);
-    if (mContextThread)
+    if (mContext && mContextThread) {
+        JS_ClearNewbornRoots(mContext);
         JS_EndRequest(mContext);
+    }
+
+    if (mPopNeeded) {
+        nsCOMPtr<nsIThreadJSContextStack> cxstack = 
+            do_GetService(kJSContextStackContractID);
+        if (cxstack) {
+            JSContext* cx;
+            nsresult rv = cxstack->Pop(&cx);
+            NS_ASSERTION(NS_SUCCEEDED(rv) && cx == mContext, "push/pop mismatch");
+        }        
+    }        
 }        
 
 //----------------------------------------------------------------------

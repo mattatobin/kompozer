@@ -4,42 +4,49 @@
 
 const nsIFilePicker       = Components.interfaces.nsIFilePicker;
 const nsILocalFile        = Components.interfaces.nsILocalFile;
+const nsIFile             = Components.interfaces.nsIFile;
 const nsIProperties       = Components.interfaces.nsIProperties;
 const kCacheParentDirPref = "browser.cache.disk.parent_directory";
 
-var gFolderField;
-var gCacheParentDirectory;
-
 function Startup()
 {
-  var prefWindow = parent.hPrefWindow;
-  gFolderField = document.getElementById("browserCacheDiskCacheFolder");
+  var path = null;
+  var pref = null;
+  try 
+  {
+    pref = Components.classes["@mozilla.org/preferences-service;1"]
+      .getService(Components.interfaces.nsIPrefBranch);
+    path = pref.getComplexValue(kCacheParentDirPref, nsILocalFile);
+  }
+  catch (ex)
+  {
+    // parent_directory pref not set; path is null so we'll failover
+    // to filling in the parent_directory as the profile directory
+  }
 
-  gCacheParentDirectory = prefWindow.getPref("localfile", kCacheParentDirPref);
-  if (gCacheParentDirectory == "!/!ERROR_UNDEFINED_PREF!/!")
+  if (!path)
   {
     try
     {
-      // no disk cache folder pref set; default to profile directory
+      // no disk cache folder found; default to profile directory
       var dirSvc = Components.classes["@mozilla.org/file/directory_service;1"]
-                             .getService(nsIProperties);
-      if (dirSvc.has("ProfLD"))
-        gCacheParentDirectory = dirSvc.get("ProfLD", nsILocalFile);
-      else
-        gCacheParentDirectory = dirSvc.get("ProfD", nsILocalFile);
+        .getService(nsIProperties);
+      var ifile = dirSvc.get("ProfD", nsIFile);
+      path = ifile.QueryInterface(nsILocalFile);
+
+      // now remember the new assumption
+      if (pref)
+        pref.setComplexValue(kCacheParentDirPref, nsILocalFile, path);
     }
     catch (ex)
     {
-      gCacheParentDirectory = null;
     }
   }
 
-  // if both pref and dir svc fail leave this field blank else show directory
-  if (gCacheParentDirectory)
-    gFolderField.value = (/Mac/.test(navigator.platform)) ? gCacheParentDirectory.leafName : gCacheParentDirectory.path;
-
-  document.getElementById("chooseDiskCacheFolder").disabled =
-    prefWindow.getPrefIsLocked(kCacheParentDirPref);
+  // if both pref and dir svc fail leave this field blank else show path
+  if (path)
+    document.getElementById("browserCacheDiskCacheFolder").value = 
+      path.path;
 }
 
 
@@ -47,23 +54,31 @@ function prefCacheSelectFolder()
 {
   var fp = Components.classes["@mozilla.org/filepicker;1"]
                      .createInstance(nsIFilePicker);
-  var prefWindow = parent.hPrefWindow;
+  var pref = Components.classes["@mozilla.org/preferences-service;1"]
+                     .getService(Components.interfaces.nsIPrefBranch);
   var prefutilitiesBundle = document.getElementById("bundle_prefutilities");
   var title = prefutilitiesBundle.getString("cachefolder");
 
   fp.init(window, title, nsIFilePicker.modeGetFolder);
-
-  fp.displayDirectory = gCacheParentDirectory;
-
+  try 
+  {
+    var initialDir = pref.getComplexValue(kCacheParentDirPref, nsILocalFile);
+    if (initialDir)
+      fp.displayDirectory = initialDir;
+  }
+  catch (ex)
+  {
+    // ignore exception: file picker will open at default location
+  }
   fp.appendFilters(nsIFilePicker.filterAll);
   var ret = fp.show();
 
   if (ret == nsIFilePicker.returnOK) {
     var localFile = fp.file.QueryInterface(nsILocalFile);
-    prefWindow.setPref("localfile", kCacheParentDirPref, localFile);
-    gFolderField.value = (/Mac/.test(navigator.platform)) ? fp.file.leafName : fp.file.path;
-
-    gCacheParentDirectory = fp.file;
+    var viewable = fp.file.path;
+    var folderField = document.getElementById("browserCacheDiskCacheFolder");
+    folderField.value = viewable;
+    pref.setComplexValue(kCacheParentDirPref, nsILocalFile, localFile)
   }
 }
 
@@ -76,5 +91,6 @@ function prefClearCache(aType)
 
 function prefClearDiskAndMemCache()
 {
-    prefClearCache(Components.interfaces.nsICache.STORE_ANYWHERE);
+    prefClearCache(Components.interfaces.nsICache.STORE_ON_DISK);
+    prefClearCache(Components.interfaces.nsICache.STORE_IN_MEMORY);
 }

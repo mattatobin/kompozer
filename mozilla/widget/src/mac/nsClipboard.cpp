@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,6 +48,7 @@
 #include "nsCOMPtr.h"
 #include "nsClipboard.h"
 
+#include "nsVoidArray.h"
 #include "nsIClipboardOwner.h"
 #include "nsString.h"
 #include "nsIFormatConverter.h"
@@ -65,16 +66,10 @@
 #include "nsCRT.h"
 #include "nsStylClipboardUtils.h"
 #include "nsLinebreakConverter.h"
-#include "nsAutoPtr.h"
-#include "nsIServiceManager.h"
-#include "nsIMacUtils.h"
 
 #include <Scrap.h>
 #include <Script.h>
 #include <TextEdit.h>
-
-static const PRUint32 kPrivateFlavorMask = 0xffff0000;
-static const PRUint32 kPrivateFlavorTag = 'MZ..' & kPrivateFlavorMask;
 
 
 
@@ -119,7 +114,11 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
   
   nsMimeMapperMac theMapper;
 
+#if TARGET_CARBON
   ::ClearCurrentScrap();
+#else
+  ::ZeroScrap();
+#endif
 
   // get flavor list that includes all flavors that can be written (including ones 
   // obtained through conversion)
@@ -156,10 +155,11 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
         nsPrimitiveHelpers::CreateDataFromPrimitive ( flavorStr, genericDataWrapper, &data, dataSize );
 
         // Convert unix to mac linebreaks, since mac linebreaks are required for clipboard compatibility.
+        // I'm making the assumption here that the substitution will be entirely in-place, since both
+        // types of line breaks are 1-byte.
 
-        PRUnichar* castedData = NS_REINTERPRET_CAST(PRUnichar*, data);
-        PRUnichar* linebreakConvertedUnicode = castedData;
-        nsLinebreakConverter::ConvertUnicharLineBreaksInSitu(&linebreakConvertedUnicode,
+        PRUnichar* castedUnicode = NS_REINTERPRET_CAST(PRUnichar*, data);
+        nsLinebreakConverter::ConvertUnicharLineBreaksInSitu(&castedUnicode,
                                                              nsLinebreakConverter::eLinebreakUnix,
                                                              nsLinebreakConverter::eLinebreakMac,
                                                              dataSize / sizeof(PRUnichar), nsnull);
@@ -169,7 +169,7 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
           // we also need to put it on as 'TEXT' after doing the conversion to the platform charset.
           char* plainTextData = nsnull;
           PRInt32 plainTextLen = 0;
-          errCode = nsPrimitiveHelpers::ConvertUnicodeToPlatformPlainText ( linebreakConvertedUnicode, dataSize / 2, &plainTextData, &plainTextLen );
+          errCode = nsPrimitiveHelpers::ConvertUnicodeToPlatformPlainText ( castedUnicode, dataSize / 2, &plainTextData, &plainTextLen );
           
           ScriptCodeRun *scriptCodeRuns = nsnull;
           PRInt32 scriptRunOutLen;
@@ -181,7 +181,7 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
               nsMemory::Free(plainTextData);
               plainTextData = nsnull;
             }
-            errCode = nsMacNativeUnicodeConverter::ConvertUnicodetoScript(linebreakConvertedUnicode, 
+            errCode = nsMacNativeUnicodeConverter::ConvertUnicodetoScript(castedUnicode, 
                                                                           dataSize / 2,
                                                                           &plainTextData, 
                                                                           &plainTextLen,
@@ -220,11 +220,6 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
           if (scriptCodeRuns)
             nsMemory::Free(scriptCodeRuns);
         }
-
-        // ConvertUnicharLineBreaksInSitu may have allocated a new buffer
-        // (although unlikely when converting from '\n' to '\r').
-        if (linebreakConvertedUnicode != castedData)
-          nsMemory::Free(linebreakConvertedUnicode);
       } // if unicode
       else if ( strcmp(flavorStr, kPNGImageMime) == 0 || strcmp(flavorStr, kJPEGImageMime) == 0 ||
                 strcmp(flavorStr, kGIFImageMime) == 0 || strcmp(flavorStr, kNativeImageMime) == 0 ) {
@@ -251,49 +246,6 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
         else
           NS_WARNING ( "Image isn't an nsIImageMac in transferable" );
       }
-      else if (strcmp(flavorStr.get(), kURLDataMime) == 0 ||
-               strcmp(flavorStr.get(), kURLDescriptionMime) == 0) {
-        nsCOMPtr<nsISupports> genericDataWrapper;
-        errCode = mTransferable->GetTransferData(
-                                            flavorStr,
-                                            getter_AddRefs(genericDataWrapper),
-                                            &dataSize);
-        if (NS_SUCCEEDED(errCode)) {
-          nsPrimitiveHelpers::CreateDataFromPrimitive(flavorStr,
-                                                      genericDataWrapper,
-                                                      &data,
-                                                      dataSize);
-
-          // Transform the line break format from Unix-style '\n' to
-          // classic Mac-style '\r', as expected on the clipboard.
-          PRUnichar* castedData = NS_REINTERPRET_CAST(PRUnichar*, data);
-          PRUnichar* linebreakConvertedUnicode = castedData;
-          nsLinebreakConverter::ConvertUnicharLineBreaksInSitu(
-                                          &linebreakConvertedUnicode,
-                                          nsLinebreakConverter::eLinebreakUnix,
-                                          nsLinebreakConverter::eLinebreakMac,
-                                          dataSize / sizeof(PRUnichar),
-                                          nsnull);
-
-          // kURLDataMime ('url ') goes onto the clipboard in an 8-bit
-          // encoding using the %-escaped ASCII subset.  The URL has already
-          // been %-escaped, so convert it from UTF-16 on the transferable to
-          // UTF-8 because it's easy.  UTF-8 will also be used for
-          // kURLDescriptionMime ('urld'), URLs that carry a description, for
-          // congruity and to avoid using endian-dependent UTF-16 where the
-          // flavor is not mapped as a private 'MZ..' (see 340071), even
-          // though 'urld' is not used by others.
-          nsDependentString utf16(linebreakConvertedUnicode);
-          NS_ConvertUTF16toUTF8 utf8(utf16);
-          PutOnClipboard(macOSFlavor,
-                         PromiseFlatCString(utf8).get(), utf8.Length());
-
-          // ConvertUnicharLineBreaksInSitu may have allocated a new buffer
-          // (although unlikely when converting from '\n' to '\r').
-          if (linebreakConvertedUnicode != castedData)
-            nsMemory::Free(linebreakConvertedUnicode);
-        }
-      }
       else {
         // we don't know what we have. let's just assume it's unicode but doesn't need to be
         // translated to TEXT.
@@ -313,7 +265,7 @@ nsClipboard :: SetNativeClipboardData ( PRInt32 aWhichClipboard )
   const char* mapping = theMapper.ExportMapping(&mappingLen);
   if ( mapping && mappingLen ) {
     errCode = PutOnClipboard ( nsMimeMapperMac::MappingFlavor(), mapping, mappingLen );
-    nsMemory::Free ( NS_CONST_CAST(char*, mapping) );
+    nsCRT::free ( NS_CONST_CAST(char*, mapping) );
   }
   
   return errCode;
@@ -331,30 +283,16 @@ nsresult
 nsClipboard :: PutOnClipboard ( ResType inFlavor, const void* inData, PRInt32 inLen )
 {
   nsresult errCode = NS_OK;
-
-  void* data = (void*) inData;
-  if ((inFlavor & kPrivateFlavorMask) == kPrivateFlavorTag) {
-    // Byte-swap private flavors if running translated
-    nsCOMPtr<nsIMacUtils> macUtils =
-     do_GetService("@mozilla.org/xpcom/mac-utils;1");
-    PRBool isTranslated;
-    if (macUtils &&
-        NS_SUCCEEDED(macUtils->GetIsTranslated(&isTranslated)) &&
-        isTranslated) {
-      data = nsMemory::Alloc(inLen);
-      if (!data)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-      swab(inData, data, inLen);
-    }
-  }
   
+#if TARGET_CARBON
   ScrapRef scrap;
   ::GetCurrentScrap(&scrap);
-  ::PutScrapFlavor( scrap, inFlavor, kScrapFlavorMaskNone, inLen, data );
-
-  if (data != inData)
-    nsMemory::Free(data);
+  ::PutScrapFlavor( scrap, inFlavor, kScrapFlavorMaskNone, inLen, inData );
+#else
+  long numBytes = ::PutScrap ( inLen, inFlavor, inData );
+  if ( numBytes != noErr )
+    errCode = NS_ERROR_FAILURE;
+#endif
 
   return errCode;
   
@@ -391,7 +329,7 @@ nsClipboard :: GetNativeClipboardData ( nsITransferable * aTransferable, PRInt32
   errCode = GetDataOffClipboard ( nsMimeMapperMac::MappingFlavor(), (void**)&mimeMapperData, 0 );
   nsMimeMapperMac theMapper ( mimeMapperData );
   if (mimeMapperData)
-    nsMemory::Free ( mimeMapperData );
+    nsCRT::free ( mimeMapperData );
  
   // Now walk down the list of flavors. When we find one that is actually on the
   // clipboard, copy out the data into the transferable in that format. SetTransferData()
@@ -425,7 +363,7 @@ nsClipboard :: GetNativeClipboardData ( nsITransferable * aTransferable, PRInt32
           loadResult = GetDataOffClipboard ( 'styl', &clipboardData, &dataSize );
           if (NS_SUCCEEDED(loadResult) && 
               clipboardData &&
-              ((PRUint32)dataSize >= (sizeof(ScrpSTElement) + 2))) {
+              (dataSize >= (sizeof(ScrpSTElement) + 2))) {
             StScrpRec *scrpRecP = (StScrpRec *) clipboardData;
             ScrpSTElement *styl = scrpRecP->scrpStyleTab;
             ScriptCode script = styl ? ::FontToScript(styl->scrpFont) : smCurrentScript;
@@ -483,29 +421,12 @@ nsClipboard :: GetNativeClipboardData ( nsITransferable * aTransferable, PRInt32
                
         } // if image requested
         else {
-          if (strcmp(flavorStr.get(), kURLDataMime) == 0 ||
-              strcmp(flavorStr.get(), kURLDescriptionMime) == 0) {
-            // kURLDataMime ('url ') exists on the clipboard in a %-encoded
-            // subset of ASCII.  It belongs on the transferable in UTF-16.
-            // The %-encoding may remain intact, so this is handled by
-            // converting UTF-8 to UTF-16.  kURLDescriptionMime ('urld'),
-            // URLs carrying a description, are also treated to the same
-            // conversion because it's used when the data is copied to the
-            // clipboard.
-            nsDependentCString utf8(NS_REINTERPRET_CAST(char*, clipboardData));
-            NS_ConvertUTF8toUTF16 utf16(utf8);
-
-            // Replace clipboardData with the new wide-char version.
-            nsMemory::Free(clipboardData);
-            clipboardData = ToNewUnicode(utf16);
-            dataSize = utf16.Length() * 2;
-          }
-
           // Assume that we have some form of textual data. The DOM only wants LF, so convert
           // from MacOS line endings to DOM line endings.
           nsLinebreakHelpers::ConvertPlatformToDOMLinebreaks ( flavorStr, &clipboardData, &dataSize );
           
           unsigned char *clipboardDataPtr = (unsigned char *) clipboardData;
+#if TARGET_CARBON
           // skip BOM (Byte Order Mark to distinguish little or big endian) in 'utxt'
           // 10.2 puts BOM for 'utxt', we need to remove it here
           // for little endian case, we also need to convert the data to big endian
@@ -517,6 +438,7 @@ nsClipboard :: GetNativeClipboardData ( nsITransferable * aTransferable, PRInt32
             dataSize -= sizeof(PRUnichar);
             clipboardDataPtr += sizeof(PRUnichar);
           }
+#endif
 
           // put it into the transferable
           nsCOMPtr<nsISupports> genericDataWrapper;
@@ -553,7 +475,10 @@ nsClipboard :: GetDataOffClipboard ( ResType inMacFlavor, void** outData, PRInt3
   if ( outDataSize )
       *outDataSize = 0;
 
+  // check if it is on the clipboard
+  long offsetUnused = 0;
 
+#if TARGET_CARBON
   ScrapRef scrap;
   long dataSize;
   OSStatus err;
@@ -578,31 +503,37 @@ nsClipboard :: GetDataOffClipboard ( ResType inMacFlavor, void** outData, PRInt3
       return NS_ERROR_FAILURE;
     }
 
-    if ((inMacFlavor & kPrivateFlavorMask) == kPrivateFlavorTag) {
-      // Byte-swap private flavors if running translated
-      nsCOMPtr<nsIMacUtils> macUtils =
-       do_GetService("@mozilla.org/xpcom/mac-utils;1");
-      PRBool isTranslated;
-      if (macUtils &&
-          NS_SUCCEEDED(macUtils->GetIsTranslated(&isTranslated)) &&
-          isTranslated) {
-        char* swappedData = (char*) nsMemory::Alloc(dataSize);
-        if (!swappedData) {
-          nsMemory::Free(dataBuff);
-          return NS_ERROR_OUT_OF_MEMORY;
-        }
-
-        swab(dataBuff, swappedData, dataSize);
-        nsMemory::Free(dataBuff);
-        dataBuff = swappedData;
-      }
-    }
-
     // put it into the transferable
     if ( outDataSize )
       *outDataSize = dataSize;
     *outData = dataBuff;
   }
+#else
+  long clipResult = ::GetScrap(NULL, inMacFlavor, &offsetUnused);
+  if ( clipResult > 0 ) {
+    Handle dataHand = ::NewHandle(0);
+    if ( !dataHand )
+      return NS_ERROR_OUT_OF_MEMORY;
+    long dataSize = ::GetScrap ( dataHand, inMacFlavor, &offsetUnused );
+    NS_ASSERTION(dataSize > 0, "nsClipboard:: Error getting data off the clipboard, size negative");
+    if ( dataSize > 0 ) {
+      char* dataBuff = NS_REINTERPRET_CAST(char*, nsMemory::Alloc(dataSize));
+      if ( !dataBuff )
+        return NS_ERROR_OUT_OF_MEMORY;
+      ::HLock(dataHand);
+      ::BlockMoveData ( *dataHand, dataBuff, dataSize );
+      ::HUnlock(dataHand);
+      
+      ::DisposeHandle(dataHand);
+      
+      if ( outDataSize )
+        *outDataSize = dataSize;
+      *outData = dataBuff;
+    } 
+    else
+      return NS_ERROR_FAILURE;
+  }
+#endif /* TARGET_CARBON */
   return NS_OK;
   
 } // GetDataOffClipboard
@@ -684,6 +615,7 @@ nsClipboard :: CheckIfFlavorPresent ( ResType inMacFlavor )
 {
   PRBool retval = PR_FALSE;
 
+#if TARGET_CARBON
   ScrapRef scrap = nsnull;
   OSStatus err = ::GetCurrentScrap(&scrap);
   if ( scrap ) {
@@ -693,18 +625,26 @@ nsClipboard :: CheckIfFlavorPresent ( ResType inMacFlavor )
     // see the list of what could be there if we asked for it. This is really
     // fast. Iterate over the list, and if we find it, we're good to go.
     UInt32 flavorCount = 0;
-    ::GetScrapFlavorCount ( scrap, &flavorCount );
-    nsAutoArrayPtr<ScrapFlavorInfo> flavorList(new ScrapFlavorInfo[flavorCount]);
+    ::GetScrapFlavorCount ( scrap, &flavorCount );    
+    ScrapFlavorInfo* flavorList = new ScrapFlavorInfo[flavorCount];
     if ( flavorList ) {
       err = ::GetScrapFlavorInfoList ( scrap, &flavorCount, flavorList );
       if ( !err && flavorList ) {
-        for ( unsigned int i = 0; i < flavorCount; ++i ) {
+        for ( int i = 0; i < flavorCount; ++i ) {
           if ( flavorList[i].flavorType == inMacFlavor )
             retval = PR_TRUE;
         }
+        delete flavorList;
       }
     }
 
   }
+#else
+  long offsetUnused = 0;
+  long clipResult = ::GetScrap(NULL, inMacFlavor, &offsetUnused);
+  if ( clipResult > 0 )   
+    retval = PR_TRUE;   // we found one!
+#endif
+
   return retval;
 } // CheckIfFlavorPresent

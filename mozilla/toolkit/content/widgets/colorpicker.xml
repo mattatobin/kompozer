@@ -5,7 +5,7 @@
    xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
    xmlns:xbl="http://www.mozilla.org/xbl">
 
-  <binding id="colorpicker" extends="chrome://global/content/bindings/general.xml#basecontrol">
+  <binding id="colorpicker">
     <resources>
       <stylesheet src="chrome://global/skin/colorpicker.css"/>
     </resources>
@@ -104,73 +104,74 @@
     </content>
     
     <implementation>
+    
       <property name="color">
         <getter><![CDATA[
           return this.mSelectedCell ? this.mSelectedCell.getAttribute("color") : null;
         ]]></getter>
         <setter><![CDATA[
           if (!val)
-            return val;
-          var uppercaseVal = val.toUpperCase();
+            return null;
+          val = val.toUpperCase();
           // Translate standard HTML color strings:
-          if (uppercaseVal[0] != "#") {
+          if (val[0] != "#") {
             switch (val) {
               case "GREEN":
-                uppercaseVal = "#008000";
+                val = "#008000";
                 break;
               case "LIME":
-                uppercaseVal = "#00FF00";
+                val = "#00FF00";
                 break;
               case "OLIVE":
-                uppercaseVal = "#808000";
+                val = "#808000";
                 break;
               case "TEAL":
-                uppercaseVal = "#008080";
+                val = "#008080";
                 break;
               case "YELLOW":
-                uppercaseVal = "#FFFF00";
+                val = "#FFFF00";
                 break;
               case "RED":
-                uppercaseVal = "#FF0000";
+                val = "#FF0000";
                 break;
               case "MAROON":
-                uppercaseVal = "#800000";
+                val = "#800000";
                 break;
               case "PURPLE":
-                uppercaseVal = "#800080";
+                val = "#800080";
                 break;
               case "FUCHSIA":
-                uppercaseVal = "#FF00FF";
+                val = "#FF00FF";
                 break;
               case "NAVY":
-                uppercaseVal = "#000080";
+                val = "#000080";
                 break;
               case "BLUE":
-                uppercaseVal = "#0000FF";
+                val = "#0000FF";
                 break;
               case "AQUA":
-                uppercaseVal = "#00FFFF";
+                val = "#00FFFF";
                 break;
               case "WHITE":
-                uppercaseVal = "#FFFFFF";
+                val = "#FFFFFF";
                 break;
               case "SILVER":
-                uppercaseVal = "#CC0C0C0";
+                val = "#CC0C0C0";
                 break;
               case "GRAY":
-                uppercaseVal = "#808080";
+                val = "#808080";
                 break;
               default: // BLACK
-                uppercaseVal = "#000000";
+                val = "#000000";
                 break;
             }
           }
-          var cells = this.mBox.getElementsByAttribute("color", uppercaseVal);
-          if (cells.item(0)) {
+          var cells = this.mBox.getElementsByAttribute("color", val);
+          if (cells.length > 0) {
             this.selectCell(cells[0]);
             this.hoverCell(this.mSelectedCell);
           }
-          return val;
+	  return null;
         ]]></setter>
       </property>
 
@@ -196,6 +197,14 @@
 
           this.hoverCell(this.mBox.childNodes[0].childNodes[0]);
           
+          var onselect = this.getAttribute("onselect");
+          if (onselect) {
+            try {
+              this.onselect = new Function(onselect);
+            } catch (ex) {
+              // watch out for syntax errors in the function code
+            }
+          }
           // used to capture keydown at the document level
           this.mPickerKeyDown = function(aEvent)
           {
@@ -203,31 +212,6 @@
           }
 
         ]]></body>
-      </method>
-      
-      <method name="_fireEvent">
-        <parameter name="aTarget"/>
-        <parameter name="aEventName"/>
-        <body>
-        <![CDATA[      
-          try {
-            var event = document.createEvent("Events");
-            event.initEvent(aEventName, true, true);
-            var cancel = !aTarget.dispatchEvent(event);
-            if (aTarget.hasAttribute("on" + aEventName)) {
-              var fn = new Function ("event", aTarget.getAttribute("on" + aEventName));
-              var rv = fn.call(aTarget, event);
-              if (rv == false)
-                cancel = true;
-            }
-            return !cancel;  
-          }
-          catch (e) { 
-            dump(e);
-          }
-          return false;
-        ]]>
-        </body>
       </method>
 
       <method name="resetHover">
@@ -314,7 +298,7 @@
             aCell.setAttribute("hover", "true");
             this.mHoverCell = aCell;
             var event = document.createEvent('Events');
-            event.initEvent('DOMMenuItemActive', true, true);
+            event.initEvent('DOMMenuItemActive', false, true);
             aCell.dispatchEvent(event);
           }
         ]]></body>
@@ -337,8 +321,8 @@
             this.mSelectedCell = aCell;
             aCell.setAttribute("selected", "true");
 
-            if (this.mDoOnSelect)
-              this._fireEvent(this, "select");
+            if (this.mDoOnSelect && this.onselect)
+              this.onselect();
           }
         ]]></body>
       </method>
@@ -428,20 +412,22 @@
     </resources>
     
     <content>
-      <xul:hbox class="colorpicker-button-colorbox" anonid="colorbox" flex="1" xbl:inherits="disabled"/>
+      <xul:hbox class="colorpicker-button-colorbox" anonid="colorbox" flex="1"/>
 
       <xul:popupset>
         <xul:popup class="colorpicker-button-menupopup" anonid="colorpopup"
-                   onmousedown="event.stopPropagation()"
-                   onpopupshowing="this._colorPicker.onPopupShowing()"
-                   onpopuphiding="this._colorPicker.onPopupHiding()"
-                   onselect="this._colorPicker.pickerChange()">
-           <xul:colorpicker xbl:inherits="palettename,disabled" allowevents="true" anonid="colorpicker"/>
+          onmousedown="event.stopPropagation()"
+          onpopupshowing="this._colorPicker.onPopupShowing()"
+          onpopuphiding="this._colorPicker.onPopupHiding()">
+
+          <xul:colorpicker xbl:inherits="palettename" allowevents="true" anonid="colorpicker"
+           onselect="this.parentNode.parentNode.parentNode.pickerChange()"/>
+
          </xul:popup>
        </xul:popupset>
     </content>
     
-    <implementation implements="nsIAccessibleProvider, nsIDOMXULControlElement">
+    <implementation implements="nsIAccessibleProvider" >
       <property name="accessible">
         <getter>
           <![CDATA[
@@ -452,20 +438,21 @@
       </property>
     
       <property name="open" onget="return this.mOpen"/>
+
       <property name="color">
         <getter><![CDATA[
           return this.getAttribute("color");
         ]]></getter>
         <setter><![CDATA[
           this.mColorBox.setAttribute("style", "background-color: " + val);
-          this.setAttribute("color", val);
-          return val;
+          return this.setAttribute("color", val);
         ]]></setter>
       </property>
       
       <method name="initialize">
         <body><![CDATA[
           this.mOpen = false;
+          this.onchange = null;
                     
           this.mColorBox = document.getAnonymousElementByAttribute(this, "anonid", "colorbox");
         
@@ -473,34 +460,32 @@
           popup._colorPicker = this;
           
           this.mPicker = document.getAnonymousElementByAttribute(this, "anonid", "colorpicker")
+
+          var change = this.getAttribute("onchange");
+          if (change) {
+            try {
+              this.onchange = new Function("event", change);
+            } catch (ex) {
+              // watch out for syntax errors in the function code
+            }
+          }
         ]]></body>
       </method>
       
-      <method name="_fireEvent">
-        <parameter name="aTarget"/>
-        <parameter name="aEventName"/>
-        <body>
-        <![CDATA[      
-          try {
-            var event = document.createEvent("Events");
-            event.initEvent(aEventName, true, true);
-            var cancel = !aTarget.dispatchEvent(event);
-            if (aTarget.hasAttribute("on" + aEventName)) {
-              var fn = new Function ("event", aTarget.getAttribute("on" + aEventName));
-              var rv = fn.call(aTarget, event);
-              if (rv == false)
-                cancel = true;
-            }
-            return !cancel;  
+      <method name="getElementByanonid">
+        <parameter name="aValue"/>
+        <body><![CDATA[
+          var nodes = document.getAnonymousNodes(this);
+          var results;
+          for (var i = 0; i < nodes.length; i++) {
+            results = nodes[i].getElementsByAttribute("anonid", aValue);
+            if (results.length > 0)
+              return results[0];
           }
-          catch (e) { 
-            dump(e);
-          }
-          return false;
-        ]]>
-        </body>
+          return null;
+        ]]></body>
       </method>
-
+      
       <method name="showPopup">
         <body><![CDATA[
           this.mPicker.parentNode.showPopup(this, -1, -1, "popup", "bottomleft", "topleft");
@@ -542,7 +527,8 @@
           this.color = this.mPicker.color;
           setTimeout(function(aPopup) { aPopup.hidePopup() }, 1, this.mPicker.parentNode);
           
-          this._fireEvent(this, "change");
+          if (this.onchange) 
+            this.onchange();
         ]]></body>
       </method>
 
@@ -561,9 +547,6 @@
       ]]></handler>
 
       <handler event="mousedown"><![CDATA[
-        if (this.disabled)
-          return;
-
         // Though I would prefer the open the popup using the built-in
         // popup="_child" mechanism, I can't use that because I can't seem to
         // get it to recognize the popupalign and popupanchor attributes that way
@@ -571,7 +554,6 @@
         this.focus();
         this.showPopup();
       ]]></handler>
-      
     </handlers>
   </binding>
 

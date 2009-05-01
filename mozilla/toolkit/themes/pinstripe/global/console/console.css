@@ -1,50 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 /* ===== console.css ====================================================
-  == Styles used by the Error Console window.
+  == Styles used by the JavaScript Console window.
   ======================================================================= */
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 
 .console-box {
   background-color: -moz-Field;
-  color: -moz-FieldText;
-  overflow: auto;
+  color: -moz-FieldText;  overflow: auto;
 }
  
 /* ::::: console rows ::::: */
@@ -132,7 +117,7 @@
 
 .console-row {
   list-style-image: url("chrome://global/skin/console/console-bullets.png");
-  -moz-image-region: rect(0px, 16px, 16px, 0px);
+  -moz-image-region: rect(0px, 32px, 32px, 0px);
 }
 .console-row[type="error"],
 .console-row[type="exception"] {
@@ -140,12 +125,12 @@
 }
 
 .console-row[type="warning"] {
-  -moz-image-region: rect(0px, 32px, 16px, 16px);
+  -moz-image-region: rect(0px, 64px, 32px, 32px);
   background-color: #F8F3CC;
 }
 
 .console-row[type="message"] {
-  -moz-image-region: rect(0px, 48px, 16px, 32px);
+  -moz-image-region: rect(0px, 96px, 32px, 64px);
   background-color: #D3EDFF;
 }
 
@@ -179,38 +164,38 @@ toolbar#ToolbarMode toolbarbutton {
 }
 
 toolbarbutton[observes="Console:modeWarnings"] {
-  -moz-image-region: rect(0px, 24px, 24px, 0px);
+  -moz-image-region: rect(0px, 32px, 32px, 0px);
 }
 toolbarbutton[observes="Console:modeWarnings"]:hover:active {
-  -moz-image-region: rect(24px, 24px, 48px, 0px);
+  -moz-image-region: rect(32px, 32px, 64px, 0px);
 }
 
 toolbarbutton[observes="Console:modeMessages"] {
-  -moz-image-region: rect(0px, 48px, 24px, 24px);
+  -moz-image-region: rect(0px, 64px, 32px, 32px);
 }
 toolbarbutton[observes="Console:modeMessages"]:hover:active {
-  -moz-image-region: rect(24px, 48px, 48px, 24px);
+  -moz-image-region: rect(32px, 64px, 64px, 32px);
 }
 
 toolbarbutton[observes="Console:modeErrors"] {
-  -moz-image-region: rect(0px, 72px, 24px, 48px);
+  -moz-image-region: rect(0px, 96px, 32px, 64px);
 }
 toolbarbutton[observes="Console:modeErrors"]:hover:active {
-  -moz-image-region: rect(24px, 72px, 48px, 48px);
+  -moz-image-region: rect(32px, 96px, 64px, 64px);
 }
 
 toolbarbutton[observes="Console:modeAll"] {
-  -moz-image-region: rect(0px, 96px, 24px, 72px);
+  -moz-image-region: rect(0px, 128px, 32px, 96px);
 }
 toolbarbutton[observes="Console:modeAll"]:hover:active {
-  -moz-image-region: rect(24px, 96px, 48px, 72px);
+  -moz-image-region: rect(32px, 128px, 64px, 96px);
 }
 
 toolbarbutton[observes="Console:clear"] {
-  -moz-image-region: rect(0px, 120px, 24px, 96px);
+  -moz-image-region: rect(0px, 160px, 32px, 128px);
 }
 toolbarbutton[observes="Console:clear"]:hover:active {
-  -moz-image-region: rect(24px, 120px, 48px, 96px);
+  -moz-image-region: rect(32px, 160px, 64px, 128px);
 }
 
 #ConsoleBox {

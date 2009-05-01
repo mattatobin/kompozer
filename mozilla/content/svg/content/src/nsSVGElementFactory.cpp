@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,37 +14,35 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsCOMPtr.h"
-#include "nsContentCreatorFunctions.h"
+#include "nsIElementFactory.h"
 #include "nsIAtom.h"
 #include "nsINodeInfo.h"
 #include "nsSVGAtoms.h"
-#include "nsContentDLF.h"
-#include "nsContentUtils.h"
-#include "nsSVGUtils.h"
-#include "nsDebug.h"
+#include "nsIXMLContent.h"
+
 
 nsresult
 NS_NewSVGPolylineElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
@@ -62,10 +60,8 @@ nsresult
 NS_NewSVGGElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
 nsresult
 NS_NewSVGSVGElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-#ifdef MOZ_SVG_FOREIGNOBJECT
 nsresult
 NS_NewSVGForeignObjectElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-#endif
 nsresult
 NS_NewSVGPathElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
 nsresult
@@ -74,49 +70,61 @@ nsresult
 NS_NewSVGTSpanElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
 nsresult
 NS_NewSVGImageElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGStyleElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGLinearGradientElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGMetadataElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGRadialGradientElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGStopElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGDefsElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGDescElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGScriptElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGUseElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGSymbolElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGMarkerElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGTitleElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGClipPathElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
-nsresult
-NS_NewSVGTextPathElement(nsIContent **aResult, nsINodeInfo *aNodeInfo);
 
 
-nsresult
-NS_NewSVGElement(nsIContent** aResult, nsINodeInfo *aNodeInfo)
+class nsSVGElementFactory : public nsIElementFactory
 {
-  NS_PRECONDITION(nsSVGUtils::SVGEnabled(),
-                  "creating an SVG element while SVG disabled");
+protected:
+  nsSVGElementFactory();
+  virtual ~nsSVGElementFactory();
 
-  static const char kSVGStyleSheetURI[] = "resource://gre/res/svg.css";
+  // nsISupports interface
+  NS_DECL_ISUPPORTS
 
-  // this bit of code is to load svg.css on demand
-  nsIDocument* doc = nsContentUtils::GetDocument(aNodeInfo);
-  if (doc)
-    doc->EnsureCatalogStyleSheet(kSVGStyleSheetURI);
+  // nsIElementFactory interface
+  NS_IMETHOD CreateInstanceByTag(nsINodeInfo *aNodeInfo, nsIContent** aResult);
+  
+public:
+  friend nsresult NS_NewSVGElementFactory(nsIElementFactory** aResult);
+};
 
+
+
+nsSVGElementFactory::nsSVGElementFactory()
+{
+}
+
+nsSVGElementFactory::~nsSVGElementFactory()
+{
+  
+}
+
+
+NS_IMPL_ISUPPORTS1(nsSVGElementFactory, nsIElementFactory)
+
+
+nsresult
+NS_NewSVGElementFactory(nsIElementFactory** aResult)
+{
+  NS_PRECONDITION(aResult != nsnull, "null ptr");
+  if (! aResult)
+    return NS_ERROR_NULL_POINTER;
+
+  nsSVGElementFactory* result = new nsSVGElementFactory();
+  if (! result)
+    return NS_ERROR_OUT_OF_MEMORY;
+
+  NS_ADDREF(result);
+  *aResult = result;
+  return NS_OK;
+}
+
+
+
+NS_IMETHODIMP
+nsSVGElementFactory::CreateInstanceByTag(nsINodeInfo *aNodeInfo,
+                                           nsIContent** aResult)
+{
   nsIAtom *name = aNodeInfo->NameAtom();
   
   if (name == nsSVGAtoms::polyline)
@@ -135,47 +143,17 @@ NS_NewSVGElement(nsIContent** aResult, nsINodeInfo *aNodeInfo)
     return NS_NewSVGSVGElement(aResult, aNodeInfo);
   if (name == nsSVGAtoms::g)
     return NS_NewSVGGElement(aResult, aNodeInfo);
-#ifdef MOZ_SVG_FOREIGNOBJECT
   if (name == nsSVGAtoms::foreignObject)
     return NS_NewSVGForeignObjectElement(aResult, aNodeInfo);
-#endif
   if (name == nsSVGAtoms::path)
     return NS_NewSVGPathElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::text)
+  else if (name == nsSVGAtoms::text)
     return NS_NewSVGTextElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::tspan)
+  else if (name == nsSVGAtoms::tspan)
     return NS_NewSVGTSpanElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::image)
+  else if (name == nsSVGAtoms::image)
     return NS_NewSVGImageElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::style)
-    return NS_NewSVGStyleElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::linearGradient)
-    return NS_NewSVGLinearGradientElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::metadata)
-    return NS_NewSVGMetadataElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::radialGradient)
-    return NS_NewSVGRadialGradientElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::stop)
-    return NS_NewSVGStopElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::defs)
-    return NS_NewSVGDefsElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::desc)
-    return NS_NewSVGDescElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::script)
-    return NS_NewSVGScriptElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::use)
-    return NS_NewSVGUseElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::symbol)
-    return NS_NewSVGSymbolElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::marker)
-    return NS_NewSVGMarkerElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::title)
-    return NS_NewSVGTitleElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::clipPath)
-    return NS_NewSVGClipPathElement(aResult, aNodeInfo);
-  if (name == nsSVGAtoms::textPath)
-    return NS_NewSVGTextPathElement(aResult, aNodeInfo);
-
+  
   // if we don't know what to create, just create a standard xml element:
   return NS_NewXMLElement(aResult, aNodeInfo);
 }

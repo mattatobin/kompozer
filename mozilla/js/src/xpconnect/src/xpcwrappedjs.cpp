@@ -57,11 +57,10 @@ nsXPCWrappedJS::AggregatedQueryInterface(REFNSIID aIID, void** aInstancePtr)
     // to be in QueryInterface before the possible delegation to 'outer', but
     // we don't want to do this check twice in one call in the normal case:
     // once in QueryInterface and once in DelegatedQueryInterface.
-    if(aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS)) ||
-       aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH)))
+    if(aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS)))
     {
         NS_ADDREF(this);
-        *aInstancePtr = (void*) NS_STATIC_CAST(nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH*,this);
+        *aInstancePtr = (void*) NS_STATIC_CAST(nsIXPConnectWrappedJS*,this);
         return NS_OK;
     }
 
@@ -82,18 +81,10 @@ nsXPCWrappedJS::QueryInterface(REFNSIID aIID, void** aInstancePtr)
 
     // Always check for this first so that our 'outer' can get this interface
     // from us without recurring into a call to the outer's QI!
-    if(aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS)) ||
-       aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH)))
+    if(aIID.Equals(NS_GET_IID(nsIXPConnectWrappedJS)))
     {
         NS_ADDREF(this);
-        *aInstancePtr = (void*) NS_STATIC_CAST(nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH*,this);
-        return NS_OK;
-    }
-
-    // This interface is a hack that says "don't AddRef me".
-    if(aIID.Equals(NS_GET_IID(nsWeakRefToIXPConnectWrappedJS)))
-    {
-        *aInstancePtr = NS_STATIC_CAST(nsWeakRefToIXPConnectWrappedJS*, this);
+        *aInstancePtr = (void*) NS_STATIC_CAST(nsIXPConnectWrappedJS*,this);
         return NS_OK;
     }
 
@@ -198,7 +189,10 @@ do_decrement:
 NS_IMETHODIMP
 nsXPCWrappedJS::GetWeakReference(nsIWeakReference** aInstancePtr)
 {
-    return mRoot->nsSupportsWeakReference::GetWeakReference(aInstancePtr);
+    if(mRoot != this)
+        return mRoot->GetWeakReference(aInstancePtr);
+
+    return nsSupportsWeakReference::GetWeakReference(aInstancePtr);
 }
 
 NS_IMETHODIMP
@@ -354,8 +348,6 @@ nsXPCWrappedJS::~nsXPCWrappedJS()
 {
     NS_PRECONDITION(0 == mRefCnt, "refcounting error");
 
-    XPCJSRuntime* rt = nsXPConnect::GetRuntime();
-
     if(mRoot != this)
     {
         // unlink this wrapper
@@ -381,6 +373,7 @@ nsXPCWrappedJS::~nsXPCWrappedJS()
         ClearWeakReferences();
 
         // remove this root wrapper from the map
+        XPCJSRuntime* rt = nsXPConnect::GetRuntime();
         if(rt)
         {
             JSObject2WrappedJSMap* map = rt->GetWrappedJSMap();
@@ -395,18 +388,7 @@ nsXPCWrappedJS::~nsXPCWrappedJS()
     if(IsValid())
     {
         NS_IF_RELEASE(mClass);
-        if (mOuter)
-        {
-            if (rt && rt->GetThreadRunningGC())
-            {
-                rt->DeferredRelease(mOuter);
-                mOuter = nsnull;
-            }
-            else
-            {
-                NS_RELEASE(mOuter);
-            }
-        }
+        NS_IF_RELEASE(mOuter);
     }
 }
 

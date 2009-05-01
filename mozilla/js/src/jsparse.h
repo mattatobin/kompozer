@@ -1,5 +1,4 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=8 sw=4 et tw=78:
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
@@ -43,7 +42,6 @@
 /*
  * JS parser definitions.
  */
-#include "jsconfig.h"
 #include "jsprvtd.h"
 #include "jspubtd.h"
 #include "jsscan.h"
@@ -82,10 +80,7 @@ JS_BEGIN_EXTERN_C
  * TOK_IF       ternary     pn_kid1: cond, pn_kid2: then, pn_kid3: else or null
  * TOK_SWITCH   binary      pn_left: discriminant
  *                          pn_right: list of TOK_CASE nodes, with at most one
- *                            TOK_DEFAULT node, or if there are let bindings
- *                            in the top level of the switch body's cases, a
- *                            TOK_LEXICALSCOPE node that contains the list of
- *                            TOK_CASE nodes.
+ *                            TOK_DEFAULT node
  * TOK_CASE,    binary      pn_left: case expr or null if TOK_DEFAULT
  * TOK_DEFAULT              pn_right: TOK_LC node for this case's statements
  *                          pn_val: constant value if lookup or table switch
@@ -105,13 +100,11 @@ JS_BEGIN_EXTERN_C
  *                          pn_right: body
  * TOK_THROW    unary       pn_op: JSOP_THROW, pn_kid: exception
  * TOK_TRY      ternary     pn_kid1: try block
- *                          pn_kid2: null or TOK_RESERVED list of
- *                          TOK_LEXICALSCOPE nodes, each with pn_expr pointing
- *                          to a TOK_CATCH node
- *                          pn_kid3: null or finally block
- * TOK_CATCH    ternary     pn_kid1: TOK_NAME, TOK_RB, or TOK_RC catch var node
- *                                   (TOK_RB or TOK_RC if destructuring)
- *                          pn_kid2: null or the catch guard expression
+ *                          pn_kid2: catch blocks or null
+ *                          pn_kid3: finally block or null
+ * TOK_CATCH    ternary     pn_kid1: PN_NAME node for catch var (with pn_expr
+ *                                   null or the catch guard expression)
+ *                          pn_kid2: more catch blocks or null
  *                          pn_kid3: catch block statements
  * TOK_BREAK    name        pn_atom: label or null
  * TOK_CONTINUE name        pn_atom: label or null
@@ -162,8 +155,8 @@ JS_BEGIN_EXTERN_C
  *                          pn_count: 1 + N (where N is number of args)
  *                          ctor is a MEMBER expr
  * TOK_DELETE   unary       pn_kid: MEMBER expr
- * TOK_DOT,     name        pn_expr: MEMBER expr to left of .
- * TOK_DBLDOT               pn_atom: name to right of .
+ * TOK_DOT      name        pn_expr: MEMBER expr to left of .
+ *                          pn_atom: name to right of .
  * TOK_LB       binary      pn_left: MEMBER expr to left of [
  *                          pn_right: expr between [ and ]
  * TOK_LP       list        pn_head: list of call, arg1, arg2, ... argN
@@ -183,81 +176,11 @@ JS_BEGIN_EXTERN_C
  * TOK_USESHARP nullary     pn_num: jsint value of n in #n#
  * TOK_RP       unary       pn_kid: parenthesized expression
  * TOK_NAME,    name        pn_atom: name, string, or object atom
- * TOK_STRING,              pn_op: JSOP_NAME, JSOP_STRING, or JSOP_OBJECT, or
- *                                 JSOP_REGEXP
+ * TOK_STRING,              pn_op: JSOP_NAME, JSOP_STRING, or JSOP_OBJECT
  * TOK_OBJECT               If JSOP_NAME, pn_op may be JSOP_*ARG or JSOP_*VAR
  *                          with pn_slot >= 0 and pn_attrs telling const-ness
  * TOK_NUMBER   dval        pn_dval: double value of numeric literal
  * TOK_PRIMARY  nullary     pn_op: JSOp bytecode
- *
- * <E4X node descriptions>
- * TOK_ANYNAME  nullary     pn_op: JSOP_ANYNAME
- *                          pn_atom: cx->runtime->atomState.starAtom
- * TOK_AT       unary       pn_op: JSOP_TOATTRNAME; pn_kid attribute id/expr
- * TOK_DBLCOLON binary      pn_op: JSOP_QNAME
- *                          pn_left: TOK_ANYNAME or TOK_NAME node
- *                          pn_right: TOK_STRING "*" node, or expr within []
- *              name        pn_op: JSOP_QNAMECONST
- *                          pn_expr: TOK_ANYNAME or TOK_NAME left operand
- *                          pn_atom: name on right of ::
- * TOK_XMLELEM  list        XML element node
- *                          pn_head: start tag, content1, ... contentN, end tag
- *                          pn_count: 2 + N where N is number of content nodes
- *                                    N may be > x.length() if {expr} embedded
- * TOK_XMLLIST  list        XML list node
- *                          pn_head: content1, ... contentN
- * TOK_XMLSTAGO, list       XML start, end, and point tag contents
- * TOK_XMLETAGC,            pn_head: tag name or {expr}, ... XML attrs ...
- * TOK_XMLPTAGO
- * TOK_XMLNAME  nullary     pn_atom: XML name, with no {expr} embedded
- * TOK_XMLNAME  list        pn_head: tag name or {expr}, ... name or {expr}
- * TOK_XMLATTR, nullary     pn_atom: attribute value string; pn_op: JSOP_STRING
- * TOK_XMLCDATA,
- * TOK_XMLCOMMENT
- * TOK_XMLPI    nullary     pn_atom: XML processing instruction target
- *                          pn_atom2: XML PI content, or null if no content
- * TOK_XMLTEXT  nullary     pn_atom: marked-up text, or null if empty string
- * TOK_LC       unary       {expr} in XML tag or content; pn_kid is expr
- *
- * So an XML tag with no {expr} and three attributes is a list with the form:
- *
- *    (tagname attrname1 attrvalue1 attrname2 attrvalue2 attrname2 attrvalue3)
- *
- * An XML tag with embedded expressions like so:
- *
- *    <name1{expr1} name2{expr2}name3={expr3}>
- *
- * would have the form:
- *
- *    ((name1 {expr1}) (name2 {expr2} name3) {expr3})
- *
- * where () bracket a list with elements separated by spaces, and {expr} is a
- * TOK_LC unary node with expr as its kid.
- *
- * Thus, the attribute name/value pairs occupy successive odd and even list
- * locations, where pn_head is the TOK_XMLNAME node at list location 0.  The
- * parser builds the same sort of structures for elements:
- *
- *    <a x={x}>Hi there!<b y={y}>How are you?</b><answer>{x + y}</answer></a>
- *
- * translates to:
- *
- *    ((a x {x}) 'Hi there!' ((b y {y}) 'How are you?') ((answer) {x + y}))
- *
- * <Non-E4X node descriptions, continued>
- *
- * Label              Variant   Members
- * -----              -------   -------
- * TOK_LEXICALSCOPE   name      pn_op: JSOP_LEAVEBLOCK or JSOP_LEAVEBLOCKEXPR
- *                              pn_atom: block object
- *                              pn_expr: block body
- * TOK_ARRAYCOMP      list      pn_head: list of pn_count (1 or 2) elements
- *                              if pn_count is 2, first element is #n=[...]
- *                                last element is block enclosing for loop(s)
- *                                and optionally if-guarded TOK_ARRAYPUSH
- *                              pn_extra: stack slot, used during code gen
- * TOK_ARRAYPUSH      unary     pn_op: JSOP_ARRAYCOMP
- *                              pn_kid: array comprehension expression
  */
 typedef enum JSParseNodeArity {
     PN_FUNC     = -3,
@@ -270,11 +193,11 @@ typedef enum JSParseNodeArity {
 } JSParseNodeArity;
 
 struct JSParseNode {
-    uint16              pn_type;
-    uint8               pn_op;
-    int8                pn_arity;
+    JSTokenType         pn_type;
     JSTokenPos          pn_pos;
+    JSOp                pn_op;
     ptrdiff_t           pn_offset;      /* first generated bytecode offset */
+    JSParseNodeArity    pn_arity;
     union {
         struct {                        /* TOK_FUNCTION node */
             JSAtom      *funAtom;       /* atomized function object */
@@ -286,7 +209,7 @@ struct JSParseNode {
             JSParseNode *head;          /* first node in list */
             JSParseNode **tail;         /* ptr to ptr to last node in list */
             uint32      count;          /* number of nodes in list */
-            uint32      extra;          /* extra flags, see below */
+            uint32      extra;          /* extra comma flag for [1,2,,] */
         } list;
         struct {                        /* ternary: if, for(;;), ?: */
             JSParseNode *kid1;          /* condition, discriminant, etc. */
@@ -308,15 +231,9 @@ struct JSParseNode {
             jsint       slot;           /* -1 or arg or local var slot */
             uintN       attrs;          /* attributes if local var or const */
         } name;
-        struct {
-            JSAtom      *atom;          /* first atom in pair */
-            JSAtom      *atom2;         /* second atom in pair or null */
-        } apair;
         jsdouble        dval;           /* aligned numeric literal value */
     } pn_u;
     JSParseNode         *pn_next;       /* to align dval and pn_u on RISCs */
-    JSTokenStream       *pn_ts;         /* token stream for error reports */
-    JSAtom              *pn_source;     /* saved source for decompilation */
 };
 
 #define pn_funAtom      pn_u.func.funAtom
@@ -340,7 +257,6 @@ struct JSParseNode {
 #define pn_slot         pn_u.name.slot
 #define pn_attrs        pn_u.name.attrs
 #define pn_dval         pn_u.dval
-#define pn_atom2        pn_u.apair.atom2
 
 /* PN_LIST pn_extra flags. */
 #define PNX_STRCAT      0x01            /* TOK_PLUS list has string term */
@@ -349,9 +265,6 @@ struct JSParseNode {
 #define PNX_FORINVAR    0x08            /* TOK_VAR is left kid of TOK_IN node,
                                            which is left kid of TOK_FOR */
 #define PNX_ENDCOMMA    0x10            /* array literal has comma at end */
-#define PNX_XMLROOT     0x20            /* top-most node in XML literal tree */
-#define PNX_GROUPINIT   0x40            /* var [a, b] = [c, d]; unit list */
-#define PNX_NEEDBRACES  0x80            /* braces necessary due to closure */
 
 /*
  * Move pn2 into pn, preserving pn->pn_pos and pn->pn_offset and handing off
@@ -390,7 +303,7 @@ struct JSParseNode {
     JS_BEGIN_MACRO                                                            \
         (list)->pn_head = NULL;                                               \
         (list)->pn_tail = &(list)->pn_head;                                   \
-        (list)->pn_count = (list)->pn_extra = 0;                              \
+        (list)->pn_count = 0;                                                 \
     JS_END_MACRO
 
 #define PN_INIT_LIST_1(list, pn)                                              \
@@ -398,7 +311,6 @@ struct JSParseNode {
         (list)->pn_head = (pn);                                               \
         (list)->pn_tail = &(pn)->pn_next;                                     \
         (list)->pn_count = 1;                                                 \
-        (list)->pn_extra = 0;                                                 \
     JS_END_MACRO
 
 #define PN_APPEND(list, pn)                                                   \
@@ -426,12 +338,6 @@ js_CompileFunctionBody(JSContext *cx, JSTokenStream *ts, JSFunction *fun);
 
 extern JSBool
 js_FoldConstants(JSContext *cx, JSParseNode *pn, JSTreeContext *tc);
-
-#if JS_HAS_XML_SUPPORT
-JS_FRIEND_API(JSParseNode *)
-js_ParseXMLTokenStream(JSContext *cx, JSObject *chain, JSTokenStream *ts,
-                       JSBool allowList);
-#endif
 
 JS_END_EXTERN_C
 

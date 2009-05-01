@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -25,23 +25,23 @@
  *   Ben Goodger <ben@netscape.com>
  *   Benjamin Smedberg <bsmedberg@covad.net>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsCOMPtr.h"
 #include "nsXPIDLString.h"
-#include "nsContentUtils.h"
 #include "nsICSSStyleSheet.h"
 #include "nsIXULPrototypeCache.h"
 #include "nsIXULPrototypeDocument.h"
@@ -52,6 +52,7 @@
 #include "plstr.h"
 #include "nsIDocument.h"
 #include "nsIXBLDocumentInfo.h"
+#include "nsIPref.h"
 #include "nsIServiceManager.h"
 #include "nsXULDocument.h"
 #include "nsIJSRuntimeService.h"
@@ -71,8 +72,6 @@
 #include "nsInterfaceHashtable.h"
 #include "nsDataHashtable.h"
 #include "nsAppDirectoryServiceDefs.h"
-
-#include "jsxdrapi.h"
 
 class nsXULPrototypeCache : public nsIXULPrototypeCache,
                                    nsIObserver
@@ -146,8 +145,9 @@ static const char kDisableXULCachePref[] = "nglayout.debug.disable_xul_cache";
 PR_STATIC_CALLBACK(int)
 DisableXULCacheChangedCallback(const char* aPref, void* aClosure)
 {
-    gDisableXULCache =
-        nsContentUtils::GetBoolPref(kDisableXULCachePref, gDisableXULCache);
+    nsCOMPtr<nsIPref> prefs = do_GetService(NS_PREF_CONTRACTID);
+    if (prefs)
+        prefs->GetBoolPref(kDisableXULCachePref, &gDisableXULCache);
 
     // Flush the cache, regardless
     static NS_DEFINE_CID(kXULPrototypeCacheCID, NS_XULPROTOTYPECACHE_CID);
@@ -192,33 +192,38 @@ NS_NewXULPrototypeCache(nsISupports* aOuter, REFNSIID aIID, void** aResult)
     if (aOuter)
         return NS_ERROR_NO_AGGREGATION;
 
-    nsRefPtr<nsXULPrototypeCache> result = new nsXULPrototypeCache();
+    nsXULPrototypeCache* result = new nsXULPrototypeCache();
     if (! result)
         return NS_ERROR_OUT_OF_MEMORY;
+
+    nsresult rv;
 
     if (!(result->mPrototypeTable.Init() &&
           result->mStyleSheetTable.Init() &&
           result->mScriptTable.Init() &&
           result->mXBLDocTable.Init() &&
           result->mFastLoadURITable.Init())) {
+        delete result;
         return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    // XXX Ignore return values.
-    gDisableXULCache =
-        nsContentUtils::GetBoolPref(kDisableXULCachePref, gDisableXULCache);
-    nsContentUtils::RegisterPrefCallback(kDisableXULCachePref,
-                                         DisableXULCacheChangedCallback,
-                                         nsnull);
+    nsCOMPtr<nsIPref> prefs(do_GetService(NS_PREF_CONTRACTID, &rv));
+    if (NS_SUCCEEDED(rv)) {
+        // XXX Ignore return values.
+        prefs->GetBoolPref(kDisableXULCachePref, &gDisableXULCache);
+        prefs->RegisterCallback(kDisableXULCachePref, DisableXULCacheChangedCallback, nsnull);
+    }
 
-    nsresult rv = result->QueryInterface(aIID, aResult);
+    NS_ADDREF(result);
+    rv = result->QueryInterface(aIID, aResult);
 
     nsCOMPtr<nsIObserverService> obsSvc(do_GetService("@mozilla.org/observer-service;1"));
     if (obsSvc && NS_SUCCEEDED(rv)) {
-        nsXULPrototypeCache *p = result;
-        obsSvc->AddObserver(p, "chrome-flush-skin-caches", PR_FALSE);
-        obsSvc->AddObserver(p, "chrome-flush-caches", PR_FALSE);
+        obsSvc->AddObserver(result, "chrome-flush-skin-caches", PR_FALSE);
+        obsSvc->AddObserver(result, "chrome-flush-caches", PR_FALSE);
     }
+
+    NS_RELEASE(result);
 
     return rv;
 }
@@ -336,7 +341,7 @@ nsXULPrototypeCache::PutStyleSheet(nsICSSStyleSheet* aStyleSheet)
 {
     nsresult rv;
     nsCOMPtr<nsIURI> uri;
-    rv = aStyleSheet->GetSheetURI(getter_AddRefs(uri));
+    rv = aStyleSheet->GetURL(*getter_AddRefs(uri));
     if (NS_SUCCEEDED(rv))
         mStyleSheetTable.Put(uri, aStyleSheet);
 
@@ -437,7 +442,7 @@ PR_STATIC_CALLBACK(PLDHashOperator)
 FlushSkinSheets(nsIURI* aKey, nsCOMPtr<nsICSSStyleSheet>& aSheet, void* aClosure)
 {
   nsCOMPtr<nsIURI> uri;
-  aSheet->GetSheetURI(getter_AddRefs(uri));
+  aSheet->GetURL(*getter_AddRefs(uri));
   nsCAutoString str;
   uri->GetPath(str);
 
@@ -685,24 +690,20 @@ nsXULPrototypeCache::StartFastLoadingURI(nsIURI* aURI, PRInt32 aDirectionFlags)
 PR_STATIC_CALLBACK(int)
 FastLoadPrefChangedCallback(const char* aPref, void* aClosure)
 {
-    PRBool wasEnabled = !gDisableXULFastLoad;
-    gDisableXULFastLoad =
-        nsContentUtils::GetBoolPref(kDisableXULFastLoadPref,
-                                    gDisableXULFastLoad);
+    nsCOMPtr<nsIPref> prefs = do_GetService(NS_PREF_CONTRACTID);
+    if (prefs) {
+        PRBool wasEnabled = !gDisableXULFastLoad;
+        prefs->GetBoolPref(kDisableXULFastLoadPref, &gDisableXULFastLoad);
 
-    if (wasEnabled && gDisableXULFastLoad) {
-        static NS_DEFINE_CID(kXULPrototypeCacheCID, NS_XULPROTOTYPECACHE_CID);
-        nsCOMPtr<nsIXULPrototypeCache> cache =
-            do_GetService(kXULPrototypeCacheCID);
+        if (wasEnabled && gDisableXULFastLoad) {
+            static NS_DEFINE_CID(kXULPrototypeCacheCID, NS_XULPROTOTYPECACHE_CID);
+            nsCOMPtr<nsIXULPrototypeCache> cache(do_GetService(kXULPrototypeCacheCID));
+            if (cache)
+                cache->AbortFastLoads();
+        }
 
-        if (cache)
-            cache->AbortFastLoads();
+        prefs->GetBoolPref(kChecksumXULFastLoadFilePref, &gChecksumXULFastLoadFile);
     }
-
-    gChecksumXULFastLoadFile =
-        nsContentUtils::GetBoolPref(kChecksumXULFastLoadFilePref,
-                                    gChecksumXULFastLoadFile);
-
     return 0;
 }
 
@@ -810,21 +811,20 @@ nsXULPrototypeCache::StartFastLoad(nsIURI* aURI)
     if (! fastLoadService)
         return NS_ERROR_FAILURE;
 
-    gDisableXULFastLoad =
-        nsContentUtils::GetBoolPref(kDisableXULFastLoadPref,
-                                    gDisableXULFastLoad);
-    gChecksumXULFastLoadFile =
-        nsContentUtils::GetBoolPref(kChecksumXULFastLoadFilePref,
-                                    gChecksumXULFastLoadFile);
-    nsContentUtils::RegisterPrefCallback(kDisableXULFastLoadPref,
-                                         FastLoadPrefChangedCallback,
-                                         nsnull);
-    nsContentUtils::RegisterPrefCallback(kChecksumXULFastLoadFilePref,
-                                         FastLoadPrefChangedCallback,
-                                         nsnull);
+    nsCOMPtr<nsIPref> prefs(do_GetService(NS_PREF_CONTRACTID));
+    if (prefs) {
+        prefs->GetBoolPref(kDisableXULFastLoadPref, &gDisableXULFastLoad);
+        prefs->GetBoolPref(kChecksumXULFastLoadFilePref, &gChecksumXULFastLoadFile);
+        prefs->RegisterCallback(kDisableXULFastLoadPref,
+                                FastLoadPrefChangedCallback,
+                                nsnull);
+        prefs->RegisterCallback(kChecksumXULFastLoadFilePref,
+                                FastLoadPrefChangedCallback,
+                                nsnull);
 
-    if (gDisableXULFastLoad)
-        return NS_ERROR_NOT_AVAILABLE;
+        if (gDisableXULFastLoad)
+            return NS_ERROR_NOT_AVAILABLE;
+    }
 
     // Get the chrome directory to validate against the one stored in the
     // FastLoad file, or to store there if we're generating a new file.
@@ -906,16 +906,12 @@ nsXULPrototypeCache::StartFastLoad(nsIURI* aURI)
                 // Get the XUL fastload file version number, which should be
                 // decremented whenever the XUL-specific file format changes
                 // (see public/nsIXULPrototypeCache.h for the #define).
-                PRUint32 xulFastLoadVersion, jsByteCodeVersion;
-                rv = objectInput->Read32(&xulFastLoadVersion);
-                rv |= objectInput->Read32(&jsByteCodeVersion);
+                PRUint32 version;
+                rv = objectInput->Read32(&version);
                 if (NS_SUCCEEDED(rv)) {
-                    if (xulFastLoadVersion != XUL_FASTLOAD_FILE_VERSION ||
-                        jsByteCodeVersion != JSXDR_BYTECODE_VERSION) {
+                    if (version != XUL_FASTLOAD_FILE_VERSION) {
 #ifdef DEBUG
-                        printf((xulFastLoadVersion != XUL_FASTLOAD_FILE_VERSION)
-                               ? "bad FastLoad file version\n"
-                               : "bad JS bytecode version\n");
+                        printf("bad FastLoad file version\n");
 #endif
                         rv = NS_ERROR_UNEXPECTED;
                     } else {
@@ -965,7 +961,6 @@ nsXULPrototypeCache::StartFastLoad(nsIURI* aURI)
                                               getter_AddRefs(objectOutput));
         if (NS_SUCCEEDED(rv)) {
             rv = objectOutput->Write32(XUL_FASTLOAD_FILE_VERSION);
-            rv |= objectOutput->Write32(JSXDR_BYTECODE_VERSION);
             rv |= objectOutput->WriteStringZ(chromePath.get());
             rv |= objectOutput->WriteStringZ(locale.get());
         }

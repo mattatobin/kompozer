@@ -40,7 +40,7 @@
 #include "nsICategoryManager.h"
 #include "nsIObserverService.h"
 #include "nsIPrefService.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsIDocCharset.h"
 #include "nsIWebProgress.h"
 #include "nsCURILoader.h"
@@ -52,7 +52,6 @@
 #include "nsString.h"
 #include "nsXPIDLString.h"
 #include "nsReadableUtils.h"
-#include "nsAutoPtr.h"
 #include "prtime.h"
 #include "prlog.h"
 #include "plstr.h"
@@ -128,11 +127,9 @@ nsPrefetchListener::ConsumeSegments(nsIInputStream *aInputStream,
 // nsPrefetchListener::nsISupports
 //-----------------------------------------------------------------------------
 
-NS_IMPL_ISUPPORTS4(nsPrefetchListener,
+NS_IMPL_ISUPPORTS2(nsPrefetchListener,
                    nsIRequestObserver,
-                   nsIStreamListener,
-                   nsIInterfaceRequestor,
-                   nsIChannelEventSink)
+                   nsIStreamListener)
 
 //-----------------------------------------------------------------------------
 // nsPrefetchListener::nsIStreamListener
@@ -201,54 +198,6 @@ nsPrefetchListener::OnStopRequest(nsIRequest *aRequest,
 }
 
 //-----------------------------------------------------------------------------
-// nsPrefetchListener::nsIInterfaceRequestor
-//-----------------------------------------------------------------------------
-
-NS_IMETHODIMP
-nsPrefetchListener::GetInterface(const nsIID &aIID, void **aResult)
-{
-    if (aIID.Equals(NS_GET_IID(nsIChannelEventSink))) {
-        NS_ADDREF_THIS();
-        *aResult = NS_STATIC_CAST(nsIChannelEventSink *, this);
-        return NS_OK;
-    }
-
-    return NS_ERROR_NO_INTERFACE;
-}
-
-//-----------------------------------------------------------------------------
-// nsPrefetchListener::nsIChannelEventSink
-//-----------------------------------------------------------------------------
-
-NS_IMETHODIMP
-nsPrefetchListener::OnChannelRedirect(nsIChannel *aOldChannel,
-                                      nsIChannel *aNewChannel,
-                                      PRUint32 aFlags)
-{
-    nsCOMPtr<nsIURI> newURI;
-    nsresult rv = aNewChannel->GetURI(getter_AddRefs(newURI));
-    if (NS_FAILED(rv))
-        return rv;
-
-    PRBool match;
-    rv = newURI->SchemeIs("http", &match); 
-    if (NS_FAILED(rv) || !match) {
-        LOG(("rejected: URL is not of type http\n"));
-        return NS_ERROR_ABORT;
-    }
-
-    // HTTP request headers are not automatically forwarded to the new channel.
-    nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(aNewChannel);
-    NS_ENSURE_STATE(httpChannel);
-
-    httpChannel->SetRequestHeader(NS_LITERAL_CSTRING("X-Moz"),
-                                  NS_LITERAL_CSTRING("prefetch"), PR_FALSE);
-
-    mService->UpdateCurrentChannel(aNewChannel);
-    return NS_OK;
-}
-
-//-----------------------------------------------------------------------------
 // nsPrefetchService <public>
 //-----------------------------------------------------------------------------
 
@@ -278,7 +227,7 @@ nsPrefetchService::Init()
     nsresult rv;
 
     // read prefs and hook up pref observer
-    nsCOMPtr<nsIPrefBranch2> prefs(do_GetService(kPrefServiceCID, &rv));
+    nsCOMPtr<nsIPrefBranchInternal> prefs(do_GetService(kPrefServiceCID, &rv));
     if (NS_SUCCEEDED(rv)) {
       PRBool enabled;
       rv = prefs->GetBoolPref(PREFETCH_PREF, &enabled);
@@ -310,7 +259,7 @@ nsPrefetchService::ProcessNextURI()
 
     mCurrentChannel = nsnull;
 
-    nsRefPtr<nsPrefetchListener> listener(new nsPrefetchListener(this));
+    nsCOMPtr<nsIStreamListener> listener(new nsPrefetchListener(this));
     if (!listener) return;
 
     do {
@@ -329,7 +278,7 @@ nsPrefetchService::ProcessNextURI()
         // if opening the channel fails, then just skip to the next uri
         //
         rv = NS_NewChannel(getter_AddRefs(mCurrentChannel), uri,
-                           nsnull, nsnull, listener,
+                           nsnull, nsnull, nsnull,
                            nsIRequest::LOAD_BACKGROUND |
                            nsICachingChannel::LOAD_ONLY_IF_MODIFIED);
         if (NS_FAILED(rv)) continue;

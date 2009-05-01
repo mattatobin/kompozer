@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -44,7 +44,7 @@
 #include "txNodeSetContext.h"
 #include "txTextHandler.h"
 #include "nsIConsoleService.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "txStringUtils.h"
 #include "txAtoms.h"
 #include "txRtfHandler.h"
@@ -165,9 +165,13 @@ txAttribute::execute(txExecutionState& aEs)
             exprRes->stringValue(nspace);
 
             if (!nspace.IsEmpty()) {
+#ifdef TX_EXE
                 nsId = txNamespaceManager::getNamespaceID(nspace);
-                NS_ENSURE_FALSE(nsId == kNameSpaceID_Unknown,
-                                NS_ERROR_FAILURE);
+#else
+                NS_ASSERTION(gTxNameSpaceManager, "No namespace manager");
+                rv = gTxNameSpaceManager->RegisterNameSpace(nspace, nsId);
+                NS_ENSURE_SUCCESS(rv, rv);
+#endif
             }
         }
         else if (prefix) {
@@ -448,7 +452,7 @@ txCopyOf::execute(txExecutionState& aEs)
             txResultTreeFragment* rtf =
                 NS_STATIC_CAST(txResultTreeFragment*,
                                NS_STATIC_CAST(txAExprResult*, exprRes));
-            rv = rtf->flushToHandler(&aEs.mResultHandler);
+            rv = rtf->flushToHandler(aEs.mResultHandler);
             NS_ENSURE_SUCCESS(rv, rv);
 
             break;
@@ -933,9 +937,13 @@ txStartElement::execute(txExecutionState& aEs)
             exprRes->stringValue(nspace);
 
             if (!nspace.IsEmpty()) {
+#ifdef TX_EXE
                 nsId = txNamespaceManager::getNamespaceID(nspace);
-                NS_ENSURE_FALSE(nsId == kNameSpaceID_Unknown,
-                                NS_ERROR_FAILURE);
+#else
+                NS_ASSERTION(gTxNameSpaceManager, "No namespace manager");
+                rv = gTxNameSpaceManager->RegisterNameSpace(nspace, nsId);
+                NS_ENSURE_SUCCESS(rv, rv);
+#endif
             }
         }
         else {
@@ -945,7 +953,7 @@ txStartElement::execute(txExecutionState& aEs)
             }
             nsId = mMappings->lookupNamespace(prefix);
             if (nsId == kNameSpaceID_Unknown) {
-                // truncate name to indicate failure
+                // tunkate name to indicate failure
                 name.Truncate();
             }
         }
@@ -958,7 +966,7 @@ txStartElement::execute(txExecutionState& aEs)
     else {
         // we call characters with an empty string to "close" any element to
         // make sure that no attributes are added
-        aEs.mResultHandler->characters(EmptyString(), PR_FALSE);
+        aEs.mResultHandler->characters(nsString(), PR_FALSE);
     }
 
     rv = aEs.pushString(name);

@@ -99,11 +99,7 @@ public:
     }
 
     // adds a transaction to the list of managed transactions.
-    nsresult AddTransaction(nsHttpTransaction *, PRInt32 priority);
-
-    // called to reschedule the given transaction.  it must already have been
-    // added to the connection manager via AddTransaction.
-    nsresult RescheduleTransaction(nsHttpTransaction *, PRInt32 priority);
+    nsresult AddTransaction(nsHttpTransaction *);
 
     // cancels a transaction w/ the given reason.
     nsresult CancelTransaction(nsHttpTransaction *, nsresult reason);
@@ -217,7 +213,7 @@ private:
     nsresult ProcessNewTransaction(nsHttpTransaction *);
 
     // message handlers have this signature
-    typedef void (nsHttpConnectionMgr:: *nsConnEventHandler)(PRInt32, void *);
+    typedef void (nsHttpConnectionMgr:: *nsConnEventHandler)(nsresult, void *);
 
     // nsConnEvent
     //
@@ -231,11 +227,11 @@ private:
     public:
         nsConnEvent(nsHttpConnectionMgr *mgr,
                     nsConnEventHandler handler,
-                    PRInt32 iparam,
-                    void *vparam)
+                    nsresult status,
+                    void *param)
             : mHandler(handler)
-            , mIParam(iparam)
-            , mVParam(vparam)
+            , mStatus(status)
+            , mParam(param)
         {
             NS_ADDREF(mgr);
             PL_InitEvent(this, mgr, HandleEvent, DestroyEvent);
@@ -246,7 +242,7 @@ private:
             nsHttpConnectionMgr *mgr = (nsHttpConnectionMgr *) event->owner;
             nsConnEvent *self = (nsConnEvent *) event;
             nsConnEventHandler handler = self->mHandler;
-            (mgr->*handler)(self->mIParam, self->mVParam);
+            (mgr->*handler)(self->mStatus, self->mParam);
             NS_RELEASE(mgr);
             return nsnull;
         }
@@ -257,23 +253,22 @@ private:
 
     private:
         nsConnEventHandler  mHandler;
-        PRInt32             mIParam;
-        void               *mVParam;
+        nsresult            mStatus;
+        void               *mParam;
     };
 
     nsresult PostEvent(nsConnEventHandler  handler,
-                       PRInt32             iparam = 0,
-                       void               *vparam = nsnull);
+                       nsresult            status = NS_OK,
+                       void               *param  = nsnull);
 
     // message handlers
-    void OnMsgShutdown             (PRInt32, void *);
-    void OnMsgNewTransaction       (PRInt32, void *);
-    void OnMsgReschedTransaction   (PRInt32, void *);
-    void OnMsgCancelTransaction    (PRInt32, void *);
-    void OnMsgProcessPendingQ      (PRInt32, void *);
-    void OnMsgPruneDeadConnections (PRInt32, void *);
-    void OnMsgReclaimConnection    (PRInt32, void *);
-    void OnMsgUpdateParam          (PRInt32, void *);
+    void OnMsgShutdown             (nsresult status, void *param);
+    void OnMsgNewTransaction       (nsresult status, void *param);
+    void OnMsgCancelTransaction    (nsresult status, void *param);
+    void OnMsgProcessPendingQ      (nsresult status, void *param);
+    void OnMsgPruneDeadConnections (nsresult status, void *param);
+    void OnMsgReclaimConnection    (nsresult status, void *param);
+    void OnMsgUpdateParam          (nsresult status, void *param);
 
     // counters
     PRUint16 mNumActiveConns;

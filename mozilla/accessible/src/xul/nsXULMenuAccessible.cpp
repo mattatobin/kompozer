@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Author: Aaron Leventhal (aaronl@netscape.com)
+ * Author: Aaron Leventhal (aaronl@netscape.com)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,10 +45,6 @@
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
 #include "nsIServiceManager.h"
-#include "nsIPresShell.h"
-#include "nsIContent.h"
-#include "nsGUIEvent.h"
-
 
 // ------------------------ Menu Item -----------------------------
 
@@ -62,8 +59,7 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetState(PRUint32 *_retval)
 
   // Focused?
   nsCOMPtr<nsIDOMElement> element(do_QueryInterface(mDOMNode));
-  if (!element)
-    return NS_ERROR_FAILURE;
+  NS_ASSERTION(element, "No DOM element for menu  node!");
   PRBool isFocused = PR_FALSE;
   element->HasAttribute(NS_LITERAL_STRING("_moz-menuactive"), &isFocused); 
   if (isFocused)
@@ -72,23 +68,24 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetState(PRUint32 *_retval)
   // Has Popup?
   nsAutoString tagName;
   element->GetLocalName(tagName);
-  if (tagName.EqualsLiteral("menu"))
+  if (tagName.Equals(NS_LITERAL_STRING("menu")))
     *_retval |= STATE_HASPOPUP;
 
   nsAutoString menuItemType;
   element->GetAttribute(NS_LITERAL_STRING("type"), menuItemType); 
 
   if (!menuItemType.IsEmpty()) {
-    // Checkable?
-    if (menuItemType.EqualsIgnoreCase("radio") ||
-        menuItemType.EqualsIgnoreCase("checkbox"))
-      *_retval |= STATE_CHECKABLE;
+    // Selectable?
+    if (menuItemType.Equals(NS_LITERAL_STRING("radio")))
+      *_retval |= STATE_SELECTABLE;
 
     // Checked?
-    nsAutoString checkValue;
-    element->GetAttribute(NS_LITERAL_STRING("checked"), checkValue);
-    if (checkValue.EqualsLiteral("true")) {
-      *_retval |= STATE_CHECKED;
+    PRBool isChecked = PR_FALSE;
+    element->HasAttribute(NS_LITERAL_STRING("checked"), &isChecked); 
+    if (isChecked) {
+      if (*_retval & STATE_SELECTABLE)
+        *_retval |= STATE_SELECTED;  // Use STATE_SELECTED for radio buttons
+      else *_retval |= STATE_CHECKED;
     }
   }
 
@@ -97,14 +94,10 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetState(PRUint32 *_retval)
   // We get it by replacing the current offscreen bit with the parent's
   PRUint32 parentState = 0;
   nsCOMPtr<nsIAccessible> parentAccessible;
-  if (parentAccessible) {
-    GetParent(getter_AddRefs(parentAccessible));
-    if (parentAccessible) {
-      parentAccessible->GetFinalState(&parentState);
-      *_retval &= ~STATE_OFFSCREEN;  // clear the old OFFSCREEN bit
-      *_retval |= (parentState & STATE_OFFSCREEN);  // or it with the parent's offscreen bit
-    }
-  }
+  GetParent(getter_AddRefs(parentAccessible));
+  parentAccessible->GetState(&parentState);
+  *_retval &= ~STATE_OFFSCREEN;  // clear the old OFFSCREEN bit
+  *_retval |= (parentState & STATE_OFFSCREEN);  // or it with the parent's offscreen bit
 
   return NS_OK;
 }
@@ -112,9 +105,7 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetState(PRUint32 *_retval)
 NS_IMETHODIMP nsXULMenuitemAccessible::GetName(nsAString& _retval)
 {
   nsCOMPtr<nsIDOMElement> element(do_QueryInterface(mDOMNode));
-  if (!element) {
-    return NS_ERROR_FAILURE;
-  }
+  NS_ASSERTION(element, "No DOM element for menu  node!");
   element->GetAttribute(NS_LITERAL_STRING("label"), _retval); 
 
   return NS_OK;
@@ -149,9 +140,9 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetKeyboardShortcut(nsAString& _retval)
         }
         nsAutoString propertyKey;
         switch (gMenuAccesskeyModifier) {
-          case nsIDOMKeyEvent::DOM_VK_CONTROL: propertyKey.AssignLiteral("VK_CONTROL"); break;
-          case nsIDOMKeyEvent::DOM_VK_ALT: propertyKey.AssignLiteral("VK_ALT"); break;
-          case nsIDOMKeyEvent::DOM_VK_META: propertyKey.AssignLiteral("VK_META"); break;
+          case nsIDOMKeyEvent::DOM_VK_CONTROL: propertyKey = NS_LITERAL_STRING("VK_CONTROL"); break;
+          case nsIDOMKeyEvent::DOM_VK_ALT: propertyKey = NS_LITERAL_STRING("VK_ALT"); break;
+          case nsIDOMKeyEvent::DOM_VK_META: propertyKey = NS_LITERAL_STRING("VK_META"); break;
         }
         if (!propertyKey.IsEmpty())
           nsAccessible::GetFullKeyName(propertyKey, accesskey, _retval);
@@ -183,15 +174,6 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetKeyBinding(nsAString& _retval)
 NS_IMETHODIMP nsXULMenuitemAccessible::GetRole(PRUint32 *_retval)
 {
   *_retval = ROLE_MENUITEM;
-  nsCOMPtr<nsIDOMElement> element(do_QueryInterface(mDOMNode));
-  if (!element)
-    return NS_ERROR_FAILURE;
-  nsAutoString menuItemType;
-  element->GetAttribute(NS_LITERAL_STRING("type"), menuItemType);
-  if (menuItemType.EqualsIgnoreCase("radio"))
-    *_retval = ROLE_RADIO_MENU_ITEM;
-  else if (menuItemType.EqualsIgnoreCase("checkbox"))
-    *_retval = ROLE_CHECK_MENU_ITEM;
   return NS_OK;
 }
 
@@ -208,7 +190,7 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetChildCount(PRInt32 *aAccChildCount)
       nodeList->Item(childIndex, getter_AddRefs(childNode));
       nsAutoString nodeName;
       childNode->GetNodeName(nodeName);
-      if (nodeName.EqualsLiteral("menupopup")) {
+      if (nodeName.Equals(NS_LITERAL_STRING("menupopup"))) {
         break;
       }
     }
@@ -218,19 +200,10 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetChildCount(PRInt32 *aAccChildCount)
       if (element) {
         nsAutoString attr;
         element->GetAttribute(NS_LITERAL_STRING("menugenerated"), attr);
-        if (!attr.EqualsLiteral("true")) {
+        if (!attr.Equals(NS_LITERAL_STRING("true"))) {
           element->SetAttribute(NS_LITERAL_STRING("menugenerated"), NS_LITERAL_STRING("true"));
         }
       }
-      // fire a popup dom event
-      nsEventStatus status = nsEventStatus_eIgnore;
-      nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_SHOWING, nsnull,
-                         nsMouseEvent::eReal);
-
-      nsCOMPtr<nsIPresShell> presShell(do_QueryReferent(mWeakShell));
-      nsCOMPtr<nsIContent> content(do_QueryInterface(childNode));
-      if (presShell && content)
-        presShell->HandleDOMEventWithTarget(content, &event, &status);
     }
   }
 
@@ -243,7 +216,10 @@ NS_IMETHODIMP nsXULMenuitemAccessible::GetChildCount(PRInt32 *aAccChildCount)
 NS_IMETHODIMP nsXULMenuitemAccessible::DoAction(PRUint8 index)
 {
   if (index == eAction_Select) {   // default action
-    DoCommand();
+    nsCOMPtr<nsIDOMXULElement> xulElement(do_QueryInterface(mDOMNode));
+    if (xulElement)
+      xulElement->Click();
+
     nsCOMPtr<nsIAccessible> parentAccessible;
     GetParent(getter_AddRefs(parentAccessible));
     if (parentAccessible) {
@@ -253,7 +229,7 @@ NS_IMETHODIMP nsXULMenuitemAccessible::DoAction(PRUint8 index)
         nsCOMPtr<nsIAccessible> buttonAccessible;
         parentAccessible->GetPreviousSibling(getter_AddRefs(buttonAccessible));
         PRUint32 state;
-        buttonAccessible->GetFinalState(&state);
+        buttonAccessible->GetState(&state);
         if (state & STATE_PRESSED)
           buttonAccessible->DoAction(eAction_Click);
       }
@@ -299,7 +275,7 @@ NS_IMETHODIMP nsXULMenuSeparatorAccessible::GetState(PRUint32 *_retval)
 
 NS_IMETHODIMP nsXULMenuSeparatorAccessible::GetName(nsAString& _retval)
 {
-  _retval.Truncate();
+  _retval.Assign(NS_LITERAL_STRING(""));
   return NS_OK;
 }
 
@@ -342,9 +318,8 @@ NS_IMETHODIMP nsXULMenupopupAccessible::GetState(PRUint32 *_retval)
     nsCOMPtr<nsIAccessible> parentAccessible;
     nsCOMPtr<nsIDOMNode> parentNode;
     GetParent(getter_AddRefs(parentAccessible));
-    nsCOMPtr<nsIAccessNode> accessNode(do_QueryInterface(parentAccessible));
-    if (accessNode) 
-      accessNode->GetDOMNode(getter_AddRefs(parentNode));
+    if (parentAccessible)
+      parentAccessible->GetDOMNode(getter_AddRefs(parentNode));
     element = do_QueryInterface(parentNode);
     if (element)
       element->HasAttribute(NS_LITERAL_STRING("open"), &isActive);
@@ -398,7 +373,7 @@ NS_IMETHODIMP nsXULMenubarAccessible::GetState(PRUint32 *_retval)
 
 NS_IMETHODIMP nsXULMenubarAccessible::GetName(nsAString& _retval)
 {
-  _retval.AssignLiteral("Application");
+  _retval = NS_LITERAL_STRING("Application");
 
   return NS_OK;
 }

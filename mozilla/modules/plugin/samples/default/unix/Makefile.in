@@ -49,6 +49,7 @@ GRE_MODULE   = 1
 PACKAGE_FILE = npnul.pkg
 
 REQUIRES	= java \
+		  plugin \
 		  $(NULL)
 
 CSRCS		= \

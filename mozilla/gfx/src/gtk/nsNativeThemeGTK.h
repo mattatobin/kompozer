@@ -40,14 +40,11 @@
 #include "nsCOMPtr.h"
 #include "nsIAtom.h"
 #include "nsIObserver.h"
-#include "nsNativeTheme.h"
 
 #include <gtk/gtkwidget.h>
 #include "gtkdrawing.h"
 
-class nsNativeThemeGTK: private nsNativeTheme,
-                        public nsITheme,
-                        public nsIObserver {
+class nsNativeThemeGTK: public nsITheme, public nsIObserver {
 public:
   NS_DECL_ISUPPORTS
 
@@ -67,11 +64,6 @@ public:
                                               PRUint8 aWidgetType,
                                               nsMargin* aResult);
 
-  virtual NS_HIDDEN_(PRBool) GetWidgetOverflow(nsIDeviceContext* aContext,
-                                               nsIFrame* aFrame,
-                                               PRUint8 aWidgetType,
-                                               nsRect* aResult);
-
   NS_IMETHOD GetMinimumWidgetSize(nsIRenderingContext* aContext,
                                   nsIFrame* aFrame, PRUint8 aWidgetType,
                                   nsSize* aResult, PRBool* aIsOverridable);
@@ -81,7 +73,7 @@ public:
 
   NS_IMETHOD ThemeChanged();
 
-  NS_IMETHOD_(PRBool) ThemeSupportsWidget(nsPresContext* aPresContext,
+  NS_IMETHOD_(PRBool) ThemeSupportsWidget(nsIPresContext* aPresContext,
                                           nsIFrame* aFrame,
                                           PRUint8 aWidgetType);
 
@@ -90,16 +82,22 @@ public:
   nsNativeThemeGTK();
   virtual ~nsNativeThemeGTK();
 
-private:
+protected:
   PRBool GetGtkWidgetAndState(PRUint8 aWidgetType, nsIFrame* aFrame,
                               GtkThemeWidgetType& aGtkWidgetType,
                               GtkWidgetState* aState, gint* aWidgetFlags);
 
-  void RefreshWidgetWindow(nsIFrame* aFrame);
+  PRBool IsDisabled(nsIFrame* aFrame);
 
+private:
+  nsCOMPtr<nsIAtom> mCheckedAtom;
+  nsCOMPtr<nsIAtom> mDisabledAtom;
+  nsCOMPtr<nsIAtom> mSelectedAtom;
   nsCOMPtr<nsIAtom> mTypeAtom;
   nsCOMPtr<nsIAtom> mInputCheckedAtom;
   nsCOMPtr<nsIAtom> mInputAtom;
+  nsCOMPtr<nsIAtom> mFocusedAtom;
+  nsCOMPtr<nsIAtom> mFirstTabAtom;
   nsCOMPtr<nsIAtom> mCurPosAtom;
   nsCOMPtr<nsIAtom> mMaxPosAtom;
   nsCOMPtr<nsIAtom> mMenuActiveAtom;

@@ -37,8 +37,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsProfileDirServiceProvider.h"
-#include "nsProfileStringTypes.h"
 #include "nsProfileLock.h"
+#include "nsIAtom.h"
+#include "nsStaticAtom.h"
 #include "nsILocalFile.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsAppDirectoryServiceDefs.h"
@@ -66,11 +67,29 @@
 #define IMAP_MAIL_DIR_50_NAME        NS_LITERAL_CSTRING("ImapMail")
 #define NEWS_DIR_50_NAME             NS_LITERAL_CSTRING("News")
 #define MSG_FOLDER_CACHE_DIR_50_NAME NS_LITERAL_CSTRING("panacea.dat")
-#define STORAGE_FILE_50_NAME         NS_LITERAL_CSTRING("storage.sdb")
+
+// Static Variables
+
+nsIAtom*   nsProfileDirServiceProvider::sApp_PrefsDirectory50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_PreferencesFile50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_UserProfileDirectory50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_UserChromeDirectory;
+nsIAtom*   nsProfileDirServiceProvider::sApp_LocalStore50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_History50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_UsersPanels50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_UsersMimeTypes50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_BookmarksFile50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_DownloadsFile50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_SearchFile50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_MailDirectory50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_ImapMailDirectory50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_NewsDirectory50;
+nsIAtom*   nsProfileDirServiceProvider::sApp_MessengerFolderCache50;
+
 
 //*****************************************************************************
 // nsProfileDirServiceProvider::nsProfileDirServiceProvider
-//*****************************************************************************
+//*****************************************************************************   
 
 nsProfileDirServiceProvider::nsProfileDirServiceProvider(PRBool aNotifyObservers) :
 #ifdef MOZ_PROFILELOCKING
@@ -90,12 +109,9 @@ nsProfileDirServiceProvider::~nsProfileDirServiceProvider()
 }
 
 nsresult
-nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir,
-                                           nsIFile* aLocalProfileDir)
+nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir)
 {
-  if (!aLocalProfileDir)
-    aLocalProfileDir = aProfileDir;
-  if (mProfileDir) {
+  if (mProfileDir) {    
     PRBool isEqual;
     if (aProfileDir &&
         NS_SUCCEEDED(aProfileDir->Equals(mProfileDir, &isEqual)) && isEqual) {
@@ -108,18 +124,12 @@ nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir,
     UndefineFileLocations();
   }
   mProfileDir = aProfileDir;
-  mLocalProfileDir = aLocalProfileDir;
   if (!mProfileDir)
     return NS_OK;
-
+    
   nsresult rv = InitProfileDir(mProfileDir);
   if (NS_FAILED(rv))
     return rv;
-
-  // Make sure that the local profile dir exists
-  // we just try to create it - if it exists already, that'll fail; ignore
-  // errors
-  mLocalProfileDir->Create(nsIFile::DIRECTORY_TYPE, 0700);
 
 #ifdef MOZ_PROFILESHARING
   if (mSharingEnabled) {
@@ -136,7 +146,7 @@ nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir,
     }
   }
 #endif
-
+  
 #ifdef MOZ_PROFILELOCKING
   // Lock the non-shared sub-dir if we are sharing,
   // the whole profile dir if we are not.
@@ -145,13 +155,13 @@ nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir,
     dirToLock = do_QueryInterface(mNonSharedProfileDir);
   else
     dirToLock = do_QueryInterface(mProfileDir);
-  rv = mProfileDirLock->Lock(dirToLock, nsnull);
+  rv = mProfileDirLock->Lock(dirToLock);
   if (NS_FAILED(rv))
     return rv;
 #endif
-
+      
   if (mNotifyObservers) {
-    nsCOMPtr<nsIObserverService> observerService =
+    nsCOMPtr<nsIObserverService> observerService = 
              do_GetService("@mozilla.org/observer-service;1");
     if (!observerService)
       return NS_ERROR_FAILURE;
@@ -162,14 +172,14 @@ nsProfileDirServiceProvider::SetProfileDir(nsIFile* aProfileDir,
     // Now observers can respond to something another observer did on "profile-do-change"
     observerService->NotifyObservers(nsnull, "profile-after-change", context.get());
   }
-
+  
   return NS_OK;
 }
 
 nsresult
 nsProfileDirServiceProvider::Register()
 {
-  nsCOMPtr<nsIDirectoryService> directoryService =
+  nsCOMPtr<nsIDirectoryService> directoryService = 
           do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID);
   if (!directoryService)
     return NS_ERROR_FAILURE;
@@ -181,27 +191,27 @@ nsProfileDirServiceProvider::Shutdown()
 {
   if (!mNotifyObservers)
     return NS_OK;
-
-  nsCOMPtr<nsIObserverService> observerService =
+    
+  nsCOMPtr<nsIObserverService> observerService = 
            do_GetService("@mozilla.org/observer-service;1");
   if (!observerService)
     return NS_ERROR_FAILURE;
-
+    
   NS_NAMED_LITERAL_STRING(context, "shutdown-persist");
-  observerService->NotifyObservers(nsnull, "profile-before-change", context.get());
+  observerService->NotifyObservers(nsnull, "profile-before-change", context.get());        
   return NS_OK;
 }
 
 //*****************************************************************************
 // nsProfileDirServiceProvider::nsISupports
-//*****************************************************************************
+//*****************************************************************************   
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsProfileDirServiceProvider,
                               nsIDirectoryServiceProvider)
 
 //*****************************************************************************
 // nsProfileDirServiceProvider::nsIDirectoryServiceProvider
-//*****************************************************************************
+//*****************************************************************************   
 
 NS_IMETHODIMP
 nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFile **_retval)
@@ -209,49 +219,49 @@ nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFi
   NS_ENSURE_ARG(prop);
   NS_ENSURE_ARG_POINTER(persistant);
   NS_ENSURE_ARG_POINTER(_retval);
-
+  
   // Don't assert - we can be called many times before SetProfileDir() has been called.
   if (!mProfileDir)
     return NS_ERROR_FAILURE;
-
+    
   *persistant = PR_TRUE;
   nsIFile* domainDir = mProfileDir;
 
 #ifdef MOZ_PROFILESHARING
   // If the prop is prefixed with NS_SHARED,
   // the location is in the shared domain.
-  PRBool bUseShared = PR_FALSE;
+  PRBool bUseShared = PR_FALSE;  
   if (strncmp(prop, NS_SHARED, sizeof(NS_SHARED)-1) == 0) {
     prop += (sizeof(NS_SHARED)-1);
-    bUseShared = PR_TRUE;
-  }
+    bUseShared = PR_TRUE;  
+  }  
   if (!bUseShared && mNonSharedProfileDir)
     domainDir = mNonSharedProfileDir;
 #endif
 
   nsCOMPtr<nsIFile>  localFile;
   nsresult rv = NS_ERROR_FAILURE;
-
-  if (strcmp(prop, NS_APP_PREFS_50_DIR) == 0) {
+      
+  nsIAtom* inAtom = NS_NewAtom(prop);
+  NS_ENSURE_TRUE(inAtom, NS_ERROR_OUT_OF_MEMORY);
+  
+  if (inAtom == sApp_PrefsDirectory50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
   }
-  else if (strcmp(prop, NS_APP_PREFS_50_FILE) == 0) {
+  else if (inAtom == sApp_PreferencesFile50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(PREFS_FILE_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_USER_PROFILE_50_DIR) == 0) {
+  else if (inAtom == sApp_UserProfileDirectory50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
   }
-  else if (strcmp(prop, NS_APP_USER_PROFILE_LOCAL_50_DIR) == 0) {
-    rv = mLocalProfileDir->Clone(getter_AddRefs(localFile));
-  }
-  else if (strcmp(prop, NS_APP_USER_CHROME_DIR) == 0) {
+  else if (inAtom == sApp_UserChromeDirectory) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(USER_CHROME_DIR_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_LOCALSTORE_50_FILE) == 0) {
+  else if (inAtom == sApp_LocalStore50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv)) {
       rv = localFile->AppendNative(LOCAL_STORE_FILE_50_NAME);
@@ -262,12 +272,12 @@ nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFi
       }
     }
   }
-  else if (strcmp(prop, NS_APP_HISTORY_50_FILE) == 0) {
+  else if (inAtom == sApp_History50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(HISTORY_FILE_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_USER_PANELS_50_FILE) == 0) {
+  else if (inAtom == sApp_UsersPanels50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv)) {
       rv = localFile->AppendNative(PANELS_FILE_50_NAME);
@@ -275,7 +285,7 @@ nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFi
         rv = EnsureProfileFileExists(localFile, domainDir);
     }
   }
-  else if (strcmp(prop, NS_APP_USER_MIMETYPES_50_FILE) == 0) {
+  else if (inAtom == sApp_UsersMimeTypes50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv)) {
       rv = localFile->AppendNative(MIME_TYPES_FILE_50_NAME);
@@ -283,17 +293,17 @@ nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFi
         rv = EnsureProfileFileExists(localFile, domainDir);
     }
   }
-  else if (strcmp(prop, NS_APP_BOOKMARKS_50_FILE) == 0) {
+  else if (inAtom == sApp_BookmarksFile50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(BOOKMARKS_FILE_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_DOWNLOADS_50_FILE) == 0) {
+  else if (inAtom == sApp_DownloadsFile50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(DOWNLOADS_FILE_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_SEARCH_50_FILE) == 0) {
+  else if (inAtom == sApp_SearchFile50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv)) {
       rv = localFile->AppendNative(SEARCH_FILE_50_NAME);
@@ -301,42 +311,38 @@ nsProfileDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFi
         rv = EnsureProfileFileExists(localFile, domainDir);
     }
   }
-  else if (strcmp(prop, NS_APP_MAIL_50_DIR) == 0) {
+  else if (inAtom == sApp_MailDirectory50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(MAIL_DIR_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_IMAP_MAIL_50_DIR) == 0) {
+  else if (inAtom == sApp_ImapMailDirectory50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(IMAP_MAIL_DIR_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_NEWS_50_DIR) == 0) {
+  else if (inAtom == sApp_NewsDirectory50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(NEWS_DIR_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_MESSENGER_FOLDER_CACHE_50_DIR) == 0) {
+  else if (inAtom == sApp_MessengerFolderCache50) {
     rv = domainDir->Clone(getter_AddRefs(localFile));
     if (NS_SUCCEEDED(rv))
       rv = localFile->AppendNative(MSG_FOLDER_CACHE_DIR_50_NAME);
   }
-  else if (strcmp(prop, NS_APP_STORAGE_50_FILE) == 0) {
-    rv = domainDir->Clone(getter_AddRefs(localFile));
-    if (NS_SUCCEEDED(rv))
-      rv = localFile->AppendNative(STORAGE_FILE_50_NAME);
-  }
-
+  
+  NS_RELEASE(inAtom);
   
   if (localFile && NS_SUCCEEDED(rv))
     return CallQueryInterface(localFile, _retval);
-
+  
   return rv;
 }
 
 //*****************************************************************************
 // Protected methods
-//*****************************************************************************
+//*****************************************************************************   
 
 nsresult
 nsProfileDirServiceProvider::Initialize()
@@ -359,16 +365,38 @@ nsProfileDirServiceProvider::Initialize()
   }
 #endif
 
+  static const nsStaticAtom provider_atoms[] = {
+    { NS_APP_PREFS_50_DIR,           &sApp_PrefsDirectory50 },
+    { NS_APP_PREFS_50_FILE,          &sApp_PreferencesFile50 },
+    { NS_APP_USER_PROFILE_50_DIR,    &sApp_UserProfileDirectory50 },
+    { NS_APP_USER_CHROME_DIR,        &sApp_UserChromeDirectory },
+    { NS_APP_LOCALSTORE_50_FILE,     &sApp_LocalStore50 },
+    { NS_APP_HISTORY_50_FILE,        &sApp_History50 },
+    { NS_APP_USER_PANELS_50_FILE,    &sApp_UsersPanels50 },
+    { NS_APP_USER_MIMETYPES_50_FILE, &sApp_UsersMimeTypes50 },
+    { NS_APP_BOOKMARKS_50_FILE,      &sApp_BookmarksFile50 },
+    { NS_APP_DOWNLOADS_50_FILE,      &sApp_DownloadsFile50 },
+    { NS_APP_SEARCH_50_FILE,         &sApp_SearchFile50 },
+    { NS_APP_MAIL_50_DIR,            &sApp_MailDirectory50 },
+    { NS_APP_IMAP_MAIL_50_DIR,       &sApp_ImapMailDirectory50 },
+    { NS_APP_NEWS_50_DIR,            &sApp_NewsDirectory50 },
+    { NS_APP_MESSENGER_FOLDER_CACHE_50_DIR, &sApp_MessengerFolderCache50 },
+    { NS_APP_PROFILE_DEFAULTS_NLOC_50_DIR, nsnull },
+  };
+
+  // Register our directory atoms
+  NS_RegisterStaticAtoms(provider_atoms, NS_ARRAY_LENGTH(provider_atoms));
+        
   return NS_OK;
 }
 
 nsresult
 nsProfileDirServiceProvider::InitProfileDir(nsIFile *profileDir)
-{
+{    
   // Make sure our "Profile" folder exists.
   // If it does not, copy the profile defaults to its location.
-
-  nsresult rv;
+  
+  nsresult rv;    
   PRBool exists;
   rv = profileDir->Exists(&exists);
   if (NS_FAILED(rv))
@@ -378,7 +406,7 @@ nsProfileDirServiceProvider::InitProfileDir(nsIFile *profileDir)
     nsCOMPtr<nsIFile> profileDefaultsDir;
     nsCOMPtr<nsIFile> profileDirParent;
     nsCAutoString profileDirName;
-
+    
     (void)profileDir->GetParent(getter_AddRefs(profileDirParent));
     if (!profileDirParent)
       return NS_ERROR_FAILURE;
@@ -400,8 +428,8 @@ nsProfileDirServiceProvider::InitProfileDir(nsIFile *profileDir)
         if (NS_FAILED(rv))
             return rv;
     }
-
-#if !defined(XP_MAC) && !defined(WINCE)
+      
+#ifndef XP_MAC
     rv = profileDir->SetPermissions(0700);
     if (NS_FAILED(rv))
       return rv;
@@ -418,7 +446,7 @@ nsProfileDirServiceProvider::InitProfileDir(nsIFile *profileDir)
       return NS_ERROR_FILE_NOT_DIRECTORY;
   }
 
-  if (mNonSharedDirName.Length())
+  if (!mNonSharedDirName.IsEmpty())
     rv = InitNonSharedProfileDir();
 
   return rv;
@@ -430,7 +458,7 @@ nsProfileDirServiceProvider::InitNonSharedProfileDir()
   nsresult rv;
 
   NS_ENSURE_STATE(mProfileDir);
-  NS_ENSURE_STATE(mNonSharedDirName.Length());
+  NS_ENSURE_STATE(!mNonSharedDirName.IsEmpty());
 
   nsCOMPtr<nsIFile> localDir;
   rv = mProfileDir->Clone(getter_AddRefs(localDir));
@@ -464,13 +492,13 @@ nsProfileDirServiceProvider::EnsureProfileFileExists(nsIFile *aFile, nsIFile *de
 {
   nsresult rv;
   PRBool exists;
-
+    
   rv = aFile->Exists(&exists);
   if (NS_FAILED(rv))
     return rv;
   if (exists)
     return NS_OK;
-
+  
   nsCOMPtr<nsIFile> defaultsFile;
 
   // Attempt first to get the localized subdir of the defaults
@@ -481,7 +509,7 @@ nsProfileDirServiceProvider::EnsureProfileFileExists(nsIFile *aFile, nsIFile *de
     if (NS_FAILED(rv))
       return rv;
   }
-
+    
   nsCAutoString leafName;
   rv = aFile->GetNativeLeafName(leafName);
   if (NS_FAILED(rv))
@@ -490,15 +518,15 @@ nsProfileDirServiceProvider::EnsureProfileFileExists(nsIFile *aFile, nsIFile *de
   if (NS_FAILED(rv))
     return rv;
   
-  return defaultsFile->CopyTo(destDir, EmptyString());
+  return defaultsFile->CopyTo(destDir, nsString());
 }
 
 nsresult
 nsProfileDirServiceProvider::UndefineFileLocations()
 {
   nsresult rv;
-
-  nsCOMPtr<nsIProperties> directoryService =
+  
+  nsCOMPtr<nsIProperties> directoryService = 
            do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
   NS_ENSURE_TRUE(directoryService, NS_ERROR_FAILURE);
 
@@ -523,14 +551,14 @@ nsProfileDirServiceProvider::UndefineFileLocations()
 
 //*****************************************************************************
 // Global creation function
-//*****************************************************************************
+//*****************************************************************************   
 
 nsresult NS_NewProfileDirServiceProvider(PRBool aNotifyObservers,
                                          nsProfileDirServiceProvider** aProvider)
 {
   NS_ENSURE_ARG_POINTER(aProvider);
   *aProvider = nsnull;
-
+  
   nsProfileDirServiceProvider *prov = new nsProfileDirServiceProvider(aNotifyObservers);
   if (!prov)
     return NS_ERROR_OUT_OF_MEMORY;
@@ -540,5 +568,5 @@ nsresult NS_NewProfileDirServiceProvider(PRBool aNotifyObservers,
     return rv;
   }
   NS_ADDREF(*aProvider = prov);
-  return NS_OK;
+  return NS_OK;  
 }

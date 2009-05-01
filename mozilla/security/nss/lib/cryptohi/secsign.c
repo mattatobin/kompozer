@@ -1,43 +1,43 @@
 /*
  * Signature stuff.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved. 
+ * 
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: secsign.c,v 1.14.2.3 2006/04/28 03:35:29 rrelyea%redhat.com Exp $ */
+ * $Id: secsign.c,v 1.6 2003/10/17 13:45:33 ian.mcgreer%sun.com Exp $
+ */
 
 #include <stdio.h>
 #include "cryptohi.h"
@@ -121,31 +121,18 @@ SGN_NewContext(SECOidTag alg, SECKEYPrivateKey *key)
 	signalg = SEC_OID_MISSI_DSS; /* XXX Is there a better algid? */
 	keyType = fortezzaKey;
 	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE:
+#ifdef NSS_ENABLE_ECC
+      case SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST:
 	hashalg = SEC_OID_SHA1;
-	signalg = SEC_OID_ANSIX962_EC_PUBLIC_KEY;
+	signalg = SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST;
 	keyType = ecKey;
 	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA256_SIGNATURE:
-	hashalg = SEC_OID_SHA256;
-	signalg = SEC_OID_ANSIX962_EC_PUBLIC_KEY;
-	keyType = ecKey;
-	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA384_SIGNATURE:
-	hashalg = SEC_OID_SHA384;
-	signalg = SEC_OID_ANSIX962_EC_PUBLIC_KEY;
-	keyType = ecKey;
-	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA512_SIGNATURE:
-	hashalg = SEC_OID_SHA512;
-	signalg = SEC_OID_ANSIX962_EC_PUBLIC_KEY;
-	keyType = ecKey;
-	break;
+#endif /* NSS_ENABLE_ECC */
       /* we don't implement MD4 hashes. 
        * we *CERTAINLY* don't want to sign one! */
       case SEC_OID_PKCS1_MD4_WITH_RSA_ENCRYPTION:
       default:
-	PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
+	PORT_SetError(SEC_ERROR_INVALID_ARGS);
 	return 0;
     }
 
@@ -156,13 +143,6 @@ SGN_NewContext(SECOidTag alg, SECKEYPrivateKey *key)
 	PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
 	return 0;
     }
-
-#ifndef NSS_ECC_MORE_THAN_SUITE_B
-    if (key->keyType == ecKey) {
-	PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
-	return 0;
-    }
-#endif
 
     cx = (SGNContext*) PORT_ZAlloc(sizeof(SGNContext));
     if (cx) {
@@ -221,9 +201,8 @@ SGN_Update(SGNContext *cx, unsigned char *input, unsigned inputLen)
 SECStatus
 SGN_End(SGNContext *cx, SECItem *result)
 {
-    unsigned char digest[HASH_LENGTH_MAX];
-    unsigned part1;
-    int signatureLen;
+    unsigned char digest[32];
+    unsigned part1, signatureLen;
     SECStatus rv;
     SECItem digder, sigitem;
     PRArenaPool *arena = 0;
@@ -271,11 +250,6 @@ SGN_End(SGNContext *cx, SECItem *result)
     ** block
     */
     signatureLen = PK11_SignatureLen(privKey);
-    if (signatureLen <= 0) {
-	PORT_SetError(SEC_ERROR_INVALID_KEY);
-	rv = SECFailure;
-	goto loser;
-    }
     sigitem.len = signatureLen;
     sigitem.data = (unsigned char*) PORT_Alloc(signatureLen);
 
@@ -292,9 +266,9 @@ SGN_End(SGNContext *cx, SECItem *result)
     }
 
     if ((cx->signalg == SEC_OID_ANSIX9_DSA_SIGNATURE) ||
-        (cx->signalg == SEC_OID_ANSIX962_EC_PUBLIC_KEY)) {
+        (cx->signalg == SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST)) {
         /* DSAU_EncodeDerSigWithLen works for DSA and ECDSA */
-	rv = DSAU_EncodeDerSigWithLen(result, &sigitem, sigitem.len); 
+	rv = DSAU_EncodeDerSigWithLen(result, &sigitem, signatureLen); 
 	PORT_Free(sigitem.data);
 	if (rv != SECSuccess)
 	    goto loser;
@@ -339,6 +313,57 @@ SEC_SignData(SECItem *res, unsigned char *buf, int len,
 	goto loser;
 
     rv = SGN_End(sgn, res);
+
+  loser:
+    SGN_DestroyContext(sgn, PR_TRUE);
+    return rv;
+}
+
+/*
+** Sign the input file's contents returning in result a bunch of bytes
+** that are the signature. Returns zero on success, an error code on
+** failure.
+*/
+SECStatus
+SEC_SignFile(SECItem *result, FILE *input, 
+	     SECKEYPrivateKey *pk, SECOidTag algid)
+{
+    unsigned char buf[1024];
+    SECStatus rv;
+    int nb;
+    SGNContext *sgn;
+
+    sgn = SGN_NewContext(algid, pk);
+    if (sgn == NULL)
+	return SECFailure;
+    rv = SGN_Begin(sgn);
+    if (rv != SECSuccess)
+	goto loser;
+
+    /*
+    ** Now feed the contents of the input file into the digest
+    ** algorithm, one chunk at a time, until we have exhausted the
+    ** input
+    */
+    for (;;) {
+	if (feof(input)) break;
+	nb = fread(buf, 1, sizeof(buf), input);
+	if (nb == 0) {
+	    if (ferror(input)) {
+		PORT_SetError(SEC_ERROR_IO);
+		rv = SECFailure;
+		goto loser;
+	    }
+	    break;
+	}
+	rv = SGN_Update(sgn, buf, nb);
+	if (rv != SECSuccess)
+	    goto loser;
+    }
+
+    /* Sign the digest */
+    rv = SGN_End(sgn, result);
+    /* FALL THROUGH */
 
   loser:
     SGN_DestroyContext(sgn, PR_TRUE);
@@ -400,12 +425,14 @@ SEC_DerSignData(PRArenaPool *arena, SECItem *result,
 	  case dsaKey:
 	    algID = SEC_OID_ANSIX9_DSA_SIGNATURE_WITH_SHA1_DIGEST;
 	    break;
+#ifdef NSS_ENABLE_ECC
 	  case ecKey:
-	    algID = SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE;
+	    algID = SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST;
 	    break;
+#endif /* NSS_ENABLE_ECC */
 	  default:
-	    PORT_SetError(SEC_ERROR_INVALID_KEY);
 	    return SECFailure;
+	    break;
 	}
     }
 
@@ -435,7 +462,7 @@ SECStatus
 SGN_Digest(SECKEYPrivateKey *privKey,
 		SECOidTag algtag, SECItem *result, SECItem *digest)
 {
-    int modulusLen;
+    unsigned modulusLen;
     SECStatus rv;
     SECItem digder;
     PRArenaPool *arena = 0;
@@ -474,11 +501,6 @@ SGN_Digest(SECKEYPrivateKey *privKey,
     ** block
     */
     modulusLen = PK11_SignatureLen(privKey);
-    if (modulusLen <= 0) {
-	PORT_SetError(SEC_ERROR_INVALID_KEY);
-	rv = SECFailure;
-	goto loser;
-    }
     result->len = modulusLen;
     result->data = (unsigned char*) PORT_Alloc(modulusLen);
 
@@ -499,59 +521,4 @@ SGN_Digest(SECKEYPrivateKey *privKey,
 	PORT_FreeArena(arena, PR_FALSE);
     }
     return rv;
-}
-
-SECOidTag
-SEC_GetSignatureAlgorithmOidTag(KeyType keyType, SECOidTag hashAlgTag)
-{
-    SECOidTag sigTag = SEC_OID_UNKNOWN;
-
-    switch (keyType) {
-    case rsaKey:
-	switch (hashAlgTag) {
-	case SEC_OID_MD2:
-	    sigTag = SEC_OID_PKCS1_MD2_WITH_RSA_ENCRYPTION;	break;
-	case SEC_OID_UNKNOWN:	/* default for RSA if not specified */
-	case SEC_OID_MD5:
-	    sigTag = SEC_OID_PKCS1_MD5_WITH_RSA_ENCRYPTION;	break;
-	case SEC_OID_SHA1:
-	    sigTag = SEC_OID_PKCS1_SHA1_WITH_RSA_ENCRYPTION;	break;
-	case SEC_OID_SHA256:
-	    sigTag = SEC_OID_PKCS1_SHA256_WITH_RSA_ENCRYPTION;	break;
-	case SEC_OID_SHA384:
-	    sigTag = SEC_OID_PKCS1_SHA384_WITH_RSA_ENCRYPTION;	break;
-	case SEC_OID_SHA512:
-	    sigTag = SEC_OID_PKCS1_SHA512_WITH_RSA_ENCRYPTION;	break;
-	default:
-	    break;
-	}
-	break;
-    case dsaKey:
-	switch (hashAlgTag) {
-	case SEC_OID_UNKNOWN:	/* default for DSA if not specified */
-	case SEC_OID_SHA1:
-	    sigTag = SEC_OID_ANSIX9_DSA_SIGNATURE_WITH_SHA1_DIGEST; break;
-	default:
-	    break;
-	}
-	break;
-    case ecKey:
-	switch (hashAlgTag) {
-	case SEC_OID_UNKNOWN:	/* default for ECDSA if hash not specified */
-	case SEC_OID_SHA1:      /*  is ECDSA_SHA1_SIGNTARURE */
-	    sigTag = SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE; break;
-	case SEC_OID_SHA256:
-	    sigTag = SEC_OID_ANSIX962_ECDSA_SHA256_SIGNATURE; break;
-	case SEC_OID_SHA384:
-	    sigTag = SEC_OID_ANSIX962_ECDSA_SHA384_SIGNATURE; break;
-	case SEC_OID_SHA512:
-	    sigTag = SEC_OID_ANSIX962_ECDSA_SHA512_SIGNATURE; break;
-	default:
-	    break;
-	}
-	break;
-    default:
-    	break;
-    }
-    return sigTag;
 }

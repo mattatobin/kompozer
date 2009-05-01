@@ -1,43 +1,26 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set ts=4 sw=4 sts=4 et cin: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Darin Fisher <darin@netscape.com> (original author)
  *   Andreas M. Schneider <clarence@clarence.de>
- *   Christian Biesinger <cbiesinger@web.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include <stdlib.h>
 #include "nsHttpResponseHead.h"
@@ -69,13 +52,13 @@ nsHttpResponseHead::SetHeader(nsHttpAtom hdr,
 }
 
 void
-nsHttpResponseHead::SetContentLength(PRInt64 len)
+nsHttpResponseHead::SetContentLength(PRInt32 len)
 {
     mContentLength = len;
-    if (!LL_GE_ZERO(len)) // < 0
+    if (len < 0)
         mHeaders.ClearHeader(nsHttp::Content_Length);
     else
-        mHeaders.SetHeader(nsHttp::Content_Length, nsPrintfCString(20, "%lld", len));
+        mHeaders.SetHeader(nsHttp::Content_Length, nsPrintfCString("%d", len));
 }
 
 void
@@ -84,11 +67,11 @@ nsHttpResponseHead::Flatten(nsACString &buf, PRBool pruneTransients)
     if (mVersion == NS_HTTP_VERSION_0_9)
         return;
 
-    buf.AppendLiteral("HTTP/");
+    buf.Append(NS_LITERAL_CSTRING("HTTP/"));
     if (mVersion == NS_HTTP_VERSION_1_1)
-        buf.AppendLiteral("1.1 ");
+        buf.Append(NS_LITERAL_CSTRING("1.1 "));
     else
-        buf.AppendLiteral("1.0 ");
+        buf.Append(NS_LITERAL_CSTRING("1.0 "));
 
     buf.Append(nsPrintfCString("%u", PRUintn(mStatus)) +
                NS_LITERAL_CSTRING(" ") +
@@ -174,7 +157,7 @@ nsHttpResponseHead::ParseStatusLine(char *line)
     
     if ((mVersion == NS_HTTP_VERSION_0_9) || !(line = PL_strchr(line, ' '))) {
         mStatus = 200;
-        mStatusText.AssignLiteral("OK");
+        mStatusText = NS_LITERAL_CSTRING("OK");
     }
     else {
         // Status-Code
@@ -187,7 +170,7 @@ nsHttpResponseHead::ParseStatusLine(char *line)
         // Reason-Phrase is whatever is remaining of the line
         if (!(line = PL_strchr(line, ' '))) {
             LOG(("mal-formed response status line; assuming statusText = 'OK'\n"));
-            mStatusText.AssignLiteral("OK");
+            mStatusText = NS_LITERAL_CSTRING("OK");
         }
         else
             mStatusText = ++line;
@@ -204,23 +187,12 @@ nsHttpResponseHead::ParseHeaderLine(char *line)
     char *val;
 
     mHeaders.ParseHeaderLine(line, &hdr, &val);
-    // leading and trailing LWS has been removed from |val|
 
     // handle some special case headers...
-    if (hdr == nsHttp::Content_Length) {
-        PRInt64 len;
-        // permit only a single value here.
-        if (nsHttp::ParseInt64(val, &len))
-            mContentLength = len;
-        else
-            LOG(("invalid content-length!\n"));
-    }
-    else if (hdr == nsHttp::Content_Type) {
-        LOG(("ParseContentType [type=%s]\n", val));
-        PRBool dummy;
-        net_ParseContentType(nsDependentCString(val),
-                             mContentType, mContentCharset, &dummy);
-    }
+    if (hdr == nsHttp::Content_Length)
+        mContentLength = atoi(val);
+    else if (hdr == nsHttp::Content_Type)
+        ParseContentType(val);
     else if (hdr == nsHttp::Cache_Control)
         ParseCacheControl(val);
     else if (hdr == nsHttp::Pragma)
@@ -308,11 +280,8 @@ nsHttpResponseHead::ComputeFreshnessLifetime(PRUint32 *result)
     if (NS_SUCCEEDED(GetLastModifiedValue(&date2))) {
         LOG(("using last-modified to determine freshness-lifetime\n"));
         LOG(("last-modified = %u, date = %u\n", date2, date));
-        if (date2 <= date) {
-            // this only makes sense if last-modified is actually in the past
-            *result = (date - date2) / 10;
-            return NS_OK;
-        }
+        *result = (date - date2) / 10;
+        return NS_OK;
     }
 
     // These responses can be cached indefinitely.
@@ -333,33 +302,6 @@ nsHttpResponseHead::MustValidate()
 {
     LOG(("nsHttpResponseHead::MustValidate ??\n"));
 
-    // Some response codes are cacheable, but the rest are not.  This switch
-    // should stay in sync with the list in nsHttpChannel::ProcessResponse
-    switch (mStatus) {
-        // Success codes
-    case 200:
-    case 203:
-    case 206:
-        // Cacheable redirects
-    case 300:
-    case 301:
-    case 302:
-    case 304:
-    case 307:
-        break;
-        // Uncacheable redirects
-    case 303:
-    case 305:
-        // Other known errors
-    case 401:
-    case 407:
-    case 412:
-    case 416:
-    default:  // revalidate unknown error pages
-        LOG(("Must validate since response is an uncacheable error page\n"));
-        return PR_TRUE;
-    }
-    
     // The no-cache response header indicates that we must validate this
     // cached response before reusing.
     if (NoCache()) {
@@ -450,6 +392,7 @@ nsHttpResponseHead::UpdateHeaders(nsHttpHeaderArray &headers)
             header == nsHttp::Content_Location    ||
             header == nsHttp::Content_MD5         ||
             header == nsHttp::ETag                ||
+            header == nsHttp::Last_Modified       ||
         // Assume Cache-Control: "no-transform"
             header == nsHttp::Content_Encoding    ||
             header == nsHttp::Content_Range       ||
@@ -480,7 +423,7 @@ nsHttpResponseHead::Reset()
 
     mVersion = NS_HTTP_VERSION_1_1;
     mStatus = 200;
-    mContentLength = LL_MAXUINT;
+    mContentLength = -1;
     mCacheControlNoStore = PR_FALSE;
     mCacheControlNoCache = PR_FALSE;
     mPragmaNoCache = PR_FALSE;
@@ -543,10 +486,14 @@ nsHttpResponseHead::GetExpiresValue(PRUint32 *result)
     PRTime time;
     PRStatus st = PR_ParseTimeString(val, PR_TRUE, &time);
     if (st != PR_SUCCESS) {
-        // parsing failed... RFC 2616 section 14.21 says we should treat this
-        // as an expiration time in the past.
-        *result = 0;
-        return NS_OK;
+        // parsing failed... maybe this is an "Expires: 0"
+        nsCAutoString buf(val);
+        buf.StripWhitespace();
+        if (buf.Length() == 1 && buf[0] == '0') {
+            *result = 0;
+            return NS_OK;
+        }
+        return NS_ERROR_NOT_AVAILABLE;
     }
 
     if (LL_CMP(time, <, LL_Zero()))
@@ -554,28 +501,6 @@ nsHttpResponseHead::GetExpiresValue(PRUint32 *result)
     else
         *result = PRTimeToSeconds(time); 
     return NS_OK;
-}
-
-PRInt64
-nsHttpResponseHead::TotalEntitySize()
-{
-    const char* contentRange = PeekHeader(nsHttp::Content_Range);
-    if (!contentRange)
-        return ContentLength();
-
-    // Total length is after a slash
-    const char* slash = strrchr(contentRange, '/');
-    if (!slash)
-        return -1; // No idea what the length is
-
-    slash++;
-    if (*slash == '*') // Server doesn't know the length
-        return -1;
-
-    PRInt64 size;
-    if (!nsHttp::ParseInt64(slash, &size))
-        size = LL_MAXUINT;
-    return size;
 }
 
 //-----------------------------------------------------------------------------
@@ -623,6 +548,96 @@ nsHttpResponseHead::ParseVersion(const char *str)
     else
         // treat anything else as version 1.0
         mVersion = NS_HTTP_VERSION_1_0;
+}
+
+void
+nsHttpResponseHead::ParseContentType(char *type)
+{
+    LOG(("nsHttpResponseHead::ParseContentType [type=%s]\n", type));
+
+    //
+    // Augmented BNF (from RFC 2616 section 3.7):
+    //
+    //   header-value = media-type *( LWS "," LWS media-type )
+    //   media-type   = type "/" subtype *( LWS ";" LWS parameter )
+    //   type         = token
+    //   subtype      = token
+    //   parameter    = attribute "=" value
+    //   attribute    = token
+    //   value        = token | quoted-string
+    //   
+    //
+    // Examples:
+    //
+    //   text/html
+    //   text/html, text/html
+    //   text/html,text/html; charset=ISO-8859-1
+    //   text/html;charset=ISO-8859-1, text/html
+    //   application/octet-stream
+    //
+
+    // iterate over media-types
+    char *nextType;
+    do {
+        nextType = (char *) strchr(type, ',');
+        if (nextType) {
+            *nextType = '\0';
+            ++nextType;
+        }
+        // type points at this media-type; locate first parameter if any
+        char *charset = "";
+        char *param = (char *) strchr(type, ';');
+        if (param) {
+            *param = '\0';
+            ++param;
+
+            // iterate over parameters
+            char *nextParam;
+            do {
+                nextParam = (char *) strchr(param, ';');
+                if (nextParam) {
+                    *nextParam = '\0';
+                    ++nextParam;
+                }
+                // param points at this parameter
+
+                param = net_FindCharNotInSet(param, HTTP_LWS);
+                if (PL_strncasecmp(param, "charset=", 8) == 0)
+                    charset = param + 8;
+
+            } while ((param = nextParam) != nsnull);
+        }
+
+        // trim LWS leading and trailing whitespace from type and charset.
+        // charset cannot have leading whitespace.  we include '(' in the
+        // trailing trim set to catch media-type comments, which are not
+        // at all standard, but may occur in rare cases.
+
+        type = net_FindCharNotInSet(type, HTTP_LWS);
+
+        char *typeEnd    = net_FindCharInSet(type,    HTTP_LWS "(");
+        char *charsetEnd = net_FindCharInSet(charset, HTTP_LWS "(");
+
+        // force content-type to be lowercase
+        net_ToLowerCase(type, typeEnd - type);
+
+        // if the server sent "*/*", it is meaningless, so do not store it.
+        // also, if type is the same as mContentType, then just update the
+        // charset.  however, if charset is empty and mContentType hasn't
+        // changed, then don't wipe-out an existing mContentCharset.  we
+        // also want to reject a mime-type if it does not include a slash.
+        // some servers give junk after the charset parameter, which may
+        // include a comma, so this check makes us a bit more tolerant.
+
+        if (*type && strcmp(type, "*/*") != 0 && strchr(type, '/')) {
+            PRBool eq = mContentType.Equals(Substring(type, typeEnd));
+            if (!eq)
+                mContentType.Assign(type, typeEnd - type);
+            if (!eq || *charset)
+                mContentCharset.Assign(charset, charsetEnd - charset);
+        }
+
+    } while ((type = nextType) != nsnull);
 }
 
 void

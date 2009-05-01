@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Dean Tessman <dean_tessman@hotmail.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -51,29 +51,30 @@
 #include "nsIFontMetrics.h"
 #include "nsHTMLAtoms.h"
 #include "nsXULAtoms.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIRenderingContext.h"
 #include "nsStyleContext.h"
 #include "nsIContent.h"
 #include "nsINameSpaceManager.h"
 #include "nsBoxLayoutState.h"
 #include "nsMenuBarListener.h"
+#include "nsIPrefBranch.h"
+#include "nsIPrefService.h"
+#include "nsIPrefLocalizedString.h"
 #include "nsXPIDLString.h"
 #include "nsIServiceManager.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
 #include "nsIDOMElement.h"
-#include "nsIDOMXULLabelElement.h"
 #include "nsIEventStateManager.h"
 #include "nsITheme.h"
 #include "nsUnicharUtils.h"
-#include "nsContentUtils.h"
-#include "nsIReflowCallback.h"
 
 #ifdef IBMBIDI
 #include "nsBidiUtils.h"
 #include "nsBidiPresUtils.h"
 #endif // IBMBIDI
+#include "nsReadableUtils.h"
 
 #define ELLIPSIS "..."
 
@@ -93,10 +94,8 @@ public:
 };
 
 
-PRBool nsTextBoxFrame::gAlwaysAppendAccessKey          = PR_FALSE;
-PRBool nsTextBoxFrame::gAccessKeyPrefInitialized       = PR_FALSE;
-PRBool nsTextBoxFrame::gInsertSeparatorBeforeAccessKey = PR_FALSE;
-PRBool nsTextBoxFrame::gInsertSeparatorPrefInitialized = PR_FALSE;
+PRBool nsTextBoxFrame::gAlwaysAppendAccessKey       = PR_FALSE;
+PRBool nsTextBoxFrame::gAccessKeyPrefInitialized    = PR_FALSE;
 
 //
 // NS_NewToolbarFrame
@@ -122,7 +121,8 @@ NS_NewTextBoxFrame ( nsIPresShell* aPresShell, nsIFrame** aNewFrame )
 
 
 NS_IMETHODIMP
-nsTextBoxFrame::AttributeChanged(nsIContent*     aChild,
+nsTextBoxFrame::AttributeChanged(nsIPresContext* aPresContext,
+                                 nsIContent*     aChild,
                                  PRInt32         aNameSpaceID,
                                  nsIAtom*        aAttribute,
                                  PRInt32         aModType)
@@ -130,29 +130,26 @@ nsTextBoxFrame::AttributeChanged(nsIContent*     aChild,
     mState |= NS_STATE_NEED_LAYOUT;
     PRBool aResize;
     PRBool aRedraw;
-    nsPresContext* presContext = GetPresContext();
 
-    UpdateAttributes(presContext, aAttribute, aResize, aRedraw);
+    UpdateAttributes(aPresContext, aAttribute, aResize, aRedraw);
 
     if (aResize) {
-        nsBoxLayoutState state(presContext);
+        nsBoxLayoutState state(aPresContext);
         MarkDirty(state);
     } else if (aRedraw) {
-        nsBoxLayoutState state(presContext);
+        nsBoxLayoutState state(aPresContext);
         Redraw(state);
     }
 
     // If the accesskey changed, register for the new value
     // The old value has been unregistered in nsXULElement::SetAttr
     if (aAttribute == nsXULAtoms::accesskey || aAttribute == nsXULAtoms::control)
-        RegUnregAccessKey(presContext, PR_TRUE);
+        RegUnregAccessKey(aPresContext, PR_TRUE);
 
     return NS_OK;
 }
 
-nsTextBoxFrame::nsTextBoxFrame(nsIPresShell* aShell)
-  : nsLeafBoxFrame(aShell), mCropType(CropRight), mAccessKeyInfo(nsnull), 
-    mNeedsReflowCallback(PR_FALSE)
+nsTextBoxFrame::nsTextBoxFrame(nsIPresShell* aShell):nsLeafBoxFrame(aShell), mCropType(CropRight),mAccessKeyInfo(nsnull)
 {
     mState |= NS_STATE_NEED_LAYOUT;
     NeedsRecalc();
@@ -165,7 +162,7 @@ nsTextBoxFrame::~nsTextBoxFrame()
 
 
 NS_IMETHODIMP
-nsTextBoxFrame::Init(nsPresContext*  aPresContext,
+nsTextBoxFrame::Init(nsIPresContext*  aPresContext,
                      nsIContent*      aContent,
                      nsIFrame*        aParent,
                      nsStyleContext*  aContext,
@@ -187,7 +184,7 @@ nsTextBoxFrame::Init(nsPresContext*  aPresContext,
 }
 
 NS_IMETHODIMP
-nsTextBoxFrame::Destroy(nsPresContext* aPresContext)
+nsTextBoxFrame::Destroy(nsIPresContext* aPresContext)
 {
     // unregister access key
     RegUnregAccessKey(aPresContext, PR_FALSE);
@@ -202,83 +199,30 @@ nsTextBoxFrame::AlwaysAppendAccessKey()
   {
     gAccessKeyPrefInitialized = PR_TRUE;
 
-    const char* prefName = "intl.menuitems.alwaysappendaccesskeys";
-    nsAdoptingString val = nsContentUtils::GetLocalizedStringPref(prefName);
-    gAlwaysAppendAccessKey = val.Equals(NS_LITERAL_STRING("true"));
+    nsCOMPtr<nsIPrefBranch> prefBranch =
+      do_GetService(NS_PREFSERVICE_CONTRACTID);
+
+    if (prefBranch) 
+    {
+      nsCOMPtr<nsIPrefLocalizedString> prefValue;
+      prefBranch->GetComplexValue("intl.menuitems.alwaysappendaccesskeys",
+                                  NS_GET_IID(nsIPrefLocalizedString),
+                                  getter_AddRefs(prefValue));
+      if (prefValue)
+      {
+        nsXPIDLString prefString;
+        prefValue->ToString(getter_Copies(prefString));
+        gAlwaysAppendAccessKey =
+          nsDependentString(prefString).Equals(NS_LITERAL_STRING("true"));
+      }
+    }
   }
   return gAlwaysAppendAccessKey;
 }
-
-PRBool
-nsTextBoxFrame::InsertSeparatorBeforeAccessKey()
-{
-  if (!gInsertSeparatorPrefInitialized)
-  {
-    gInsertSeparatorPrefInitialized = PR_TRUE;
-
-    const char* prefName = "intl.menuitems.insertseparatorbeforeaccesskeys";
-    nsAdoptingString val = nsContentUtils::GetLocalizedStringPref(prefName);
-    gInsertSeparatorBeforeAccessKey = val.EqualsLiteral("true");
-  }
-  return gInsertSeparatorBeforeAccessKey;
-}
-
-class nsAsyncAccesskeyUpdate : public nsIReflowCallback
-{
-public:
-    nsAsyncAccesskeyUpdate(nsIFrame* aFrame) : mWeakFrame(aFrame)
-    {
-    }
-
-    NS_DECL_ISUPPORTS
-
-    NS_IMETHOD ReflowFinished(nsIPresShell* aShell, PRBool* aFlushFlag)
-    {
-        nsTextBoxFrame* frame =
-            NS_STATIC_CAST(nsTextBoxFrame*, mWeakFrame.GetFrame());
-        if (frame && frame->UpdateAccesskey(mWeakFrame)) {
-            *aFlushFlag = PR_TRUE;
-        }
-        return NS_OK;
-    }
-
-    nsWeakFrame mWeakFrame;
-};
-
-NS_IMPL_ISUPPORTS1(nsAsyncAccesskeyUpdate, nsIReflowCallback)
-
-PRBool
-nsTextBoxFrame::UpdateAccesskey(nsWeakFrame& aWeakThis)
-{
-    nsAutoString accesskey;
-    nsCOMPtr<nsIDOMXULLabelElement> labelElement = do_QueryInterface(mContent);
-    if (labelElement) {
-        // Accesskey may be stored on control.
-        nsCxPusher cx;
-        if (cx.Push(mContent)) {
-          labelElement->GetAccessKey(accesskey);
-          NS_ENSURE_TRUE(aWeakThis.IsAlive(), PR_FALSE);
-        }
-    }
-    else {
-        mContent->GetAttr(kNameSpaceID_None, nsXULAtoms::accesskey, accesskey);
-    }
-
-    if (!accesskey.Equals(mAccessKey)) {
-        // Need to get clean mTitle.
-        mContent->GetAttr(kNameSpaceID_None, nsHTMLAtoms::value, mTitle);
-        mAccessKey = accesskey;
-        UpdateAccessTitle();
-        nsPresContext* presContext = GetPresContext();
-        nsBoxLayoutState state(presContext);
-        MarkDirty(state);
-        return PR_TRUE;
-    }
-    return PR_FALSE;
-}
+ 
 
 void
-nsTextBoxFrame::UpdateAttributes(nsPresContext*  aPresContext,
+nsTextBoxFrame::UpdateAttributes(nsIPresContext*  aPresContext,
                                  nsIAtom*         aAttribute,
                                  PRBool&          aResize,
                                  PRBool&          aRedraw)
@@ -292,13 +236,13 @@ nsTextBoxFrame::UpdateAttributes(nsPresContext*  aPresContext,
         mContent->GetAttr(kNameSpaceID_None, nsXULAtoms::crop, value);
         CroppingStyle cropType;
 
-        if (value.EqualsASCII(CROP_LEFT) ||
-            value.EqualsASCII(CROP_START))
+        if (value.Equals(NS_LITERAL_STRING(CROP_LEFT)) ||
+            value.Equals(NS_LITERAL_STRING(CROP_START)))
             cropType = CropLeft;
-        else if (value.EqualsASCII(CROP_CENTER))
+        else if (value.Equals(NS_LITERAL_STRING(CROP_CENTER)))
             cropType = CropCenter;
-        else if (value.EqualsASCII(CROP_RIGHT) ||
-                 value.EqualsASCII(CROP_END))
+        else if (value.Equals(NS_LITERAL_STRING(CROP_RIGHT)) ||
+                 value.Equals(NS_LITERAL_STRING(CROP_END)))
             cropType = CropRight;
         else
             cropType = CropNone;
@@ -310,14 +254,27 @@ nsTextBoxFrame::UpdateAttributes(nsPresContext*  aPresContext,
     }
 
     if (aAttribute == nsnull || aAttribute == nsHTMLAtoms::value) {
-        mContent->GetAttr(kNameSpaceID_None, nsHTMLAtoms::value, mTitle);
-        doUpdateTitle = PR_TRUE;
+        nsAutoString value;
+        mContent->GetAttr(kNameSpaceID_None, nsHTMLAtoms::value, value);
+        if (!value.Equals(mTitle)) {
+            mTitle = value;
+            doUpdateTitle = PR_TRUE;
+        }
     }
 
     if (aAttribute == nsnull || aAttribute == nsXULAtoms::accesskey) {
-        mNeedsReflowCallback = PR_TRUE;
-        // Ensure that layout is refreshed and reflow callback called.
-        aResize = PR_TRUE;
+        nsAutoString accesskey;
+        mContent->GetAttr(kNameSpaceID_None, nsXULAtoms::accesskey, accesskey);
+        if (!accesskey.Equals(mAccessKey)) {
+            if (!doUpdateTitle) {
+                // Need to get clean mTitle and didn't already
+                nsAutoString value;
+                mContent->GetAttr(kNameSpaceID_None, nsHTMLAtoms::value, value);
+                mTitle = value;
+                doUpdateTitle = PR_TRUE;
+            }
+            mAccessKey = accesskey;
+        }
     }
 
     if (doUpdateTitle) {
@@ -328,7 +285,7 @@ nsTextBoxFrame::UpdateAttributes(nsPresContext*  aPresContext,
 }
 
 NS_IMETHODIMP
-nsTextBoxFrame::Paint(nsPresContext*      aPresContext,
+nsTextBoxFrame::Paint(nsIPresContext*      aPresContext,
                       nsIRenderingContext& aRenderingContext,
                       const nsRect&        aDirtyRect,
                       nsFramePaintLayer    aWhichLayer,
@@ -355,7 +312,7 @@ nsTextBoxFrame::Paint(nsPresContext*      aPresContext,
 }
 
 NS_IMETHODIMP
-nsTextBoxFrame::PaintTitle(nsPresContext*      aPresContext,
+nsTextBoxFrame::PaintTitle(nsIPresContext*      aPresContext,
                            nsIRenderingContext& aRenderingContext,
                            const nsRect&        aDirtyRect,
                            const nsRect&        aRect)
@@ -467,48 +424,27 @@ nsTextBoxFrame::PaintTitle(nsPresContext*      aPresContext,
     nsresult rv = NS_ERROR_FAILURE;
 
     if (mState & NS_FRAME_IS_BIDI) {
+      nsBidiPresUtils* bidiUtils;
       aPresContext->SetBidiEnabled(PR_TRUE);
-      nsBidiPresUtils* bidiUtils = aPresContext->GetBidiUtils();
+      aPresContext->GetBidiUtils(&bidiUtils);
 
       if (bidiUtils) {
-        const nsStyleVisibility* vis = GetStyleVisibility();
-        nsBidiDirection direction = (NS_STYLE_DIRECTION_RTL == vis->mDirection) ? NSBIDI_RTL : NSBIDI_LTR;
-        if (mAccessKeyInfo && mAccessKeyInfo->mAccesskeyIndex != kNotFound) {
-           // We let the RenderText function calculate the mnemonic's
-           // underline position for us.
-           nsBidiPositionResolve posResolve;
-           posResolve.logicalIndex = mAccessKeyInfo->mAccesskeyIndex;
-           rv = bidiUtils->RenderText(mCroppedTitle.get(), mCroppedTitle.Length(), direction,
-                                      aPresContext, aRenderingContext,
-                                      textRect.x, textRect.y + baseline,
-                                      &posResolve,
-                                      1);
-           mAccessKeyInfo->mBeforeWidth = posResolve.visualLeftTwips;
-        }
-        else
-        {
-           rv = bidiUtils->RenderText(mCroppedTitle.get(), mCroppedTitle.Length(), direction,
-                                      aPresContext, aRenderingContext,
-                                      textRect.x, textRect.y + baseline);
+        PRUnichar* buffer = ToNewUnicode(mCroppedTitle);
+        if (buffer) {
+          const nsStyleVisibility* vis = GetStyleVisibility();
+          nsBidiDirection direction =
+                                    (NS_STYLE_DIRECTION_RTL == vis->mDirection)
+                                    ? NSBIDI_RTL : NSBIDI_LTR;
+          rv = bidiUtils->RenderText(buffer, mCroppedTitle.Length(), direction,
+                                     aPresContext, aRenderingContext,
+                                     textRect.x, textRect.y + baseline);
+          nsMemory::Free(buffer);
         }
       }
     }
     if (NS_FAILED(rv) )
 #endif // IBMBIDI
-    {
-       if (mAccessKeyInfo && mAccessKeyInfo->mAccesskeyIndex != kNotFound) {
-           // In the simple (non-BiDi) case, we calculate the mnemonic's
-           // underline position by getting the text metric.
-           // XXX are attribute values always two byte?
-           if (mAccessKeyInfo->mAccesskeyIndex > 0)
-               aRenderingContext.GetWidth(mCroppedTitle.get(), mAccessKeyInfo->mAccesskeyIndex,
-                                          mAccessKeyInfo->mBeforeWidth);
-           else
-               mAccessKeyInfo->mBeforeWidth = 0;
-       }
-
-       aRenderingContext.DrawString(mCroppedTitle, textRect.x, textRect.y + baseline);
-    }
+    aRenderingContext.DrawString(mCroppedTitle, textRect.x, textRect.y + baseline);
 
     if (mAccessKeyInfo && mAccessKeyInfo->mAccesskeyIndex != kNotFound) {
         aRenderingContext.FillRect(textRect.x + mAccessKeyInfo->mBeforeWidth,
@@ -521,7 +457,7 @@ nsTextBoxFrame::PaintTitle(nsPresContext*      aPresContext,
 }
 
 void
-nsTextBoxFrame::LayoutTitle(nsPresContext*      aPresContext,
+nsTextBoxFrame::LayoutTitle(nsIPresContext*      aPresContext,
                             nsIRenderingContext& aRenderingContext,
                             const nsRect&        aRect)
 {
@@ -543,9 +479,17 @@ void
 nsTextBoxFrame::CalculateUnderline(nsIRenderingContext& aRenderingContext)
 {
     if (mAccessKeyInfo && mAccessKeyInfo->mAccesskeyIndex != kNotFound) {
-         // Calculate all fields of mAccessKeyInfo which
-         // are the same for both BiDi and non-BiDi rames.
-         const PRUnichar *titleString = mCroppedTitle.get();
+         // get all the underline-positioning stuff
+
+         // XXX are attribute values always two byte?
+         const PRUnichar *titleString;
+         titleString = mCroppedTitle.get();
+         if (mAccessKeyInfo->mAccesskeyIndex > 0)
+             aRenderingContext.GetWidth(titleString, mAccessKeyInfo->mAccesskeyIndex,
+                                        mAccessKeyInfo->mBeforeWidth);
+         else
+             mAccessKeyInfo->mBeforeWidth = 0;
+
          aRenderingContext.GetWidth(titleString[mAccessKeyInfo->mAccesskeyIndex],
                                     mAccessKeyInfo->mAccessWidth);
 
@@ -560,7 +504,7 @@ nsTextBoxFrame::CalculateUnderline(nsIRenderingContext& aRenderingContext)
 }
 
 void
-nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
+nsTextBoxFrame::CalculateTitleForWidth(nsIPresContext*      aPresContext,
                                        nsIRenderingContext& aRenderingContext,
                                        nscoord              aWidth)
 {
@@ -580,12 +524,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 #ifdef IBMBIDI
         PRInt32 length = mTitle.Length();
         for (PRInt32 i = 0; i < length; i++) {
-          if ((UCS2_CHAR_IS_BIDI(mTitle.CharAt(i)) ) ||
-              ((IS_HIGH_SURROGATE(mTitle.CharAt(i))) &&
-               (++i < length) &&
-               (IS_LOW_SURROGATE(mTitle.CharAt(i))) &&
-               (UTF32_CHAR_IS_BIDI(SURROGATE_TO_UCS4(mTitle.CharAt(i-1),
-                                                     mTitle.CharAt(i)))))) {
+          if (CHAR_IS_BIDI(mTitle.CharAt(i) ) ) {
             mState |= NS_FRAME_IS_BIDI;
             break;
           }
@@ -595,7 +534,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
     }
 
     // start with an ellipsis
-    mCroppedTitle.AssignASCII(ELLIPSIS);
+    mCroppedTitle.AssignWithConversion(ELLIPSIS);
 
     // see if the width is even smaller than the ellipsis
     // if so, clear the text (XXX set as many '.' as we can?).
@@ -616,7 +555,6 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 
     aWidth -= ellipsisWidth;
 
-    // XXX: This whole block should probably take surrogates into account
     // ok crop things
     switch (mCropType)
     {
@@ -635,7 +573,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 
                 twidth += cwidth;
 #ifdef IBMBIDI
-                if (UCS2_CHAR_IS_BIDI(ch) ) {
+                if (CHAR_IS_BIDI(ch) ) {
                   mState |= NS_FRAME_IS_BIDI;
                 }
 #endif // IBMBIDI
@@ -665,7 +603,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 
                 twidth += cwidth;
 #ifdef IBMBIDI
-                if (UCS2_CHAR_IS_BIDI(ch) ) {
+                if (CHAR_IS_BIDI(ch) ) {
                   mState |= NS_FRAME_IS_BIDI;
                 }
 #endif // IBMBIDI
@@ -709,7 +647,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
                 leftString.Insert(ch, leftString.Length());
 
 #ifdef IBMBIDI
-                if (UCS2_CHAR_IS_BIDI(ch))
+                if (CHAR_IS_BIDI(ch))
                     mState |= NS_FRAME_IS_BIDI;
 #endif
 
@@ -725,7 +663,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
                     rightString.Insert(ch, 0);
 
 #ifdef IBMBIDI
-                    if (UCS2_CHAR_IS_BIDI(ch))
+                    if (CHAR_IS_BIDI(ch))
                         mState |= NS_FRAME_IS_BIDI;
 #endif
                 }
@@ -737,7 +675,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 
             // form the new cropped string
             nsAutoString ellipsisString;
-            ellipsisString.AssignASCII(ELLIPSIS);
+            ellipsisString.AssignWithConversion(ELLIPSIS);
 
             mCroppedTitle = leftString + ellipsisString + rightString;
         }
@@ -759,12 +697,7 @@ nsTextBoxFrame::UpdateAccessTitle()
             if (( !FindInReadable(mAccessKey, mTitle, nsCaseInsensitiveStringComparator()))
                 || AlwaysAppendAccessKey()) 
             {
-                nsAutoString tmpstring;
-                if (InsertSeparatorBeforeAccessKey() &&
-                    !mTitle.IsEmpty() && !NS_IS_SPACE(mTitle.Last())) {
-                  tmpstring += ' ';
-                }
-                tmpstring += '(';
+                nsAutoString tmpstring(NS_LITERAL_STRING("("));
                 tmpstring += mAccessKey;
                 ToUpperCase(tmpstring);
                 tmpstring.Append(NS_LITERAL_STRING(")"));
@@ -837,14 +770,6 @@ nsTextBoxFrame::UpdateAccessIndex()
 NS_IMETHODIMP
 nsTextBoxFrame::DoLayout(nsBoxLayoutState& aBoxLayoutState)
 {
-    if (mNeedsReflowCallback) {
-        nsCOMPtr<nsIReflowCallback> cb = new nsAsyncAccesskeyUpdate(this);
-        if (cb) {
-            GetPresContext()->PresShell()->PostReflowCallback(cb);
-        }
-        mNeedsReflowCallback = PR_FALSE;
-    }
-
     mState |= NS_STATE_NEED_LAYOUT;
 
     return nsLeafBoxFrame::DoLayout(aBoxLayoutState);
@@ -858,7 +783,7 @@ nsTextBoxFrame::NeedsRecalc()
 }
 
 void
-nsTextBoxFrame::GetTextSize(nsPresContext* aPresContext, nsIRenderingContext& aRenderingContext,
+nsTextBoxFrame::GetTextSize(nsIPresContext* aPresContext, nsIRenderingContext& aRenderingContext,
                                 const nsString& aString, nsSize& aSize, nscoord& aAscent)
 {
     nsCOMPtr<nsIFontMetrics> fontMet;
@@ -876,7 +801,7 @@ nsTextBoxFrame::CalcTextSize(nsBoxLayoutState& aBoxLayoutState)
     if (mNeedsRecalc)
     {
         nsSize size;
-        nsPresContext* presContext = aBoxLayoutState.PresContext();
+        nsIPresContext* presContext = aBoxLayoutState.GetPresContext();
         const nsHTMLReflowState* rstate = aBoxLayoutState.GetReflowState();
         if (!rstate)
             return;
@@ -960,7 +885,7 @@ nsTextBoxFrame::GetFrameName(nsAString& aResult) const
 // If you make changes to this function, check its counterparts 
 // in nsBoxFrame and nsAreaFrame
 nsresult
-nsTextBoxFrame::RegUnregAccessKey(nsPresContext* aPresContext,
+nsTextBoxFrame::RegUnregAccessKey(nsIPresContext* aPresContext,
                                   PRBool          aDoReg)
 {
     // if we have no content, we can't do anything

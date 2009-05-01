@@ -41,12 +41,21 @@
 #include "mozISpellI18NManager.h"
 #include "nsIStringEnumerator.h"
 
-#define UNREASONABLE_WORD_LENGTH 64
-
 NS_IMPL_ISUPPORTS1(mozSpellChecker, nsISpellChecker)
 
 mozSpellChecker::mozSpellChecker()
 {
+  nsresult rv;
+
+  mPersonalDictionary = do_GetService("@mozilla.org/spellchecker/personaldictionary;1",&rv);
+  if (NS_FAILED(rv)) {
+    NS_ERROR("Could not get personal Dictionary");
+  }
+  mSpellCheckingEngine = do_GetService("@mozilla.org/spellchecker/myspell;1",&rv);
+  if (NS_FAILED(rv)) {
+    NS_ERROR("Could not get spell checker");
+  }
+  mSpellCheckingEngine->SetPersonalDictionary(mPersonalDictionary);
 }
 
 mozSpellChecker::~mozSpellChecker()
@@ -57,20 +66,6 @@ mozSpellChecker::~mozSpellChecker()
   }
   mSpellCheckingEngine = nsnull;
   mPersonalDictionary = nsnull;
-}
-
-nsresult 
-mozSpellChecker::Init()
-{
-  mPersonalDictionary = do_GetService("@mozilla.org/spellchecker/personaldictionary;1");
-
-  nsresult rv;
-  mSpellCheckingEngine = do_GetService("@mozilla.org/spellchecker/myspell;1",&rv);
-  if (NS_FAILED(rv)) {
-    return rv;
-  }
-  mSpellCheckingEngine->SetPersonalDictionary(mPersonalDictionary);
-  return NS_OK;
 }
 
 NS_IMETHODIMP 
@@ -130,30 +125,20 @@ mozSpellChecker::CheckWord(const nsAString &aWord, PRBool *aIsMisspelled, nsStri
   PRBool correct;
   if(!mSpellCheckingEngine)
     return NS_ERROR_NULL_POINTER;
-
-  // don't bother to check crazy words, also, myspell gets unhappy if you
-  // give it too much data and crashes sometimes
-  if (aWord.Length() > UNREASONABLE_WORD_LENGTH) {
-    *aIsMisspelled = PR_TRUE;
-    return NS_OK;
-  }
-
   *aIsMisspelled = PR_FALSE;
   result = mSpellCheckingEngine->Check(PromiseFlatString(aWord).get(), &correct);
-  NS_ENSURE_SUCCESS(result, result);
+  if(NS_FAILED(result))
+    return result;
   if(!correct){
     if(aSuggestions){
       PRUint32 count,i;
       PRUnichar **words;
       
-      result = mSpellCheckingEngine->Suggest(PromiseFlatString(aWord).get(), &words, &count);
-      NS_ENSURE_SUCCESS(result, result); 
+      mSpellCheckingEngine->Suggest(PromiseFlatString(aWord).get(), &words, &count);
       for(i=0;i<count;i++){
         aSuggestions->AppendString(nsDependentString(words[i]));
       }
-      
-      if (count)
-        NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(count, words);
+      NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(count, words);
     }
     if(aIsMisspelled){
       *aIsMisspelled = PR_TRUE;
@@ -222,30 +207,12 @@ mozSpellChecker::Replace(const nsAString &aOldWord, const nsAString &aNewWord, P
     while(( NS_SUCCEEDED(mTsDoc->IsDone(&done)) && !done ) &&(currentBlock < startBlock)){
       mTsDoc->NextBlock();
     }
-
-//After we have moved to the block where the first occurance of replace was done, put the 
-//selection to the next word following it. In case there is no word following it i.e if it happens
-//to be the last word in that block, then move to the next block and put the selection to the 
-//first word in that block, otherwise when the Setupdoc() is called, it queries the LastSelectedBlock()
-//and the selection offset of the last occurance of the replaced word is taken instead of the first 
-//occurance and things get messed up as reported in the bug 244969
-
     if( NS_SUCCEEDED(mTsDoc->IsDone(&done)) && !done ){
-      nsString str;                                
-      result = mTsDoc->GetCurrentTextBlock(&str);  
-      result = mConverter->FindNextWord(str.get(),str.Length(),selOffset,&begin,&end);
-            if(end == -1)
-             {
-                mTsDoc->NextBlock();
-                selOffset=0;
-                result = mTsDoc->GetCurrentTextBlock(&str); 
-                result = mConverter->FindNextWord(str.get(),str.Length(),selOffset,&begin,&end);
-                mTsDoc->SetSelection(begin, 0);
-             }
-         else
-                mTsDoc->SetSelection(begin, 0);
+      nsString str;                                // regenerate the offset table 
+      result = mTsDoc->GetCurrentTextBlock(&str);  // this seems necessary.  I'm not 100% sure why
+      mTsDoc->SetSelection(selOffset,0);
     }
- }
+  }
   else{
     mTsDoc->InsertText(&newWord);
   }

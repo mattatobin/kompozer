@@ -179,13 +179,13 @@ public:
      * removes the specified callback from the nsHostRecord for the given
      * hostname, flags, and address family.  these parameters should correspond
      * to the parameters passed to ResolveHost.  this function executes the
-     * callback if the callback is still pending with the given status.
+     * callback if the callback is still pending with the status failure code
+     * NS_ERROR_ABORT.
      */
     void DetachCallback(const char            *hostname,
                         PRUint16               flags,
                         PRUint16               af,
-                        nsResolveHostCallback *callback,
-                        nsresult               status);
+                        nsResolveHostCallback *callback);
 
     /**
      * values for the flags parameter passed to ResolveHost and DetachCallback

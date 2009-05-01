@@ -1,42 +1,39 @@
 /*
  * NSS utility functions
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: nssinit.c,v 1.69.2.9 2007/12/06 00:45:12 julien.pierre.boogz%sun.com Exp $ */
+ # $Id: nssinit.c,v 1.64.22.1 2004/10/15 21:13:54 wchang0222%aol.com Exp $
+ */
 
 #include <ctype.h>
 #include "seccomon.h"
@@ -57,7 +54,6 @@
 #include "pki3hack.h"
 #include "certi.h"
 #include "secmodi.h"
-#include "ocspi.h"
 
 /*
  * On Windows nss3.dll needs to export the symbol 'mktemp' to be
@@ -124,7 +120,7 @@ nss_makeFlags(PRBool readOnly, PRBool noCertDB,
 }
 
 /*
- * statics to remember the PK11_ConfigurePKCS11()
+ * statics to remember the PKCS11_ConfigurePKCS11()
  * info.
  */
 static char * pk11_config_strings = NULL;
@@ -225,18 +221,6 @@ PK11_ConfigurePKCS11(const char *man, const char *libdes, const char *tokdes,
     return;
 }
 
-void PK11_UnconfigurePKCS11(void)
-{
-    if (pk11_config_strings != NULL) {
-	PR_smprintf_free(pk11_config_strings);
-        pk11_config_strings = NULL;
-    }
-    if (pk11_config_name) {
-        PORT_Free(pk11_config_name);
-        pk11_config_name = NULL;
-    }
-}
-
 static char *
 nss_addEscape(const char *string, char quote)
 {
@@ -298,7 +282,7 @@ done:
 static const char *dllname =
 #if defined(XP_WIN32) || defined(XP_OS2)
 	"nssckbi.dll";
-#elif defined(HPUX) && !defined(__ia64)  /* HP-UX PA-RISC */
+#elif defined(HPUX)
 	"libnssckbi.sl";
 #elif defined(DARWIN)
 	"libnssckbi.dylib";
@@ -313,15 +297,14 @@ static const char *dllname =
 /* Should we have platform ifdefs here??? */
 #define FILE_SEP '/'
 
-static void nss_FindExternalRootPaths(const char *dbpath, 
-                                      const char* secmodprefix,
+static void nss_FindExternalRootPaths(const char *dbpath, const char* secmodprefix,
                               char** retoldpath, char** retnewpath)
 {
     char *path, *oldpath = NULL, *lastsep;
     int len, path_len, secmod_len, dll_len;
 
     path_len = PORT_Strlen(dbpath);
-    secmod_len = secmodprefix ? PORT_Strlen(secmodprefix) : 0;
+    secmod_len = PORT_Strlen(secmodprefix);
     dll_len = PORT_Strlen(dllname);
     len = path_len + secmod_len + dll_len + 2; /* FILE_SEP + NULL */
 
@@ -334,7 +317,7 @@ static void nss_FindExternalRootPaths(const char *dbpath,
         path[path_len++] = FILE_SEP;
     }
     PORT_Strcpy(&path[path_len],dllname);
-    if (secmod_len > 0) {
+    if (secmodprefix) {
         lastsep = PORT_Strrchr(secmodprefix, FILE_SEP);
         if (lastsep) {
             int secmoddir_len = lastsep-secmodprefix+1; /* FILE_SEP */
@@ -409,19 +392,12 @@ nss_FindExternalRoot(const char *dbpath, const char* secmodprefix)
 static PRBool nss_IsInitted = PR_FALSE;
 
 extern SECStatus secoid_Init(void);
-static SECStatus nss_InitShutdownList(void);
-
-#ifdef DEBUG
-static CERTCertificate dummyCert;
-#endif
 
 static SECStatus
 nss_Init(const char *configdir, const char *certPrefix, const char *keyPrefix,
 		 const char *secmodName, PRBool readOnly, PRBool noCertDB, 
 			PRBool noModDB, PRBool forceOpen, PRBool noRootInit,
-			PRBool optimizeSpace, PRBool noSingleThreadedModules,
-			PRBool allowAlreadyInitializedModules,
-			PRBool dontFinalizeModules)
+			PRBool optimizeSpace)
 {
     char *moduleSpec = NULL;
     char *flags = NULL;
@@ -435,18 +411,7 @@ nss_Init(const char *configdir, const char *certPrefix, const char *keyPrefix,
 	return SECSuccess;
     }
 
-    /* New option bits must not change the size of CERTCertificate. */
-    PORT_Assert(sizeof(dummyCert.options) == sizeof(void *));
-
-    if (SECSuccess != cert_InitLocks()) {
-        return SECFailure;
-    }
-
     if (SECSuccess != InitCRLCache()) {
-        return SECFailure;
-    }
-    
-    if (SECSuccess != OCSP_InitGlobal()) {
         return SECFailure;
     }
 
@@ -473,12 +438,6 @@ nss_Init(const char *configdir, const char *certPrefix, const char *keyPrefix,
     lsecmodName = nss_doubleEscape(secmodName);
     if (lsecmodName == NULL) {
 	goto loser;
-    }
-    if (noSingleThreadedModules || allowAlreadyInitializedModules ||
-        dontFinalizeModules) {
-        pk11_setGlobalOptions(noSingleThreadedModules,
-                              allowAlreadyInitializedModules,
-                              dontFinalizeModules);
     }
 
     moduleSpec = PR_smprintf("name=\"%s\" parameters=\"configdir='%s' certPrefix='%s' keyPrefix='%s' secmod='%s' flags=%s %s\" NSS=\"flags=internal,moduleDB,moduleDBOnly,critical\"",
@@ -509,9 +468,6 @@ loser:
 	if (STAN_LoadDefaultNSS3TrustDomain() != PR_SUCCESS) {
 	    return SECFailure;
 	}
-	if (nss_InitShutdownList() != SECSuccess) {
-	    return SECFailure;
-	}
 	CERT_SetDefaultCertDB((CERTCertDBHandle *)
 				STAN_GetDefaultTrustDomain());
 #ifndef XP_MAC
@@ -534,14 +490,14 @@ SECStatus
 NSS_Init(const char *configdir)
 {
     return nss_Init(configdir, "", "", SECMOD_DB, PR_TRUE, 
-		PR_FALSE, PR_FALSE, PR_FALSE, PR_FALSE, PR_TRUE, PR_FALSE, PR_FALSE, PR_FALSE);
+		PR_FALSE, PR_FALSE, PR_FALSE, PR_FALSE, PR_TRUE);
 }
 
 SECStatus
 NSS_InitReadWrite(const char *configdir)
 {
     return nss_Init(configdir, "", "", SECMOD_DB, PR_FALSE, 
-		PR_FALSE, PR_FALSE, PR_FALSE, PR_FALSE, PR_TRUE, PR_FALSE, PR_FALSE, PR_FALSE);
+		PR_FALSE, PR_FALSE, PR_FALSE, PR_FALSE, PR_TRUE);
 }
 
 /*
@@ -561,36 +517,6 @@ NSS_InitReadWrite(const char *configdir)
  *			initialize the 	PKCS #11 module.
  *      NSS_INIT_FORCEOPEN - Continue to force initializations even if the 
  * 			databases cannot be opened.
- *      NSS_INIT_PK11THREADSAFE - only load PKCS#11 modules that are
- *                      thread-safe, ie. that support locking - either OS
- *                      locking or NSS-provided locks . If a PKCS#11
- *                      module isn't thread-safe, don't serialize its
- *                      calls; just don't load it instead. This is necessary
- *                      if another piece of code is using the same PKCS#11
- *                      modules that NSS is accessing without going through
- *                      NSS, for example the Java SunPKCS11 provider.
- *      NSS_INIT_PK11RELOAD - ignore the CKR_CRYPTOKI_ALREADY_INITIALIZED
- *                      error when loading PKCS#11 modules. This is necessary
- *                      if another piece of code is using the same PKCS#11
- *                      modules that NSS is accessing without going through
- *                      NSS, for example Java SunPKCS11 provider.
- *      NSS_INIT_NOPK11FINALIZE - never call C_Finalize on any
- *                      PKCS#11 module. This may be necessary in order to
- *                      ensure continuous operation and proper shutdown
- *                      sequence if another piece of code is using the same
- *                      PKCS#11 modules that NSS is accessing without going
- *                      through NSS, for example Java SunPKCS11 provider.
- *                      The following limitation applies when this is set :
- *                      SECMOD_WaitForAnyTokenEvent will not use
- *                      C_WaitForSlotEvent, in order to prevent the need for
- *                      C_Finalize. This call will be emulated instead.
- *      NSS_INIT_RESERVED - Currently has no effect, but may be used in the
- *                      future to trigger better cooperation between PKCS#11
- *                      modules used by both NSS and the Java SunPKCS11
- *                      provider. This should occur after a new flag is defined
- *                      for C_Initialize by the PKCS#11 working group.
- *      NSS_INIT_COOPERATE - Sets 4 recommended options for applications that
- *                      use both NSS and the Java SunPKCS11 provider. 
  */
 SECStatus
 NSS_Initialize(const char *configdir, const char *certPrefix, 
@@ -602,10 +528,7 @@ NSS_Initialize(const char *configdir, const char *certPrefix,
 	((flags & NSS_INIT_NOMODDB) == NSS_INIT_NOMODDB),
 	((flags & NSS_INIT_FORCEOPEN) == NSS_INIT_FORCEOPEN),
 	((flags & NSS_INIT_NOROOTINIT) == NSS_INIT_NOROOTINIT),
-	((flags & NSS_INIT_OPTIMIZESPACE) == NSS_INIT_OPTIMIZESPACE),
-        ((flags & NSS_INIT_PK11THREADSAFE) == NSS_INIT_PK11THREADSAFE),
-        ((flags & NSS_INIT_PK11RELOAD) == NSS_INIT_PK11RELOAD),
-        ((flags & NSS_INIT_NOPK11FINALIZE) == NSS_INIT_NOPK11FINALIZE));
+	((flags & NSS_INIT_OPTIMIZESPACE) == NSS_INIT_OPTIMIZESPACE));
 }
 
 /*
@@ -615,223 +538,41 @@ SECStatus
 NSS_NoDB_Init(const char * configdir)
 {
       return nss_Init("","","","",
-			PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE,
-			PR_FALSE,PR_FALSE,PR_FALSE);
+			PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE,PR_TRUE);
 }
-
-
-#define NSS_SHUTDOWN_STEP 10
-
-struct NSSShutdownFuncPair {
-    NSS_ShutdownFunc	func;
-    void		*appData;
-};
-
-static struct NSSShutdownListStr {
-    PZLock		*lock;
-    int			maxFuncs;
-    int			numFuncs;
-    struct NSSShutdownFuncPair	*funcs;
-} nssShutdownList = { 0 };
-
-/*
- * find and existing shutdown function
- */
-static int 
-nss_GetShutdownEntry(NSS_ShutdownFunc sFunc, void *appData)
-{
-    int count, i;
-    count = nssShutdownList.numFuncs;
-    /* expect the list to be short, just do a linear search */
-    for (i=0; i < count; i++) {
-	if ((nssShutdownList.funcs[i].func == sFunc) &&
-	    (nssShutdownList.funcs[i].appData == appData)){
-	    return i;
-	}
-    }
-    return -1;
-}
-    
-/*
- * register a callback to be called when NSS shuts down
- */
-SECStatus
-NSS_RegisterShutdown(NSS_ShutdownFunc sFunc, void *appData)
-{
-    int i;
-
-    if (!nss_IsInitted) {
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
-	return SECFailure;
-    }
-    if (sFunc == NULL) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
-    }
-
-    PORT_Assert(nssShutdownList.lock);
-    PZ_Lock(nssShutdownList.lock);
-
-    /* make sure we don't have a duplicate */
-    i = nss_GetShutdownEntry(sFunc, appData);
-    if (i > 0) {
-	PZ_Unlock(nssShutdownList.lock);
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
-	return SECFailure;
-    }
-    /* find an empty slot */
-    i = nss_GetShutdownEntry(NULL, NULL);
-    if (i > 0) {
-	nssShutdownList.funcs[i].func = sFunc;
-	nssShutdownList.funcs[i].appData = appData;
-	PZ_Unlock(nssShutdownList.lock);
-	return SECFailure;
-    }
-    if (nssShutdownList.maxFuncs == nssShutdownList.numFuncs) {
-	struct NSSShutdownFuncPair *funcs = 
-		(struct NSSShutdownFuncPair *)PORT_Realloc
-		(nssShutdownList.funcs, 
-		(nssShutdownList.maxFuncs + NSS_SHUTDOWN_STEP) 
-		*sizeof(struct NSSShutdownFuncPair));
-	if (!funcs) {
-	    return SECFailure;
-	}
-	nssShutdownList.funcs = funcs;
-	nssShutdownList.maxFuncs += NSS_SHUTDOWN_STEP;
-    }
-    nssShutdownList.funcs[nssShutdownList.numFuncs].func = sFunc;
-    nssShutdownList.funcs[nssShutdownList.numFuncs].appData = appData;
-    nssShutdownList.numFuncs++;
-    PZ_Unlock(nssShutdownList.lock);
-    return SECSuccess;
-}
-
-/*
- * unregister a callback so it won't get called on shutdown.
- */
-SECStatus
-NSS_UnregisterShutdown(NSS_ShutdownFunc sFunc, void *appData)
-{
-    int i;
-    if (!nss_IsInitted) {
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
-	return SECFailure;
-    }
-
-    PORT_Assert(nssShutdownList.lock);
-    PZ_Lock(nssShutdownList.lock);
-    i = nss_GetShutdownEntry(sFunc, appData);
-    if (i > 0) {
-	nssShutdownList.funcs[i].func = NULL;
-	nssShutdownList.funcs[i].appData = NULL;
-    }
-    PZ_Unlock(nssShutdownList.lock);
-
-    if (i < 0) {
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
-	return SECFailure;
-    }
-    return SECSuccess;
-}
-
-/*
- * bring up and shutdown the shutdown list
- */
-static SECStatus
-nss_InitShutdownList(void)
-{
-    nssShutdownList.lock = PZ_NewLock(nssILockOther);
-    if (nssShutdownList.lock == NULL) {
-	return SECFailure;
-    }
-    nssShutdownList.funcs = PORT_ZNewArray(struct NSSShutdownFuncPair, 
-				           NSS_SHUTDOWN_STEP);
-    if (nssShutdownList.funcs == NULL) {
-	PZ_DestroyLock(nssShutdownList.lock);
-    	nssShutdownList.lock = NULL;
-	return SECFailure;
-    }
-    nssShutdownList.maxFuncs = NSS_SHUTDOWN_STEP;
-    nssShutdownList.numFuncs = 0;
-
-    return SECSuccess;
-}
-
-static SECStatus
-nss_ShutdownShutdownList(void)
-{
-    SECStatus rv = SECSuccess;
-    int i;
-
-    /* call all the registerd functions first */
-    for (i=0; i < nssShutdownList.numFuncs; i++) {
-	struct NSSShutdownFuncPair *funcPair = &nssShutdownList.funcs[i];
-	if (funcPair->func) {
-	    if ((*funcPair->func)(funcPair->appData,NULL) != SECSuccess) {
-		rv = SECFailure;
-	    }
-	}
-    }
-
-    nssShutdownList.numFuncs = 0;
-    nssShutdownList.maxFuncs = 0;
-    PORT_Free(nssShutdownList.funcs);
-    nssShutdownList.funcs = NULL;
-    if (nssShutdownList.lock) {
-	PZ_DestroyLock(nssShutdownList.lock);
-    }
-    nssShutdownList.lock = NULL;
-    return rv;
-}
-
 
 extern const NSSError NSS_ERROR_BUSY;
 
 SECStatus
 NSS_Shutdown(void)
 {
-    SECStatus shutdownRV = SECSuccess;
     SECStatus rv;
     PRStatus status;
 
-    if (!nss_IsInitted) {
-	PORT_SetError(SEC_ERROR_NOT_INITIALIZED);
-	return SECFailure;
-    }
-
-    rv = nss_ShutdownShutdownList();
-    if (rv != SECSuccess) {
-	shutdownRV = SECFailure;
-    }
-    cert_DestroyLocks();
     ShutdownCRLCache();
-    OCSP_ShutdownCache();
     SECOID_Shutdown();
     status = STAN_Shutdown();
     cert_DestroySubjectKeyIDHashTable();
     rv = SECMOD_Shutdown();
-    if (rv != SECSuccess) {
-	shutdownRV = SECFailure;
-    }
     pk11sdr_Shutdown();
     if (status == PR_FAILURE) {
 	if (NSS_GetError() == NSS_ERROR_BUSY) {
 	    PORT_SetError(SEC_ERROR_BUSY);
 	}
-	shutdownRV = SECFailure;
+	rv = SECFailure;
     }
     nss_IsInitted = PR_FALSE;
-    return shutdownRV;
+    return rv;
 }
 
+
+
+extern const char __nss_base_rcsid[];
 PRBool
 NSS_IsInitialized(void)
 {
     return nss_IsInitted;
 }
-
-
-extern const char __nss_base_rcsid[];
 extern const char __nss_base_sccsid[];
 
 PRBool

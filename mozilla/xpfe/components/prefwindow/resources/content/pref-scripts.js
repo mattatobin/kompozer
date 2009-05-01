@@ -1,9 +1,6 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
  * The contents of this file are subject to the Mozilla Public License Version
  * 1.1 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -25,8 +22,8 @@
  *   Jonas Jørgensen <jonasj@jonasj.dk>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
@@ -38,22 +35,15 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-function setDisableState(id, state) {
-  var component = document.getElementById(id);
-  var prefString = component.getAttribute("prefstring");
-  var isLocked = parent.hPrefWindow.getPrefIsLocked(prefString);
-  component.disabled = isLocked || state;
-}
-
 function changeDisabledState(state){
   //Set the states of the groupbox children state based on the "javascript enabled" checkbox value
-  setDisableState("allowScripts", state);
-  setDisableState("allowWindowMoveResize", state);
-  setDisableState("allowImageSrcChange", state);
-  setDisableState("allowWindowStatusChange", state);
-  setDisableState("allowWindowFlip", state);
-  setDisableState("allowHideStatusBar", state);
-  setDisableState("allowContextmenuDisable", state);
+  document.getElementById("allowScripts").disabled = state;
+  document.getElementById("allowWindowMoveResize").disabled = state;
+  document.getElementById("allowImageSrcChange").disabled = state;
+  document.getElementById("allowWindowStatusChange").disabled = state;
+  document.getElementById("allowWindowFlip").disabled = state;
+  document.getElementById("allowHideStatusBar").disabled = state;
+  document.getElementById("allowContextmenuDisable").disabled = state;
 }
 
 function javascriptEnabledChange(){

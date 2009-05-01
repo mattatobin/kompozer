@@ -47,9 +47,8 @@
 #include <gtk/gtkmain.h>
 #include <gdk/gdkkeysyms.h>
 
-static nsINativeKeyBindings::DoCommandCallback gCurrentCallback;
+static nsINativeKeyBindings::doCommandCallback gCurrentCallback;
 static void *gCurrentCallbackData;
-static PRBool gHandled;
 
 // Common GtkEntry and GtkTextView signals
 static void
@@ -57,7 +56,6 @@ copy_clipboard_cb(GtkWidget *w, gpointer user_data)
 {
   gCurrentCallback("cmd_copy", gCurrentCallbackData);
   g_signal_stop_emission_by_name(w, "copy_clipboard");
-  gHandled = PR_TRUE;
 }
 
 static void
@@ -65,7 +63,6 @@ cut_clipboard_cb(GtkWidget *w, gpointer user_data)
 {
   gCurrentCallback("cmd_cut", gCurrentCallbackData);
   g_signal_stop_emission_by_name(w, "cut_clipboard");
-  gHandled = PR_TRUE;
 }
 
 // GTK distinguishes between display lines (wrapped, as they appear on the
@@ -93,7 +90,6 @@ delete_from_cursor_cb(GtkWidget *w, GtkDeleteType del_type,
                       gint count, gpointer user_data)
 {
   g_signal_stop_emission_by_name(w, "delete_from_cursor");
-  gHandled = PR_TRUE;
 
   PRBool forward = count > 0;
   if (PRUint32(del_type) >= NS_ARRAY_LENGTH(sDeleteCommands)) {
@@ -185,7 +181,6 @@ move_cursor_cb(GtkWidget *w, GtkMovementStep step, gint count,
                gboolean extend_selection, gpointer user_data)
 {
   g_signal_stop_emission_by_name(w, "move_cursor");
-  gHandled = PR_TRUE;
   PRBool forward = count > 0;
   if (PRUint32(step) >= NS_ARRAY_LENGTH(sMoveCommands)) {
     // unsupported movement type
@@ -208,7 +203,6 @@ paste_clipboard_cb(GtkWidget *w, gpointer user_data)
 {
   gCurrentCallback("cmd_paste", gCurrentCallbackData);
   g_signal_stop_emission_by_name(w, "paste_clipboard");
-  gHandled = PR_TRUE;
 }
 
 // GtkTextView-only signals
@@ -217,7 +211,6 @@ select_all_cb(GtkWidget *w, gboolean select, gpointer user_data)
 {
   gCurrentCallback("cmd_selectAll", gCurrentCallbackData);
   g_signal_stop_emission_by_name(w, "select_all");
-  gHandled = PR_TRUE;
 }
 
 void
@@ -262,14 +255,14 @@ NS_IMPL_ISUPPORTS1(nsNativeKeyBindings, nsINativeKeyBindings)
 
 PRBool
 nsNativeKeyBindings::KeyDown(const nsNativeKeyEvent& aEvent,
-                             DoCommandCallback aCallback, void *aCallbackData)
+                             doCommandCallback aCallback, void *aCallbackData)
 {
   return PR_FALSE;
 }
 
 PRBool
 nsNativeKeyBindings::KeyPress(const nsNativeKeyEvent& aEvent,
-                              DoCommandCallback aCallback, void *aCallbackData)
+                              doCommandCallback aCallback, void *aCallbackData)
 {
   PRUint32 keyCode;
 
@@ -290,20 +283,22 @@ nsNativeKeyBindings::KeyPress(const nsNativeKeyEvent& aEvent,
   gCurrentCallback = aCallback;
   gCurrentCallbackData = aCallbackData;
 
-  gHandled = PR_FALSE;
+  PRBool handled = PR_FALSE;
 
-  gtk_bindings_activate(GTK_OBJECT(mNativeTarget),
-                        keyCode, GdkModifierType(modifiers));
+  if (gtk_bindings_activate(GTK_OBJECT(mNativeTarget),
+                            keyCode, GdkModifierType(modifiers))) {
+    handled = PR_TRUE;
+  }
 
   gCurrentCallback = nsnull;
   gCurrentCallbackData = nsnull;
 
-  return gHandled;
+  return handled;
 }
 
 PRBool
 nsNativeKeyBindings::KeyUp(const nsNativeKeyEvent& aEvent,
-                           DoCommandCallback aCallback, void *aCallbackData)
+                           doCommandCallback aCallback, void *aCallbackData)
 {
   return PR_FALSE;
 }

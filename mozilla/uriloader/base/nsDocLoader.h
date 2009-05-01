@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1999
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -54,10 +54,8 @@
 #include "nsIProgressEventSink.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIInterfaceRequestorUtils.h"
-#include "nsIChannelEventSink.h"
+#include "nsIHttpEventSink.h"
 #include "nsISecurityEventSink.h"
-#include "nsISupportsPriority.h"
-#include "nsInt64.h"
 #include "nsCOMPtr.h"
 #include "pldhash.h"
 
@@ -65,42 +63,26 @@ struct nsRequestInfo;
 struct nsListenerInfo;
 
 /****************************************************************************
- * nsDocLoader implementation...
+ * nsDocLoaderImpl implementation...
  ****************************************************************************/
 
-#define NS_THIS_DOCLOADER_IMPL_CID                    \
- { /* b4ec8387-98aa-4c08-93b6-6d23069c06f2 */         \
-     0xb4ec8387,                                      \
-     0x98aa,                                          \
-     0x4c08,                                          \
-     {0x93, 0xb6, 0x6d, 0x23, 0x06, 0x9c, 0x06, 0xf2} \
- }
-
-class nsDocLoader : public nsIDocumentLoader, 
-                    public nsIRequestObserver,
-                    public nsSupportsWeakReference,
-                    public nsIProgressEventSink,
-                    public nsIWebProgress,
-                    public nsIInterfaceRequestor,
-                    public nsIChannelEventSink,
-                    public nsISecurityEventSink,
-                    public nsISupportsPriority
+class nsDocLoaderImpl : public nsIDocumentLoader, 
+                        public nsIRequestObserver,
+                        public nsSupportsWeakReference,
+                        public nsIProgressEventSink,
+                        public nsIWebProgress,
+                        public nsIInterfaceRequestor,
+                        public nsIHttpEventSink,
+                        public nsISecurityEventSink
 {
 public:
-    NS_DEFINE_STATIC_IID_ACCESSOR(NS_THIS_DOCLOADER_IMPL_CID);
 
-    nsDocLoader();
+    nsDocLoaderImpl();
 
-    virtual nsresult Init();
+    nsresult Init();
 
-    static already_AddRefed<nsDocLoader> GetAsDocLoader(nsISupports* aSupports);
-    // Needed to deal with ambiguous inheritance from nsISupports...
-    static nsISupports* GetAsSupports(nsDocLoader* aDocLoader) {
-        return NS_STATIC_CAST(nsIDocumentLoader*, aDocLoader);
-    }
-
-    // Add aDocLoader as a child to the docloader service.
-    static nsresult AddDocLoaderAsChildOfRoot(nsDocLoader* aDocLoader);
+    // for nsIGenericFactory:
+    static NS_IMETHODIMP Create(nsISupports *aOuter, const nsIID &aIID, void **aResult);
 
     NS_DECL_ISUPPORTS
     NS_DECL_NSIDOCUMENTLOADER
@@ -115,81 +97,41 @@ public:
     NS_DECL_NSIWEBPROGRESS
 
     NS_DECL_NSIINTERFACEREQUESTOR
-    NS_DECL_NSICHANNELEVENTSINK
-    NS_DECL_NSISUPPORTSPRIORITY
+    NS_DECL_NSIHTTPEVENTSINK
 
     // Implementation specific methods...
-
-    // Remove aChild from our childlist.  This nulls out the child's mParent
-    // pointer.
-    nsresult RemoveChildLoader(nsDocLoader *aChild);
-    // Add aChild to our child list.  This will set aChild's mParent pointer to
-    // |this|.
-    nsresult AddChildLoader(nsDocLoader* aChild);
-    nsDocLoader* GetParent() const { return mParent; }
-
 protected:
-    virtual ~nsDocLoader();
+    virtual ~nsDocLoaderImpl();
 
-    virtual nsresult SetDocLoaderParent(nsDocLoader * aLoader);
-
-    // DocLoaderIsEmpty should be called whenever the docloader may be empty.
-    // This method is idempotent and does nothing if the docloader is not in
-    // fact empty.
+    nsresult SetDocLoaderParent(nsDocLoaderImpl * aLoader);
+    nsresult RemoveChildGroup(nsDocLoaderImpl *aLoader);
     void DocLoaderIsEmpty();
 
-    PRBool IsBusy();
-
-    void Destroy();
-    virtual void DestroyChildren();
-
-    nsIDocumentLoader* ChildAt(PRInt32 i) {
-        return NS_STATIC_CAST(nsDocLoader*, mChildList[i]);
-    }
-
-    nsIDocumentLoader* SafeChildAt(PRInt32 i) {
-        return NS_STATIC_CAST(nsDocLoader*, mChildList.SafeElementAt(i));
-    }
-
-    void FireOnProgressChange(nsDocLoader* aLoadInitiator,
+    void FireOnProgressChange(nsDocLoaderImpl* aLoadInitiator,
                               nsIRequest *request,
-                              PRInt64 aProgress,
-                              PRInt64 aProgressMax,
-                              PRInt64 aProgressDelta,
-                              PRInt64 aTotalProgress,
-                              PRInt64 aMaxTotalProgress);
+                              PRInt32 aProgress,
+                              PRInt32 aProgressMax,
+                              PRInt32 aProgressDelta,
+                              PRInt32 aTotalProgress,
+                              PRInt32 aMaxTotalProgress);
 
     void FireOnStateChange(nsIWebProgress *aProgress,
                            nsIRequest* request,
                            PRInt32 aStateFlags,
                            nsresult aStatus);
 
-    void FireOnStatusChange(nsIWebProgress *aWebProgress,
-                            nsIRequest *aRequest,
-                            nsresult aStatus,
-                            const PRUnichar* aMessage);
-
-    void FireOnLocationChange(nsIWebProgress* aWebProgress,
-                              nsIRequest* aRequest,
-                              nsIURI *aUri);
-
-    // this function is overridden by the docshell, it is provided so that we
-    // can pass more information about redirect state (the normal OnStateChange
-    // doesn't get the new channel).
-    // @param aRedirectFlags The flags being sent to OnStateChange that
-    //                       indicate the type of redirect.
-    // @param aStateFlags    The channel flags normally sent to OnStateChange.
-    virtual void OnRedirectStateChange(nsIChannel* aOldChannel,
-                                       nsIChannel* aNewChannel,
-                                       PRUint32 aRedirectFlags,
-                                       PRUint32 aStateFlags) {}
-
     void doStartDocumentLoad();
     void doStartURLLoad(nsIRequest *request);
     void doStopURLLoad(nsIRequest *request, nsresult aStatus);
     void doStopDocumentLoad(nsIRequest *request, nsresult aStatus);
 
+    // get web progress returns our web progress listener or if
+    // we don't have one, it will look up the doc loader hierarchy
+    // to see if one of our parent doc loaders has one.
+    nsresult GetParentWebProgressListener(nsDocLoaderImpl * aDocLoader, nsIWebProgressListener ** aWebProgres);
+
 protected:
+
     // IMPORTANT: The ownership implicit in the following member
     // variables has been explicitly checked and set using nsCOMPtr
     // for owning pointers and raw COM interface pointers for weak
@@ -197,8 +139,9 @@ protected:
     // class, please make the ownership explicit (pinkerton, scc).
   
     nsCOMPtr<nsIRequest>       mDocumentRequest;       // [OWNER] ???compare with document
+    nsISupports*               mContainer;             // [WEAK] it owns me!
 
-    nsDocLoader*               mParent;                // [WEAK]
+    nsDocLoaderImpl*           mParent;                // [WEAK]
 
     nsVoidArray                mListenerInfoList;
     /*
@@ -209,33 +152,30 @@ protected:
     PRBool mIsLoadingDocument;
 
     nsCOMPtr<nsILoadGroup>        mLoadGroup;
-    // We hold weak refs to all our kids
-    nsVoidArray                   mChildList;
+    nsCOMArray<nsIDocumentLoader> mChildList;
 
     // The following member variables are related to the new nsIWebProgress 
     // feedback interfaces that travis cooked up.
+    nsCOMPtr<nsIWebProgressListener> mProgressListener;
     PRInt32 mProgressStateFlags;
 
-    nsInt64 mCurrentSelfProgress;
-    nsInt64 mMaxSelfProgress;
+    PRInt32 mCurrentSelfProgress;
+    PRInt32 mMaxSelfProgress;
 
-    nsInt64 mCurrentTotalProgress;
-    nsInt64 mMaxTotalProgress;
+    PRInt32 mCurrentTotalProgress;
+    PRInt32 mMaxTotalProgress;
 
     PLDHashTable mRequestInfoHash;
 
-    /* Flag to indicate that we're in the process of restoring a document. */
-    PRBool mIsRestoringDocument;
-
 private:
-    nsListenerInfo *GetListenerInfo(nsIWebProgressListener* aListener);
+    nsListenerInfo *GetListenerInfo(nsIWeakReference* aListener);
 
-    PRInt64 GetMaxTotalProgress();
+    nsresult GetMaxTotalProgress(PRInt32* aMaxTotalProgress);
 
     nsresult AddRequestInfo(nsIRequest* aRequest);
     nsRequestInfo *GetRequestInfo(nsIRequest* aRequest);
-    void ClearRequestInfoHash();
-    PRInt64 CalculateMaxProgress();
+    void ClearRequestInfoHash(void);
+    void CalculateMaxProgress(PRInt32 *aMax);
 ///    void DumpChannelInfo(void);
 
     // used to clear our internal progress state between loads...

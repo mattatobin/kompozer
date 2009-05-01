@@ -15,7 +15,7 @@
  * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
+ * Netscape Communiactions Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
@@ -74,7 +74,7 @@ public:
   NS_IMETHOD WillInterrupt(void);
   NS_IMETHOD WillResume(void);
   NS_IMETHOD SetParser(nsIParser* aParser);  
-  virtual void FlushPendingNotifications(mozFlushType aType);
+  NS_IMETHOD FlushPendingNotifications(void);
   NS_IMETHOD SetDocumentCharset(nsAString& aCharset);
 
 private:

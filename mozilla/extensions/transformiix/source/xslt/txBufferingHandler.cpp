@@ -12,16 +12,16 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -208,7 +208,7 @@ txBufferingHandler::comment(const nsAString& aData)
 }
 
 void
-txBufferingHandler::endDocument(nsresult aResult)
+txBufferingHandler::endDocument()
 {
     if (!mBuffer) {
         return;
@@ -318,15 +318,14 @@ txResultBuffer::addTransaction(txOutputTransaction* aTransaction)
 
 struct Holder
 {
-    txAXMLEventHandler** mHandler;
+    txAXMLEventHandler* mHandler;
     nsAFlatString::const_char_iterator mIter;
 };
 
 PR_STATIC_CALLBACK(PRBool)
 flushTransaction(void* aElement, void *aData)
 {
-    Holder* holder = NS_STATIC_CAST(Holder*, aData);
-    txAXMLEventHandler* handler = *holder->mHandler;
+    txAXMLEventHandler* handler = NS_STATIC_CAST(Holder*, aData)->mHandler;
     txOutputTransaction* transaction =
         NS_STATIC_CAST(txOutputTransaction*, aElement);
 
@@ -397,9 +396,10 @@ flushTransaction(void* aElement, void *aData)
 }
 
 nsresult
-txResultBuffer::flushToHandler(txAXMLEventHandler** aHandler)
+txResultBuffer::flushToHandler(txAXMLEventHandler* aHandler)
 {
-    Holder data = { aHandler };
+    Holder data;
+    data.mHandler = aHandler;
     mStringValue.BeginReading(data.mIter);
     mTransactions.EnumerateForwards(flushTransaction, &data);
     return NS_OK;

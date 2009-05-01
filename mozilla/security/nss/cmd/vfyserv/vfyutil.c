@@ -1,48 +1,41 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "vfyserv.h"
 #include "secerr.h"
 #include "sslerr.h"
 #include "nspr.h"
 #include "secutil.h"
-
-
-extern PRBool dumpChain;
-extern void dumpCertChain(CERTCertificate *, SECCertUsage);
 
 /* Declare SSL cipher suites. */
 
@@ -57,14 +50,14 @@ int ssl2CipherSuites[] = {
 };
 
 int ssl3CipherSuites[] = {
-    -1, /* SSL_FORTEZZA_DMS_WITH_FORTEZZA_CBC_SHA* a */
-    -1, /* SSL_FORTEZZA_DMS_WITH_RC4_128_SHA,	 * b */
+    SSL_FORTEZZA_DMS_WITH_FORTEZZA_CBC_SHA,	/* a */
+    SSL_FORTEZZA_DMS_WITH_RC4_128_SHA,		/* b */
     SSL_RSA_WITH_RC4_128_MD5,			/* c */
     SSL_RSA_WITH_3DES_EDE_CBC_SHA,		/* d */
     SSL_RSA_WITH_DES_CBC_SHA,			/* e */
     SSL_RSA_EXPORT_WITH_RC4_40_MD5,		/* f */
     SSL_RSA_EXPORT_WITH_RC2_CBC_40_MD5,		/* g */
-    -1, /* SSL_FORTEZZA_DMS_WITH_NULL_SHA,	 * h */
+    SSL_FORTEZZA_DMS_WITH_NULL_SHA,		/* h */
     SSL_RSA_WITH_NULL_MD5,			/* i */
     SSL_RSA_FIPS_WITH_3DES_EDE_CBC_SHA,		/* j */
     SSL_RSA_FIPS_WITH_DES_CBC_SHA,		/* k */
@@ -140,10 +133,6 @@ myAuthCertificate(void *arg, PRFileDesc *socket,
     cert = SSL_PeerCertificate(socket);
 	
     pinArg = SSL_RevealPinArg(socket);
-    
-    if (dumpChain == PR_TRUE) {
-        dumpCertChain(cert, certUsage);
-    }
 
     secStatus = CERT_VerifyCertificateNow((CERTCertDBHandle *)arg,
 				   cert,
@@ -299,10 +288,10 @@ myGetClientAuthData(void *arg,
 			break;
 		    }
 		    secStatus = SECFailure;
+		    break;
 		}
-		CERT_DestroyCertificate(cert);
+		CERT_FreeNicknames(names);
 	    } /* for loop */
-	    CERT_FreeNicknames(names);
 	}
     }
 
@@ -624,43 +613,3 @@ lockedVars_AddToCount(lockedVars * lv, int addend)
     return rv;
 }
 
-
-/*
- * Dump cert chain in to cert.* files. This function is will
- * create collisions while dumping cert chains if called from
- * multiple treads. But it should not be a problem since we
- * consider vfyserv to be single threaded(see bug 353477).
- */
-
-void
-dumpCertChain(CERTCertificate *cert, SECCertUsage usage)
-{
-    CERTCertificateList *certList;
-    int count = 0;
-
-    certList = CERT_CertChainFromCert(cert, usage, PR_TRUE);
-    if (certList == NULL) {
-        errWarn("CERT_CertChainFromCert");
-        return;
-    }
-
-    for(count = 0; count < (unsigned int)certList->len; count++) {
-        char certFileName[16];
-        PRFileDesc *cfd;
-
-        PR_snprintf(certFileName, sizeof certFileName, "cert.%03d",
-                    count);
-        cfd = PR_Open(certFileName, PR_WRONLY|PR_CREATE_FILE|PR_TRUNCATE, 
-                      0664);
-        if (!cfd) {
-            PR_fprintf(PR_STDOUT,
-                       "Error: couldn't save cert der in file '%s'\n",
-                       certFileName);
-        } else {
-            PR_Write(cfd,  certList->certs[count].data,  certList->certs[count].len);
-            PR_Close(cfd);
-            PR_fprintf(PR_STDOUT, "Cert file %s was created.\n", certFileName);
-        }
-    }
-    CERT_DestroyCertificateList(certList);
-}

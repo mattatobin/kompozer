@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2000
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Scott Collins <scc@mozilla.org> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -62,47 +62,11 @@
   // for |PRUnichar|
 #endif
 
-#ifndef nsDebug_h__
-#include "nsDebug.h"
-  // for NS_ASSERTION
-#endif
-
 #ifdef HAVE_CPP_BOOL
   typedef bool nsCharTraits_bool;
 #else
   typedef PRBool nsCharTraits_bool;
 #endif
-
-// Some macros for working with PRUnichar
-#define PLANE1_BASE          PRUint32(0x00010000)
-// High surrogates are in the range 0xD800 -- OxDBFF
-#define IS_HIGH_SURROGATE(u) ((PRUnichar(u) & 0xFC00) == 0xD800)
-// Low surrogates are in the range 0xDC00 -- 0xDFFF
-#define IS_LOW_SURROGATE(u)  ((PRUnichar(u) & 0xFC00) == 0xDC00)
-// Faster than testing IS_HIGH_SURROGATE || IS_LOW_SURROGATE
-#define IS_SURROGATE(u)      ((PRUnichar(u) & 0xF800) == 0xD800)
-
-// Everything else is not a surrogate: 0x000 -- 0xD7FF, 0xE000 -- 0xFFFF
-
-// N = (H - 0xD800) * 0x400 + 0x10000 + (L - 0xDC00)
-// I wonder whether we could somehow assert that H is a high surrogate
-// and L is a low surrogate
-#define SURROGATE_TO_UCS4(h, l) (((PRUint32(h) & 0x03FF) << 10) + \
-                                 (PRUint32(l) & 0x03FF) + PLANE1_BASE)
-
-// Extract surrogates from a UCS4 char
-// See unicode specification 3.7 for following math.
-#define H_SURROGATE(c) PRUnichar(PRUnichar((PRUint32(c) - PLANE1_BASE) >> 10) | \
-                                 PRUnichar(0xD800))
-#define L_SURROGATE(c) PRUnichar(PRUnichar((PRUint32(c) - PLANE1_BASE) & 0x03FF) | \
-                                 PRUnichar(0xDC00))
-
-#define IS_IN_BMP(ucs) (PRUint32(ucs) < PLANE1_BASE)
-#define UCS2_REPLACEMENT_CHAR PRUnichar(0xFFFD)
-
-#define UCS_END PRUint32(0x00110000)
-#define IS_VALID_CHAR(c) ((PRUint32(c) < UCS_END) && !IS_SURROGATE(c))
-#define ENSURE_VALID_CHAR(c) (IS_VALID_CHAR(c) ? (c) : UCS2_REPLACEMENT_CHAR)
 
 template <class CharT> struct nsCharTraits {};
 
@@ -188,17 +152,6 @@ struct nsCharTraits<PRUnichar>
 
     static
     char_type*
-    copyASCII( char_type* s1, const char* s2, size_t n )
-      {
-        for (char_type* s = s1; n--; ++s, ++s2) {
-          NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-          *s = *s2;
-        }
-        return s1;
-      }
-
-    static
-    char_type*
     assign( char_type* s, size_t n, char_type c )
       {
 #ifdef USE_CPP_WCHAR_FUNCS
@@ -226,108 +179,6 @@ struct nsCharTraits<PRUnichar>
 
         return 0;
 #endif
-      }
-
-    static
-    int
-    compareASCII( const char_type* s1, const char* s2, size_t n )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            if ( !eq_int_type(to_int_type(*s1), to_int_type(*s2)) )
-              return to_int_type(*s1) - to_int_type(*s2);
-          }
-
-        return 0;
-      }
-
-    // this version assumes that s2 is null-terminated and s1 has length n.
-    // if s1 is shorter than s2 then we return -1; if s1 is longer than s2,
-    // we return 1.
-    static
-    int
-    compareASCIINullTerminated( const char_type* s1, size_t n, const char* s2 )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            if ( !*s2 )
-              return 1;
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            if ( !eq_int_type(to_int_type(*s1), to_int_type(*s2)) )
-              return to_int_type(*s1) - to_int_type(*s2);
-          }
-
-        if ( *s2 )
-          return -1;
-
-        return 0;
-      }
-
-    /**
-     * Convert c to its lower-case form, but only if the lower-case form is
-     * ASCII. Otherwise leave it alone.
-     *
-     * There are only two non-ASCII Unicode characters whose lowercase
-     * equivalents are ASCII: KELVIN SIGN and LATIN CAPITAL LETTER I WITH
-     * DOT ABOVE. So it's a simple matter to handle those explicitly.
-     */
-    static
-    char_type
-    ASCIIToLower( char_type c )
-      {
-        if (c < 0x100)
-          return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
-        else
-          {
-            if (c == 0x212A) // KELVIN SIGN
-              return 'k';
-            if (c == 0x0130) // LATIN CAPITAL LETTER I WITH DOT ABOVE
-              return 'i';
-            return c;
-          }
-      }
-
-    static
-    int
-    compareLowerCaseToASCII( const char_type* s1, const char* s2, size_t n )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            NS_ASSERTION(!(*s2 >= 'A' && *s2 <= 'Z'),
-                         "Unexpected uppercase character");
-            char_type lower_s1 = ASCIIToLower(*s1);
-            if ( lower_s1 != to_char_type(*s2) )
-              return to_int_type(lower_s1) - to_int_type(*s2);
-          }
-
-        return 0;
-      }
-
-    // this version assumes that s2 is null-terminated and s1 has length n.
-    // if s1 is shorter than s2 then we return -1; if s1 is longer than s2,
-    // we return 1.
-    static
-    int
-    compareLowerCaseToASCIINullTerminated( const char_type* s1, size_t n, const char* s2 )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            if ( !*s2 )
-              return 1;
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            NS_ASSERTION(!(*s2 >= 'A' && *s2 <= 'Z'),
-                         "Unexpected uppercase character");
-            char_type lower_s1 = ASCIIToLower(*s1);
-            if ( lower_s1 != to_char_type(*s2) )
-              return to_int_type(lower_s1) - to_int_type(*s2);
-          }
-
-        if ( *s2 )
-          return -1;
-
-        return 0;
       }
 
     static
@@ -469,13 +320,6 @@ struct nsCharTraits<char>
 
     static
     char_type*
-    copyASCII( char_type* s1, const char* s2, size_t n )
-      {
-        return copy(s1, s2, n);
-      }
-
-    static
-    char_type*
     assign( char_type* s, size_t n, char_type c )
       {
         return NS_STATIC_CAST(char_type*, memset(s, to_int_type(c), n));
@@ -486,94 +330,6 @@ struct nsCharTraits<char>
     compare( const char_type* s1, const char_type* s2, size_t n )
       {
         return memcmp(s1, s2, n);
-      }
-
-    static
-    int
-    compareASCII( const char_type* s1, const char* s2, size_t n )
-      {
-#ifdef DEBUG
-        for (size_t i = 0; i < n; ++i)
-          {
-            NS_ASSERTION(!(s2[i] & ~0x7F), "Unexpected non-ASCII character");
-          }
-#endif
-        return compare(s1, s2, n);
-      }
-
-    // this version assumes that s2 is null-terminated and s1 has length n.
-    // if s1 is shorter than s2 then we return -1; if s1 is longer than s2,
-    // we return 1.
-    static
-    int
-    compareASCIINullTerminated( const char_type* s1, size_t n, const char* s2 )
-      {
-        // can't use strcmp here because we don't want to stop when s1
-        // contains a null
-        for ( ; n--; ++s1, ++s2 )
-          {
-            if ( !*s2 )
-              return 1;
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            if ( *s1 != *s2 )
-              return to_int_type(*s1) - to_int_type(*s2);
-          }
-
-        if ( *s2 )
-          return -1;
-
-        return 0;
-      }
-
-    /**
-     * Convert c to its lower-case form, but only if c is ASCII.
-     */
-    static
-    char_type
-    ASCIIToLower( char_type c )
-      {
-        return (c >= 'A' && c <= 'Z') ? (c + ('a' - 'A')) : c;
-      }
-
-    static
-    int
-    compareLowerCaseToASCII( const char_type* s1, const char* s2, size_t n )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            NS_ASSERTION(!(*s2 >= 'A' && *s2 <= 'Z'),
-                         "Unexpected uppercase character");
-            char_type lower_s1 = ASCIIToLower(*s1);
-            if ( lower_s1 != *s2 )
-              return to_int_type(lower_s1) - to_int_type(*s2);
-          }
-        return 0;
-      }
-
-    // this version assumes that s2 is null-terminated and s1 has length n.
-    // if s1 is shorter than s2 then we return -1; if s1 is longer than s2,
-    // we return 1.
-    static
-    int
-    compareLowerCaseToASCIINullTerminated( const char_type* s1, size_t n, const char* s2 )
-      {
-        for ( ; n--; ++s1, ++s2 )
-          {
-            if ( !*s2 )
-              return 1;
-            NS_ASSERTION(!(*s2 & ~0x7F), "Unexpected non-ASCII character");
-            NS_ASSERTION(!(*s2 >= 'A' && *s2 <= 'Z'),
-                         "Unexpected uppercase character");
-            char_type lower_s1 = ASCIIToLower(*s1);
-            if ( lower_s1 != *s2 )
-              return to_int_type(lower_s1) - to_int_type(*s2);
-          }
-
-        if ( *s2 )
-          return -1;
-
-        return 0;
       }
 
     static

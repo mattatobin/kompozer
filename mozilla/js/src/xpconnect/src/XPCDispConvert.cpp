@@ -283,8 +283,7 @@ JSBool XPCDispConvert::JSToCOM(XPCCallContext& ccx,
                 return JS_FALSE;
             }
 
-            CComBSTR val(JS_GetStringLength(str),
-                         NS_REINTERPRET_CAST(const WCHAR *, chars));
+            CComBSTR val(JS_GetStringLength(str), chars);
             varDest->bstrVal = val.Detach();
         }
         break;
@@ -390,8 +389,7 @@ JSBool XPCDispConvert::COMArrayToJSArray(XPCCallContext& ccx,
         err = NS_ERROR_OUT_OF_MEMORY;
         return JS_FALSE;
     }
-    AUTO_MARK_JSVAL(ccx, OBJECT_TO_JSVAL(array));
-    // Divine the type of our array
+    // Devine the type of our array
     VARTYPE vartype;
     if((src.vt & VT_ARRAY) != 0)
     {
@@ -402,11 +400,10 @@ JSBool XPCDispConvert::COMArrayToJSArray(XPCCallContext& ccx,
         if(FAILED(SafeArrayGetVartype(src.parray, &vartype)))
             return JS_FALSE;
     }
-    jsval val = JSVAL_NULL;
-    AUTO_MARK_JSVAL(ccx, &val);
+    jsval val;
     for(long index = lbound; index <= ubound; ++index)
     {
-        // Divine the type of our array
+        // Devine the type of our array
         _variant_t var;
         var.vt = vartype;
         if(FAILED(SafeArrayGetElement(src.parray, &index, &var.byref)))
@@ -432,9 +429,7 @@ JSBool XPCDispConvert::COMArrayToJSArray(XPCCallContext& ccx,
 inline
 jsval StringToJSVal(JSContext* cx, const PRUnichar * str, PRUint32 len)
 {
-    JSString * s = JS_NewUCStringCopyN(cx,
-                                       NS_REINTERPRET_CAST(const jschar *, str),
-                                       len);
+    JSString * s = JS_NewUCStringCopyN(cx, str, len);
     if(s)
         return STRING_TO_JSVAL(s);
     else

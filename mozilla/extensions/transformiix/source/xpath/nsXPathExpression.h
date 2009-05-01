@@ -1,26 +1,27 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com> (original author)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -28,11 +29,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,7 +41,6 @@
 #define nsXPathExpression_h__
 
 #include "nsIDOMXPathExpression.h"
-#include "nsIDOMNSXPathExpression.h"
 #include "txIXPathContext.h"
 #include "txResultRecycler.h"
 #include "nsAutoPtr.h"
@@ -51,8 +51,7 @@ class txXPathNode;
 /**
  * A class for evaluating an XPath expression string
  */
-class nsXPathExpression : public nsIDOMXPathExpression,
-                          public nsIDOMNSXPathExpression
+class nsXPathExpression : public nsIDOMXPathExpression
 {
 public:
     nsXPathExpression(nsAutoPtr<Expr>& aExpression,
@@ -65,9 +64,6 @@ public:
     // nsIDOMXPathExpression interface
     NS_DECL_NSIDOMXPATHEXPRESSION
 
-    // nsIDOMNSXPathExpression interface
-    NS_DECL_NSIDOMNSXPATHEXPRESSION
-
 private:
     nsAutoPtr<Expr> mExpression;
     nsRefPtr<txResultRecycler> mRecycler;
@@ -75,12 +71,8 @@ private:
     class EvalContextImpl : public txIEvalContext
     {
     public:
-        EvalContextImpl(const txXPathNode& aContextNode,
-                        PRUint32 aContextPosition, PRUint32 aContextSize,
-                        txResultRecycler* aRecycler)
+        EvalContextImpl(const txXPathNode& aContextNode, txResultRecycler* aRecycler)
             : mContextNode(aContextNode),
-              mContextPosition(aContextPosition),
-              mContextSize(aContextSize),
               mLastError(NS_OK),
               mRecycler(aRecycler)
         {
@@ -99,8 +91,6 @@ private:
 
     private:
         const txXPathNode& mContextNode;
-        PRUint32 mContextPosition;
-        PRUint32 mContextSize;
         nsresult mLastError;
         nsRefPtr<txResultRecycler> mRecycler;
     };

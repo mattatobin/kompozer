@@ -53,25 +53,6 @@ static NS_DEFINE_CID(kSocketTransportServiceCID, NS_SOCKETTRANSPORTSERVICE_CID);
 
 //-----------------------------------------------------------------------------
 
-static void
-InsertTransactionSorted(nsVoidArray &pendingQ, nsHttpTransaction *trans)
-{
-    // insert into queue with smallest valued number first.  search in reverse
-    // order under the assumption that many of the existing transactions will
-    // have the same priority (usually 0).
-
-    for (PRInt32 i=pendingQ.Count()-1; i>=0; --i) {
-        nsHttpTransaction *t = (nsHttpTransaction *) pendingQ[i];
-        if (trans->Priority() >= t->Priority()) {
-            pendingQ.InsertElementAt(trans, i+1);
-            return;
-        }
-    }
-    pendingQ.InsertElementAt(trans, 0);
-}
-
-//-----------------------------------------------------------------------------
-
 nsHttpConnectionMgr::nsHttpConnectionMgr()
     : mRef(0)
     , mMonitor(nsAutoMonitor::NewMonitor("nsHttpConnectionMgr"))
@@ -105,10 +86,6 @@ nsHttpConnectionMgr::Init(PRUint16 maxConns,
 {
     LOG(("nsHttpConnectionMgr::Init\n"));
 
-    nsresult rv;
-    nsCOMPtr<nsIEventTarget> sts = do_GetService(kSocketTransportServiceCID, &rv);
-    if NS_FAILED(rv) return rv;
-
     nsAutoMonitor mon(mMonitor);
 
     // do nothing if already initialized
@@ -125,7 +102,8 @@ nsHttpConnectionMgr::Init(PRUint16 maxConns,
     mMaxRequestDelay = maxRequestDelay;
     mMaxPipelinedRequests = maxPipelinedRequests;
 
-    mSTEventTarget = sts;
+    nsresult rv;
+    mSTEventTarget = do_GetService(kSocketTransportServiceCID, &rv);
     return rv;
 }
 
@@ -158,7 +136,7 @@ nsHttpConnectionMgr::Shutdown()
 }
 
 nsresult
-nsHttpConnectionMgr::PostEvent(nsConnEventHandler handler, PRInt32 iparam, void *vparam)
+nsHttpConnectionMgr::PostEvent(nsConnEventHandler handler, nsresult status, void *param)
 {
     nsAutoMonitor mon(mMonitor);
 
@@ -168,7 +146,7 @@ nsHttpConnectionMgr::PostEvent(nsConnEventHandler handler, PRInt32 iparam, void 
         rv = NS_ERROR_NOT_INITIALIZED;
     }
     else {
-        PLEvent *event = new nsConnEvent(this, handler, iparam, vparam);
+        PLEvent *event = new nsConnEvent(this, handler, status, param);
         if (!event)
             rv = NS_ERROR_OUT_OF_MEMORY;
         else {
@@ -183,24 +161,12 @@ nsHttpConnectionMgr::PostEvent(nsConnEventHandler handler, PRInt32 iparam, void 
 //-----------------------------------------------------------------------------
 
 nsresult
-nsHttpConnectionMgr::AddTransaction(nsHttpTransaction *trans, PRInt32 priority)
+nsHttpConnectionMgr::AddTransaction(nsHttpTransaction *trans)
 {
-    LOG(("nsHttpConnectionMgr::AddTransaction [trans=%x %d]\n", trans, priority));
+    LOG(("nsHttpConnectionMgr::AddTransaction [trans=%x]\n", trans));
 
     NS_ADDREF(trans);
-    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgNewTransaction, priority, trans);
-    if (NS_FAILED(rv))
-        NS_RELEASE(trans);
-    return rv;
-}
-
-nsresult
-nsHttpConnectionMgr::RescheduleTransaction(nsHttpTransaction *trans, PRInt32 priority)
-{
-    LOG(("nsHttpConnectionMgr::RescheduleTransaction [trans=%x %d]\n", trans, priority));
-
-    NS_ADDREF(trans);
-    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgReschedTransaction, priority, trans);
+    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgNewTransaction, NS_OK, trans);
     if (NS_FAILED(rv))
         NS_RELEASE(trans);
     return rv;
@@ -268,7 +234,7 @@ nsHttpConnectionMgr::ReclaimConnection(nsHttpConnection *conn)
     LOG(("nsHttpConnectionMgr::ReclaimConnection [conn=%x]\n", conn));
 
     NS_ADDREF(conn);
-    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgReclaimConnection, 0, conn);
+    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgReclaimConnection, NS_OK, conn);
     if (NS_FAILED(rv))
         NS_RELEASE(conn);
     return rv;
@@ -278,7 +244,7 @@ nsresult
 nsHttpConnectionMgr::UpdateParam(nsParamName name, PRUint16 value)
 {
     PRUint32 param = (PRUint32(name) << 16) | PRUint32(value);
-    return PostEvent(&nsHttpConnectionMgr::OnMsgUpdateParam, 0, (void *) param);
+    return PostEvent(&nsHttpConnectionMgr::OnMsgUpdateParam, NS_OK, (void *) param);
 }
 
 nsresult
@@ -287,7 +253,7 @@ nsHttpConnectionMgr::ProcessPendingQ(nsHttpConnectionInfo *ci)
     LOG(("nsHttpConnectionMgr::ProcessPendingQ [ci=%s]\n", ci->HashKey().get()));
 
     NS_ADDREF(ci);
-    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgProcessPendingQ, 0, ci);
+    nsresult rv = PostEvent(&nsHttpConnectionMgr::OnMsgProcessPendingQ, NS_OK, ci);
     if (NS_FAILED(rv))
         NS_RELEASE(ci);
     return rv;
@@ -724,7 +690,7 @@ nsHttpConnectionMgr::ProcessNewTransaction(nsHttpTransaction *trans)
         LOG(("  adding transaction to pending queue [trans=%x pending-count=%u]\n",
             trans, ent->mPendingQ.Count()+1));
         // put this transaction on the pending queue...
-        InsertTransactionSorted(ent->mPendingQ, trans);
+        ent->mPendingQ.AppendElement(trans);
         NS_ADDREF(trans);
         rv = NS_OK;
     }
@@ -739,7 +705,7 @@ nsHttpConnectionMgr::ProcessNewTransaction(nsHttpTransaction *trans)
 //-----------------------------------------------------------------------------
 
 void
-nsHttpConnectionMgr::OnMsgShutdown(PRInt32, void *)
+nsHttpConnectionMgr::OnMsgShutdown(nsresult, void *)
 {
     LOG(("nsHttpConnectionMgr::OnMsgShutdown\n"));
 
@@ -751,12 +717,11 @@ nsHttpConnectionMgr::OnMsgShutdown(PRInt32, void *)
 }
 
 void
-nsHttpConnectionMgr::OnMsgNewTransaction(PRInt32 priority, void *param)
+nsHttpConnectionMgr::OnMsgNewTransaction(nsresult, void *param)
 {
     LOG(("nsHttpConnectionMgr::OnMsgNewTransaction [trans=%p]\n", param));
 
     nsHttpTransaction *trans = (nsHttpTransaction *) param;
-    trans->SetPriority(priority);
     nsresult rv = ProcessNewTransaction(trans);
     if (NS_FAILED(rv))
         trans->Close(rv); // for whatever its worth
@@ -764,29 +729,7 @@ nsHttpConnectionMgr::OnMsgNewTransaction(PRInt32 priority, void *param)
 }
 
 void
-nsHttpConnectionMgr::OnMsgReschedTransaction(PRInt32 priority, void *param)
-{
-    LOG(("nsHttpConnectionMgr::OnMsgNewTransaction [trans=%p]\n", param));
-
-    nsHttpTransaction *trans = (nsHttpTransaction *) param;
-    trans->SetPriority(priority);
-
-    nsHttpConnectionInfo *ci = trans->ConnectionInfo();
-    nsCStringKey key(ci->HashKey());
-    nsConnectionEntry *ent = (nsConnectionEntry *) mCT.Get(&key);
-    if (ent) {
-        PRInt32 index = ent->mPendingQ.IndexOf(trans);
-        if (index >= 0) {
-            ent->mPendingQ.RemoveElementAt(index);
-            InsertTransactionSorted(ent->mPendingQ, trans);
-        }
-    }
-
-    NS_RELEASE(trans);
-}
-
-void
-nsHttpConnectionMgr::OnMsgCancelTransaction(PRInt32 reason, void *param)
+nsHttpConnectionMgr::OnMsgCancelTransaction(nsresult reason, void *param)
 {
     LOG(("nsHttpConnectionMgr::OnMsgCancelTransaction [trans=%p]\n", param));
 
@@ -817,7 +760,7 @@ nsHttpConnectionMgr::OnMsgCancelTransaction(PRInt32 reason, void *param)
 }
 
 void
-nsHttpConnectionMgr::OnMsgProcessPendingQ(PRInt32, void *param)
+nsHttpConnectionMgr::OnMsgProcessPendingQ(nsresult, void *param)
 {
     nsHttpConnectionInfo *ci = (nsHttpConnectionInfo *) param;
 
@@ -836,7 +779,7 @@ nsHttpConnectionMgr::OnMsgProcessPendingQ(PRInt32, void *param)
 }
 
 void
-nsHttpConnectionMgr::OnMsgPruneDeadConnections(PRInt32, void *)
+nsHttpConnectionMgr::OnMsgPruneDeadConnections(nsresult, void *)
 {
     LOG(("nsHttpConnectionMgr::OnMsgPruneDeadConnections\n"));
 
@@ -845,7 +788,7 @@ nsHttpConnectionMgr::OnMsgPruneDeadConnections(PRInt32, void *)
 }
 
 void
-nsHttpConnectionMgr::OnMsgReclaimConnection(PRInt32, void *param)
+nsHttpConnectionMgr::OnMsgReclaimConnection(nsresult, void *param)
 {
     LOG(("nsHttpConnectionMgr::OnMsgReclaimConnection [conn=%p]\n", param));
 
@@ -889,7 +832,7 @@ nsHttpConnectionMgr::OnMsgReclaimConnection(PRInt32, void *param)
 }
 
 void
-nsHttpConnectionMgr::OnMsgUpdateParam(PRInt32, void *param)
+nsHttpConnectionMgr::OnMsgUpdateParam(nsresult status, void *param)
 {
     PRUint16 name  = (NS_PTR_TO_INT32(param) & 0xFFFF0000) >> 16;
     PRUint16 value =  NS_PTR_TO_INT32(param) & 0x0000FFFF;

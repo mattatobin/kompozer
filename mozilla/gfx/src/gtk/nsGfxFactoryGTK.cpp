@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Christopher Blizzard.
  * Portions created by the Initial Developer are Copyright (C) 2000
  * the Initial Developer. All Rights Reserved.
@@ -23,17 +23,18 @@
  *   Christopher Blizzzard <blizzard@mozilla.org>
  *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -61,9 +62,6 @@
 #ifdef NATIVE_THEME_SUPPORT
 #include "nsNativeThemeGTK.h"
 #endif
-#ifdef MOZ_ENABLE_PANGO
-#include "nsFontMetricsPango.h"
-#endif
 #ifdef MOZ_ENABLE_XFT
 #include "nsFontMetricsXft.h"
 #endif
@@ -73,10 +71,8 @@
 #include "nsFontMetricsUtils.h"
 #include "nsPrintSession.h"
 #include "gfxImageFrame.h"
-#ifdef MOZ_ENABLE_FREETYPE2
 #include "nsFT2FontCatalog.h"
 #include "nsFreeType.h"
-#endif
 
 // objects that just require generic constructors
 
@@ -89,15 +85,15 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsDeviceContextSpecGTK)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsDeviceContextSpecFactoryGTK)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsFontList)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsScreenManagerGtk)
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsPrintOptionsGTK, Init)
+NS_GENERIC_FACTORY_CONSTRUCTOR(nsPrintOptionsGTK)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsPrinterEnumeratorGTK)
 #ifdef NATIVE_THEME_SUPPORT
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsNativeThemeGTK)
 #endif
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsPrintSession, Init)
 NS_GENERIC_FACTORY_CONSTRUCTOR(gfxImageFrame)
-#ifdef MOZ_ENABLE_FREETYPE2
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsFT2FontCatalog)
+#ifdef MOZ_ENABLE_FREETYPE2
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsFreeType2, Init)
 #endif
 
@@ -116,13 +112,6 @@ nsFontMetricsConstructor(nsISupports *aOuter, REFNSIID aIID, void **aResult)
   if (aOuter)
     return NS_ERROR_NO_AGGREGATION;
 
-#ifdef MOZ_ENABLE_PANGO
-  if (NS_IsPangoEnabled()) {
-    result = new nsFontMetricsPango();
-    if (!result)
-      return NS_ERROR_OUT_OF_MEMORY;
-  } else {
-#endif
 #ifdef MOZ_ENABLE_XFT
   if (NS_IsXftEnabled()) {
     result = new nsFontMetricsXft();
@@ -136,9 +125,6 @@ nsFontMetricsConstructor(nsISupports *aOuter, REFNSIID aIID, void **aResult)
       return NS_ERROR_OUT_OF_MEMORY;
 #endif
 #ifdef MOZ_ENABLE_XFT
-  }
-#endif
-#ifdef MOZ_ENABLE_PANGO
   }
 #endif
 
@@ -162,13 +148,6 @@ nsFontEnumeratorConstructor(nsISupports *aOuter, REFNSIID aIID, void **aResult)
   if (aOuter)
     return NS_ERROR_NO_AGGREGATION;
 
-#ifdef MOZ_ENABLE_PANGO
-  if (NS_IsPangoEnabled()) {
-    result = new nsFontEnumeratorPango();
-    if (!result)
-      return NS_ERROR_OUT_OF_MEMORY;
-  } else {
-#endif
 #ifdef MOZ_ENABLE_XFT
   if (NS_IsXftEnabled()) {
     result = new nsFontEnumeratorXft();
@@ -182,9 +161,6 @@ nsFontEnumeratorConstructor(nsISupports *aOuter, REFNSIID aIID, void **aResult)
       return NS_ERROR_OUT_OF_MEMORY;
 #endif
 #ifdef MOZ_ENABLE_XFT
-  }
-#endif
-#ifdef MOZ_ENABLE_PANGO
   }
 #endif
 
@@ -315,11 +291,11 @@ static const nsModuleComponentInfo components[] =
     NS_PRINTSESSION_CID,
     "@mozilla.org/gfx/printsession;1",
     nsPrintSessionConstructor },
-#ifdef MOZ_ENABLE_FREETYPE2
   { "TrueType Font Catalog Service",
     NS_FONTCATALOGSERVICE_CID,
     "@mozilla.org/gfx/xfontcatalogservice;1",
     nsFT2FontCatalogConstructor },
+#ifdef MOZ_ENABLE_FREETYPE2
   { "FreeType2 routines",
     NS_FREETYPE2_CID,
     NS_FREETYPE2_CONTRACTID,
@@ -333,13 +309,6 @@ static const nsModuleComponentInfo components[] =
 #endif
 };
 
-PR_STATIC_CALLBACK(nsresult)
-nsGfxGTKModuleCtor(nsIModule *self)
-{
-  nsImageGTK::Startup();
-  return NS_OK;
-}
-
 PR_STATIC_CALLBACK(void)
 nsGfxGTKModuleDtor(nsIModule *self)
 {
@@ -352,5 +321,5 @@ nsGfxGTKModuleDtor(nsIModule *self)
 #endif
 }
 
-NS_IMPL_NSGETMODULE_WITH_CTOR_DTOR(nsGfxGTKModule, components,
-                                   nsGfxGTKModuleCtor, nsGfxGTKModuleDtor)
+NS_IMPL_NSGETMODULE_WITH_DTOR(nsGfxGTKModule, components, nsGfxGTKModuleDtor)
+

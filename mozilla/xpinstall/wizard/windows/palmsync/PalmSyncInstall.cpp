@@ -153,22 +153,28 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     {
         ConstructMessage(hInstance, IDS_APP_TITLE_UNINSTALL, appTitle);
         ConstructMessage(hInstance, IDS_CONFIRM_UNINSTALL, msgStr);
-        if (MessageBox(NULL, msgStr, appTitle, MB_YESNO | MB_TOPMOST) == IDYES) 
+        if (MessageBox(NULL, msgStr, appTitle, MB_YESNO) == IDYES) 
         {
             res = UninstallConduit();
             if(!res)
                 res = IDS_SUCCESS_UNINSTALL;
         }
         else
-          return 0;
+          return TRUE;;
     }
     else if (!strcmpi(lpCmdLine,"/us")) // silent un-install
     {
-        return UninstallConduit();
+        res = UninstallConduit();
+        if(!res)
+            return TRUE; // success
+        return res;
     }
     else if (!strcmpi(lpCmdLine,"/s")) // silent install
     {
-        return InstallConduit(hInstance, installDir);
+        res = InstallConduit(hInstance, installDir);
+        if(!res)
+            return TRUE; // success
+        return res;
     }
     else // install
     {
@@ -188,7 +194,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     ConstructMessage(hInstance, res, msgStr);
     MessageBox(NULL, msgStr, appTitle, MB_OK);
 
-    return 0;
+    return TRUE;
 }
 
 // this function gets the install dir for installation
@@ -253,7 +259,7 @@ int LoadConduitManagerDll(HINSTANCE* hCondMgrDll, const TCHAR * szPalmDesktopDir
     // Load the Conduit Manager library from the Palm Desktop directory
     if( (*hCondMgrDll=LoadLibrary(szPDCondMgrPath)) != NULL )
         // Successfully loaded CondMgr Library from Palm Desktop Directory
-        return 0;
+    return 0;
 
     return IDS_ERR_LOADING_CONDMGR;
 }
@@ -423,7 +429,6 @@ char *mystrsep(char **stringp, char delim)
 }
 
 char oldSettingsStr[500];
-static char             gSavedCwd[_MAX_PATH];
 
 // installs our Conduit
 int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
@@ -456,8 +461,7 @@ int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
     // might already have conduit filename in szConduitPath if we're called recursively
     if (!strstr(szConduitPath, CONDUIT_FILENAME)) 
     {
-      if (szConduitPath[strlen(szConduitPath) - 1] != DIRECTORY_SEPARATOR)
-        strcat(szConduitPath, DIRECTORY_SEPARATOR_STR);
+      strcat(szConduitPath, DIRECTORY_SEPARATOR_STR);
       strcat(szConduitPath, CONDUIT_FILENAME);
     }
     // Make sure the conduit dll exists
@@ -486,19 +490,16 @@ int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
 
     // Load the Conduit Manager DLL.
     HINSTANCE hConduitManagerDLL;
-    if( (dwReturnCode = GetPalmDesktopInstallDirectory(szPalmDesktopDir, &desktopSize)) == 0 ) 
+    if( (dwReturnCode=GetPalmDesktopInstallDirectory(szPalmDesktopDir, &desktopSize)) == 0 ) 
     {
-        // need to switch current working directory to directory with palm dlls
-        // because of a bug in Palm Desktop 6.01
-
-        GetCurrentDirectory(sizeof(gSavedCwd), gSavedCwd);
-        SetCurrentDirectory(szPalmDesktopDir);
-
         if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, szPalmDesktopDir)) != 0 )
-            return dwReturnCode;
+            // load it from local dir if present by any chance
+            if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, ".")) != 0 )
+                return(dwReturnCode);
     }
-    else 
-        return IDS_ERR_CONDUIT_NOT_FOUND;
+    else // if registery key not load it from local dir if present by any chance
+        if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, ".")) != 0 )
+        return(dwReturnCode);
     
     // Prepare to install the conduit using Conduit Manager functions
     CmInstallCreatorPtr lpfnCmInstallCreator;
@@ -542,12 +543,6 @@ int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
         return(IDS_ERR_LOADING_CONDMGR);
     }
  
-    szOldCreatorTitle[0] = '\0';
-    szOldCreatorName[0] = '\0';
-    szOldRemote[0] = '\0';
-    szOldCreatorTitle[0] = '\0';
-    szOldCreatorFile[0] = '\0';
-    szOldCreatorDirectory[0] = '\0';
     // get settings for old conduit
     int remoteBufSize = sizeof(szOldRemote);
     (*lpfnCmGetCreatorRemote) (CREATOR, szOldRemote, &remoteBufSize);
@@ -571,7 +566,9 @@ int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
     // Load the HSAPI DLL.
     HINSTANCE hHsapiDLL;
     if( (dwReturnCode = LoadHsapiDll(&hHsapiDLL, szPalmDesktopDir)) != 0 )
-        return dwReturnCode;
+        // load it from local dir if present by any chance
+        if( (dwReturnCode = LoadHsapiDll(&hHsapiDLL, ".")) != 0 )
+        return(dwReturnCode);
         
     // Shutdown the HotSync Process if it is running
     if( (bHotSyncRunning=IsHotSyncRunning(hHsapiDLL)) )
@@ -618,11 +615,7 @@ int InstallConduit(HINSTANCE hInstance, TCHAR *installDir)
     // Re-start HotSync if it was running before
     if( gWasHotSyncRunning )
         StartHotSync(hHsapiDLL);
-
-    // restore cwd, if we changed it.        
-    if (gSavedCwd[0])
-      SetCurrentDirectory(gSavedCwd);
-
+        
     return(dwReturnCode);
 }
 
@@ -640,24 +633,20 @@ int UninstallConduit()
     if( (dwReturnCode=GetPalmDesktopInstallDirectory(szPalmDesktopDir, &desktopSize)) == 0 )
     {
         if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, szPalmDesktopDir)) != 0 )
+            // load it from local dir if present by any chance
+            if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, ".")) != 0 )
                 return(dwReturnCode);
     }
     // if registery key not load it from local dir if present by any chance
-    else 
-        return(dwReturnCode);
+    else if( (dwReturnCode = LoadConduitManagerDll(&hConduitManagerDLL, ".")) != 0 )
+          return(dwReturnCode);
     
-    // need to switch current working directory to directory with palm dlls
-    // because of a bug in Palm Desktop 6.01
-
-    GetCurrentDirectory(sizeof(gSavedCwd), gSavedCwd);
-    SetCurrentDirectory(szPalmDesktopDir);
-
     // Prepare to uninstall the conduit using Conduit Manager functions
     CmRemoveConduitByCreatorIDPtr   lpfnCmRemoveConduitByCreatorID;
     lpfnCmRemoveConduitByCreatorID = (CmRemoveConduitByCreatorIDPtr) GetProcAddress(hConduitManagerDLL, "CmRemoveConduitByCreatorID");
     if( (lpfnCmRemoveConduitByCreatorID == NULL) )
         return(IDS_ERR_LOADING_CONDMGR);
-    CmSetCorePathPtr lpfnCmSetCorePath = (CmSetCorePathPtr) GetProcAddress(hConduitManagerDLL, "CmSetCorePath");
+        CmSetCorePathPtr lpfnCmSetCorePath = (CmSetCorePathPtr) GetProcAddress(hConduitManagerDLL, "CmSetCorePath");
     CmSetHotSyncExePathPtr lpfnCmSetHotSyncExePath = (CmSetHotSyncExePathPtr) GetProcAddress(hConduitManagerDLL, "CmSetHotSyncExecPath");
     CmRestoreHotSyncSettingsPtr lpfnCmRestoreHotSyncSettings;
     lpfnCmRestoreHotSyncSettings = (CmRestoreHotSyncSettingsPtr) GetProcAddress(hConduitManagerDLL, "CmRestoreHotSyncSettings");
@@ -682,6 +671,8 @@ int UninstallConduit()
     // Load the HSAPI DLL.
     HINSTANCE hHsapiDLL;
     if( (dwReturnCode = LoadHsapiDll(&hHsapiDLL, szPalmDesktopDir)) != 0 )
+        // load it from local dir if present by any chance
+        if( (dwReturnCode = LoadHsapiDll(&hHsapiDLL, ".")) != 0 )
           return(dwReturnCode);
         
     // Shutdown the HotSync Process if it is running
@@ -775,10 +766,6 @@ int UninstallConduit()
     if( bHotSyncRunning )
         StartHotSync(hHsapiDLL);
         
-    // restore cwd, if we changed it.        
-    if (gSavedCwd[0])
-      SetCurrentDirectory(gSavedCwd);
-
     if( dwReturnCode < 0 ) 
         return dwReturnCode;
     else 

@@ -44,16 +44,11 @@
 #include "PDEUtilities.h"
 
 // Static Prototypes
-static void InitSettings(MySettings* settings);
-static void InternSettings(CFDictionaryRef srcDict, MySettings* settings);
-static void ExternSettings(MySettings* settings, CFMutableDictionaryRef destDict);
+static void InitSettings(nsPrintExtensions* settings);
 static void SyncPaneFromSettings(MyCustomContext context);
 static void SyncSettingsFromPane(MyCustomContext context);
 static CFStringRef GetSummaryTextBooleanValue(Boolean value);
 static CFStringRef GetSummaryTextNAValue();
-static CFStringRef GetSummaryTextHeaderFooterValue(CFStringRef inStr);
-static int  GetIndexForPrintString(CFStringRef stringCode);
-static CFStringRef GetPrintStringFromIndex(int index);
 
 /*
 --------------------------------------------------------------------------------
@@ -78,13 +73,6 @@ extern MyCustomContext MyCreateCustomContext()
 
 extern void MyReleaseCustomContext (MyCustomContext context)
 {
-    MyCFAssign(NULL, context->settings.mHeaderLeft);
-    MyCFAssign(NULL, context->settings.mHeaderCenter);
-    MyCFAssign(NULL, context->settings.mHeaderRight);
-    MyCFAssign(NULL, context->settings.mFooterLeft);
-    MyCFAssign(NULL, context->settings.mFooterCenter);
-    MyCFAssign(NULL, context->settings.mFooterRight);
-    
     free (context);
 }
 
@@ -163,12 +151,6 @@ extern OSStatus MyEmbedCustomControls (
     static const ControlID shrinkToFitCheckControlID = { kMozPDECreatorCode, 4003 };
     static const ControlID printBGColorsCheckControlID = { kMozPDECreatorCode, 4004 };
     static const ControlID printBGImagesCheckControlID = { kMozPDECreatorCode, 4005 };
-    static const ControlID headerLeftPopupControlID = { kMozPDECreatorCode, 4006 };
-    static const ControlID headerCenterPopupControlID = { kMozPDECreatorCode, 4007 };
-    static const ControlID headerRightPopupControlID = { kMozPDECreatorCode, 4008 };
-    static const ControlID footerLeftPopupControlID = { kMozPDECreatorCode, 4009 };
-    static const ControlID footerCenterPopupControlID = { kMozPDECreatorCode, 4010 };
-    static const ControlID footerRightPopupControlID = { kMozPDECreatorCode, 4011 };
     
     OSStatus result = noErr;
     
@@ -258,30 +240,6 @@ extern OSStatus MyEmbedCustomControls (
                            &printBGImagesCheckControlID,
                            &(context->controls.printBGImagesCheck));
 
-            GetControlByID(controlOwner,
-                           &headerLeftPopupControlID,
-                           &(context->controls.headerLeftPopup));
-
-            GetControlByID(controlOwner,
-                           &headerCenterPopupControlID,
-                           &(context->controls.headerCenterPopup));
-
-            GetControlByID(controlOwner,
-                           &headerRightPopupControlID,
-                           &(context->controls.headerRightPopup));
-
-            GetControlByID(controlOwner,
-                           &footerLeftPopupControlID,
-                           &(context->controls.footerLeftPopup));
-
-            GetControlByID(controlOwner,
-                           &footerCenterPopupControlID,
-                           &(context->controls.footerCenterPopup));
-
-            GetControlByID(controlOwner,
-                           &footerRightPopupControlID,
-                           &(context->controls.footerRightPopup));
-                           
             // Now that the controls are in, sync with data.
             SyncPaneFromSettings(context);
         }
@@ -306,7 +264,6 @@ extern OSStatus MyGetSummaryText (
 {
     CFStringRef title = NULL;
     CFStringRef value = NULL;
-    CFStringRef format = NULL;
 
     OSStatus result = noErr;
 
@@ -437,79 +394,12 @@ extern OSStatus MyGetSummaryText (
         }
         CFRelease (title);
     }
- 
-    // Page Headers
-    title = CFCopyLocalizedStringFromTableInBundle(
-                        CFSTR("Page Headers"),
-                        CFSTR("Localizable"),
-                        MyGetBundle(),
-                        "Page Headers (for summary)");
-    if (title != NULL)
-    {
-        format = CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("%@, %@, %@"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer format (for summary)");
-
-        if (format != NULL)
-        {
-            value = CFStringCreateWithFormat(NULL, NULL, format,
-                            GetSummaryTextHeaderFooterValue(context->settings.mHeaderLeft),
-                            GetSummaryTextHeaderFooterValue(context->settings.mHeaderCenter),
-                            GetSummaryTextHeaderFooterValue(context->settings.mHeaderRight));
-            if (value != NULL)
-            {
-                // append the title-value pair to the arrays
-                CFArrayAppendValue (titleArray, title);
-                CFArrayAppendValue (valueArray, value);
-
-                CFRelease (value);
-            }
-            CFRelease(format);
-        }
-        CFRelease (title);
-    }
-
-    // Page Footers
-    title = CFCopyLocalizedStringFromTableInBundle(
-                        CFSTR("Page Footers"),
-                        CFSTR("Localizable"),
-                        MyGetBundle(),
-                        "Page Footers (for summary)");
-    if (title != NULL)
-    {
-        format = CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("%@, %@, %@"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer format (for summary)");
-
-        if (format != NULL)
-        {
-            value = CFStringCreateWithFormat(NULL, NULL, format,
-                            GetSummaryTextHeaderFooterValue(context->settings.mFooterLeft),
-                            GetSummaryTextHeaderFooterValue(context->settings.mFooterCenter),
-                            GetSummaryTextHeaderFooterValue(context->settings.mFooterRight));
-            if (value != NULL)
-            {
-                // append the title-value pair to the arrays
-                CFArrayAppendValue (titleArray, title);
-                CFArrayAppendValue (valueArray, value);
-
-                CFRelease (value);
-            }
-            CFRelease(format);
-        }
-        CFRelease (title);
-    }
-
+    
     return result;
 }
 
 
 #pragma mark -
-
 
 /*
 --------------------------------------------------------------------------------
@@ -523,39 +413,43 @@ extern OSStatus MySyncPaneFromTicket (
 )
 
 {
+    CFDataRef data = NULL;
+    CFIndex length = 0;
     OSStatus result = noErr;
     PMTicketRef ticket = NULL;
 
     result = MyGetTicket (session, kPDE_PMPrintSettingsRef, &ticket);
+
     if (result == noErr)
     {
-        CFDataRef xmlData = NULL;
-        CFDictionaryRef dict = NULL;
-
+        // copy ticket data into our settings
         result = PMTicketGetCFData (
             ticket, 
             kPMTopLevel, 
             kPMTopLevel, 
-            kAppPrintDialogPDEOnlyKey, 
-            &xmlData
+            kMyAppPrintSettingsKey, 
+            &data
         );
+    
         if (result == noErr)
         {
-            dict = CFPropertyListCreateFromXMLData (
-                        kCFAllocatorDefault,
-                        xmlData,
-                        kCFPropertyListImmutable,
-                        NULL
-                        );
-            if (dict)
+            length = CFDataGetLength (data);
+
+            if (length == sizeof(nsPrintExtensions))
             {
-                InternSettings(dict, &context->settings);
-                CFRelease(dict);
+                CFDataGetBytes (
+                    data, 
+                    CFRangeMake(0,length), 
+                    (UInt8*) &(context->settings)
+                );
             }
             else
-                result = kPMKeyNotFound;    // bad XML?
+            {   // so below we use the default value for mismatched length
+                result = kPMKeyNotFound;
+            }
         }
-        if (result == kPMKeyNotFound)
+        
+        if (result == kPMKeyNotFound) 
         {
             InitSettings(&context->settings);
             result = noErr;
@@ -582,10 +476,9 @@ extern OSStatus MySyncTicketFromPane (
 )
 
 {
+    CFDataRef data = NULL;
     OSStatus result = noErr;
     PMTicketRef ticket = NULL;
-    CFMutableDictionaryRef dict = NULL;
-    CFDataRef xmlData = NULL;
 
     result = MyGetTicket (session, kPDE_PMPrintSettingsRef, &ticket);
     if (result == noErr)
@@ -593,25 +486,24 @@ extern OSStatus MySyncTicketFromPane (
         // If our pane has never been shown, this will be a noop.
         SyncSettingsFromPane(context);
         
-        dict = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
-                    (const CFDictionaryKeyCallBacks *)&kCFTypeDictionaryKeyCallBacks,
-                    (const CFDictionaryValueCallBacks *)&kCFTypeDictionaryValueCallBacks);
-        if (dict)
+        data = CFDataCreate (
+            kCFAllocatorDefault, 
+            (UInt8*) &context->settings, 
+            sizeof(nsPrintExtensions)
+        );
+    
+        if (data != NULL)
         {
-            ExternSettings(&context->settings, dict);
-            xmlData = CFPropertyListCreateXMLData(kCFAllocatorDefault, dict);
-            if (xmlData)
-            {
-                result = PMTicketSetCFData (
-                    ticket, 
-                    kMyBundleIdentifier, 
-                    kAppPrintDialogPDEOnlyKey, 
-                    xmlData, 
-                    kPMUnlocked
-                );
-                CFRelease(xmlData);
-            }
-            CFRelease(dict);
+            // update ticket
+            result = PMTicketSetCFData (
+                ticket, 
+                kMyBundleIdentifier, 
+                kMyAppPrintSettingsKey, 
+                data, 
+                kPMUnlocked
+            );
+
+            CFRelease (data);
         }
     }
 
@@ -627,7 +519,7 @@ extern OSStatus MySyncTicketFromPane (
 --------------------------------------------------------------------------------
 */
 
-static void InitSettings(MySettings* settings)
+static void InitSettings(nsPrintExtensions* settings)
 {
     settings->mHaveSelection                = false;
     settings->mHaveFrames                   = false;
@@ -635,105 +527,13 @@ static void InitSettings(MySettings* settings)
   
     settings->mPrintFrameAsIs               = false;
     settings->mPrintSelectedFrame           = false;
-    settings->mPrintFramesSeparately        = false;
+    settings->mPrintFramesSeparately         = false;
     settings->mPrintSelection               = false;
     settings->mShrinkToFit                  = true;
     settings->mPrintBGColors                = true;
     settings->mPrintBGImages                = true;
-    
-    settings->mHeaderLeft                   = MyCFAssign(NULL, settings->mHeaderLeft);
-    settings->mHeaderCenter                 = MyCFAssign(NULL, settings->mHeaderCenter);
-    settings->mHeaderRight                  = MyCFAssign(NULL, settings->mHeaderRight);
-    settings->mFooterLeft                   = MyCFAssign(NULL, settings->mFooterLeft);
-    settings->mFooterCenter                 = MyCFAssign(NULL, settings->mFooterCenter);
-    settings->mFooterRight                  = MyCFAssign(NULL, settings->mFooterRight);
 }
 
-static void InternSettings(CFDictionaryRef srcDict, MySettings* settings)
-{
-    CFTypeRef dictValue;
-    
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHaveSelection)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mHaveSelection = CFBooleanGetValue((CFBooleanRef)dictValue);
-
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHaveFrames)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mHaveFrames = CFBooleanGetValue((CFBooleanRef)dictValue);
-
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHaveFrameSelected)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mHaveFrameSelected = CFBooleanGetValue((CFBooleanRef)dictValue);
-    
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyPrintFrameType)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID())) {
-        if (CFEqual(dictValue, kPDEValueFramesAsIs))
-            settings->mPrintFrameAsIs = true;
-        else if (CFEqual(dictValue, kPDEValueSelectedFrame))
-            settings->mPrintSelectedFrame = true;
-        else if (CFEqual(dictValue, kPDEValueEachFrameSep))
-            settings->mPrintFramesSeparately = true;
-    }
-
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyPrintSelection)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mPrintSelection = CFBooleanGetValue((CFBooleanRef)dictValue); 
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyShrinkToFit)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mShrinkToFit = CFBooleanGetValue((CFBooleanRef)dictValue);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyPrintBGColors)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mPrintBGColors = CFBooleanGetValue((CFBooleanRef)dictValue);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyPrintBGImages)) &&
-        (CFGetTypeID(dictValue) == CFBooleanGetTypeID()))
-            settings->mPrintBGImages = CFBooleanGetValue((CFBooleanRef)dictValue);
-    
-    
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHeaderLeft)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mHeaderLeft = MyCFAssign(dictValue, settings->mHeaderLeft);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHeaderCenter)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mHeaderCenter = MyCFAssign(dictValue, settings->mHeaderCenter);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyHeaderRight)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mHeaderRight = MyCFAssign(dictValue, settings->mHeaderRight);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyFooterLeft)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mFooterLeft = MyCFAssign(dictValue, settings->mFooterLeft);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyFooterCenter)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mFooterCenter = MyCFAssign(dictValue, settings->mFooterCenter);
-    if ((dictValue = CFDictionaryGetValue(srcDict, kPDEKeyFooterRight)) &&
-        (CFGetTypeID(dictValue) == CFStringGetTypeID()))
-            settings->mFooterRight = MyCFAssign(dictValue, settings->mFooterRight);
-}
-
-static void ExternSettings(MySettings* settings, CFMutableDictionaryRef destDict)
-{
-    // Do not write the state info mHaveSelection, mHaveFrames, mHaveFrameSelected
-    // That info is used to enable/disable UI for this session only. It's not read
-    // back by the application, nor should it be saved in custom print settings
-    
-    if (settings->mPrintFrameAsIs)
-        CFDictionaryAddValue(destDict, kPDEKeyPrintFrameType, kPDEValueFramesAsIs);
-    else if (settings->mPrintSelectedFrame)
-        CFDictionaryAddValue(destDict, kPDEKeyPrintFrameType, kPDEValueSelectedFrame);
-    else if (settings->mPrintFramesSeparately)
-        CFDictionaryAddValue(destDict, kPDEKeyPrintFrameType, kPDEValueEachFrameSep);
-
-    CFDictionaryAddValue(destDict, kPDEKeyPrintSelection, settings->mPrintSelection ? kCFBooleanTrue : kCFBooleanFalse);
-    CFDictionaryAddValue(destDict, kPDEKeyShrinkToFit, settings->mShrinkToFit ? kCFBooleanTrue : kCFBooleanFalse);
-    CFDictionaryAddValue(destDict, kPDEKeyPrintBGColors, settings->mPrintBGColors ? kCFBooleanTrue : kCFBooleanFalse);
-    CFDictionaryAddValue(destDict, kPDEKeyPrintBGImages, settings->mPrintBGImages ? kCFBooleanTrue : kCFBooleanFalse);
-    
-    CFDictionaryAddValue(destDict, kPDEKeyHeaderLeft, settings->mHeaderLeft ? settings->mHeaderLeft : CFSTR(""));
-    CFDictionaryAddValue(destDict, kPDEKeyHeaderCenter, settings->mHeaderCenter ? settings->mHeaderCenter : CFSTR(""));
-    CFDictionaryAddValue(destDict, kPDEKeyHeaderRight, settings->mHeaderRight ? settings->mHeaderRight : CFSTR(""));
-    CFDictionaryAddValue(destDict, kPDEKeyFooterLeft, settings->mFooterLeft ? settings->mFooterLeft : CFSTR(""));
-    CFDictionaryAddValue(destDict, kPDEKeyFooterCenter, settings->mFooterCenter ? settings->mFooterCenter : CFSTR(""));
-    CFDictionaryAddValue(destDict, kPDEKeyFooterRight, settings->mFooterRight ? settings->mFooterRight : CFSTR(""));
-}
 
 static void SyncPaneFromSettings(MyCustomContext context)
 {
@@ -745,13 +545,13 @@ static void SyncPaneFromSettings(MyCustomContext context)
 
             if (context->settings.mPrintSelectedFrame &&
                     context->settings.mHaveFrameSelected)
-                SetControl32BitValue(context->controls.frameRadioGroup,
+                SetControlValue(context->controls.frameRadioGroup,
                                 kFramesSelectedIndex);
             else if (context->settings.mPrintFramesSeparately)
-                SetControl32BitValue(context->controls.frameRadioGroup,
+                SetControlValue(context->controls.frameRadioGroup,
                                 kFramesEachSeparatelyIndex);
             else /* (context->settings.mPrintFrameAsIs) */
-                SetControl32BitValue(context->controls.frameRadioGroup,
+                SetControlValue(context->controls.frameRadioGroup,
                                 kFramesAsLaidOutIndex);
             
             if (!context->settings.mHaveFrameSelected)
@@ -765,7 +565,7 @@ static void SyncPaneFromSettings(MyCustomContext context)
         else
         {
             DisableControl(context->controls.frameRadioGroup);
-            SetControl32BitValue(context->controls.frameRadioGroup, 0);
+            SetControlValue(context->controls.frameRadioGroup, 0);
         }
     }
     
@@ -774,58 +574,35 @@ static void SyncPaneFromSettings(MyCustomContext context)
         if (context->settings.mHaveSelection)
         {
             EnableControl(context->controls.printSelCheck);
-            SetControl32BitValue(context->controls.printSelCheck,
+            SetControlValue(context->controls.printSelCheck,
                             context->settings.mPrintSelection);
         }
         else
         {
             DisableControl(context->controls.printSelCheck);
-            SetControl32BitValue(context->controls.printSelCheck, 0);
+            SetControlValue(context->controls.printSelCheck, 0);
         }
     }
     if (context->controls.shrinkToFitCheck)
-        SetControl32BitValue(context->controls.shrinkToFitCheck,
+        SetControlValue(context->controls.shrinkToFitCheck,
                         context->settings.mShrinkToFit);
     if (context->controls.printBGColorsCheck)
-        SetControl32BitValue(context->controls.printBGColorsCheck,
+        SetControlValue(context->controls.printBGColorsCheck,
                         context->settings.mPrintBGColors);
     if (context->controls.printBGImagesCheck)
-        SetControl32BitValue(context->controls.printBGImagesCheck,
+        SetControlValue(context->controls.printBGImagesCheck,
                         context->settings.mPrintBGImages);
-                        
-    if (context->controls.headerLeftPopup)
-      SetControl32BitValue(context->controls.headerLeftPopup,
-                        GetIndexForPrintString(context->settings.mHeaderLeft));
-    if (context->controls.headerCenterPopup)
-      SetControl32BitValue(context->controls.headerCenterPopup,
-                        GetIndexForPrintString(context->settings.mHeaderCenter));
-    if (context->controls.headerRightPopup)
-      SetControl32BitValue(context->controls.headerRightPopup,
-                        GetIndexForPrintString(context->settings.mHeaderRight));
-
-    if (context->controls.footerLeftPopup)
-      SetControl32BitValue(context->controls.footerLeftPopup,
-                        GetIndexForPrintString(context->settings.mFooterLeft));
-    if (context->controls.footerCenterPopup)
-      SetControl32BitValue(context->controls.footerCenterPopup,
-                        GetIndexForPrintString(context->settings.mFooterCenter));
-    if (context->controls.footerRightPopup)
-      SetControl32BitValue(context->controls.footerRightPopup,
-                         GetIndexForPrintString(context->settings.mFooterRight));
-
 }
 
 
 static void SyncSettingsFromPane(MyCustomContext context)
 {
-    SInt32 controlVal;
-    
     if (context->controls.frameRadioGroup)
     {
         context->settings.mPrintFrameAsIs = false;
         context->settings.mPrintSelectedFrame = false;
         context->settings.mPrintFramesSeparately = false;
-        switch (GetControl32BitValue(context->controls.frameRadioGroup))
+        switch (GetControlValue(context->controls.frameRadioGroup))
         {
             case kFramesAsLaidOutIndex:
               context->settings.mPrintFrameAsIs = true;
@@ -841,48 +618,16 @@ static void SyncSettingsFromPane(MyCustomContext context)
     
     if (context->controls.printSelCheck)
         context->settings.mPrintSelection =
-          GetControl32BitValue(context->controls.printSelCheck);
+          GetControlValue(context->controls.printSelCheck);
     if (context->controls.printSelCheck)
         context->settings.mShrinkToFit = 
-          GetControl32BitValue(context->controls.shrinkToFitCheck);
+          GetControlValue(context->controls.shrinkToFitCheck);
     if (context->controls.printSelCheck)
         context->settings.mPrintBGColors = 
-          GetControl32BitValue(context->controls.printBGColorsCheck);
+          GetControlValue(context->controls.printBGColorsCheck);
     if (context->controls.printSelCheck)
         context->settings.mPrintBGImages = 
-          GetControl32BitValue(context->controls.printBGImagesCheck);
-          
-    if (context->controls.headerLeftPopup) {
-      controlVal = GetControl32BitValue(context->controls.headerLeftPopup);
-      context->settings.mHeaderLeft = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                                 context->settings.mHeaderLeft);      
-    }
-    if (context->controls.headerCenterPopup) {
-      controlVal = GetControl32BitValue(context->controls.headerCenterPopup);
-      context->settings.mHeaderCenter = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                                   context->settings.mHeaderCenter);
-    }
-    if (context->controls.headerRightPopup) {
-      controlVal = GetControl32BitValue(context->controls.headerRightPopup);
-      context->settings.mHeaderRight = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                                  context->settings.mHeaderRight);
-    }
-    if (context->controls.footerLeftPopup) {
-      controlVal = GetControl32BitValue(context->controls.footerLeftPopup);
-      context->settings.mFooterLeft = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                      context->settings.mFooterLeft);
-    }
-    if (context->controls.footerCenterPopup) {
-      controlVal = GetControl32BitValue(context->controls.footerCenterPopup);
-      context->settings.mFooterCenter = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                                   context->settings.mFooterCenter);
-    }
-    if (context->controls.footerRightPopup) {
-      controlVal = GetControl32BitValue(context->controls.footerRightPopup);
-      context->settings.mFooterRight = MyCFAssign(GetPrintStringFromIndex(controlVal),
-                                                  context->settings.mFooterRight);
-    }
-
+          GetControlValue(context->controls.printBGImagesCheck);
 }
 
 #pragma mark -
@@ -913,94 +658,5 @@ static CFStringRef GetSummaryTextNAValue()
                 "Not Applicable (for summary)");
     
 }
-
-static CFStringRef GetSummaryTextHeaderFooterValue(CFStringRef inStr)
-{   
-    if (!inStr || !CFStringGetLength(inStr))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("(Blank)"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <blank> (for summary)");
-    else if (CFEqual(inStr, CFSTR("&T")))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("Title"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <title> (for summary)");
-    else if (CFEqual(inStr, CFSTR("&U")))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("URL"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <url> (for summary)");
-    else if (CFEqual(inStr, CFSTR("&D")))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("Date"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <date> (for summary)");
-    else if (CFEqual(inStr, CFSTR("&P")))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("Page #"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <page #> (for summary)");
-    else if (CFEqual(inStr, CFSTR("&PT")))
-        return CFCopyLocalizedStringFromTableInBundle(
-                            CFSTR("Page # of #"),
-                            CFSTR("Localizable"),
-                            MyGetBundle(),
-                            "Page Heaader/Footer <page # of #> (for summary)");
-    else
-        return CFRetain(inStr);
-}
-
-//
-// Here we have a mapping of control codes to pop-up button messages
-//
-
-static int  GetIndexForPrintString(CFStringRef stringCode)
-{
-    if (stringCode)
-    {
-        // title
-        if (CFEqual(stringCode, CFSTR("&T")))
-            return 2;
-        // URL
-        if (CFEqual(stringCode, CFSTR("&U")))
-            return 3;
-        // Date/Time
-        if (CFEqual(stringCode, CFSTR("&D")))
-            return 4;
-        // Page Number
-        if (CFEqual(stringCode, CFSTR("&P")))
-            return 5;
-        // Page Number of Total Page Numbers
-        if (CFEqual(stringCode, CFSTR("&PT")))
-            return 6;
-    }
-    // Something Else - aka "Blank"
-    return 1;
-}
-
-CFStringRef GetPrintStringFromIndex(int index)
-{
-    switch (index)
-    {
-        case 2: // title
-            return CFSTR("&T");
-        case 3: // url
-            return CFSTR("&U");
-        case 4: // date/time
-            return CFSTR("&D");
-        case 5: // Page #
-            return CFSTR("&P");
-        case 6: // Page # of #
-            return CFSTR("&PT");
-        default: // blank OR custom (need to implement custom)
-            return CFSTR("");
-    }
- }
 
 /* END OF SOURCE */

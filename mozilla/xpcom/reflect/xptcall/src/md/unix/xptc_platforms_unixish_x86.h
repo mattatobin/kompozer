@@ -1,11 +1,11 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1999
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -107,16 +107,12 @@
 #define THUNK_BASED_THIS_ADJUST
 
 #elif defined(__OpenBSD__) 
-#if __GNUC__ >= 3
-#define THUNK_BASED_THIS_ADJUST
-#else
-/* OpenBSD introduces GCC 2.95.x in late May 1999 */
+/* OpenBSD instroduces GCC 2.95.x in late May 1999 */
 #include <sys/param.h>
 #if OpenBSD <= 199905
 #define THUNK_BASED_THIS_ADJUST
 #else
 #define CFRONT_STYLE_THIS_ADJUST
-#endif
 #endif
 
 #elif defined(__bsdi__) 
@@ -129,13 +125,7 @@
 #endif
 
 #elif defined(NTO) 
-#if (__GNUC__ == 2) && (__GNUC_MINOR__ <= 7)
-/* Old gcc 2.7.x.x.  What does gcc 2.8.x do?? */
 #define CFRONT_STYLE_THIS_ADJUST
-#else
-/* egcs and later */
-#define THUNK_BASED_THIS_ADJUST
-#endif
 
 #elif defined(__BEOS__) 
 #define CFRONT_STYLE_THIS_ADJUST
@@ -168,12 +158,4 @@
 
 #if defined(THUNK_BASED_THIS_ADJUST) && defined(CFRONT_STYLE_THIS_ADJUST)
 #error "need to define only ONE 'this' adjust scheme"    
-#endif
-
-/* Define KEEP_STACK_16_BYTE_ALIGNED if the stack needs to maintain alignment
- * in a CALL for some good reason (like ABI compliance). */
-
-#if defined(XP_MACOSX) || defined(__QNXNTO__)
-/* http://developer.apple.com/documentation/DeveloperTools/Conceptual/LowLevelABI/Articles/IA32.html */
-#define KEEP_STACK_16_BYTE_ALIGNED
 #endif

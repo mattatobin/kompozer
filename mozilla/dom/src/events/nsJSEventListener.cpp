@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsJSEventListener.h"
@@ -45,32 +46,20 @@
 #include "nsIXPConnect.h"
 #include "nsIPrivateDOMEvent.h"
 #include "nsGUIEvent.h"
-#include "nsContentUtils.h"
 
 
 /*
  * nsJSEventListener implementation
  */
-nsJSEventListener::nsJSEventListener(nsIScriptContext *aContext,
-                                     JSObject *aScopeObject,
+nsJSEventListener::nsJSEventListener(nsIScriptContext *aContext, 
                                      nsISupports *aObject)
-  : nsIJSEventListener(aContext, aScopeObject, aObject),
+  : nsIJSEventListener(aContext, aObject),
     mReturnResult(nsReturnResult_eNotSet)
 {
-  if (aScopeObject && aContext) {
-    JSContext *cx = (JSContext *)aContext->GetNativeContext();
-
-    ::JS_LockGCThing(cx, aScopeObject);
-  }
 }
 
 nsJSEventListener::~nsJSEventListener() 
 {
-  if (mScopeObject && mContext) {
-    JSContext *cx = (JSContext *)mContext->GetNativeContext();
-
-    ::JS_UnlockGCThing(cx, mScopeObject);
-  }
 }
 
 NS_INTERFACE_MAP_BEGIN(nsJSEventListener)
@@ -111,8 +100,8 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
       return NS_OK;
     }
     //if (mReturnResult == nsReturnResult_eNotSet) {
-      if (eventString.EqualsLiteral("error") ||
-          eventString.EqualsLiteral("mouseover")) {
+      if (eventString.Equals(NS_LITERAL_STRING("error")) ||
+          eventString.Equals(NS_LITERAL_STRING("mouseover"))) {
         mReturnResult = nsReturnResult_eReverseReturnResult;
       }
       else {
@@ -126,12 +115,12 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
   }
 
   nsresult rv;
-  nsIXPConnect *xpc = nsContentUtils::XPConnect();
+  nsCOMPtr<nsIXPConnect> xpc(do_GetService(nsIXPConnect::GetCID()));
 
   // root
   nsCOMPtr<nsIXPConnectJSObjectHolder> wrapper;
-  rv = xpc->WrapNative(cx, mScopeObject, mTarget, NS_GET_IID(nsISupports),
-                       getter_AddRefs(wrapper));
+  rv = xpc->WrapNative(cx, ::JS_GetGlobalObject(cx), mTarget,
+                       NS_GET_IID(nsISupports), getter_AddRefs(wrapper));
   NS_ENSURE_SUCCESS(rv, rv);
 
   JSObject* obj = nsnull;
@@ -150,7 +139,7 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
   }
 
   PRBool handledScriptError = PR_FALSE;
-  if (eventString.EqualsLiteral("onerror")) {
+  if (eventString.Equals(NS_LITERAL_STRING("onerror"))) {
     nsCOMPtr<nsIPrivateDOMEvent> priv(do_QueryInterface(aEvent));
     NS_ENSURE_TRUE(priv, NS_ERROR_UNEXPECTED);
 
@@ -190,7 +179,7 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
   }
 
   if (NS_SUCCEEDED(rv)) {
-    if (eventString.EqualsLiteral("onbeforeunload")) {
+    if (eventString.Equals(NS_LITERAL_STRING("onbeforeunload"))) {
       nsCOMPtr<nsIPrivateDOMEvent> priv(do_QueryInterface(aEvent));
       NS_ENSURE_TRUE(priv, NS_ERROR_UNEXPECTED);
 
@@ -205,15 +194,12 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
       if (!JSVAL_IS_VOID(rval)) {
         aEvent->PreventDefault();
 
-        // Set the text in the beforeUnload event as long as it wasn't
-        // already set (through event.returnValue, which takes
-        // precedence over a value returned from a JS function in IE)
-        if (JSVAL_IS_STRING(rval) && beforeUnload->text.IsEmpty()) {
+        if (JSVAL_IS_STRING(rval)) {
           beforeUnload->text = nsDependentJSString(JSVAL_TO_STRING(rval));
         }
       }
     } else if (JSVAL_IS_BOOLEAN(rval)) {
-      // If the handler returned false and its sense is not reversed,
+      // if the handler returned false and its sense is not reversed,
       // or the handler returned true and its sense is reversed from
       // the usual (false means cancel), then prevent default.
 
@@ -232,16 +218,16 @@ nsJSEventListener::HandleEvent(nsIDOMEvent* aEvent)
  */
 
 nsresult
-NS_NewJSEventListener(nsIScriptContext *aContext, JSObject *aScopeObject,
-                      nsISupports *aObject, nsIDOMEventListener ** aReturn)
+NS_NewJSEventListener(nsIDOMEventListener ** aInstancePtrResult,
+                      nsIScriptContext *aContext, nsISupports *aObject)
 {
-  nsJSEventListener* it =
-    new nsJSEventListener(aContext, aScopeObject, aObject);
+  nsJSEventListener* it = new nsJSEventListener(aContext, aObject);
   if (!it) {
     return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  NS_ADDREF(*aReturn = it);
+  *aInstancePtrResult = it;
+  NS_ADDREF(*aInstancePtrResult);
 
   return NS_OK;
 }

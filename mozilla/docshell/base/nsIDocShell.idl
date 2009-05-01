@@ -1,47 +1,30 @@
 /* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Travis Bogard <travis@netscape.com>
  *   Steve Clark <buster@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsISupports.idl"
 
 %{ C++
-class nsPresContext;
+class nsIPresContext;
 class nsIPresShell;
 %}
 
@@ -49,11 +32,10 @@ class nsIPresShell;
  * The nsIDocShell interface.
  */
 
-[ptr] native nsPresContext(nsPresContext);
+[ptr] native nsIPresContext(nsIPresContext);
 [ptr] native nsIPresShell(nsIPresShell);
 
 interface nsIURI;
-interface nsIChannel;
 interface nsIContentViewer;
 interface nsIURIContentListener;
 interface nsIChromeEventHandler;
@@ -65,10 +47,8 @@ interface nsIInputStream;
 interface nsIRequest;
 interface nsISHEntry;
 interface nsILayoutHistoryState;
-interface nsISecureBrowserUI;
-interface nsIDOMStorage;
 
-[scriptable, uuid(9f0c7461-b9a4-47f6-b88c-421dce1bce66)]
+[scriptable, uuid(69E5DE00-7B8B-11d3-AF61-00A024FFC08C)]
 interface nsIDocShell : nsISupports
 {
   /**
@@ -117,14 +97,9 @@ interface nsIDocShell : nsISupports
                             in ACString aContentCharset,
                             in nsIDocShellLoadInfo aLoadInfo);
 
-  const long INTERNAL_LOAD_FLAGS_NONE                    = 0x0;
-  const long INTERNAL_LOAD_FLAGS_INHERIT_OWNER           = 0x1;
-  const long INTERNAL_LOAD_FLAGS_DONT_SEND_REFERRER      = 0x2;
-  const long INTERNAL_LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP = 0x4;
-
-  // This flag marks the first load in this object
-  // @see nsIWebNavigation::LOAD_FLAGS_FIRST_LOAD
-  const long INTERNAL_LOAD_FLAGS_FIRST_LOAD              = 0x8;
+  const long INTERNAL_LOAD_FLAGS_NONE               = 0x0;
+  const long INTERNAL_LOAD_FLAGS_INHERIT_OWNER      = 0x1;
+  const long INTERNAL_LOAD_FLAGS_DONT_SEND_REFERRER = 0x2;
 
   /**
    * Loads the given URI.  This method is identical to loadURI(...) except
@@ -182,15 +157,14 @@ interface nsIDocShell : nsISupports
 
   /**
    * Notify the associated content viewer and all child docshells that they are
-   * about to be hidden.  If |isUnload| is true, then the document is being
-   * unloaded as well.
+   * about to be unloaded.
    */
-  [noscript] void firePageHideNotification(in boolean isUnload);
+  [noscript] void fireUnloadNotification();
 
   /**
    * Presentation context for the currently loaded document.  This may be null.
    */
-  [noscript] readonly attribute nsPresContext presContext;
+  [noscript] readonly attribute nsIPresContext presContext;
 
   /**
    * Presentation shell for the currently loaded document.  This may be null.
@@ -214,6 +188,12 @@ interface nsIDocShell : nsISupports
    * be of interest to chrome.
    */
   attribute nsIChromeEventHandler chromeEventHandler;
+
+  /**
+   * URI content listener parent.  This is not refcounted and is assumed to be
+   * nulled out by the parent when the parent is going away.
+   */
+  attribute nsIURIContentListener parentURIContentListener;
 
   /**
    * The document charset info.  This is used by a load to determine priorities
@@ -349,114 +329,5 @@ interface nsIDocShell : nsISupports
   attribute nsILayoutHistoryState layoutHistoryState;
 
   readonly attribute boolean shouldSaveLayoutState;
-
-  /**
-   * The SecureBrowserUI object for this docshell.  This is set by XUL
-   * <browser> or nsWebBrowser for their root docshell.
-   */
-  attribute nsISecureBrowserUI securityUI;
-
-  /**
-   * Cancel the XPCOM timers for each meta-refresh URI in this docshell,
-   * and this docshell's children, recursively. The meta-refresh timers can be
-   * restarted using resumeRefreshURIs().  If the timers are already suspended,
-   * this has no effect.
-   */
-  void suspendRefreshURIs();
-
-  /**
-   * Restart the XPCOM timers for each meta-refresh URI in this docshell,
-   * and this docshell's children, recursively.  If the timers are already
-   * running, this has no effect.
-   */
-  void resumeRefreshURIs();
-
-  /**
-   * Begin firing WebProgressListener notifications for restoring a page
-   * presentation. |viewer| is the content viewer whose document we are
-   * starting to load.  If null, it defaults to the docshell's current content
-   * viewer, creating one if necessary.  |top| should be true for the toplevel
-   * docshell that is being restored; it will be set to false when this method
-   * is called for child docshells.  This method will post an event to
-   * complete the simulated load after returning to the event loop.
-   */
-  void beginRestore(in nsIContentViewer viewer, in boolean top);
-
-  /**
-   * Finish firing WebProgressListener notifications and DOM events for
-   * restoring a page presentation.  This should only be called via
-   * beginRestore().
-   */
-  void finishRestore();
-
-  /* Track whether we're currently restoring a document presentation. */
-  readonly attribute boolean restoringDocument;
-
-  /* attribute to access whether error pages are enabled */
-  attribute boolean useErrorPages;
-
-  /**
-   * Keeps track of the previous SHTransaction index and the current
-   * SHTransaction index at the time that the doc shell begins to load.
-   * Used for ContentViewer eviction.
-   */
-  readonly attribute long previousTransIndex;
-  readonly attribute long loadedTransIndex;
-
-  /**
-   * Notification that entries have been removed from the beginning of a
-   * nsSHistory which has this as its rootDocShell.
-   *
-   * @param numEntries - The number of entries removed
-   */
-  void historyPurged(in long numEntries);
 };
 
-[scriptable, uuid(45988A14-B240-4D07-AE64-50ECCA26E6D8)]
-interface nsIDocShell_MOZILLA_1_8_BRANCH : nsISupports
-{
-  /*
-   * Retrieves the WebApps session storage object for the supplied domain.
-   * If it doesn't already exist, a new one will be created.
-   *
-   * @param domain the domain of the storage object to retrieve
-   */
-  nsIDOMStorage getSessionStorageForURI(in nsIURI uri);
-
-  /*
-   * Add a WebApps session storage object to the docshell.
-   *
-   * @param domain the domain the storage object is associated with
-   * @param storage the storage object to add
-   */
-  void addSessionStorage(in ACString aDomain, in nsIDOMStorage storage);
-
-  /**
-   * Gets the channel for the currently loaded document, if any. 
-   * For a new document load, this will be the channel of the previous document
-   * until after OnLocationChange fires.
-   */
-  readonly attribute nsIChannel currentDocumentChannel;
-};
-
-[scriptable, uuid(9cee9ce9-a815-46ad-8d46-46b2044836b2)]
-interface nsIDocShell_MOZILLA_1_8_BRANCH2 : nsISupports
-{
-  /**
-   * Find out whether the docshell is currently in the middle of a page
-   * transition (after the onunload event has fired, but before the new
-   * document has been set up)
-   */
-  readonly attribute boolean isInUnload;
-};
-
-[scriptable, uuid(833fdff8-e0ca-4987-bf13-e10e631e504d)]
-interface nsIDocShell_MOZILLA_1_8_BRANCH3 : nsISupports
-{
-  /**
-   * Find out if the currently loaded document came from a suspicious channel
-   * (such as a JAR channel where the server-returned content type isn't a
-   * known JAR type).
-   */
-  readonly attribute boolean channelIsUnsafe;
-};

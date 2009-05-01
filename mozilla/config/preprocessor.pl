@@ -30,7 +30,6 @@ use strict;
 # output to stdout
 
 my $stack = new stack;
-my $marker = '#';
 
 # command line arguments
 my @includes;
@@ -72,8 +71,6 @@ while ($_ = $ARGV[0], defined($_) && /^-./) {
         $stack->{'lineEndings'} = "\x0A";
     } elsif (/^--line-endings=(.+)$/os) { 
         die "$0: unrecognised line ending: $1\n";
-    } elsif (/^--marker=(.)$/os) {
-        $marker = $1;
     } else {
         die "$0: invalid argument: $_\n";
     }
@@ -112,29 +109,17 @@ sub include {
     local $stack->{'variables'}->{'LINE'} = 0;
     local *FILE;
     open(FILE, $filename) or die "Couldn't open $filename: $!\n";
-    my $lineout = 0;
     while (<FILE>) {
         # on cygwin, line endings are screwed up, so normalise them.
-        s/[\x0D\x0A]+$/\n/os if ($^O eq 'msys' || $^O eq 'cygwin' || "$^O" eq "MSWin32");
+        s/[\x0D\x0A]+$/\n/os if $^O eq 'cygwin';
         $stack->newline;
-        if (/^\Q$marker\E([a-z]+)\n?$/os) { # argumentless processing instruction
+        if (/^\#([a-z]+)\n?$/os) { # argumentless processing instruction
             process($stack, $1);
-        } elsif (/^\Q$marker\E([a-z]+)\s(.*?)\n?$/os) { # processing instruction with arguments
+        } elsif (/^\#([a-z]+)\s(.*?)\n?$/os) { # processing instruction with arguments
             process($stack, $1, $2);
-        } elsif (/^\Q$marker\E/os) { # comment
+        } elsif (/^\#/os) { # comment
             # ignore it
         } elsif ($stack->enabled) {
-            next if $stack->{'dependencies'};
-
-            # set the current line number in JavaScript if necessary
-            my $linein = $stack->{'variables'}->{'LINE'};
-            if (++$lineout != $linein) {
-                if ($filename =~ /\.js(|\.in)$/o) {
-                    $stack->print("//\@line $linein \"$filename\"\n")
-                }
-                $lineout = $linein;
-            }
-
             # print it, including any newlines
             $stack->print(filtered($stack, $_));
         }

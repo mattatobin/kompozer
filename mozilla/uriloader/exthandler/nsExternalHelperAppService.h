@@ -1,41 +1,24 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Scott MacGregor <mscott@netscape.com>
- *   Christian Biesinger <cbiesinger@web.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef nsExternalHelperAppService_h__
 #define nsExternalHelperAppService_h__
@@ -46,11 +29,9 @@
 #include "prlog.h"
 #include "prtime.h"
 
-#include "nsInt64.h"
-
 #include "nsIExternalHelperAppService.h"
 #include "nsIExternalProtocolService.h"
-#include "nsIWebProgressListener2.h"
+#include "nsIWebProgressListener.h"
 #include "nsIHelperAppLauncherDialog.h"
 
 #include "nsIMIMEInfo.h"
@@ -65,7 +46,6 @@
 #include "nsIInterfaceRequestorUtils.h"
 #include "nsILocalFile.h"
 #include "nsIChannel.h"
-#include "nsITimer.h"
 
 #include "nsIRDFDataSource.h"
 #include "nsIRDFResource.h"
@@ -79,8 +59,7 @@
 class nsExternalAppHandler;
 class nsIMIMEInfo;
 class nsIRDFService;
-class nsITransfer;
-class nsIDOMWindowInternal;
+class nsIDownload;
 
 /**
  * The helper app service. Responsible for handling content that Mozilla
@@ -89,7 +68,7 @@ class nsIDOMWindowInternal;
 class nsExternalHelperAppService
 : public nsIExternalHelperAppService,
   public nsPIExternalAppLauncher,
-  public nsIExternalProtocolService,
+  public nsPIExternalProtocolService,
   public nsIMIMEService,
   public nsIObserver,
   public nsSupportsWeakReference
@@ -99,6 +78,7 @@ public:
   NS_DECL_NSIEXTERNALHELPERAPPSERVICE
   NS_DECL_NSPIEXTERNALAPPLAUNCHER
   NS_DECL_NSIEXTERNALPROTOCOLSERVICE
+  NS_DECL_NSPIEXTERNALPROTOCOLSERVICE
   NS_DECL_NSIMIMESERVICE
   NS_DECL_NSIOBSERVER
 
@@ -110,13 +90,31 @@ public:
    * @retval errorcode Loading failed
    * @see mOverRideDataSource
    */
-  NS_HIDDEN_(nsresult) InitDataSource();
-
+  nsresult InitDataSource();
   /**
    * Initializes internal state. Will be called automatically when
    * this service is first instantiated.
    */
-  NS_HIDDEN_(nsresult) Init();
+  nsresult Init();
+
+  /**
+   * Create an external app handler and binds it with a mime info object which
+   * represents how we want to dispose of this content.
+   * CreateNewExternalHandler is implemented only by the base class.
+   * @param aMIMEInfo      MIMEInfo object, representing the type of the
+   *                       content that should be handled
+   * @param aFileExtension The extension we need to append to our temp file,
+   *                       INCLUDING the ".". e.g. .mp3
+   * @param aFileName      The filename to use
+   * @param aIsAttachment  Whether the request has Content-Disposition: attachment
+   *                       set
+   * @param aWindowContext Window context, as passed to DoContent
+   */
+  nsExternalAppHandler * CreateNewExternalHandler(nsIMIMEInfo * aMIMEInfo,
+                                                  const char * aFileExtension,
+                                                  const nsAString& aFileName,
+                                                  PRBool aIsAttachment,
+                                                  nsISupports * aWindowContext);
  
   /**
    * Given a content type, look up the user override information to see if
@@ -124,29 +122,17 @@ public:
    * over ride information is contained in a in memory data source.
    * @param aMIMEInfo The mime info to fill with the information
    */
-  NS_HIDDEN_(nsresult) GetMIMEInfoForMimeTypeFromDS(const nsACString& aContentType,
-                                                    nsIMIMEInfo * aMIMEInfo);
+  nsresult GetMIMEInfoForMimeTypeFromDS(const char * aContentType,
+                                        nsIMIMEInfo * aMIMEInfo);
   
   /**
    * Given an extension, look up the user override information to see if we
    * have a mime info object representing this extension. The user over ride
-   * information is contained in an in-memory data source.
-   *
-   * Does not change the MIME Type of the MIME Info.
-   *
+   * information is contained in a in memory data source.
    * @param aMIMEInfo The mime info to fill with the information
    */
-  NS_HIDDEN_(nsresult) GetMIMEInfoForExtensionFromDS(const nsACString& aFileExtension,
-                                                     nsIMIMEInfo * aMIMEInfo);
-
-  /**
-   * Looks up the MIME Type for a given extension in the RDF Datasource.
-   * @param aExtension The extension to look for
-   * @param aType [out] The type, if found
-   * @return PR_TRUE if found, PR_FALSE otherwise
-   */
-  NS_HIDDEN_(PRBool) GetTypeFromDS(const nsACString& aFileExtension,
-                                   nsACString& aType);
+  nsresult GetMIMEInfoForExtensionFromDS(const char * aFileExtension,
+                                         nsIMIMEInfo * aMIMEInfo);
 
   /**
    * Given a mimetype and an extension, looks up a mime info from the OS.
@@ -154,7 +140,6 @@ public:
    * as nsIMIMEService::GetFromTypeAndExtension.
    * This is supposed to be overridden by the platform-specific
    * nsOSHelperAppService!
-   * @param aFileExt The file extension; may be empty. UTF-8 encoded.
    * @param [out] aFound
    *        Should be set to PR_TRUE if the os has a mapping, to
    *        PR_FALSE otherwise. Must not be null.
@@ -163,8 +148,8 @@ public:
    *         returning one is an out-of-memory error.
    *         If null, the value of aFound is unspecified.
    */
-  virtual already_AddRefed<nsIMIMEInfo> GetMIMEInfoFromOS(const nsACString& aMIMEType,
-                                                          const nsACString& aFileExt,
+  virtual already_AddRefed<nsIMIMEInfo> GetMIMEInfoFromOS(const char * aMIMEType,
+                                                          const char * aFileExt,
                                                           PRBool     * aFound) = 0;
 
   /**
@@ -188,7 +173,7 @@ public:
    * Helper routine used to test whether a given mime type is in our
    * mimeTypes.rdf data source
    */
-  NS_HIDDEN_(PRBool) MIMETypeIsInDataSource(const char * aContentType);
+  PRBool MIMETypeIsInDataSource(const char * aContentType);
 
 protected:
   /**
@@ -197,9 +182,9 @@ protected:
    */
   nsCOMPtr<nsIRDFDataSource> mOverRideDataSource;
 
-  nsCOMPtr<nsIRDFResource> kNC_Description;
-  nsCOMPtr<nsIRDFResource> kNC_Value;
-  nsCOMPtr<nsIRDFResource> kNC_FileExtensions;
+	nsCOMPtr<nsIRDFResource> kNC_Description;
+	nsCOMPtr<nsIRDFResource> kNC_Value;
+	nsCOMPtr<nsIRDFResource> kNC_FileExtensions;
   nsCOMPtr<nsIRDFResource> kNC_Path;
   nsCOMPtr<nsIRDFResource> kNC_UseSystemDefault;
   nsCOMPtr<nsIRDFResource> kNC_SaveToDisk;
@@ -215,27 +200,27 @@ protected:
   /**
    * Helper routines for digesting the data source and filling in a mime info
    * object for a given content type inside that data source.
-   * The content type of the MIME Info will not be changed.
    */
-  NS_HIDDEN_(nsresult) FillTopLevelProperties(nsIRDFResource * aContentTypeNodeResource, 
-                                              nsIRDFService * aRDFService,
-                                              nsIMIMEInfo * aMIMEInfo);
+  nsresult FillTopLevelProperties(const char * aContentType,
+                                  nsIRDFResource * aContentTypeNodeResource, 
+                                  nsIRDFService * aRDFService,
+                                  nsIMIMEInfo * aMIMEInfo);
   /**
    * @see FillTopLevelProperties
    */
-  NS_HIDDEN_(nsresult) FillContentHandlerProperties(const char * aContentType,
-                                                    nsIRDFResource * aContentTypeNodeResource,
-                                                    nsIRDFService * aRDFService,
-                                                    nsIMIMEInfo * aMIMEInfo);
+  nsresult FillContentHandlerProperties(const char * aContentType,
+                                        nsIRDFResource * aContentTypeNodeResource,
+                                        nsIRDFService * aRDFService,
+                                        nsIMIMEInfo * aMIMEInfo);
 
   /**
    * A small helper function which gets the target for a given source and
    * property. QIs to a literal and returns a CONST ptr to the string value
    * of that target
    */
-  NS_HIDDEN_(nsresult) FillLiteralValueFromTarget(nsIRDFResource * aSource,
-                                                  nsIRDFResource * aProperty,
-                                                  const PRUnichar ** aLiteralValue);
+  nsresult FillLiteralValueFromTarget(nsIRDFResource * aSource,
+                                      nsIRDFResource * aProperty,
+                                      const PRUnichar ** aLiteralValue);
 
   /**
    * Searches the "extra" array of MIMEInfo objects for an object
@@ -245,27 +230,15 @@ protected:
    * @param aContentType The type to search for.
    * @param aMIMEInfo    [inout] The mime info, if found
    */
-  NS_HIDDEN_(nsresult) GetMIMEInfoForMimeTypeFromExtras(const nsACString& aContentType,
-                                                        nsIMIMEInfo * aMIMEInfo);
+  nsresult GetMIMEInfoForMimeTypeFromExtras(const char * aContentType,
+                                            nsIMIMEInfo * aMIMEInfo);
   /**
    * Searches the "extra" array of MIMEInfo objects for an object
    * with a specific extension.
-   *
-   * Does not change the MIME Type of the MIME Info.
-   *
    * @see GetMIMEInfoForMimeTypeFromExtras
    */
-  NS_HIDDEN_(nsresult) GetMIMEInfoForExtensionFromExtras(const nsACString& aExtension,
-                                                         nsIMIMEInfo * aMIMEInfo);
-
-  /**
-   * Searches the "extra" array for a MIME type, and gets its extension.
-   * @param aExtension The extension to search for
-   * @param aMIMEType [out] The found MIME type.
-   * @return PR_TRUE if the extension was found, PR_FALSE otherwise.
-   */
-  NS_HIDDEN_(PRBool) GetTypeFromExtras(const nsACString& aExtension,
-                                       nsACString& aMIMEType);
+  nsresult GetMIMEInfoForExtensionFromExtras(const char * aExtension,
+                                             nsIMIMEInfo * aMIMEInfo);
 
   /**
    * Fixes the file permissions to be correct. Base class has a no-op
@@ -290,7 +263,7 @@ protected:
    * Functions related to the tempory file cleanup service provided by
    * nsExternalHelperAppService
    */
-  NS_HIDDEN_(nsresult) ExpungeTemporaryFiles();
+  nsresult ExpungeTemporaryFiles();
   /**
    * Array for the files that should be deleted
    */
@@ -324,51 +297,30 @@ protected:
  */
 class nsExternalAppHandler : public nsIStreamListener,
                              public nsIHelperAppLauncher,
-                             public nsITimerCallback
+                             public nsIObserver
 {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSISTREAMLISTENER
   NS_DECL_NSIREQUESTOBSERVER
   NS_DECL_NSIHELPERAPPLAUNCHER
-  NS_DECL_NSICANCELABLE
-  NS_DECL_NSITIMERCALLBACK
+  NS_DECL_NSIOBSERVER
 
-  /**
-   * @param aMIMEInfo      MIMEInfo object, representing the type of the
-   *                       content that should be handled
-   * @param aFileExtension The extension we need to append to our temp file,
-   *                       INCLUDING the ".". e.g. .mp3
-   * @param aWindowContext Window context, as passed to DoContent
-   * @param aFileName      The filename to use
-   * @param aReason        A constant from nsIHelperAppLauncherDialog indicating
-   *                       why the request is handled by a helper app.
-   */
-  nsExternalAppHandler(nsIMIMEInfo * aMIMEInfo, const nsCSubstring& aFileExtension,
-                       nsIInterfaceRequestor * aWindowContext,
-                       const nsAString& aFilename,
-                       PRUint32 aReason);
-
+  nsExternalAppHandler();
   ~nsExternalAppHandler();
+
+  nsresult Init(nsIMIMEInfo * aMIMEInfo, const char * aFileExtension,
+                nsISupports * aWindowContext,
+                const nsAString& aFilename,
+                PRBool aIsAttachment);
 
 protected:
   nsCOMPtr<nsIFile> mTempFile;
   nsCOMPtr<nsIURI> mSourceUrl;
   nsString mTempFileExtension;
-  /**
-   * The MIME Info for this load. Will never be null.
-   */
   nsCOMPtr<nsIMIMEInfo> mMimeInfo;
   nsCOMPtr<nsIOutputStream> mOutStream; /**< output stream to the temp file */
-  nsCOMPtr<nsIInterfaceRequestor> mWindowContext;
-
-  /**
-   * Used to close the window on a timer, to avoid any exceptions that are
-   * thrown if we try to close the window before it's fully loaded.
-   */
-  nsCOMPtr<nsIDOMWindowInternal> mWindowToClose;
-  nsCOMPtr<nsITimer> mTimer;
-
+  nsCOMPtr<nsISupports> mWindowContext; 
   /**
    * The following field is set if we were processing an http channel that had
    * a content disposition header which specified the SUGGESTED file name we
@@ -383,30 +335,17 @@ protected:
   PRPackedBool mCanceled;
 
   /**
-   * This is set based on whether the channel indicates that a new window
-   * was opened specifically for this download.  If so, then we
-   * close it.
-   */
-  PRPackedBool mShouldCloseWindow;
-
-  /**
    * have we received information from the user about how they want to
    * dispose of this content
    */
   PRPackedBool mReceivedDispositionInfo;
   PRPackedBool mStopRequestIssued; 
   PRPackedBool mProgressListenerInitialized;
-
-  /**
-   * One of the REASON_ constants from nsIHelperAppLauncherDialog. Indicates the
-   * reason the dialog was shown (unknown content type, server requested it,
-   * etc).
-   */
-  PRUint32 mReason;
-
+  /// This is set when handling something with "Content-Disposition: attachment"
+  PRPackedBool mHandlingAttachment;
   PRTime mTimeDownloadStarted;
-  nsInt64 mContentLength;
-  nsInt64 mProgress; /**< Number of bytes received (for sending progress notifications). */
+  PRInt32 mContentLength;
+  PRInt32 mProgress; /**< Number of bytes received (for sending progress notifications). */
 
   /**
    * When we are told to save the temp file to disk (in a more permament
@@ -417,10 +356,6 @@ protected:
 
   char mDataBuffer[DATA_BUFFER_SIZE];
 
-  /**
-   * Creates the temporary file for the download and an output stream for it.
-   * Upon successful return, both mTempFile and mOutStream will be valid.
-   */
   nsresult SetUpTempFile(nsIChannel * aChannel);
   /**
    * When we download a helper app, we are going to retarget all load
@@ -472,9 +407,9 @@ protected:
   PRBool GetNeverAskFlagFromPref(const char * prefName, const char * aContentType);
 
   /**
-   * Initialize an nsITransfer object for use as a progress object
+   * Initialize an nsIDownload object for use as a progress object
    */
-  nsresult InitializeDownload(nsITransfer*);
+  nsresult InitializeDownload(nsIDownload*);
   
   /**
    * Helper routine to ensure mSuggestedFileName is "correct";
@@ -488,15 +423,8 @@ protected:
    * Utility function to send proper error notification to web progress listener
    */
   void SendStatusChange(ErrorType type, nsresult aStatus, nsIRequest *aRequest, const nsAFlatString &path);
-
-  /**
-   * Closes the window context if it does not have a refresh header
-   * and it never displayed content before the external helper app
-   * service was invoked.
-   */
-  nsresult MaybeCloseWindow();
-
-  nsCOMPtr<nsIWebProgressListener2> mWebProgressListener;
+  
+  nsCOMPtr<nsIWebProgressListener> mWebProgressListener;
   nsCOMPtr<nsIChannel> mOriginalChannel; /**< in the case of a redirect, this will be the pre-redirect channel. */
   nsCOMPtr<nsIHelperAppLauncherDialog> mDialog;
 

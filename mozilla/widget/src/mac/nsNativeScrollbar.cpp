@@ -36,16 +36,19 @@
  * ***** END LICENSE BLOCK ***** */
 
 
-#include <ControlDefinitions.h>
-
 #include "nsNativeScrollbar.h"
 #include "nsIDeviceContext.h"
+#if TARGET_CARBON || (UNIVERSAL_INTERFACES_VERSION >= 0x0330)
+#include <ControlDefinitions.h>
+#endif
 
 #include "nsWidgetAtoms.h"
+#include "nsWatchTask.h"
 #include "nsINameSpaceManager.h"
 #include "nsIDOMElement.h"
 #include "nsIScrollbarMediator.h"
 
+#include "Sound.h"
 
 inline void BoundsCheck(PRInt32 low, PRUint32& value, PRUint32 high)
 {
@@ -82,8 +85,10 @@ private:
 };
 
 
+static ControlActionUPP ScrollbarActionProc ( );
+
 static ControlActionUPP 
-ScrollbarActionProc( )
+ScrollbarActionProc ( )
 {
   static StNativeControlActionProcOwner sActionProcOwner;
   return sActionProcOwner.ActionProc();
@@ -96,15 +101,12 @@ nsNativeScrollbar::nsNativeScrollbar()
   : nsMacControl()
   , mContent(nsnull)
   , mMediator(nsnull)
-  , mScrollbar(nsnull)
+  , mLineIncrement(0)
   , mMaxValue(0)
   , mVisibleImageSize(0)
-  , mLineIncrement(0)
   , mMouseDownInScroll(PR_FALSE)
   , mClickedPartCode(0)
 {
-  mMax = 0;   // override the base class default
-
   WIDGET_SET_CLASSNAME("nsNativeScrollbar");
   SetControlType(kControlScrollBarLiveProc);
 }
@@ -114,22 +116,6 @@ nsNativeScrollbar::~nsNativeScrollbar()
 {
 }
 
-
-
-//
-// Destroy
-//
-// Now you're gone, gone, gone, whoa-oh...
-//
-NS_IMETHODIMP
-nsNativeScrollbar::Destroy()
-{
-  if (mMouseDownInScroll)
-  {
-    ::PostEvent(mouseUp, 0);
-  }
-  return nsMacControl::Destroy();
-}
 
 
 //
@@ -160,117 +146,92 @@ nsNativeScrollbar::DoScrollAction(ControlPartCode part)
   PRUint32 oldPos, newPos;
   PRUint32 incr;
   PRUint32 visibleImageSize;
-
-  if (mOnDestroyCalled)
-    return;
-
-  nsCOMPtr<nsIWidget> parent ( dont_AddRef(GetParent()) );
-  if (!parent)
-  {
-    // parent disappeared while scrolling was in progress.  Handling Destroy
-    // should have prevented this.  Bail out.
-    NS_ASSERTION(parent, "no parent in DoScrollAction");
-    return;
-  }
-
-  if (!IsQDStateOK()) {
-    // Something on a PLEvent messed with the QD state.  When the Control
-    // Manager tried to figure out where the mouse was relative to the
-    // control, it will have come up with some wacky results.  The received
-    // |part| code and the value returned by |GetControl32BitValue| will not
-    // be correct.  There's nothing that can be done about it this time
-    // through the action proc, so drop the bad data on the floor.  The
-    // port state is reset to what's appropriate for the control, and a fake
-    // mouse-down event is posted, which will force the Control Manager to
-    // look at the scrollbar again, hopefully while the corrected QD state
-    // is still in effect.
-    //
-    // This works in concert with |nsMacControl::HandleControlEvent|.
-    //
-    // This relies on the Control Manager responding to mouse-down events
-    // while the mouse is already down in a tracking loop by reexamining
-    // the position of the scrollbar.
-    EndDraw();
-    StartDraw();
-    ::PostEvent(mouseDown, 0);
-    return;
-  }
-
+  PRInt32 scrollBarMessage = 0;
   GetPosition(&oldPos);
   GetLineIncrement(&incr);
   GetViewSize(&visibleImageSize);
-
-  PRBool buttonPress = PR_FALSE;
-
-  switch (part)
+  switch(part)
   {
-    case kControlUpButtonPart:
-      newPos = oldPos - (mLineIncrement ? mLineIncrement : 1);
-      buttonPress = PR_TRUE;
-      break;
-    case kControlDownButtonPart:
-      newPos = oldPos + (mLineIncrement ? mLineIncrement : 1);
-      buttonPress = PR_TRUE;
-      break;
-    
-    case kControlPageUpPart:
-      newPos = oldPos - visibleImageSize;
-      break;
-    case kControlPageDownPart:
-      newPos = oldPos + visibleImageSize;
-      break;
-
-    case kControlIndicatorPart:
-      newPos = ::GetControl32BitValue(GetControl());
-      break;
-
-    default:
-      // Huh?
-      return;
-  }
-
-  if (buttonPress) {
     //
     // For the up/down buttons, scroll up or down by the line height and 
     // update the attributes on the content node (the scroll frame listens
     // for these attributes and will scroll accordingly). However,
     // if we have a mediator, we're in an outliner and we have to scroll by
-    // lines. Outliner ignores the indexes in ScrollbarButtonPressed() except
+    // lines. Outliner ignores the params to ScrollbarButtonPressed() except
     // to check if one is greater than the other to indicate direction.
     //
-    UpdateContentPosition(newPos);
-    if (mMediator) {
-      BoundsCheck(0, newPos, mMaxValue);
-      mMediator->ScrollbarButtonPressed(mScrollbar, oldPos, newPos);
-    }
-  }
-  else {
+    
+    case kControlUpButtonPart:
+      newPos = oldPos - (mLineIncrement ? mLineIncrement : 1);
+      if ( mMediator ) {
+        BoundsCheck(0, newPos, mMaxValue);
+        mMediator->ScrollbarButtonPressed(oldPos, newPos);
+      } else {
+        UpdateContentPosition(newPos);
+      }
+      break;
+         
+    case kControlDownButtonPart:
+      newPos = oldPos + (mLineIncrement ? mLineIncrement : 1);
+      if ( mMediator ) {
+        BoundsCheck(0, newPos, mMaxValue);
+        mMediator->ScrollbarButtonPressed(oldPos, newPos);
+      } else {
+        UpdateContentPosition(newPos); 
+      }
+      break;
+    
     //
     // For page up/down and dragging the thumb, scroll by the page height
     // (or directly report the value of the scrollbar) and update the attributes
     // on the content node (as above). If we have a mediator, we're in an
     // outliner so tell it directly that the position has changed. Note that
-    // outliner takes the new position as a signed reference, so we have to
-    // convert our unsigned to signed first.
+    // outliner takes signed values, so we have to convert our unsigned to 
+    // signed values first.
     //
-    UpdateContentPosition(newPos);
-    if (mMediator) {
-      PRInt32 np = newPos;
-      if (np < 0) {
-        np = 0;
+    
+    case kControlPageUpPart:
+      newPos = oldPos - visibleImageSize;
+      UpdateContentPosition(newPos);
+      if ( mMediator ) {
+        PRInt32 op = oldPos, np = mValue;
+        if ( np < 0 )
+          np = 0;
+        mMediator->PositionChanged(op, np);
       }
-      mMediator->PositionChanged(mScrollbar, oldPos, np);
-    }
+      break;
+      
+    case kControlPageDownPart:
+      newPos = oldPos + visibleImageSize;
+      UpdateContentPosition(newPos);
+      if ( mMediator ) {
+        PRInt32 op = oldPos, np = mValue;
+        if ( np < 0 )
+          np = 0;
+        mMediator->PositionChanged(op, np);
+      }
+      break;
+      
+    case kControlIndicatorPart:
+      newPos = ::GetControl32BitValue(GetControl());
+      UpdateContentPosition(newPos);
+      if ( mMediator ) {
+        PRInt32 op = oldPos, np = mValue;
+        if ( np < 0 )
+          np = 0;
+        mMediator->PositionChanged(op, np);
+      }
+      break;
   }
-
   EndDraw();
     
-  // update the area of the parent uncovered by the scrolling. Since
-  // we may be in a tight loop, we need to manually validate the area
-  // we just updated so the update rect doesn't continue to get bigger
-  // and bigger the more we scroll.
-  parent->Update();
-  parent->Validate();
+	// update the area of the parent uncovered by the scrolling. Since
+	// we may be in a tight loop, we need to manually validate the area
+	// we just updated so the update rect doesn't continue to get bigger
+	// and bigger the more we scroll.
+	nsCOMPtr<nsIWidget> parent ( dont_AddRef(GetParent()) );
+	parent->Update();
+	parent->Validate();
 
   StartDraw();
 }
@@ -285,7 +246,7 @@ nsNativeScrollbar::DoScrollAction(ControlPartCode part)
 void
 nsNativeScrollbar::UpdateContentPosition(PRUint32 inNewPos)
 {
-  if ( (PRInt32)inNewPos == mValue || !mContent )   // break any possible recursion
+  if ( inNewPos == mValue || !mContent )   // break any possible recursion
     return;
 
   // guarantee |inNewPos| is in the range of [0, mMaxValue] so it's correctly unsigned
@@ -299,20 +260,6 @@ nsNativeScrollbar::UpdateContentPosition(PRUint32 inNewPos)
   SetPosition(inNewPos);
 }
 
-//-------------------------------------------------------------------------
-//
-// Get the current hilite state of the control (disables the scrollbar
-// if there is nowhere to scroll)
-// 
-//-------------------------------------------------------------------------
-ControlPartCode
-nsNativeScrollbar::GetControlHiliteState()
-{
-  if (mMaxValue == 0)
-    return kControlInactivePart;
-  
-  return Inherited::GetControlHiliteState();
-}
 
 /**-------------------------------------------------------------------------------
  * DispatchMouseEvent handle an event for this scrollbar
@@ -328,7 +275,6 @@ nsNativeScrollbar::DispatchMouseEvent(nsMouseEvent &aEvent)
   {
     case NS_MOUSE_LEFT_DOUBLECLICK:
     case NS_MOUSE_LEFT_BUTTON_DOWN:
-      mMouseDownInScroll = PR_TRUE;
       NS_ASSERTION(this != 0, "NULL nsNativeScrollbar2");
       ::SetControlReference(mControl, (UInt32) this);
       StartDraw();
@@ -352,7 +298,9 @@ nsNativeScrollbar::DispatchMouseEvent(nsMouseEvent &aEvent)
             // which lets you pass the action proc to TrackControl
             // for the thumb (this was illegal in previous
             // versions of the defproc).
+            nsWatchTask::GetTask().Suspend();
             ::TrackControl(mControl, thePoint, ScrollbarActionProc());
+            nsWatchTask::GetTask().Resume();
             ::HiliteControl(mControl, 0);
             // We don't dispatch the mouseDown event because mouseUp is eaten
             // by TrackControl anyway and the only messages the app really
@@ -367,7 +315,6 @@ nsNativeScrollbar::DispatchMouseEvent(nsMouseEvent &aEvent)
 
 
     case NS_MOUSE_LEFT_BUTTON_UP:
-      mMouseDownInScroll = PR_FALSE;
       mClickedPartCode = 0;
       break;
 
@@ -406,11 +353,7 @@ nsNativeScrollbar::DispatchMouseEvent(nsMouseEvent &aEvent)
 NS_IMETHODIMP
 nsNativeScrollbar::SetMaxRange(PRUint32 aEndRange)
 {
-  if ((PRInt32)aEndRange < 0)
-    aEndRange = 0;
-
-  mMaxValue = aEndRange;
-
+  mMaxValue = ((int)aEndRange) > 0 ? aEndRange : 10;
   if ( GetControl() ) {
     StartDraw();
     ::SetControl32BitMaximum(GetControl(), mMaxValue);
@@ -488,14 +431,11 @@ nsNativeScrollbar::GetPosition(PRUint32* aPos)
 NS_IMETHODIMP
 nsNativeScrollbar::SetViewSize(PRUint32 aSize)
 {
-  if ((PRInt32)aSize < 0)
-    aSize = 0;
-
-  mVisibleImageSize = aSize;
-    
+  mVisibleImageSize = ((int)aSize) > 0 ? aSize : 1;
+  
   if ( GetControl() )  {
     StartDraw();
-    ::SetControlViewSize(GetControl(), mVisibleImageSize);
+    SetControlViewSize(GetControl(), mVisibleImageSize);
     EndDraw();
   }
   return NS_OK;
@@ -554,7 +494,11 @@ nsNativeScrollbar::GetNarrowSize(PRInt32* outSize)
   if ( *outSize )
     return NS_ERROR_FAILURE;
   SInt32 width = 0;
+#if TARGET_CARBON
   ::GetThemeMetric(kThemeMetricScrollBarWidth, &width);
+#else
+  width = 16;
+#endif
   *outSize = width;
   return NS_OK;
 }
@@ -568,11 +512,9 @@ nsNativeScrollbar::GetNarrowSize(PRInt32* outSize)
 // care about the mediator for <outliner> so we can do row-based scrolling.
 //
 NS_IMETHODIMP
-nsNativeScrollbar::SetContent(nsIContent* inContent, nsISupports* inScrollbar, 
-                              nsIScrollbarMediator* inMediator)
+nsNativeScrollbar::SetContent(nsIContent* inContent, nsIScrollbarMediator* inMediator)
 {
   mContent = inContent;
   mMediator = inMediator;
-  mScrollbar = inScrollbar;
   return NS_OK;
 }

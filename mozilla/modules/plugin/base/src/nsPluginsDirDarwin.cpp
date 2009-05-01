@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Patrick C. Beard <beard@netscape.com>
- *   Josh Aas <josh@mozillafoundation.org>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -45,21 +44,18 @@
   by Patrick C. Beard.
  */
 
-#include "prlink.h"
-#include "prnetdb.h"
-
 #include "nsPluginsDir.h"
+#include "prlink.h"
 #include "ns4xPlugin.h"
 #include "nsPluginsDirUtils.h"
 
 #include "nsILocalFileMac.h"
-#include <Carbon/Carbon.h>
+#include <Processes.h>
+#include <Folders.h>
+#include <Resources.h>
+#include <TextUtils.h>
+#include <Aliases.h>
 #include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <mach-o/loader.h>
-#include <mach-o/fat.h>
 
 #include <CFURL.h>
 #include <CFBundle.h>
@@ -101,127 +97,42 @@ static OSErr toFSSpec(nsIFile* file, FSSpec& outSpec)
     return NS_OK;
 }
 
-static nsresult toCFURLRef(nsIFile* file, CFURLRef& outURL)
-{
-  nsCOMPtr<nsILocalFileMac> lfm = do_QueryInterface(file);
-  if (!lfm)
-    return NS_ERROR_FAILURE;
-  CFURLRef url;
-  nsresult rv = lfm->GetCFURL(&url);
-  if (NS_SUCCEEDED(rv))
-    outURL = url;
-  
-  return rv;
-}
-
-
-// Opens the resource fork for the plugin
-// Also checks if the plugin is a CFBundle and opens gets the correct resource
-static short OpenPluginResourceFork(nsIFile *pluginFile)
-{
-    FSSpec spec;
-    OSErr err = toFSSpec(pluginFile, spec);
-    Boolean targetIsFolder, wasAliased;
-    err = ::ResolveAliasFile(&spec, true, &targetIsFolder, &wasAliased);
-    short refNum = ::FSpOpenResFile(&spec, fsRdPerm);
-    if (refNum < 0) {
-        nsCString path;
-        pluginFile->GetNativePath(path);
-        CFBundleRef bundle = getPluginBundle(path.get());
-        if (bundle) {
-            refNum = CFBundleOpenBundleResourceMap(bundle);
-            CFRelease(bundle);
-        }
-    }
-    
-    return refNum;
-}
-
-// function to test whether or not this is a loadable plugin
-static PRBool IsLoadablePlugin(CFURLRef aURL)
-{
-  if (!aURL)
-    return PR_FALSE;
-  
-  PRBool isLoadable = PR_FALSE;
-  char path[PATH_MAX];
-  if (CFURLGetFileSystemRepresentation(aURL, TRUE, (UInt8*)path, sizeof(path))) {
-    UInt32 magic;
-    int f = open(path, O_RDONLY);
-    if (f != -1) {
-      // Mach-O headers use the byte ordering of the architecture on which
-      // they run, so test against the magic number in the byte order
-      // we're compiling for. Fat headers are always big-endian, so swap
-      // them to host before comparing to host representation of the magic
-      if (read(f, &magic, sizeof(magic)) == sizeof(magic)) {
-        if ((magic == MH_MAGIC) || (PR_ntohl(magic) == FAT_MAGIC))
-          isLoadable = PR_TRUE;
-#ifdef __POWERPC__
-        // if we're on ppc, we can use CFM plugins
-        if (isLoadable == PR_FALSE) {
-          UInt32 magic2;
-          if (read(f, &magic2, sizeof(magic2)) == sizeof(magic2)) {
-            UInt32 cfm_header1 = 0x4A6F7921; // 'Joy!'
-            UInt32 cfm_header2 = 0x70656666; // 'peff'
-            if (cfm_header1 == magic && cfm_header2 == magic2)
-              isLoadable = PR_TRUE;
-          }
-        }
-#endif
-      }
-      close(f);
-    }
-  }
-  return isLoadable;
-}
-
 PRBool nsPluginsDir::IsPluginFile(nsIFile* file)
 {
-  CFURLRef pluginURL = NULL;
-  if (NS_FAILED(toCFURLRef(file, pluginURL)))
+    // look at file's creator/type and make sure it is a code fragment, etc.
+    FSSpec spec;
+    OSErr err = toFSSpec(file, spec);
+    if (err != noErr)
+        return PR_FALSE;
+
+    FInfo info;
+    err = FSpGetFInfo(&spec, &info);
+    if (err == noErr && ((info.fdType == 'shlb' && info.fdCreator == 'MOSS') ||
+                         info.fdType == 'NSPL')) {
+        return PR_TRUE;
+    }
+
+    // Some additional plugin types for Carbon/Mac OS X
+    if (err == noErr && (info.fdType == 'BRPL' || info.fdType == 'IEPL'))
+        return PR_TRUE;
+
+    // for Mac OS X bundles.
+    nsCString path;
+    file->GetNativePath(path);
+    CFBundleRef bundle = getPluginBundle(path.get());
+    if (bundle) {
+        UInt32 packageType, packageCreator;
+        CFBundleGetPackageInfo(bundle, &packageType, &packageCreator);
+        CFRelease(bundle);
+        switch (packageType) {
+        case 'BRPL':
+        case 'IEPL':
+        case 'NSPL':
+            return PR_TRUE;
+        }
+    }
+
     return PR_FALSE;
-  
-  PRBool isPluginFile = PR_FALSE;
-  
-  CFBundleRef pluginBundle = CFBundleCreate(kCFAllocatorDefault, pluginURL);
-  if (pluginBundle) {
-    UInt32 packageType, packageCreator;
-    CFBundleGetPackageInfo(pluginBundle, &packageType, &packageCreator);
-    if (packageType == 'BRPL' || packageType == 'IEPL' || packageType == 'NSPL') {
-      CFURLRef executableURL = CFBundleCopyExecutableURL(pluginBundle);
-      if (executableURL) {
-        isPluginFile = IsLoadablePlugin(executableURL);
-        CFRelease(executableURL);
-      }
-    }
-  
-    // some safari plugins that we can't use don't have resource forks 
-    short refNum;
-    if (isPluginFile) {
-      refNum = OpenPluginResourceFork(file);
-      if (refNum < 0) {
-        isPluginFile = PR_FALSE;
-      } else {
-        ::CloseResFile(refNum); 
-      }
-    }
-  
-    CFRelease(pluginBundle);
-  }
-  else {
-    LSItemInfoRecord info;
-    if (LSCopyItemInfoForURL(pluginURL, kLSRequestTypeCreator, &info) == noErr) {
-      if ((info.filetype == 'shlb' && info.creator == 'MOSS') ||
-          info.filetype == 'NSPL' ||
-          info.filetype == 'BRPL' ||
-          info.filetype == 'IEPL') {
-        isPluginFile = IsLoadablePlugin(pluginURL);
-      }
-    }
-  }
-  
-  CFRelease(pluginURL);
-  return isPluginFile;
 }
 
 nsPluginFile::nsPluginFile(nsIFile *spec)
@@ -237,22 +148,12 @@ nsPluginFile::~nsPluginFile() {}
  */
 nsresult nsPluginFile::LoadPlugin(PRLibrary* &outLibrary)
 {
-    const char* path;
+ 	const char* path;
 
     if (!mPlugin)
         return NS_ERROR_NULL_POINTER;
 
     nsCAutoString temp;
-    mPlugin->GetNativeLeafName(temp);
-    /*
-     * Don't load the VDP fake plugin, to avoid tripping a bad bug in OS X
-     * 10.5.3 (see bug 436575).
-     */
-    if (!strcmp(temp.get(), "VerifiedDownloadPlugin.plugin")) {
-        NS_WARNING("Preventing load of VerifiedDownloadPlugin.plugin (see bug 436575)");
-        return NS_ERROR_FAILURE;
-    }
-
     mPlugin->GetNativePath(temp);
     path = temp.get();
 
@@ -292,9 +193,28 @@ static char* GetPluginString(short id, short index)
     return p2cstrdup(str);
 }
 
+// Opens the resource fork for the plugin
+// Also checks if the plugin is a CFBundle and opens gets the correct resource
 short nsPluginFile::OpenPluginResource()
 {
-    return OpenPluginResourceFork(mPlugin);
+    FSSpec spec;
+    OSErr err = toFSSpec(mPlugin, spec);
+    Boolean targetIsFolder, wasAliased;
+    err = ::ResolveAliasFile(&spec, true, &targetIsFolder, &wasAliased);
+    short refNum = ::FSpOpenResFile(&spec, fsRdPerm);
+  
+    if (refNum == -1) {
+
+        nsCString path;
+        mPlugin->GetNativePath(path);
+        CFBundleRef bundle = getPluginBundle(path.get());
+        if (bundle) {
+            refNum = CFBundleOpenBundleResourceMap(bundle);
+            CFRelease(bundle);
+        }
+    }
+  
+    return refNum;
 }
 
 /**
@@ -308,7 +228,7 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info)
     // need to open the plugin's resource file and read some resources.
     short refNum = OpenPluginResource();
 
-    if (refNum >= 0) {
+    if (refNum != -1) {
         if (info.fPluginInfoSize >= sizeof(nsPluginInfo)) {
             // 'STR#', 126, 2 => plugin name.
             info.fName = GetPluginString(126, 2);

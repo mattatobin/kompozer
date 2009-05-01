@@ -1,62 +1,53 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
- * The Initial Developer of the Original Code is
- * The MITRE Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is The MITRE Corporation.
+ * Portions created by MITRE are Copyright (C) 1999 The MITRE Corporation.
+ *
+ * Portions created by Keith Visco as a Non MITRE employee,
+ * (C) 1999 Keith Visco. All Rights Reserved.
  *
  * Contributor(s):
- *   Keith Visco <kvisco@ziplink.net> (Original Author)
- *   Larry Fitzpatick, OpenText <lef@opentext.com>
- *   Jonas Sicking <sicking@bigfoot.com>
+ * Keith Visco, kvisco@ziplink.net
+ *   -- original author.
+ * Larry Fitzpatick, OpenText, lef@opentext.com
+ *   -- 19990806
+ *     - changed constant short declarations in many of the classes
+ *       with enumerations, commented with //--LF
+ * Jonas Sicking, sicking@bigfoot.com
+ *   -- removal of Patterns and some restructuring
+ *      in the class set
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
+
 
 #ifndef TRANSFRMX_EXPR_H
 #define TRANSFRMX_EXPR_H
 
-#include "txList.h"
-#include "nsAutoPtr.h"
-#include "txCore.h"
+#include "baseutils.h"
+#include "List.h"
 #include "nsString.h"
-
-#ifdef DEBUG
-#define TX_TO_STRING
-#endif
+#include "nsIAtom.h"
+#include "TxObject.h"
+#include "nsAutoPtr.h"
+#include "ExprResult.h"
 
 /*
   XPath class definitions.
   Much of this code was ported from XSL:P.
 */
 
-class nsIAtom;
-class txAExprResult;
 class txIParseContext;
 class txIMatchContext;
 class txIEvalContext;
@@ -87,7 +78,6 @@ public:
     virtual nsresult evaluate(txIEvalContext* aContext,
                               txAExprResult** aResult) = 0;
 
-#ifdef TX_TO_STRING
     /**
      * Returns the String representation of this Expr.
      * @param dest the String to use when creating the String
@@ -97,16 +87,12 @@ public:
      * @return the String representation of this Expr.
     **/
     virtual void toString(nsAString& str) = 0;
-#endif
+
 }; //-- Expr
 
 #define TX_DECL_EVALUATE \
     nsresult evaluate(txIEvalContext* aContext, txAExprResult** aResult)
 
-#ifndef TX_TO_STRING
-#define TX_DECL_EXPR TX_DECL_EVALUATE
-#define TX_DECL_FUNCTION TX_DECL_EVALUATE
-#else
 #define TX_DECL_EXPR \
     TX_DECL_EVALUATE; \
     void toString(nsAString& aDest)
@@ -114,7 +100,6 @@ public:
 #define TX_DECL_FUNCTION \
     TX_DECL_EVALUATE; \
     nsresult getNameAtom(nsIAtom** aAtom)
-#endif
 
 /**
  * This class represents a FunctionCall as defined by the XPath 1.0
@@ -124,6 +109,11 @@ class FunctionCall : public Expr {
 
 public:
     virtual ~FunctionCall();
+
+    /**
+     * Virtual methods from Expr 
+    **/
+    void toString(nsAString& aDest);
 
     /**
      * Adds the given parameter to this FunctionCall's parameter list.
@@ -148,10 +138,6 @@ public:
     virtual PRBool requireParams(PRInt32 aParamCountMin,
                                  PRInt32 aParamCountMax,
                                  txIEvalContext* aContext);
-
-#ifdef TX_TO_STRING
-    void toString(nsAString& aDest);
-#endif
 
 protected:
 
@@ -183,12 +169,10 @@ protected:
     nsresult evaluateToNodeSet(Expr* aExpr, txIEvalContext* aContext,
                                txNodeSet** aResult);
 
-#ifdef TX_TO_STRING
     /*
      * Returns the name of the function as an atom.
      */
     virtual nsresult getNameAtom(nsIAtom** aAtom) = 0;
-#endif
 }; //-- FunctionCall
 
 
@@ -231,23 +215,13 @@ public:
     virtual PRBool matches(const txXPathNode& aNode,
                            txIMatchContext* aContext) = 0;
     virtual double getDefaultPriority() = 0;
-
-#ifdef TX_TO_STRING
     virtual void toString(nsAString& aDest) = 0;
-#endif
 };
 
-#define TX_DECL_NODE_TEST_BASE \
-    PRBool matches(const txXPathNode& aNode, txIMatchContext* aContext); \
-    double getDefaultPriority()
-
-#ifndef TX_TO_STRING
-#define TX_DECL_NODE_TEST TX_DECL_NODE_TEST_BASE
-#else
 #define TX_DECL_NODE_TEST \
-    TX_DECL_NODE_TEST_BASE; \
+    PRBool matches(const txXPathNode& aNode, txIMatchContext* aContext); \
+    double getDefaultPriority(); \
     void toString(nsAString& aDest)
-#endif
 
 /*
  * This class represents a NameTest as defined by the XPath spec
@@ -339,7 +313,6 @@ public:
     **/
     MBool isEmpty();
 
-#ifdef TX_TO_STRING
     /**
      * Returns the String representation of this PredicateList.
      * @param dest the String to use when creating the String
@@ -349,7 +322,6 @@ public:
      * @return the String representation of this PredicateList.
     **/
     virtual void toString(nsAString& dest);
-#endif
 
 protected:
     //-- list of predicates
@@ -657,30 +629,21 @@ private:
  * This class represents a RootExpr, which only matches the Document node
 **/
 class RootExpr : public Expr {
+
 public:
+
     /**
      * Creates a new RootExpr
+     * @param aSerialize should this RootExpr be serialized
      */
-    RootExpr()
-#ifdef TX_TO_STRING
-        : mSerialize(PR_TRUE)
-#endif
-    {
-    }
+    RootExpr(MBool aSerialize);
 
     TX_DECL_EXPR;
 
-#ifdef TX_TO_STRING
-public:
-    void setSerialize(PRBool aSerialize)
-    {
-        mSerialize = aSerialize;
-    }
-
 private:
     // When a RootExpr is used in a PathExpr it shouldn't be serialized
-    PRBool mSerialize;
-#endif
+    MBool mSerialize;
+
 }; //-- RootExpr
 
 /**
@@ -716,27 +679,6 @@ private:
    List expressions;
 
 }; //-- UnionExpr
-
-/**
- *  Expression that failed to parse
- */
-class txErrorExpr : public Expr
-{
-public:
-#ifdef TX_TO_STRING
-    txErrorExpr(const nsAString& aStr)
-      : mStr(aStr)
-    {
-    }
-#endif
-
-    TX_DECL_EXPR;
-
-#ifdef TX_TO_STRING
-private:
-    nsString mStr;
-#endif
-};
 
 #endif
 

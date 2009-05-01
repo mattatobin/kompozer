@@ -1,10 +1,10 @@
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -13,7 +13,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -21,17 +21,18 @@
  * Contributor(s):
  *   Joe Hewitt <hewitt@netscape.com> (original author)
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -54,18 +55,11 @@ const kPromptServiceCID    = "@mozilla.org/embedcomp/prompt-service;1";
 //////////////////////////////////////////////////
 
 window.addEventListener("load", DOMViewer_initialize, false);
-window.addEventListener("unload", DOMViewer_destroy, false);
 
 function DOMViewer_initialize()
 {
   viewer = new DOMViewer();
   viewer.initialize(parent.FrameExchange.receiveData(window));
-}
-
-function DOMViewer_destroy()
-{
-  PrefUtils.removeObserver("inspector", PrefChangeObserver);
-  viewer = null;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -584,7 +578,7 @@ DOMViewer.prototype =
     var bx = this.mDOMTree.treeBoxObject;
 
     if (!aEl) {
-      bx.view.selection.select(null);
+      bx.selection.select(null);
       return false;      
     }
       
@@ -620,7 +614,7 @@ DOMViewer.prototype =
     }
 
     if (!aQuickie && lastIndex >= 0) {
-      view.selection.select(lastIndex);
+      bx.selection.select(lastIndex);
       bx.ensureRowIsVisible(lastIndex);
     }
     
@@ -634,7 +628,7 @@ DOMViewer.prototype =
   rebuild: function()
   {
     var selNode = this.getNodeFromRowIndex(this.mDOMTree.currentIndex);
-    this.mDOMTree.view.selection.select(null);
+    this.mDOMTree.treeBoxObject.selection.select(null);
     
     var opened = [];
     var i;
@@ -777,8 +771,6 @@ DOMViewer.prototype =
     for (var i = 0; i < aKids.length; ++i) {
       try {
         aArray.push(aKids[i].contentDocument);
-        // Now recurse down into the kid and look for documents there
-        this.findDocuments(aKids[i].contentDocument, aArray);
       } catch (ex) {
         // if we can't access the content document, skip it
       }
@@ -826,31 +818,18 @@ cmdEditDelete.prototype =
   nextSibling: null,
   parentNode: null,
   
-  // remove this line for bug 179621, Phase Three
-  txnType: "standard",
-  
-  // required for nsITransaction
-  QueryInterface: txnQueryInterface,
-  merge: txnMerge,
-  isTransient: false,
-  redoTransaction: txnRedoTransaction,
-  
-  doTransaction: function()
+  doCommand: function()
   {
     var node = this.node ? this.node : viewer.selectedNode;
     if (node) {
       this.node = node;
       this.nextSibling = node.nextSibling;
       this.parentNode = node.parentNode;
-      var selectNode = this.nextSibling;
-      if (!selectNode) selectNode = node.previousSibling;
-      if (!selectNode) selectNode = this.parentNode;
-      viewer.selectElementInTree(selectNode);
       node.parentNode.removeChild(node);
     }
   },
   
-  undoTransaction: function()
+  undoCommand: function()
   {
     if (this.node) {
       if (this.nextSibling)
@@ -858,7 +837,6 @@ cmdEditDelete.prototype =
       else
         this.parentNode.appendChild(this.node);        
     }
-    viewer.selectElementInTree(this.node);
   }
 };
 
@@ -867,30 +845,20 @@ cmdEditCut.prototype =
 {
   cmdCopy: null,
   cmdDelete: null,
-  
-  // remove this line for bug 179621, Phase Three
-  txnType: "standard",
-  
-  // required for nsITransaction
-  QueryInterface: txnQueryInterface,
-  merge: txnMerge,
-  isTransient: false,
-  redoTransaction: txnRedoTransaction,
-  
-  doTransaction: function() 
+  doCommand: function()
   {
     if (!this.cmdCopy) {
       this.cmdDelete = new cmdEditDelete();
       this.cmdCopy = new cmdEditCopy();
     }
-    this.cmdCopy.doTransaction();
-    this.cmdDelete.doTransaction();    
+    this.cmdCopy.doCommand();
+    this.cmdDelete.doCommand();    
   },
 
-  undoTransaction: function()
+  undoCommand: function()
   {
-    this.cmdDelete.undoTransaction();    
-    this.cmdCopy.undoTransaction();
+    this.cmdDelete.undoCommand();    
+    this.cmdCopy.undoCommand();
   }
 };
 
@@ -900,17 +868,8 @@ cmdEditCopy.prototype =
   copiedNode: null,
   previousData: null,
   previousFlavor: null,
-  
-  // remove this line for bug 179621, Phase Three
-  txnType: "standard",
-  
-  // required for nsITransaction
-  QueryInterface: txnQueryInterface,
-  merge: txnMerge,
-  isTransient: false,
-  redoTransaction: txnRedoTransaction,
-
-  doTransaction: function()
+    
+  doCommand: function()
   {
     var copiedNode = null;
     if (!this.copiedNode) {
@@ -926,7 +885,7 @@ cmdEditCopy.prototype =
     viewer.pane.panelset.setClipboardData(copiedNode, "inspector/dom-node");
   },
   
-  undoTransaction: function()
+  undoCommand: function()
   {
     viewer.pane.panelset.setClipboardData(this.previousData, this.previousFlavor);
   }
@@ -937,17 +896,8 @@ cmdEditPaste.prototype =
 {
   pastedNode: null,
   pastedBefore: null,
-
-  // remove this line for bug 179621, Phase Three
-  txnType: "standard",
   
-  // required for nsITransaction
-  QueryInterface: txnQueryInterface,
-  merge: txnMerge,
-  isTransient: false,
-  redoTransaction: txnRedoTransaction,
-  
-  doTransaction: function()
+  doCommand: function()
   {
     var node = this.pastedNode ? this.pastedNode : viewer.pane.panelset.getClipboardData();
     var selected = this.pastedBefore ? this.pastedBefore : viewer.selectedNode;
@@ -963,7 +913,7 @@ cmdEditPaste.prototype =
     return true;
   },
   
-  undoTransaction: function()
+  undoCommand: function()
   {
     if (this.pastedNode)
       this.pastedNode.parentNode.removeChild(this.pastedNode);

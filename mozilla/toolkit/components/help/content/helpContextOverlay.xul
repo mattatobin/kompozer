@@ -1,5 +1,4 @@
 <?xml version="1.0"?> 
-# ***** BEGIN LICENSE BLOCK *****
 # Version: MPL 1.1/GPL 2.0/LGPL 2.1
 #
 # The contents of this file are subject to the Mozilla Public License Version
@@ -12,7 +11,7 @@
 # for the specific language governing rights and limitations under the
 # License.
 #
-# The Original Code is Mozilla Help code.
+# The Original Code is Mozilla Help code
 #
 # The Initial Developer of the Original Code is
 # R.J. Keller.
@@ -29,11 +28,9 @@
 # under the terms of either the GPL or the LGPL, and not to allow others to
 # use your version of this file under the terms of the MPL, indicate your
 # decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
+# and other provisions required by the LGPL or the GPL. If you do not delete
 # the provisions above, a recipient may use your version of this file under
 # the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
 
 <!DOCTYPE overlay [
     <!ENTITY % helpDTD SYSTEM "chrome://help/locale/help.dtd">
@@ -44,8 +41,7 @@
 
 # Help Window's right-click menu
   <popupset id="contentAreaContextSet">
-    <popup id="contentAreaContextMenu"
-           onpopupshowing="goUpdateCommand('cmd_copy')">
+    <popup id="contentAreaContextMenu">
       <menuitem id="context-back"
                 label="&backButton.label;"
                 accesskey="&backButton.accesskey;"
@@ -56,16 +52,10 @@
                 accesskey="&forwardButton.accesskey;"
                 observes="canGoForward"
                 oncommand="goForward()"/>
-      <menuseparator/>
-      <menuitem id="context-copy"
-                label="&copyCmd.label;"
-                accesskey="&copyCmd.accesskey;"
-                command="cmd_copy"
-                disabled="true"/>
-      <menuitem id="context-selectall"
-                label="&selectAllCmd.label;"
-                accesskey="&selectAllCmd.accesskey;"
-                command="cmd_selectAll"/>
+      <menuitem id="context-reload"
+                label="&reloadCmd.label;"
+                accesskey="&reloadCmd.accesskey;"
+                oncommand="reload();"/>
       <menuseparator/>
       <menuitem id="zoom-in"
       		label="&textZoomEnlargeBtn.label;"
@@ -75,22 +65,6 @@
       		label="&textZoomReduceBtn.label;"
       		accesskey="&textZoomReduceBtn.accesskey;"
       		oncommand="ZoomManager.prototype.getInstance().reduce();"/>
-#ifdef XP_MACOSX
-#define HELP_ALWAYS_RAISED_TOGGLE
-#endif
-#ifdef XP_WIN
-#define HELP_ALWAYS_RAISED_TOGGLE
-#endif
-#ifdef HELP_ALWAYS_RAISED_TOGGLE
-      <menuseparator/>
-      <menuitem id="context-zlevel"
-                type="checkbox"
-                checked="true"
-                persist="checked"
-                label="&zLevel.label;"
-                accesskey="&zLevel.accesskey;"
-                oncommand="toggleZLevel(this);"/>
-#endif
     </popup>
   </popupset>
 </overlay>

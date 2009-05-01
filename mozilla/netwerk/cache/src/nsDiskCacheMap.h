@@ -1,43 +1,26 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set ts=4 sw=4 sts=4 cin et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsDiskCacheMap.h, released
- * March 23, 2001.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Patrick C. Beard <beard@netscape.com>
- *   Gordon Sheridan  <gordon@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
+ * The Original Code is nsDiskCacheMap.h, released March 23, 2001.
+ * 
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
+ *    Patrick C. Beard <beard@netscape.com>
+ *    Gordon Sheridan  <gordon@netscape.com>
+ */
 
 #ifndef _nsDiskCacheMap_h_
 #define _nsDiskCacheMap_h_
@@ -85,14 +68,8 @@ struct nsDiskCacheEntry;
  *****************************************************************************/
 
 #define BLOCK_SIZE_FOR_INDEX(index)  ((index) ? (256 << (2 * ((index) - 1))) : 0)
-
-// Min and max values for the number of records in the DiskCachemap
-#define kMinRecordCount    512
-#define kMaxRecordCount    8192
-
 #define kSeparateFile      0
 #define kMaxDataFileSize   0x4000000   // 64 MiB
-#define kBuckets           (1 << 5)    // must be a power of 2!
 
 class nsDiskCacheRecord {
 
@@ -144,7 +121,7 @@ public:
     void      SetEvictionRank( PRUint32 rank)   { mEvictionRank = rank ? rank : 1; }
 
     // DataLocation accessors
-    PRBool    DataLocationInitialized() const { return mDataLocation & eLocationInitializedMask; }
+    PRBool    DataLocationInitialized() { return mDataLocation & eLocationInitializedMask; }
     void      ClearDataLocation()       { mDataLocation = 0; }
     
     PRUint32  DataFile() const
@@ -211,9 +188,10 @@ public:
     }
 
     // MetaLocation accessors
-    PRBool    MetaLocationInitialized() const { return mMetaLocation & eLocationInitializedMask; }
-    void      ClearMetaLocation()             { mMetaLocation = 0; }   
-    PRUint32  MetaLocation() const            { return mMetaLocation; }
+    PRBool    MetaLocationInitialized() { return mMetaLocation & eLocationInitializedMask; }
+    void      ClearMetaLocation()       { mMetaLocation = 0; }
+    
+    PRUint32  MetaLocation()                     { return mMetaLocation; }
     
     PRUint32  MetaFile() const
     {
@@ -290,25 +268,27 @@ public:
         return 0;  // no generation
     }
 
-#if defined(IS_LITTLE_ENDIAN)
+
+
     void        Swap()
     {
+#if defined(IS_LITTLE_ENDIAN)
         mHashNumber   = ::PR_htonl(mHashNumber);
         mEvictionRank = ::PR_htonl(mEvictionRank);
         mDataLocation = ::PR_htonl(mDataLocation);
         mMetaLocation = ::PR_htonl(mMetaLocation);
-    }
 #endif
+    }
     
-#if defined(IS_LITTLE_ENDIAN)
     void        Unswap()
     {
+#if defined(IS_LITTLE_ENDIAN)
         mHashNumber   = ::PR_ntohl(mHashNumber);
         mEvictionRank = ::PR_ntohl(mEvictionRank);
         mDataLocation = ::PR_ntohl(mDataLocation);
         mMetaLocation = ::PR_ntohl(mMetaLocation);
-    }
 #endif
+    }
 
 };
 
@@ -330,6 +310,27 @@ class nsDiskCacheRecordVisitor {
 
 
 /******************************************************************************
+ *  nsDiskCacheBucket
+ *****************************************************************************/
+enum {
+    kRecordsPerBucket = 256,
+    kBucketsPerTable = (1 << 5)         // must be a power of 2!
+};
+
+struct nsDiskCacheBucket {
+    nsDiskCacheRecord   mRecords[kRecordsPerBucket];
+    
+    void      Swap();
+    void      Unswap();
+    PRInt32   CountRecords();
+    PRUint32  EvictionRank(PRUint32  targetRank);   // return largest rank in bucket < targetRank
+    PRInt32   VisitEachRecord( nsDiskCacheRecordVisitor *  visitor,
+                               PRUint32                    evictionRank,
+                               PRUint32 *                  recordsDeleted);
+};
+
+
+/******************************************************************************
  *  nsDiskCacheHeader
  *****************************************************************************/
 
@@ -338,16 +339,23 @@ struct nsDiskCacheHeader {
     PRInt32     mDataSize;                          // size of cache in bytes.
     PRInt32     mEntryCount;                        // number of entries stored in cache.
     PRUint32    mIsDirty;                           // dirty flag.
-    PRInt32     mRecordCount;                       // Number of records
-    PRUint32    mEvictionRank[kBuckets];            // Highest EvictionRank of the bucket
-    PRUint32    mBucketUsage[kBuckets];             // Number of used entries in the bucket
-  
+    PRUint32    mEvictionRank[kBucketsPerTable];
+    
+    // pad to blocksize
+    enum { kReservedBytes = sizeof(nsDiskCacheBucket)
+                            - sizeof(PRUint32) * 4      // version, size, count, dirty
+                            - sizeof(PRUint32) * kBucketsPerTable   // eviction array
+    };
+                            
+    PRUint8     reserved[kReservedBytes];
+
+    // XXX need a bitmap?
+    
     nsDiskCacheHeader()
         : mVersion(nsDiskCache::kCurrentVersion)
         , mDataSize(0)
         , mEntryCount(0)
         , mIsDirty(PR_TRUE)
-        , mRecordCount(0)
     {}
 
     void        Swap()
@@ -357,12 +365,6 @@ struct nsDiskCacheHeader {
         mDataSize    = ::PR_htonl(mDataSize);
         mEntryCount  = ::PR_htonl(mEntryCount);
         mIsDirty     = ::PR_htonl(mIsDirty);
-        mRecordCount = ::PR_htonl(mRecordCount);
-
-        for (PRUint32 i = 0; i < kBuckets ; i++) {
-            mEvictionRank[i] = ::PR_htonl(mEvictionRank[i]);
-            mBucketUsage[i]  = ::PR_htonl(mBucketUsage[i]);
-        }
 #endif
     }
     
@@ -373,12 +375,6 @@ struct nsDiskCacheHeader {
         mDataSize    = ::PR_ntohl(mDataSize);
         mEntryCount  = ::PR_ntohl(mEntryCount);
         mIsDirty     = ::PR_ntohl(mIsDirty);
-        mRecordCount = ::PR_ntohl(mRecordCount);
-
-        for (PRUint32 i = 0; i < kBuckets ; i++) {
-            mEvictionRank[i] = ::PR_ntohl(mEvictionRank[i]);
-            mBucketUsage[i]  = ::PR_ntohl(mBucketUsage[i]);
-        }
 #endif
     }
 };
@@ -388,11 +384,24 @@ struct nsDiskCacheHeader {
  *  nsDiskCacheMap
  *****************************************************************************/
 
+// XXX fixed capacity for 8192 entries. Future: make dynamic
+
+enum {
+    kCacheMapSize = sizeof(nsDiskCacheHeader) +
+                    kBucketsPerTable * sizeof(nsDiskCacheBucket)
+};
+
+
 class nsDiskCacheMap {
 public:
 
-     nsDiskCacheMap() : mCacheDirectory(nsnull), mMapFD(nsnull), mRecordArray(nsnull) { }
-    ~nsDiskCacheMap() { (void) Close(PR_TRUE); }
+     nsDiskCacheMap()
+        : mCacheDirectory(nsnull)
+        , mMapFD(nsnull)
+        {
+            NS_ASSERTION(sizeof(nsDiskCacheHeader) == sizeof(nsDiskCacheBucket), "structure misalignment");
+        }
+    ~nsDiskCacheMap()                   { (void) Close(PR_TRUE); }
 
 /**
  *  File Operations
@@ -406,8 +415,9 @@ public:
     nsresult  Close(PRBool flush);
     nsresult  Trim();
 
+//  nsresult  Flush();
     nsresult  FlushHeader();
-    nsresult  FlushRecords( PRBool unswap);
+    nsresult  FlushBuckets( PRBool unswap);
 
 /**
  *  Record operations
@@ -477,33 +487,20 @@ private:
     PRUint32    CalculateFileIndex(PRUint32 size);
 
     nsresult    GetBlockFileForIndex( PRUint32 index, nsILocalFile ** result);
-    PRUint32    GetBlockSizeForIndex( PRUint32 index) const {
-        return BLOCK_SIZE_FOR_INDEX(index);
+    PRUint32    GetBlockSizeForIndex( PRUint32 index);
+    
+    nsDiskCacheBucket * GetBucketForHashNumber( PRUint32  hashNumber)
+    {
+        return &mBuckets[GetBucketIndex(hashNumber)];
+    }
+
+    PRUint32 GetBucketIndex( PRUint32 hashNumber)
+    {
+        return (hashNumber & (kBucketsPerTable - 1));
     }
     
-    // returns the bucket number    
-    PRUint32 GetBucketIndex( PRUint32 hashNumber) const {
-        return (hashNumber & (kBuckets - 1));
-    }
-    
-    // Gets the size of the bucket (in number of records)
-    PRUint32 GetRecordsPerBucket() const {
-        return mHeader.mRecordCount / kBuckets;
-    }
 
-    // Gets the first record in the bucket
-    nsDiskCacheRecord *GetFirstRecordInBucket(PRUint32 bucket) const {
-        return mRecordArray + bucket * GetRecordsPerBucket();
-    }
-
-    PRUint32 GetBucketRank(PRUint32 bucketIndex, PRUint32 targetRank);
-
-    PRInt32  VisitEachRecord(PRUint32                    bucketIndex,
-                             nsDiskCacheRecordVisitor *  visitor,
-                             PRUint32                    evictionRank);
-
-    nsresult GrowRecords();
-    nsresult ShrinkRecords();
+   
 
 /**
  *  data members
@@ -511,9 +508,9 @@ private:
 private:
     nsCOMPtr<nsILocalFile>  mCacheDirectory;
     PRFileDesc *            mMapFD;
-    nsDiskCacheRecord *     mRecordArray;
     nsDiskCacheBlockFile    mBlockFile[3];
     nsDiskCacheHeader       mHeader;
+    nsDiskCacheBucket       mBuckets[kBucketsPerTable];
 };
 
 #endif // _nsDiskCacheMap_h_

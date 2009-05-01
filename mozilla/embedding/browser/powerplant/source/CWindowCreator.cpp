@@ -39,7 +39,7 @@
 #include "CWindowCreator.h"
 
 #include "nsIWindowWatcher.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 #include "nsIWebBrowserSetup.h"
 #include "nsIPrefBranch.h"
 #include "nsIURI.h"

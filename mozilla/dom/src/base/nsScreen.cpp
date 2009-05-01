@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Travis Bogard <travis@netscape.com>
+ *    Travis Bogard <travis@netscape.com> 
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -42,7 +43,7 @@
 #include "nsIScriptGlobalObject.h"
 #include "nsIDocShell.h"
 #include "nsIDeviceContext.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsCOMPtr.h"
 #include "nsIDocumentViewer.h"
 #include "nsIDocumentLoader.h"
@@ -52,37 +53,36 @@
 //
 //  Screen class implementation
 //
-nsScreen::nsScreen(nsIDocShell* aDocShell)
+ScreenImpl::ScreenImpl(nsIDocShell* aDocShell)
   : mDocShell(aDocShell)
 {
 }
 
-nsScreen::~nsScreen()
+ScreenImpl::~ScreenImpl()
 {
 }
 
 
-// QueryInterface implementation for nsScreen
-NS_INTERFACE_MAP_BEGIN(nsScreen)
+// QueryInterface implementation for ScreenImpl
+NS_INTERFACE_MAP_BEGIN(ScreenImpl)
   NS_INTERFACE_MAP_ENTRY(nsISupports)
   NS_INTERFACE_MAP_ENTRY(nsIDOMScreen)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(Screen)
 NS_INTERFACE_MAP_END
 
 
-NS_IMPL_ADDREF(nsScreen)
-NS_IMPL_RELEASE(nsScreen)
+NS_IMPL_ADDREF(ScreenImpl)
+NS_IMPL_RELEASE(ScreenImpl)
 
 
-NS_IMETHODIMP
-nsScreen::SetDocShell(nsIDocShell* aDocShell)
+NS_IMETHODIMP ScreenImpl::SetDocShell(nsIDocShell* aDocShell)
 {
    mDocShell = aDocShell; // Weak Reference
    return NS_OK;
 }
 
 NS_IMETHODIMP
-nsScreen::GetTop(PRInt32* aTop)
+ScreenImpl::GetTop(PRInt32* aTop)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -94,7 +94,7 @@ nsScreen::GetTop(PRInt32* aTop)
 
 
 NS_IMETHODIMP
-nsScreen::GetLeft(PRInt32* aLeft)
+ScreenImpl::GetLeft(PRInt32* aLeft)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -106,7 +106,7 @@ nsScreen::GetLeft(PRInt32* aLeft)
 
 
 NS_IMETHODIMP
-nsScreen::GetWidth(PRInt32* aWidth)
+ScreenImpl::GetWidth(PRInt32* aWidth)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -117,7 +117,7 @@ nsScreen::GetWidth(PRInt32* aWidth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetHeight(PRInt32* aHeight)
+ScreenImpl::GetHeight(PRInt32* aHeight)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -128,7 +128,7 @@ nsScreen::GetHeight(PRInt32* aHeight)
 }
 
 NS_IMETHODIMP
-nsScreen::GetPixelDepth(PRInt32* aPixelDepth)
+ScreenImpl::GetPixelDepth(PRInt32* aPixelDepth)
 {
   nsIDeviceContext* context = GetDeviceContext();
 
@@ -147,13 +147,13 @@ nsScreen::GetPixelDepth(PRInt32* aPixelDepth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetColorDepth(PRInt32* aColorDepth)
+ScreenImpl::GetColorDepth(PRInt32* aColorDepth)
 {
   return GetPixelDepth(aColorDepth);
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailWidth(PRInt32* aAvailWidth)
+ScreenImpl::GetAvailWidth(PRInt32* aAvailWidth)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -164,7 +164,7 @@ nsScreen::GetAvailWidth(PRInt32* aAvailWidth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailHeight(PRInt32* aAvailHeight)
+ScreenImpl::GetAvailHeight(PRInt32* aAvailHeight)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -175,7 +175,7 @@ nsScreen::GetAvailHeight(PRInt32* aAvailHeight)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailLeft(PRInt32* aAvailLeft)
+ScreenImpl::GetAvailLeft(PRInt32* aAvailLeft)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -186,7 +186,7 @@ nsScreen::GetAvailLeft(PRInt32* aAvailLeft)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailTop(PRInt32* aAvailTop)
+ScreenImpl::GetAvailTop(PRInt32* aAvailTop)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -197,7 +197,7 @@ nsScreen::GetAvailTop(PRInt32* aAvailTop)
 }
 
 nsIDeviceContext*
-nsScreen::GetDeviceContext()
+ScreenImpl::GetDeviceContext()
 {
   if(!mDocShell)
     return nsnull;
@@ -209,7 +209,7 @@ nsScreen::GetDeviceContext()
   if(!docViewer)
     return nsnull;
 
-  nsCOMPtr<nsPresContext> presContext;
+  nsCOMPtr<nsIPresContext> presContext;
   docViewer->GetPresContext(getter_AddRefs(presContext));
 
   nsIDeviceContext* context = nsnull;
@@ -220,7 +220,7 @@ nsScreen::GetDeviceContext()
 }
 
 nsresult
-nsScreen::GetRect(nsRect& aRect)
+ScreenImpl::GetRect(nsRect& aRect)
 {
   nsIDeviceContext *context = GetDeviceContext();
 
@@ -245,7 +245,7 @@ nsScreen::GetRect(nsRect& aRect)
 }
 
 nsresult
-nsScreen::GetAvailRect(nsRect& aRect)
+ScreenImpl::GetAvailRect(nsRect& aRect)
 {
   nsIDeviceContext *context = GetDeviceContext();
 

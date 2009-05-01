@@ -1,44 +1,40 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *    Aaron Spangler <aaron@spangler.ods.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * Certificate handling code
  *
- * $Id: certdb.c,v 1.76.2.5 2007/11/21 21:37:05 julien.pierre.boogz%sun.com Exp $
+ * $Id: certdb.c,v 1.61.8.3 2004/10/15 21:13:50 wchang0222%aol.com Exp $
  */
 
 #include "nssilock.h"
@@ -65,6 +61,9 @@
 #include "pk11func.h"
 #include "xconst.h"   /* for  CERT_DecodeAltNameExtension */
 
+#ifndef NSS_3_4_CODE
+#define NSS_3_4_CODE
+#endif /* NSS_3_4_CODE */
 #include "pki.h"
 #include "pki3hack.h"
 
@@ -217,7 +216,6 @@ const SEC_ASN1Template CERT_CertKeyTemplate[] = {
 
 SEC_ASN1_CHOOSER_IMPLEMENT(CERT_CertificateTemplate)
 SEC_ASN1_CHOOSER_IMPLEMENT(SEC_SignedCertificateTemplate)
-SEC_ASN1_CHOOSER_IMPLEMENT(CERT_SequenceOfCertExtensionTemplate)
 
 SECStatus
 CERT_KeyFromIssuerAndSN(PRArenaPool *arena, SECItem *issuer, SECItem *sn,
@@ -542,7 +540,6 @@ cert_GetCertType(CERTCertificate *cert)
 
     tmpitem.data = NULL;
     CERT_FindNSCertTypeExtension(cert, &tmpitem);
-    encodedExtKeyUsage.data = NULL;
     rv = CERT_FindCertExtension(cert, SEC_OID_X509_EXT_KEY_USAGE, 
 				&encodedExtKeyUsage);
     if (rv == SECSuccess) {
@@ -595,17 +592,6 @@ cert_GetCertType(CERTCertificate *cert)
 	}
 	if (findOIDinOIDSeqByTagNum(extKeyUsage, 
 				    SEC_OID_EXT_KEY_USAGE_SERVER_AUTH) ==
-	    SECSuccess){
-	    if (basicConstraintPresent == PR_TRUE &&
-		(basicConstraint.isCA)) {
-		nsCertType |= NS_CERT_TYPE_SSL_CA;
-	    } else {
-		nsCertType |= NS_CERT_TYPE_SSL_SERVER;
-	    }
-	}
-	/* Treat certs with step-up OID as also having SSL server type. */
-	if (findOIDinOIDSeqByTagNum(extKeyUsage, 
-				    SEC_OID_NS_KEY_USAGE_GOVT_APPROVED) ==
 	    SECSuccess){
 	    if (basicConstraintPresent == PR_TRUE &&
 		(basicConstraint.isCA)) {
@@ -669,15 +655,11 @@ cert_GetCertType(CERTCertificate *cert)
 	}
     }
 
-    if (encodedExtKeyUsage.data != NULL) {
-	PORT_Free(encodedExtKeyUsage.data);
-    }
     if (extKeyUsage != NULL) {
+	PORT_Free(encodedExtKeyUsage.data);
 	CERT_DestroyOidSequence(extKeyUsage);
     }
-    /* Assert that it is safe to cast &cert->nsCertType to "PRInt32 *" */
-    PORT_Assert(sizeof(cert->nsCertType) == sizeof(PRInt32));
-    PR_AtomicSet((PRInt32 *)&cert->nsCertType, nsCertType);
+    PR_AtomicSet(&cert->nsCertType, nsCertType);
     return(SECSuccess);
 }
 
@@ -861,7 +843,8 @@ CERT_DecodeDERCertificate(SECItem *derSignedCert, PRBool copyDER,
     }
 
     if (cert_HasUnknownCriticalExten (cert->extensions) == PR_TRUE) {
-        cert->options.bits.hasUnsupportedCriticalExt = PR_TRUE;
+	PORT_SetError(SEC_ERROR_UNKNOWN_CRITICAL_EXTENSION);
+	goto loser;
     }
 
     /* generate and save the database key for the cert */
@@ -1227,8 +1210,6 @@ loser:
 SECStatus
 CERT_CheckKeyUsage(CERTCertificate *cert, unsigned int requiredUsage)
 {
-    unsigned int certKeyUsage;
-
     if (!cert) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
 	return SECFailure;
@@ -1263,12 +1244,8 @@ CERT_CheckKeyUsage(CERTCertificate *cert, unsigned int requiredUsage)
 	}
     }
 
-    certKeyUsage = cert->keyUsage;
-    if (certKeyUsage & KU_NON_REPUDIATION)
-        certKeyUsage |= KU_DIGITAL_SIGNATURE;
-    if ( (certKeyUsage & requiredUsage) == requiredUsage ) 
+    if ( (cert->keyUsage & requiredUsage) == requiredUsage ) 
     	return SECSuccess;
-
 loser:
     PORT_SetError(SEC_ERROR_INADEQUATE_KEY_USAGE);
     return SECFailure;
@@ -1279,8 +1256,14 @@ CERTCertificate *
 CERT_DupCertificate(CERTCertificate *c)
 {
     if (c) {
+#ifdef NSS_CLASSIC
+	CERT_LockCertRefCount(c);
+	++c->referenceCount;
+	CERT_UnlockCertRefCount(c);
+#else
 	NSSCertificate *tmp = STAN_GetNSSCertificate(c);
 	nssCertificate_AddRef(tmp);
+#endif
     }
     return c;
 }
@@ -1482,7 +1465,7 @@ cert_VerifySubjectAltName(CERTCertificate *cert, const char *hn)
 	default:
 	    break;
 	}
-	current = CERT_GetNextGeneralName(current);
+	current = cert_get_next_general_name(current);
     } while (current != nameList);
 
     if ((!isIPaddr && !DNSextCount) || (isIPaddr && !IPextCount)) {
@@ -1903,45 +1886,6 @@ CERT_IsRootDERCert(SECItem *derCert)
     return isRoot;
 }
 
-CERTCompareValidityStatus
-CERT_CompareValidityTimes(CERTValidity* val_a, CERTValidity* val_b)
-{
-    PRTime notBeforeA, notBeforeB, notAfterA, notAfterB;
-
-    if (!val_a || !val_b)
-    {
-        PORT_SetError(SEC_ERROR_INVALID_ARGS);
-        return certValidityUndetermined;
-    }
-
-    if ( SECSuccess != DER_DecodeTimeChoice(&notBeforeA, &val_a->notBefore) ||
-         SECSuccess != DER_DecodeTimeChoice(&notBeforeB, &val_b->notBefore) ||
-         SECSuccess != DER_DecodeTimeChoice(&notAfterA, &val_a->notAfter) ||
-         SECSuccess != DER_DecodeTimeChoice(&notAfterB, &val_b->notAfter) ) {
-        return certValidityUndetermined;
-    }
-
-    /* sanity check */
-    if (LL_CMP(notBeforeA,>,notAfterA) || LL_CMP(notBeforeB,>,notAfterB)) {
-        PORT_SetError(SEC_ERROR_INVALID_TIME);
-        return certValidityUndetermined;
-    }
-
-    if (LL_CMP(notAfterA,!=,notAfterB)) {
-        /* one cert validity goes farther into the future, select it */
-        return LL_CMP(notAfterA,<,notAfterB) ?
-            certValidityChooseB : certValidityChooseA;
-    }
-    /* the two certs have the same expiration date */
-    PORT_Assert(LL_CMP(notAfterA, == , notAfterB));
-    /* do they also have the same start date ? */
-    if (LL_CMP(notBeforeA,==,notBeforeB)) {
-	return certValidityEqual;
-    }
-    /* choose cert with the later start date */
-    return LL_CMP(notBeforeA,<,notBeforeB) ?
-        certValidityChooseB : certValidityChooseA;
-}
 
 /*
  * is certa newer than certb?  If one is expired, pick the other one.
@@ -2053,17 +1997,9 @@ CERT_DecodeTrustString(CERTCertTrust *trust, char *trusts)
     unsigned int i;
     unsigned int *pflags;
     
-    if (!trust) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
-    }
     trust->sslFlags = 0;
     trust->emailFlags = 0;
     trust->objectSigningFlags = 0;
-    if (!trusts) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
-    }
 
     pflags = &trust->sslFlags;
     
@@ -2097,12 +2033,14 @@ CERT_DecodeTrustString(CERTCertTrust *trust, char *trusts)
 	      *pflags = *pflags | CERTDB_USER;
 	      break;
 
+#ifdef DEBUG_NSSTEAM_ONLY
 	  case 'i':
 	      *pflags = *pflags | CERTDB_INVISIBLE_CA;
 	      break;
 	  case 'g':
 	      *pflags = *pflags | CERTDB_GOVT_APPROVED_CA;
 	      break;
+#endif /* DEBUG_NSSTEAM_ONLY */
 
 	  case ',':
 	      if ( pflags == &trust->sslFlags ) {
@@ -2731,7 +2669,11 @@ static PZLock *certRefCountLock = NULL;
 void
 CERT_LockCertRefCount(CERTCertificate *cert)
 {
-    PORT_Assert(certRefCountLock != NULL);
+    if ( certRefCountLock == NULL ) {
+	nss_InitLock(&certRefCountLock, nssILockRefLock);
+	PORT_Assert(certRefCountLock != NULL);
+    }
+    
     PZ_Lock(certRefCountLock);
     return;
 }
@@ -2764,55 +2706,13 @@ static PZLock *certTrustLock = NULL;
 void
 CERT_LockCertTrust(CERTCertificate *cert)
 {
-    PORT_Assert(certTrustLock != NULL);
+    if ( certTrustLock == NULL ) {
+	nss_InitLock(&certTrustLock, nssILockCertDB);
+	PORT_Assert(certTrustLock != NULL);
+    }
+    
     PZ_Lock(certTrustLock);
     return;
-}
-
-SECStatus
-cert_InitLocks(void)
-{
-    if ( certRefCountLock == NULL ) {
-        certRefCountLock = PZ_NewLock(nssILockRefLock);
-        PORT_Assert(certRefCountLock != NULL);
-        if (!certRefCountLock) {
-            return SECFailure;
-        }
-    }
-
-    if ( certTrustLock == NULL ) {
-        certTrustLock = PZ_NewLock(nssILockCertDB);
-        PORT_Assert(certTrustLock != NULL);
-        if (!certTrustLock) {
-            PZ_DestroyLock(certRefCountLock);
-            return SECFailure;
-        }
-    }    
-
-    return SECSuccess;
-}
-
-SECStatus
-cert_DestroyLocks(void)
-{
-    SECStatus rv = SECSuccess;
-
-    PORT_Assert(certRefCountLock != NULL);
-    if (certRefCountLock) {
-        PZ_DestroyLock(certRefCountLock);
-        certRefCountLock = NULL;
-    } else {
-        rv = SECFailure;
-    }
-
-    PORT_Assert(certTrustLock != NULL);
-    if (certTrustLock) {
-        PZ_DestroyLock(certTrustLock);
-        certTrustLock = NULL;
-    } else {
-        rv = SECFailure;
-    }
-    return rv;
 }
 
 /*

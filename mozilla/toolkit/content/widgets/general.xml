@@ -4,50 +4,22 @@
    xmlns="http://www.mozilla.org/xbl"
    xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
    xmlns:xbl="http://www.mozilla.org/xbl">
-
-  <binding id="basecontrol">
-    <implementation implements="nsIDOMXULControlElement">
-      <!-- public implementation -->
-      <property name="disabled" onset="if (val) this.setAttribute('disabled', 'true');
-                                       else this.removeAttribute('disabled');
-                                       return val;"
-                                onget="return this.getAttribute('disabled') == 'true';"/>
-      <property name="tabIndex" onget="return parseInt(this.getAttribute('tabindex'));"
-                                onset="if (val) this.setAttribute('tabindex', val);
-                                       else this.removeAttribute('tabindex'); return val;"/>
-    </implementation>
-  </binding>
-
-  <binding id="basetext" extends="chrome://global/content/bindings/general.xml#basecontrol">
+  
+  <binding id="basetext">
     <implementation>
       <!-- public implementation -->
       <property name="label"      onset="return this.setAttribute('label',val);"
                                   onget="return this.getAttribute('label');"/>
       <property name="crop"       onset="return this.setAttribute('crop',val);"
                                   onget="return this.getAttribute('crop');"/>
+      <property name="disabled"   onset="if (val) this.setAttribute('disabled', 'true');
+                                         else this.removeAttribute('disabled');
+                                         return val;"
+                                  onget="return this.getAttribute('disabled') == 'true';"/>
       <property name="image"      onset="return this.setAttribute('image',val);"
                                   onget="return this.getAttribute('image');"/>
-      <property name="accessKey">
-        <getter>
-          <![CDATA[
-            return this.labelElement ? this.labelElement.accessKey : this.getAttribute('accesskey');
-          ]]>
-        </getter>
-        <setter>
-          <![CDATA[
-            // Always store on the control
-            this.setAttribute('accesskey', val);
-            // If there is a label, change the accesskey on the labelElement
-            // if it's also set there
-            if (this.labelElement) {
-              this.labelElement.accessKey = val;
-            }
-            return val;
-          ]]>
-        </setter>
-      </property>
-
-      <field name="labelElement"/>
+      <property name="accessKey"  onset="return this.setAttribute('accesskey',val);"
+                                  onget="return this.getAttribute('accesskey');"/>
     </implementation>      
   </binding>
 
@@ -58,6 +30,7 @@
     </implementation>
   </binding>
 
+  
   <!--
     Inline Editable UI Element
     - This binding forms the basis of the inline edit treecell and the inline edit
@@ -159,7 +132,7 @@
               }
             }
           }
-          aEvent.stopPropagation();
+          aEvent.preventBubble();
         ]]>
         </body>
       </method>
@@ -174,7 +147,7 @@
             var rootContent = this;
             while (rootContent && rootContent.localName != rootLocalName) 
               rootContent = rootContent.parentNode;
-
+            
             if (rootContent) {
               var ctr = document.getAnonymousElementByAttribute(rootContent, "ileattr", "text-container");
               if (!rootContent.valueIsRejected) {
@@ -246,8 +219,7 @@
     </implementation>
   </binding>
 
-  <binding id="statusbarpanel-menu-iconic" display="xul:menu"
-           extends="chrome://global/content/bindings/general.xml#statusbarpanel">
+  <binding id="statusbarpanel-menu-iconic" display="xul:menu" extends="chrome://global/content/bindings/general.xml#statusbarpanel">
     <content>
       <xul:image class="statusbarpanel-icon" xbl:inherits="src"/>
       <children/>
@@ -279,17 +251,6 @@
     <content>
       <xul:image class="statusbarpanel-icon" xbl:inherits="src"/>
     </content>
-
-    <implementation implements="nsIAccessibleProvider">
-      <property name="accessible">
-        <getter>
-          <![CDATA[
-            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
-            return accService.createXULButtonAccessible(this);
-          ]]>
-        </getter>
-      </property>
-    </implementation>
   </binding>
 
   <binding id="statusbarpanel-iconic-text" display="xul:button"
@@ -308,14 +269,8 @@
       <property name="accessible">
         <getter>
           <![CDATA[
-            try {
-              var accService = Components.classes["@mozilla.org/accessibilityService;1"]
-                                         .getService(Components.interfaces.nsIAccessibilityService);
-              return accService.createXULImageAccessible(this);
-            }
-            catch(ex) { /* no chrome privileges */ }
-
-            return null;
+            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
+            return accService.createXULImageAccessible(this);
           ]]>
         </getter>
       </property>
@@ -332,12 +287,13 @@
             return val;
           this.setAttribute("selectedIndex", val);
           var event = document.createEvent('Events');
-          event.initEvent('select', true, true);
+          event.initEvent('select', false, true);
           this.dispatchEvent(event);
           return val;
         ]]>
         </setter>
       </property>
+
 
       <property name="selectedPanel">
         <getter>
@@ -368,14 +324,8 @@
       <property name="accessible">
         <getter>
           <![CDATA[
-            try {
-              var accService = Components.classes["@mozilla.org/accessibilityService;1"]
-                                         .getService(Components.interfaces.nsIAccessibilityService);
-              return accService.createXULDropmarkerAccessible(this);
-            }
-            catch(ex) { /* no chrome privileges */ }
-
-            return null;
+            var accService = Components.classes["@mozilla.org/accessibilityService;1"].getService(Components.interfaces.nsIAccessibilityService);
+            return accService.createXULDropmarkerAccessible(this);
           ]]>
         </getter>
       </property>
@@ -383,3 +333,4 @@
   </binding>
 
 </bindings>
+

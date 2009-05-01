@@ -1,39 +1,20 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "NPL"); you may not use this file except in
+ * compliance with the NPL.  You may obtain a copy of the NPL at
+ * http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * Software distributed under the NPL is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the NPL
  * for the specific language governing rights and limitations under the
- * License.
+ * NPL.
  *
- * The Original Code is mozilla.org Code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The Initial Developer of this code under the NPL is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation.  All Rights
+ * Reserved.
+ */
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -68,19 +49,21 @@
 #include <kernel/OS.h>
 #endif
 
-#if defined(XP_MACOSX)
-#if defined(MOZ_WIDGET_COCOA)
-#include <CoreFoundation/CoreFoundation.h>
-#define MAC_USE_CFRUNLOOPSOURCE
-#elif defined(TARGET_CARBON)
-/* #include <CarbonEvents.h> */
-/* #define MAC_USE_CARBON_EVENT */
-#include <CoreFoundation/CoreFoundation.h>
-#define MAC_USE_CFRUNLOOPSOURCE
+#if defined(XP_MAC) || defined(XP_MACOSX)
+#if !defined(MOZ_WIDGET_COCOA) && TARGET_CARBON
+#include <CarbonEvents.h>
+#define MAC_USE_CARBON_EVENT
+#else
+#include <Processes.h>
+#define MAC_USE_WAKEUPPROCESS
 #endif
 #endif
 
+#if defined(XP_MAC)
+#include "pprthred.h"
+#else
 #include "private/pprthred.h"
+#endif /* defined(XP_MAC) */
 
 #if defined(VMS)
 /*
@@ -102,10 +85,7 @@
  * or paint events are starved, otherwise it will use a posted
  * WM_APP msg for PLEvent notification.
  */
-
-#ifndef WINCE
 #define USE_TIMER
-#endif
 
 /* Threshold defined in milliseconds for determining when the input
  * and paint events have been held in the WIN32 msg queue too long
@@ -169,13 +149,12 @@ struct PLEventQueue {
     PRBool              removeMsg;
 #elif defined(XP_BEOS)
     port_id             eventport;
-#elif defined(XP_MACOSX)
-#if defined(MAC_USE_CFRUNLOOPSOURCE)
-    CFRunLoopSourceRef  mRunLoopSource;
-    CFRunLoopRef        mMainRunLoop;
-#elif defined(MAC_USE_CARBON_EVENT)
+#elif defined(XP_MAC) || defined(XP_MACOSX)
+#if defined(MAC_USE_CARBON_EVENT)
     EventHandlerUPP     eventHandlerUPP;
     EventHandlerRef     eventHandlerRef;
+#elif defined(MAC_USE_WAKEUPPROCESS)
+    ProcessSerialNumber psn;
 #endif
 #endif
 };
@@ -260,6 +239,9 @@ static PLEventQueue * _pl_CreateEventQueue(const char *name,
 #if defined(_WIN32) || defined(XP_OS2)
     self->removeMsg = PR_TRUE;
 #endif
+#if defined(MAC_USE_WAKEUPPROCESS)
+    self->psn.lowLongOfPSN = kNoProcess;
+#endif
 
     self->notified = PR_FALSE;
 
@@ -278,7 +260,7 @@ static PLEventQueue * _pl_CreateEventQueue(const char *name,
     return NULL;
 }
 
-PLEventQueue*
+PR_IMPLEMENT(PLEventQueue*)
 PL_CreateEventQueue(const char* name, PRThread* handlerThread)
 {
     return( _pl_CreateEventQueue( name, handlerThread, EventQueueIsNative ));
@@ -296,7 +278,7 @@ PL_CreateMonitoredEventQueue(const char *name, PRThread *handlerThread)
     return( _pl_CreateEventQueue( name, handlerThread, EventQueueIsMonitored ));
 }
 
-PRMonitor*
+PR_IMPLEMENT(PRMonitor*)
 PL_GetEventQueueMonitor(PLEventQueue* self)
 {
     return self->monitor;
@@ -305,11 +287,14 @@ PL_GetEventQueueMonitor(PLEventQueue* self)
 static void PR_CALLBACK
 _pl_destroyEvent(PLEvent* event, void* data, PLEventQueue* queue)
 {
+#ifdef XP_MAC
+#pragma unused (data, queue)
+#endif
     PL_DequeueEvent(event, queue);
     PL_DestroyEvent(event);
 }
 
-void
+PR_IMPLEMENT(void)
 PL_DestroyEventQueue(PLEventQueue* self)
 {
     PR_EnterMonitor(self->monitor);
@@ -327,7 +312,7 @@ PL_DestroyEventQueue(PLEventQueue* self)
 
 }
 
-PRStatus
+PR_IMPLEMENT(PRStatus)
 PL_PostEvent(PLEventQueue* self, PLEvent* event)
 {
     PRStatus err = PR_SUCCESS;
@@ -369,7 +354,7 @@ error:
     return err;
 }
 
-void*
+PR_IMPLEMENT(void*)
 PL_PostSynchronousEvent(PLEventQueue* self, PLEvent* event)
 {
     void* result;
@@ -439,7 +424,7 @@ PL_PostSynchronousEvent(PLEventQueue* self, PLEvent* event)
     return result;
 }
 
-PLEvent*
+PR_IMPLEMENT(PLEvent*)
 PL_GetEvent(PLEventQueue* self)
 {
     PLEvent* event = NULL;
@@ -472,7 +457,7 @@ PL_GetEvent(PLEventQueue* self)
     return event;
 }
 
-PRBool
+PR_IMPLEMENT(PRBool)
 PL_EventAvailable(PLEventQueue* self)
 {
     PRBool result = PR_FALSE;
@@ -489,7 +474,7 @@ PL_EventAvailable(PLEventQueue* self)
     return result;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_MapEvents(PLEventQueue* self, PLEventFunProc fun, void* data)
 {
     PRCList* qp;
@@ -533,7 +518,7 @@ _pl_DestroyEventForOwner(PLEvent* event, void* owner, PLEventQueue* queue)
     }
 }
 
-void
+PR_IMPLEMENT(void)
 PL_RevokeEvents(PLEventQueue* self, void* owner)
 {
     if (self == NULL)
@@ -588,7 +573,7 @@ _pl_GetEventCount(PLEventQueue* self)
     return count;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_ProcessPendingEvents(PLEventQueue* self)
 {
     PRInt32 count;
@@ -648,7 +633,7 @@ PL_ProcessPendingEvents(PLEventQueue* self)
  * Event Operations
  ******************************************************************************/
 
-void
+PR_IMPLEMENT(void)
 PL_InitEvent(PLEvent* self, void* owner,
              PLHandleEventProc handler,
              PLDestroyEventProc destructor)
@@ -669,13 +654,13 @@ PL_InitEvent(PLEvent* self, void* owner,
 #endif
 }
 
-void*
+PR_IMPLEMENT(void*)
 PL_GetEventOwner(PLEvent* self)
 {
     return self->owner;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_HandleEvent(PLEvent* self)
 {
     void* result;
@@ -704,7 +689,7 @@ static long s_eventCount = 0;
 static long s_totalTime  = 0;
 #endif
 
-void
+PR_IMPLEMENT(void)
 PL_DestroyEvent(PLEvent* self)
 {
     if (self == NULL)
@@ -727,9 +712,12 @@ PL_DestroyEvent(PLEvent* self)
     self->destructor(self);
 }
 
-void
+PR_IMPLEMENT(void)
 PL_DequeueEvent(PLEvent* self, PLEventQueue* queue)
 {
+#ifdef XP_MAC
+#pragma unused (queue)
+#endif
     if (self == NULL)
         return;
 
@@ -758,7 +746,7 @@ PL_DequeueEvent(PLEvent* self, PLEventQueue* queue)
     PR_ExitMonitor(queue->monitor);
 }
 
-void
+PR_IMPLEMENT(void)
 PL_FavorPerformanceHint(PRBool favorPerformanceOverEventStarvation,
                         PRUint32 starvationDelay)
 {
@@ -790,7 +778,7 @@ PL_FavorPerformanceHint(PRBool favorPerformanceOverEventStarvation,
  * select, thread messages, or AppleEvents.
  ******************************************************************************/
 
-PLEvent*
+PR_IMPLEMENT(PLEvent*)
 PL_WaitForEvent(PLEventQueue* self)
 {
     PLEvent* event;
@@ -814,7 +802,7 @@ PL_WaitForEvent(PLEventQueue* self)
     return event;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_EventLoop(PLEventQueue* self)
 {
     if (self == NULL)
@@ -843,6 +831,10 @@ PL_EventLoop(PLEventQueue* self)
 static PRStatus
 _pl_SetupNativeNotifier(PLEventQueue* self)
 {
+#if defined(XP_MAC)
+#pragma unused (self)
+#endif
+
 #if defined(VMS)
     unsigned int status;
     self->idFunc = 0;
@@ -892,20 +884,7 @@ failed:
     /* hook up to the nsToolkit queue, however the appshell
      * isn't necessairly started, so we might have to create
      * the queue ourselves
-     *
-     * Set up the port for communicating. As restarts thru execv may occur
-     * and ports survive those (with faulty events as result). Combined with the fact
-     * that nsAppShell.cpp may or may not have created the port we need to take extra
-     * care that the port is created for this launch, otherwise we need to reopen it
-     * so that faulty messages gets lost.
-     *
-     * We do this by checking if the sem has been created. If it is we can reuse the port (if it exists).
-     * Otherwise we need to create the sem and the port, deleting any open ports before.
      */
-     
-    sem_info info;
-    int32 cookie = 0;
-
     char portname[64];
     char semname[64];
     PR_snprintf(portname, sizeof(portname), "event%lx", 
@@ -913,28 +892,17 @@ failed:
     PR_snprintf(semname, sizeof(semname), "sync%lx", 
                 (long unsigned) self->handlerThread);
 
-    self->eventport = find_port(portname);
-    while(get_next_sem_info(0, &cookie, &info) == B_OK)
+    if((self->eventport = find_port(portname)) < 0)
     {
-      if(strcmp(semname, info.name) != 0) {
-        continue;
-      }
+        /* create port
+         */
+        self->eventport = create_port(500, portname);
 
-      /* found semaphore */
-      if(self->eventport < 0) {
-        self->eventport = create_port(200, portname);
-      }
-      return PR_SUCCESS;
-    }
-    /* setup the port and semaphore */
-    if(self->eventport >= 0) 
-    {
-      delete_port( self->eventport );
-    }
-    self->eventport = create_port(200, portname);
         /* We don't use the sem, but it has to be there
          */
         create_sem(0, semname);
+    }
+
     return PR_SUCCESS;
 #else
     return PR_SUCCESS;
@@ -944,6 +912,10 @@ failed:
 static void
 _pl_CleanupNativeNotifier(PLEventQueue* self)
 {
+#if defined(XP_MAC)
+#pragma unused (self)
+#endif
+
 #if defined(VMS)
     {
         unsigned int status;
@@ -969,12 +941,6 @@ _pl_CleanupNativeNotifier(PLEventQueue* self)
 
 #elif defined(XP_OS2)
     WinDestroyWindow(self->eventReceiverWindow);
-#elif defined(MAC_USE_CFRUNLOOPSOURCE)
-
-    CFRunLoopRemoveSource(self->mMainRunLoop, self->mRunLoopSource, kCFRunLoopCommonModes);
-    CFRelease(self->mRunLoopSource);
-    CFRelease(self->mMainRunLoop);
-
 #elif defined(MAC_USE_CARBON_EVENT)
     EventComparatorUPP comparator = NewEventComparatorUPP(_md_CarbonEventComparator);
     PR_ASSERT(comparator != NULL);
@@ -1103,12 +1069,9 @@ static PRBool _md_IsInputPending(WORD qstatus)
 
     /* Is there anything other than a QS_MOUSEMOVE pending? */
     if ((qstatus & QS_MOUSEBUTTON) ||
-        (qstatus & QS_KEY) 
-#ifndef WINCE
-          || (qstatus & QS_HOTKEY)
-#endif 
-        ) {
-      return PR_TRUE;
+        (qstatus & QS_KEY) ||
+        (qstatus & QS_HOTKEY)) {
+        return PR_TRUE;
     }
 
     /*
@@ -1261,7 +1224,7 @@ _pl_NativeNotify(PLEventQueue* self)
 struct ThreadInterfaceData
 {
     void  *data;
-    thread_id waitingThread;
+    int32 sync;
 };
 
 static PRStatus
@@ -1269,21 +1232,18 @@ _pl_NativeNotify(PLEventQueue* self)
 {
     struct ThreadInterfaceData id;
     id.data = self;
-    id.waitingThread = 0;
+    id.sync = false;
     write_port(self->eventport, 'natv', &id, sizeof(id));
 
     return PR_SUCCESS;    /* Is this correct? */
 }
 #endif /* XP_BEOS */
 
-#if defined(XP_MACOSX)
+#if defined(XP_MAC) || defined(XP_MACOSX)
 static PRStatus
 _pl_NativeNotify(PLEventQueue* self)
 {
-#if defined(MAC_USE_CFRUNLOOPSOURCE)
-  	CFRunLoopSourceSignal(self->mRunLoopSource);
-  	CFRunLoopWakeUp(self->mMainRunLoop);
-#elif defined(MAC_USE_CARBON_EVENT)
+#if defined(MAC_USE_CARBON_EVENT)
     OSErr err;
     EventRef newEvent;
     if (CreateEvent(NULL, kEventClassPL, kEventProcessPLEvents,
@@ -1297,10 +1257,12 @@ _pl_NativeNotify(PLEventQueue* self)
     }
     if (err != noErr)
         return PR_FAILURE;
+#elif defined(MAC_USE_WAKEUPPROCESS)
+    WakeUpProcess(&self->psn);
 #endif
     return PR_SUCCESS;
 }
-#endif /* defined(XP_MACOSX) */
+#endif /* defined(XP_MAC) || defined(XP_MACOSX) */
 
 static PRStatus
 _pl_AcknowledgeNativeNotify(PLEventQueue* self)
@@ -1359,12 +1321,16 @@ _pl_AcknowledgeNativeNotify(PLEventQueue* self)
     return PR_FAILURE;
 #else
 
+#if defined(XP_MAC)
+#pragma unused (self)
+#endif
+
     /* nothing to do on the other platforms */
     return PR_SUCCESS;
 #endif
 }
 
-PRInt32
+PR_IMPLEMENT(PRInt32)
 PL_GetEventQueueSelectFD(PLEventQueue* self)
 {
     if (self == NULL)
@@ -1379,7 +1345,7 @@ PL_GetEventQueueSelectFD(PLEventQueue* self)
 #endif
 }
 
-PRBool
+PR_IMPLEMENT(PRBool)
 PL_IsQueueOnCurrentThread( PLEventQueue *queue )
 {
     PRThread *me = PR_GetCurrentThread();
@@ -1391,6 +1357,46 @@ PL_IsQueueNative(PLEventQueue *queue)
 {
     return queue->type == EventQueueIsNative ? PR_TRUE : PR_FALSE;
 }
+
+#if defined(_WIN32)
+/*
+** Global Instance handle...
+** In Win32 this is the module handle of the DLL.
+**
+*/
+static HINSTANCE _pr_hInstance;
+#endif
+
+
+#if defined(_WIN32)
+
+/*
+** Initialization routine for the DLL...
+*/
+
+BOOL WINAPI DllMain (HINSTANCE hDLL, DWORD dwReason, LPVOID lpReserved)
+{
+    switch (dwReason)
+    {
+      case DLL_PROCESS_ATTACH:
+        _pr_hInstance = hDLL;
+        break;
+
+      case DLL_THREAD_ATTACH:
+        break;
+
+      case DLL_THREAD_DETACH:
+        break;
+
+      case DLL_PROCESS_DETACH:
+        _pr_hInstance = NULL;
+        break;
+    }
+
+    return TRUE;
+}
+#endif
+
 
 #if defined(_WIN32) || defined(XP_OS2)
 #ifdef XP_OS2
@@ -1442,7 +1448,6 @@ static PRStatus InitEventLib( void )
 static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 {
     WNDCLASS wc;
-    HANDLE h = GetModuleHandle(NULL);
 
     /*
     ** If this is the first call to PL_InitializeEventsLib(),
@@ -1458,12 +1463,12 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
     _pr_PostEventMsgId = RegisterWindowMessage("XPCOM_PostEvent");
 
     /* Register the class for the event receiver window */
-    if (!GetClassInfo(h, _pr_eventWindowClass, &wc)) {
+    if (!GetClassInfo(_pr_hInstance, _pr_eventWindowClass, &wc)) {
         wc.style         = 0;
         wc.lpfnWndProc   = _md_EventReceiverProc;
         wc.cbClsExtra    = 0;
         wc.cbWndExtra    = 0;
-        wc.hInstance     = h;
+        wc.hInstance     = _pr_hInstance;
         wc.hIcon         = NULL;
         wc.hCursor       = NULL;
         wc.hbrBackground = (HBRUSH) NULL;
@@ -1476,7 +1481,7 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
     eventQueue->eventReceiverWindow = CreateWindow(_pr_eventWindowClass,
                                         "XPCOM:EventReceiver",
                                             0, 0, 0, 10, 10,
-                                            NULL, NULL, h,
+                                            NULL, NULL, _pr_hInstance,
                                             NULL);
     PR_ASSERT(eventQueue->eventReceiverWindow);
     /* Set a property which can be used to retrieve the event queue
@@ -1498,14 +1503,14 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
     /* Must have HMQ for this & can't assume we already have appshell */
     if( FALSE == WinQueryQueueInfo( HMQ_CURRENT, NULL, 0))
     {
-       PPIB ppib;
-       PTIB ptib;
+       PPIB pPib;
+       PTIB pTib;
        HAB hab;
        HMQ hmq;
 
        /* Set our app to be a PM app before attempting Win calls */
-       DosGetInfoBlocks(&ptib, &ppib);
-       ppib->pib_ultype = 3;
+       DosGetInfoBlocks(&pTib, &pPib);
+       pPib->pib_ultype = 3;
 
        hab = WinInitialize(0);
        hmq = WinCreateMsgQueue(hab, 0);
@@ -1552,14 +1557,7 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 } /* end _md_CreateEventQueue() */
 #endif /* (defined(XP_UNIX) && !defined(XP_MACOSX)) || defined(XP_BEOS) */
 
-#if defined(MAC_USE_CFRUNLOOPSOURCE)
-static void _md_EventReceiverProc(void *info)
-{
-  PLEventQueue *queue = (PLEventQueue*)info;
-  PL_ProcessPendingEvents(queue);
-}
-
-#elif defined(MAC_USE_CARBON_EVENT)
+#if defined(MAC_USE_CARBON_EVENT)
 /*
 ** _md_CreateEventQueue() -- ModelDependent initializer
 */
@@ -1601,26 +1599,10 @@ static pascal Boolean _md_CarbonEventComparator(EventRef inEvent,
 
 #endif /* defined(MAC_USE_CARBON_EVENT) */
 
-#if defined(XP_MACOSX)
+#if defined(XP_MAC) || defined(XP_MACOSX)
 static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 {
-#if defined(MAC_USE_CFRUNLOOPSOURCE)
-    CFRunLoopSourceContext sourceContext = { 0 };
-    sourceContext.version = 0;
-    sourceContext.info = (void*)eventQueue;
-    sourceContext.perform = _md_EventReceiverProc;
-
-    /* make a run loop source */
-    eventQueue->mRunLoopSource = CFRunLoopSourceCreate(kCFAllocatorDefault, 0 /* order */, &sourceContext);
-    PR_ASSERT(eventQueue->mRunLoopSource);
-    
-    eventQueue->mMainRunLoop = CFRunLoopGetCurrent();
-    CFRetain(eventQueue->mMainRunLoop);
-    
-    /* and add it to the run loop */
-    CFRunLoopAddSource(eventQueue->mMainRunLoop, eventQueue->mRunLoopSource, kCFRunLoopCommonModes);
-
-#elif defined(MAC_USE_CARBON_EVENT)
+#if defined(MAC_USE_CARBON_EVENT)
     eventQueue->eventHandlerUPP = NewEventHandlerUPP(_md_EventReceiverProc);
     PR_ASSERT(eventQueue->eventHandlerUPP);
     if (eventQueue->eventHandlerUPP)
@@ -1634,15 +1616,18 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
                                      eventQueue, &eventQueue->eventHandlerRef);
       PR_ASSERT(eventQueue->eventHandlerRef);
     }
+#elif defined(MAC_USE_WAKEUPPROCESS)
+    OSErr err = GetCurrentProcess(&eventQueue->psn);
+    PR_ASSERT(err == noErr);
 #endif
 } /* end _md_CreateEventQueue() */
-#endif /* defined(XP_MACOSX) */
+#endif /* defined(XP_MAC) || defined(XP_MACOSX) */
 
 /* extra functions for unix */
 
 #if defined(XP_UNIX) && !defined(XP_MACOSX)
 
-PRInt32
+PR_IMPLEMENT(PRInt32)
 PL_ProcessEventsBeforeID(PLEventQueue *aSelf, unsigned long aID)
 {
     PRInt32 count = 0;
@@ -1716,7 +1701,7 @@ PL_ProcessEventsBeforeID(PLEventQueue *aSelf, unsigned long aID)
     return count;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_RegisterEventIDFunc(PLEventQueue *aSelf, PLGetEventIDFunc aFunc,
                        void *aClosure)
 {
@@ -1724,7 +1709,7 @@ PL_RegisterEventIDFunc(PLEventQueue *aSelf, PLGetEventIDFunc aFunc,
     aSelf->idFuncClosure = aClosure;
 }
 
-void
+PR_IMPLEMENT(void)
 PL_UnregisterEventIDFunc(PLEventQueue *aSelf)
 {
     aSelf->idFunc = 0;

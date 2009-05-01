@@ -1,39 +1,36 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Javier Delgadillo <javi@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *  Javier Delgadillo <javi@netscape.com>
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 #include "nsNSSASN1Object.h"
 #include "nsIComponentManager.h"
 #include "secasn1.h"
@@ -241,9 +238,7 @@ CreateFromDER(unsigned char *data,
   return rv; 
 }
 
-nsNSSASN1Sequence::nsNSSASN1Sequence() : mType(0),
-                                         mTag(0),
-                                         mIsValidContainer(PR_TRUE),
+nsNSSASN1Sequence::nsNSSASN1Sequence() : mIsValidContainer(PR_TRUE),
                                          mIsExpanded(PR_TRUE)
 {
   /* member initializers and constructor code */
@@ -360,9 +355,7 @@ nsNSSASN1Sequence::SetIsExpanded(PRBool aIsExpanded)
 }
 
 
-nsNSSASN1PrintableItem::nsNSSASN1PrintableItem() : mType(0),
-                                                   mTag(0),
-                                                   mData(nsnull),
+nsNSSASN1PrintableItem::nsNSSASN1PrintableItem() : mData(nsnull),
                                                    mLen(0)
 {
   /* member initializers and constructor code */
@@ -422,20 +415,24 @@ NS_IMETHODIMP
 nsNSSASN1PrintableItem::SetData(char *data, PRUint32 len)
 {
   if (len > 0) {
-    if (mLen < len) {
-      unsigned char* newData = (unsigned char*)nsMemory::Realloc(mData, len);
-      if (!newData)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-      mData = newData;
+    if (mData) {
+      if (mLen < len)
+        nsMemory::Realloc(mData, len);
+    } else {  
+      mData = (unsigned char*)nsMemory::Alloc(len);
     }
 
+    if (mData == nsnull)
+      return NS_ERROR_FAILURE;
     memcpy(mData, data, len);
   } else if (len == 0) {
     if (mData) {
       nsMemory::Free(mData);
       mData = nsnull;
     }
+  } else {
+    NS_ASSERTION(0,"Passed in invalid buffer length to SetData");
+    return NS_ERROR_FAILURE;
   }
   mLen = len;
   return NS_OK;  

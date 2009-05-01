@@ -1,46 +1,31 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 2000 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * Contributor(s):
- *   Stuart Parmenter <pavlov@netscape.com>
- *   Brian Ryner <bryner@brianryner.com>
- *   Jan Varga <varga@ku.sk>
- *   Peter Annema <disttsc@bart.nl>
- *   Johann Petrak <johann@ai.univie.ac.at>
- *   Akkana Peck <akkana@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *  Stuart Parmenter <pavlov@netscape.com>
+ *  Brian Ryner <bryner@brianryner.com>
+ *  Jan Varga <varga@nixcorp.com>
+ *  Peter Annema <disttsc@bart.nl>
+ *  Johann Petrak <johann@ai.univie.ac.at>
+ *  Akkana Peck <akkana@netscape.com>
+ *  Daniel Glazman <daniel@glazman.org>
+ */
 
 const nsIFilePicker       = Components.interfaces.nsIFilePicker;
 const nsIProperties       = Components.interfaces.nsIProperties;
@@ -89,7 +74,7 @@ function filepickerLoad() {
     const filterTypes = o.filters.types;
     const numFilters = filterTitles.length;
 
-    document.title = title;
+    window.title = title;
 
     if (initialText) {
       textInput.value = initialText;
@@ -104,7 +89,6 @@ function filepickerLoad() {
   if (filePickerMode == nsIFilePicker.modeGetFolder) {
     var textInputLabel = document.getElementById("textInputLabel");
     textInputLabel.value = gFilePickerBundle.getString("dirTextInputLabel");
-    textInputLabel.accessKey = gFilePickerBundle.getString("dirTextInputAccesskey");
   }
   
   if ((filePickerMode == nsIFilePicker.modeOpen) ||
@@ -142,6 +126,7 @@ function filepickerLoad() {
   // start out with a filename sort
   handleColumnClick("FilenameColumn");
 
+  document.documentElement.setAttribute("ondialogcancel", "return onCancel();");
   try {
     var buttonLabel = getOKAction();
     okButton.setAttribute("label", buttonLabel);
@@ -160,7 +145,8 @@ function filepickerLoad() {
 
   // Start out with the ok button disabled since nothing will be
   // selected and nothing will be in the text field.
-  okButton.disabled = filePickerMode != nsIFilePicker.modeGetFolder;
+  okButton.disabled = true;
+  textInput.focus();
 
   // This allows the window to show onscreen before we begin
   // loading the file list
@@ -181,7 +167,11 @@ function setInitialDirectory(directory)
       directory = false;
   }
   if (!directory) {
+#ifdef LINSPIRE
+    sfile.initWithPath(homeDir.path + "/My Documents");
+#else
     sfile.initWithPath(homeDir.path);
+#endif
   }
 
   gotoDirectory(sfile);
@@ -217,9 +207,23 @@ function showErrorDialog(titleStrName, messageStrName, file)
 function openOnOK()
 {
   var dir = treeView.selectedFiles.queryElementAt(0, nsIFile);
+  if (!dir.isReadable()) {
+    showErrorDialog("errorOpenFileDoesntExistTitle",
+                    "errorDirNotReadableMessage",
+                    dir);
+    return false;
+  }
+
   if (dir)
     gotoDirectory(dir);
 
+  retvals.fileList = new Array(dir);
+
+  retvals.buttonStatus = nsIFilePicker.returnCancel;
+  
+  var filterMenuList = document.getElementById("filterMenuList");
+  retvals.filterIndex = filterMenuList.selectedIndex;
+  
   return false;
 }
 
@@ -312,7 +316,7 @@ function selectOnOK()
                                                  [file.path]);
           
           promptService = Components.classes[NS_PROMPTSERVICE_CONTRACTID].getService(Components.interfaces.nsIPromptService);
-          var rv = promptService.confirm(window, confirmTitle, message);
+          var rv = promptService.confirm(window, title, message);
           if (rv) {
             ret = nsIFilePicker.returnReplace;
             retvals.directory = file.parent.path;
@@ -486,10 +490,11 @@ function onKeypress(e) {
 }
 
 function doEnabling() {
-  if (filePickerMode != nsIFilePicker.modeGetFolder)
   // Maybe add check if textInput.value would resolve to an existing
   // file or directory in .modeOpen. Too costly I think.
-    okButton.disabled = (textInput.value == "")
+  var enable = (textInput.value != "");
+
+  okButton.disabled = !enable;
 }
 
 function onTreeFocus(event) {
@@ -500,7 +505,7 @@ function onTreeFocus(event) {
 function getOKAction(file) {
   var buttonLabel;
 
-  if (file && file.isDirectory()) {
+  if (file && file.isDirectory() && filePickerMode != nsIFilePicker.modeGetFolder) {
     document.documentElement.setAttribute("ondialogaccept", "return openOnOK();");
     buttonLabel = gFilePickerBundle.getString("openButtonLabel");
   }
@@ -562,7 +567,7 @@ function onFileSelected(/* nsIArray */ selectedFileList) {
     var buttonLabel = getOKAction(file);
     okButton.setAttribute("label", buttonLabel);
     okButton.disabled = invalidSelection;
-  } else if (filePickerMode != nsIFilePicker.modeGetFolder)
+  } else
     okButton.disabled = (textInput.value == "");
 }
 
@@ -726,11 +731,11 @@ function gotoDirectory(directory) {
 
   window.setCursor("auto");
 
+  treeView.QueryInterface(nsITreeView).selection.clearSelection();
   if (filePickerMode == nsIFilePicker.modeGetFolder) {
     textInput.value = "";
   }
   textInput.focus();
-  textInput.setAttribute("autocompletesearchparam", directory.path);
   sfile = directory;
 }
 

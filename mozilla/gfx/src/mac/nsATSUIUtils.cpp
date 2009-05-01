@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -209,17 +210,17 @@ PRBool	nsATSUIUtils::gInitialized = PR_FALSE;
 
 void nsATSUIUtils::Initialize()
 {
-  if (!gInitialized)
-  {
-    long version;
-    gIsAvailable = (::Gestalt(gestaltATSUVersion, &version) == noErr);
+	if (!gInitialized)
+	{
+		gInitialized = PR_TRUE;
 
-    gTxLayoutCache = new ATSUILayoutCache();
-    if (!gTxLayoutCache)
-      gIsAvailable = PR_FALSE;
+		long version;
+  		gIsAvailable = (::Gestalt(gestaltATSUVersion, &version) == noErr);
 
-    gInitialized = PR_TRUE;
-  }
+  		gTxLayoutCache = new ATSUILayoutCache();
+  		if (!gTxLayoutCache)
+  			gIsAvailable = PR_FALSE;
+	}
 }
 
 
@@ -251,7 +252,6 @@ nsATSUIToolkit::nsATSUIToolkit()
 //------------------------------------------------------------------------
 
 #define FloatToFixed(a)		((Fixed)((float)(a) * fixed1))
-#define ATTR_CNT 5
 
 //------------------------------------------------------------------------
 ATSUTextLayout nsATSUIToolkit::GetTextLayout(short aFontNum, short aSize, PRBool aBold, PRBool aItalic, nscolor aColor)
@@ -278,18 +278,16 @@ ATSUTextLayout nsATSUIToolkit::GetTextLayout(short aFontNum, short aSize, PRBool
     return nsnull;
 	}
 
-	ATSUAttributeTag 		theTag[ATTR_CNT];
-	ByteCount				theValueSize[ATTR_CNT];
-	ATSUAttributeValuePtr 	theValue[ATTR_CNT];
+	ATSUAttributeTag 		theTag[3];
+	ByteCount				theValueSize[3];
+	ATSUAttributeValuePtr 	theValue[3];
 
 	//--- Font ID & Face -----		
 	ATSUFontID atsuFontID;
 	
-	// The use of ATSUFONDtoFontID is not recommended, see
-	// http://developer.apple.com/documentation/Carbon/Reference/ATSUI_Reference/atsu_reference_Reference/chapter_1.2_section_19.html
-	FMFontStyle fbStyle;
-	if (::FMGetFontFromFontFamilyInstance(aFontNum, 0, &atsuFontID, &fbStyle) == kFMInvalidFontErr) {
-		NS_WARNING("FMGetFontFromFontFamilyInstance failed");
+	err = ::ATSUFONDtoFontID(aFontNum, (StyleField)((aBold ? bold : normal) | (aItalic ? italic : normal)), &atsuFontID);
+	if(noErr != err) {
+		NS_WARNING("ATSUFONDtoFontID failed");
     // goto errorDoneDestroyStyle;
   	err = ::ATSUDisposeStyle(theStyle);
   	err = ::ATSUDisposeTextLayout(txLayout);
@@ -329,21 +327,7 @@ ATSUTextLayout nsATSUIToolkit::GetTextLayout(short aFontNum, short aSize, PRBool
 	theValue[2] = (ATSUAttributeValuePtr) &color;
 	//--- Color -----		
 
-	//--- Bold -----
-	Boolean isBold = aBold ? true : false;
-	theTag[3] = kATSUQDBoldfaceTag;
-	theValueSize[3] = (ByteCount) sizeof(Boolean);
-	theValue[3] = (ATSUAttributeValuePtr) &isBold;
-	//--- Bold -----
-
-	//--- Italic -----
-	Boolean isItalic = aItalic ? true : false;
-	theTag[4] = kATSUQDItalicTag;
-	theValueSize[4] = (ByteCount) sizeof(Boolean);
-	theValue[4] = (ATSUAttributeValuePtr) &isItalic;
-	//--- Italic -----
-
-	err =  ::ATSUSetAttributes(theStyle, ATTR_CNT, theTag, theValueSize, theValue);
+	err =  ::ATSUSetAttributes(theStyle, 3, theTag, theValueSize, theValue);
 	if(noErr != err) {
 		NS_WARNING("ATSUSetAttributes failed");
     // goto errorDoneDestroyStyle;
@@ -429,23 +413,22 @@ nsATSUIToolkit::GetTextDimensions(
 {
   if (!nsATSUIUtils::IsAvailable())
     return NS_ERROR_NOT_INITIALIZED;
-
+    
   StPortSetter    setter(mPort);
-
+  
   ATSUTextLayout aTxtLayout;
   StartDraw(aCharPt, aLen, aSize, aFontNum, aBold, aItalic, aColor, aTxtLayout);
   if (nsnull == aTxtLayout) 
      return NS_ERROR_FAILURE;
 
-  OSStatus err = noErr;
-  ATSUTextMeasurement after;
-  ATSUTextMeasurement ascent;
-  ATSUTextMeasurement descent;
-  err = ::ATSUGetUnjustifiedBounds(aTxtLayout, 0, aLen, NULL, &after, &ascent,
-                                   &descent);
-  if (noErr != err)
+  OSStatus err = noErr;  
+  ATSUTextMeasurement after; 
+  ATSUTextMeasurement ascent; 
+  ATSUTextMeasurement descent; 
+  err = ::ATSUMeasureText(aTxtLayout, 0, aLen, NULL, &after, &ascent, &descent);
+  if (noErr != err) 
   {
-    NS_WARNING("ATSUGetUnjustifiedBounds failed");
+    NS_WARNING("ATSUMeasureText failed");     
     return NS_ERROR_FAILURE;
   }
 
@@ -497,9 +480,8 @@ nsATSUIToolkit::GetBoundingMetrics(
   oBoundingMetrics.ascent = -rect.top;
   oBoundingMetrics.descent = rect.bottom;
 
-  err = ::ATSUGetUnjustifiedBounds(aTxtLayout, kATSUFromTextBeginning,
-                                   kATSUToTextEnd, NULL, &width, NULL, NULL);
-  if (err != noErr)
+  if((err = ATSUMeasureText(aTxtLayout, kATSUFromTextBeginning, kATSUToTextEnd, 
+    NULL, &width, NULL, NULL)) != noErr)
   {
     oBoundingMetrics.width = oBoundingMetrics.rightBearing;
   }
@@ -537,10 +519,9 @@ nsATSUIToolkit::DrawString(
 
   OSStatus err = noErr;	
   ATSUTextMeasurement iAfter; 
-  err = ::ATSUGetUnjustifiedBounds(aTxtLayout, 0, aLen, NULL, &iAfter, NULL,
-                                   NULL);
+  err = ::ATSUMeasureText( aTxtLayout, 0, aLen, NULL, &iAfter, NULL, NULL );
   if (noErr != err) {
-     NS_WARNING("MeasureText failed");
+     NS_WARNING("ATSUMeasureText failed");
      return NS_ERROR_FAILURE;
   } 
 

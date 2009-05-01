@@ -1,24 +1,33 @@
 
 <!--LOCALIZATION NOTE : FILE 'Advanced' prefs settings -->
-<!ENTITY pref.advanced.title        "Advanced">
+<!ENTITY lHeader                      "Advanced">
 
-<!ENTITY prefEnableJava.caption     "Features that help interpret web pages">
+<!ENTITY advancedTitle.label          "Features that help interpret web pages">
 
-<!ENTITY enbJavaCheck.label         "Enable Java">
-<!ENTITY enbJavaCheck.accesskey     "J">
+<!ENTITY autoLoadImgCheck.label       "Automatically load images"> 
+<!ENTITY autoLoadImgCheck.accesskey   "i">
 
-<!ENTITY prefTurbo.caption          "Quick Launch">
-<!ENTITY enableTurbo.label          "Keep &brandShortName; in memory to improve startup performance">
-<!ENTITY enableTurboCheck.accesskey "K">
+<!ENTITY enbJavaCheck.label           "Enable Java">
+<!ENTITY enbJavaCheck.accesskey       "j">
 
-<!ENTITY prefTurbo.desc             "If you check this item, part of &brandShortName; will stay in memory when not in use, allowing it to start up more quickly.">
+<!ENTITY sendAddFtpCheck.label        "Send this email address as anonymous FTP password:">
+<!ENTITY sendAddFtpCheck.accesskey    "e">
 
-<!ENTITY prefJvmConf.caption        "Select Java version (change requires restart)">
-<!ENTITY jvm.name                   "Version">
-<!ENTITY jvm.home                   "Path">
+<!ENTITY imageBlocking.label          "Image Blocking...">
+<!ENTITY imageBlocking.accesskey      "b">
 
-<!ENTITY systemPref.caption         "System Preferences">
-<!ENTITY systemPrefCheck.label      "Use Preferences from System">
-<!ENTITY systemPrefCheck.accesskey  "U">
-<!ENTITY systemPref.desc            "Check this item to inherit preferences from the system. The system settings will override the &brandShortName; preferences">
+<!ENTITY perfTitle.label              "Quick Launch">
+<!ENTITY enableTurbo.label            "Keep &brandShortName; in memory to improve startup performance">
+<!ENTITY enableTurboCheck.accesskey   "t">
+
+<!ENTITY perfdescription.label        "If you check this item, part of &brandShortName; will stay in memory when not in use, allowing it to start up faster.">
+
+<!ENTITY jvm.configuration            "Select Java version (change requires restart)">
+<!ENTITY jvm.name                     "Version">
+<!ENTITY jvm.home                     "Path">
+
+<!ENTITY systemPrefCaption.label           "System Preferences">
+<!ENTITY systemPrefCheck.label             "Use Preferences from System">
+<!ENTITY systemPrefCheck.accesskey         "s">
+<!ENTITY systemPrefDescription.label       "Check this item to inherit preferences from the system. The system settings will override the &brandShortName; preferences">
 

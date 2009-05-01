@@ -1,72 +1,38 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Chris Saari <saari@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation.
+ * All Rights Reserved.
+ * 
+ * Contributor(s): 
+ *  Chris Saari <saari@netscape.com>
+ */
 
 #include "prmem.h"
 
 #include "nsGIFDecoder2.h"
 #include "nsIInputStream.h"
 #include "nsIComponentManager.h"
-#include "nsRecyclingAllocator.h"
+#include "nsMemory.h"
 
 #include "imgIContainerObserver.h"
 
 #include "imgILoad.h"
 
-
-/*******************************************************************************
- * Gif decoder allocator
- *
- * For every image that gets loaded, we allocate a 'gif_struct'
- * This allocator tries to keep one set of these around
- * and reuses them; automatically fails over to use calloc/free when all
- * buckets are full.
- */
-const int kGifAllocatorNBucket = 3;
-static nsRecyclingAllocator *gGifAllocator = nsnull;
-
-void nsGifShutdown()
-{
-  // Release cached buffers from zlib allocator
-  delete gGifAllocator;
-  gGifAllocator = nsnull;
-}
-
+#include "nsRect.h"
 
 //////////////////////////////////////////////////////////////////////
 // GIF Decoder Implementation
@@ -80,8 +46,6 @@ nsGIFDecoder2::nsGIFDecoder2()
   , mGIFStruct(nsnull)
   , mAlphaLine(nsnull)
   , mRGBLine(nsnull)
-  , mAlphaLineMaxSize(0)
-  , mRGBLineMaxSize(0)
   , mBackgroundRGBIndex(0)
   , mCurrentPass(0)
   , mLastFlushedPass(0)
@@ -91,7 +55,16 @@ nsGIFDecoder2::nsGIFDecoder2()
 
 nsGIFDecoder2::~nsGIFDecoder2(void)
 {
-  Close();
+  if (mAlphaLine)
+    nsMemory::Free(mAlphaLine);
+
+  if (mRGBLine)
+    nsMemory::Free(mRGBLine);
+
+  if (mGIFStruct) {
+    gif_destroy(mGIFStruct);
+    mGIFStruct = nsnull;
+  }
 }
 
 //******************************************************************************
@@ -107,13 +80,10 @@ NS_IMETHODIMP nsGIFDecoder2::Init(imgILoad *aLoad)
   mImageContainer = do_CreateInstance("@mozilla.org/image/container;1?type=image/gif");
   aLoad->SetImage(mImageContainer);
   
-  if (!gGifAllocator) {
-    gGifAllocator = new nsRecyclingAllocator(kGifAllocatorNBucket,
-                                             NS_DEFAULT_RECYCLE_TIMEOUT, "gif");
-    if (!gGifAllocator)
-      return NS_ERROR_FAILURE;
-  }
-  mGIFStruct = (gif_struct *)gGifAllocator->Malloc(sizeof(gif_struct));
+  /* do gif init stuff */
+  /* Always decode to 24 bit pixdepth */
+  
+  mGIFStruct = (gif_struct *)PR_CALLOC(sizeof(gif_struct));
   NS_ASSERTION(mGIFStruct, "gif_create failed");
   if (!mGIFStruct)
     return NS_ERROR_FAILURE;
@@ -123,6 +93,8 @@ NS_IMETHODIMP nsGIFDecoder2::Init(imgILoad *aLoad)
 
   return NS_OK;
 }
+
+
 
 
 //******************************************************************************
@@ -140,14 +112,9 @@ NS_IMETHODIMP nsGIFDecoder2::Close()
                     mGIFStruct->delay_time);
     if (decoder->mGIFOpen)
       EndGIF(mGIFStruct->clientptr, mGIFStruct->loop_count);
-
     gif_destroy(mGIFStruct);
-    if (gGifAllocator)
-      gGifAllocator->Free(mGIFStruct);
     mGIFStruct = nsnull;
   }
-  PR_FREEIF(mAlphaLine);
-  PR_FREEIF(mRGBLine);
 
   return NS_OK;
 }
@@ -186,31 +153,31 @@ nsGIFDecoder2::FlushImageData()
 {
   PRInt32 imgWidth;
   mImageContainer->GetWidth(&imgWidth);
-  nsIntRect frameRect;
+  nsRect frameRect;
   mImageFrame->GetRect(frameRect);
   
   switch (mCurrentPass - mLastFlushedPass) {
     case 0: {  // same pass
       PRInt32 remainingRows = mCurrentRow - mLastFlushedRow;
       if (remainingRows) {
-        nsIntRect r(0, frameRect.y + mLastFlushedRow + 1,
-                    imgWidth, remainingRows);
+        nsRect r(0, frameRect.y + mLastFlushedRow + 1,
+                 imgWidth, remainingRows);
         mObserver->OnDataAvailable(nsnull, mImageFrame, &r);
       }    
     }
     break;
   
     case 1: {  // one pass on - need to handle bottom & top rects
-      nsIntRect r(0, frameRect.y, imgWidth, mCurrentRow + 1);
+      nsRect r(0, frameRect.y, imgWidth, mCurrentRow + 1);
       mObserver->OnDataAvailable(nsnull, mImageFrame, &r);
-      nsIntRect r2(0, frameRect.y + mLastFlushedRow + 1,
-                   imgWidth, frameRect.height - mLastFlushedRow - 1);
+      nsRect r2(0, frameRect.y + mLastFlushedRow + 1,
+                imgWidth, frameRect.height - mLastFlushedRow - 1);
       mObserver->OnDataAvailable(nsnull, mImageFrame, &r2);
     }
     break;
 
     default: {  // more than one pass on - push the whole frame
-      nsIntRect r(0, frameRect.y, imgWidth, frameRect.height);
+      nsRect r(0, frameRect.y, imgWidth, frameRect.height);
       mObserver->OnDataAvailable(nsnull, mImageFrame, &r);
     }
   }
@@ -250,15 +217,9 @@ NS_IMETHODIMP nsGIFDecoder2::WriteFrom(nsIInputStream *inStr, PRUint32 count, PR
   nsresult rv = inStr->ReadSegments(ReadDataOut, this,  count, _retval);
 
   /* necko doesn't propagate the errors from ReadDataOut - take matters
-     into our own hands.  if we have at least one frame of an animated
-     gif, then return success so we keep displaying as much as possible. */
-  if (NS_SUCCEEDED(rv) && mGIFStruct && mGIFStruct->state == gif_error) {
-    PRUint32 numFrames = 0;
-    if (mImageContainer)
-      mImageContainer->GetNumFrames(&numFrames);
-    if (numFrames <= 0)
-      return NS_ERROR_FAILURE;
-  }
+     into our own hands */
+  if (NS_SUCCEEDED(rv) && mGIFStruct && mGIFStruct->state == gif_error)
+    return NS_ERROR_FAILURE;
 
   return rv;
 }
@@ -303,10 +264,6 @@ int nsGIFDecoder2::EndGIF(
     int      aAnimationLoopCount)
 {
   nsGIFDecoder2 *decoder = NS_STATIC_CAST(nsGIFDecoder2*, aClientData);
-
-  if (!decoder->mGIFOpen)
-    return 0;
-
   if (decoder->mObserver) {
     decoder->mObserver->OnStopContainer(nsnull, decoder->mImageContainer);
     decoder->mObserver->OnStopDecode(nsnull, NS_OK, nsnull);
@@ -343,7 +300,7 @@ int nsGIFDecoder2::BeginImageFrame(
     PRInt32 imgWidth;
     decoder->mImageContainer->GetWidth(&imgWidth);
     if (aFrameYOffset > 0) {
-      nsIntRect r(0, 0, imgWidth, aFrameYOffset);
+      nsRect r(0, 0, imgWidth, aFrameYOffset);
       decoder->mObserver->OnDataAvailable(nsnull, decoder->mImageFrame, &r);
     }
   }
@@ -376,7 +333,11 @@ int nsGIFDecoder2::EndImageFrame(
   }
   decoder->mImageContainer->EndFrameDecode(aFrameNumber, aDelayTimeout);
 
-  if (decoder->mObserver && decoder->mImageFrame) {
+  // if the gif is corrupt don't mark the frame as complete, as nsCSSRendering
+  // will happily try using it to draw a background
+  if (decoder->mObserver && 
+      decoder->mImageFrame && 
+      decoder->mGIFStruct->state != gif_error) {
     decoder->FlushImageData();
 
     if (aFrameNumber == 1) {
@@ -391,7 +352,7 @@ int nsGIFDecoder2::EndImageFrame(
         PRInt32 imgWidth;
         decoder->mImageContainer->GetWidth(&imgWidth);
 
-        nsIntRect r(0, realFrameHeight, imgWidth, imgHeight - realFrameHeight);
+        nsRect r(0, realFrameHeight, imgWidth, imgHeight - realFrameHeight);
         decoder->mObserver->OnDataAvailable(nsnull, decoder->mImageFrame, &r);
       }
     }
@@ -403,6 +364,7 @@ int nsGIFDecoder2::EndImageFrame(
   }
 
   decoder->mImageFrame = nsnull;
+  PR_FREEIF(decoder->mGIFStruct->local_colormap);
   decoder->mGIFStruct->is_transparent = PR_FALSE;
   return 0;
 }
@@ -452,16 +414,10 @@ int nsGIFDecoder2::HaveDecodedRow(
     decoder->mImageFrame->GetImageBytesPerRow(&bpr);
     decoder->mImageFrame->GetAlphaBytesPerRow(&abpr);
 
-    if (bpr > decoder->mRGBLineMaxSize) {
-      decoder->mRGBLine = (PRUint8 *)PR_REALLOC(decoder->mRGBLine, bpr);
-      decoder->mRGBLineMaxSize = bpr;
-    }
+    decoder->mRGBLine = (PRUint8 *)nsMemory::Realloc(decoder->mRGBLine, bpr);
 
     if (format == gfxIFormats::RGB_A1 || format == gfxIFormats::BGR_A1) {
-      if (abpr > decoder->mAlphaLineMaxSize) {
-        decoder->mAlphaLine = (PRUint8 *)PR_REALLOC(decoder->mAlphaLine, abpr);
-        decoder->mAlphaLineMaxSize = abpr;
-      }
+      decoder->mAlphaLine = (PRUint8 *)nsMemory::Realloc(decoder->mAlphaLine, abpr);
     }
   } else {
     decoder->mImageFrame->GetImageBytesPerRow(&bpr);
@@ -469,7 +425,8 @@ int nsGIFDecoder2::HaveDecodedRow(
   }
   
   if (aRowBufPtr) {
-    PRInt32 width;
+    nscoord width;
+
     decoder->mImageFrame->GetWidth(&width);
 
     gfx_format format;

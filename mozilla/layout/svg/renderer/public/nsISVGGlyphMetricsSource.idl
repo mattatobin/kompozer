@@ -1,10 +1,10 @@
 /* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,42 +14,35 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 %{C++
 #include "nsFont.h"
-
-struct nsSVGCharacterPosition {
-  PRBool draw;
-  float x, y;
-  float angle;
-};
 %}    
 
 #include "nsISVGGeometrySource.idl"
 
 native nsFont(nsFont);
-[ptr] native nsSVGCharacterPosition(nsSVGCharacterPosition);
 
 /**
  * \addtogroup rendering_backend_interfaces Rendering Backend Interfaces
@@ -70,14 +63,14 @@ native nsFont(nsFont);
  *
  * @nosubgrouping
  */
-[uuid(bcd7ce03-9f17-4af1-9763-f44a323695e3)]
+[scriptable, uuid(8e96a973-c8bb-43a2-8584-4976e75ca478)]
 interface nsISVGGlyphMetricsSource : nsISVGGeometrySource
 {
   /**
    * @name Font
    * @{
    */
-  readonly attribute nsFont font;
+  [noscript] readonly attribute nsFont font;
   const unsigned long UPDATEMASK_FONT            = 0x00008000;
   /** @} */
 
@@ -87,14 +80,6 @@ interface nsISVGGlyphMetricsSource : nsISVGGeometrySource
    */
   readonly attribute DOMString characterData;
   const unsigned long UPDATEMASK_CHARACTER_DATA  = 0x00010000;
-  /** @} */
-
-  /**
-   * @name Character positioning information
-   * @{
-   */
-  void GetCharacterPosition(out nsSVGCharacterPosition aCP);
-  const unsigned long UPDATEMASK_CHARACTER_POSITION  = 0x00020000;
   /** @} */
 
   /**
@@ -108,7 +93,7 @@ interface nsISVGGlyphMetricsSource : nsISVGGeometrySource
   const unsigned short TEXT_RENDERING_GEOMETRICPRECISION = 3;
 
   readonly attribute unsigned short textRendering;
-  const unsigned long UPDATEMASK_TEXT_RENDERING  = 0x00040000;
+  const unsigned long UPDATEMASK_TEXT_RENDERING  = 0x00020000;
   /** @} */
 };
 

@@ -55,9 +55,6 @@ public:
     NS_DECL_NSIHTTPAUTHENTICATOR
 
 private:
-    // returns the value of the given boolean pref
-    PRBool TestBoolPref(const char *pref);
-
     // returns true if URI is accepted by the list of hosts in the pref
     PRBool TestPref(nsIURI *, const char *pref);
 

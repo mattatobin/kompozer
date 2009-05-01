@@ -1,43 +1,43 @@
 /*
  * crypto.h - public data structures and prototypes for the crypto library
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved. 
+ * 
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: cryptohi.h,v 1.9.28.1 2006/01/21 19:01:30 rrelyea%redhat.com Exp $ */
+ * $Id: cryptohi.h,v 1.6 2003/10/17 13:45:32 ian.mcgreer%sun.com Exp $
+ */
 
 #ifndef _CRYPTOHI_H_
 #define _CRYPTOHI_H_
@@ -173,14 +173,6 @@ extern SECStatus SEC_DerSignData(PRArenaPool *arena, SECItem *result,
 */
 extern void SEC_DestroySignedData(CERTSignedData *sd, PRBool freeit);
 
-/*
-** Get the hash algorithm tag number for the given type of the key and
-** algorithm tag. Returns SEC_OID_UNKNOWN if key and algorithm
-** are not match.
-*/
-extern SECOidTag SEC_GetSignatureAlgorithmOidTag(KeyType keyType,
-                                                 SECOidTag hashAlgTag);
-
 /****************************************/
 /*
 ** Signature verification operations
@@ -268,25 +260,6 @@ extern SECStatus VFY_VerifyDigest(SECItem *dig, SECKEYPublicKey *key,
 extern SECStatus VFY_VerifyData(unsigned char *buf, int len,
 				SECKEYPublicKey *key, SECItem *sig,
 				SECOidTag algid, void *wincx);
-
-/*
- * NOTE: This function is private in NSS 3.11.x
-** Verify the signature on a block of data. 
-**      "buf" the input data
-**      "len" the length of the input data
-**      "key" the public key to check the signature with
-**      "sig" the encrypted signature data
-**      "algid" specifies the signing algorithm and parameters to use.
-**         This must match the key type.
-**      "reserved" must be NULL in this version.
-**      "wincx" void pointer to the window context
-*/
-extern SECStatus VFY_VerifyDataWithAlgorithmID(const unsigned char *buf,
-				int len, const SECKEYPublicKey *key,
-				const SECItem *sig,
-				const SECAlgorithmID *algid, 
-				SECOidTag *reserved,
-				void *wincx);
 
 
 SEC_END_PROTOS

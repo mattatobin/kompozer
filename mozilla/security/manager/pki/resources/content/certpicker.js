@@ -63,6 +63,8 @@ function onLoad()
       }
   }
 
+  doSetOKCancel(doOK, doCancel, null, null);
+
   dialogParams.SetInt(0,0); // set cancel return value
   setDetails();
 }
@@ -88,11 +90,11 @@ function doOK()
   dialogParams.SetInt(0,1);
   var index = parseInt(document.getElementById("nicknames").value);
   dialogParams.SetInt(1, index);
-  return true;
+  window.close();
 }
 
 function doCancel()
 {
   dialogParams.SetInt(0,0);
-  return true;
+  window.close();
 }

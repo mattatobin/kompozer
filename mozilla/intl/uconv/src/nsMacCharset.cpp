@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -39,7 +40,7 @@
 #include <TextCommon.h>
 #include "nsIPlatformCharset.h"
 #include "pratom.h"
-#include "nsGREResProperties.h"
+#include "nsURLProperties.h"
 #include "nsUConvDll.h"
 #include "nsCOMPtr.h"
 #include "nsIComponentManager.h"
@@ -49,7 +50,7 @@
 #include "nsPlatformCharset.h"
 #include "nsEncoderDecoderUtils.h"
 
-static nsGREResProperties *gInfo = nsnull;
+static nsURLProperties *gInfo = nsnull;
 static PRInt32 gCnt = 0;
 
 NS_IMPL_ISUPPORTS1(nsPlatformCharset, nsIPlatformCharset)
@@ -71,8 +72,7 @@ nsresult nsPlatformCharset::InitInfo()
 {  
   // load the .property file if necessary
   if (gInfo == nsnull) {
-    nsGREResProperties *info =
-        new nsGREResProperties(NS_LITERAL_CSTRING("maccharset.properties"));
+    nsURLProperties *info = new nsURLProperties( NS_LITERAL_CSTRING("resource://gre/res/maccharset.properties") );
     NS_ASSERTION(info , "cannot open properties file");
     NS_ENSURE_TRUE(info, NS_ERROR_FAILURE);
     gInfo = info;
@@ -87,10 +87,10 @@ nsresult nsPlatformCharset::MapToCharset(short script, short region, nsACString&
     case verUS:
     case verFrance:
     case verGermany:
-      outCharset.AssignLiteral("x-mac-roman");
+      outCharset.Assign(NS_LITERAL_CSTRING("x-mac-roman"));
       return NS_OK;
     case verJapan:
-      outCharset.AssignLiteral("Shift_JIS");
+      outCharset.Assign(NS_LITERAL_CSTRING("Shift_JIS"));
       return NS_OK;
   }
 
@@ -107,14 +107,14 @@ nsresult nsPlatformCharset::MapToCharset(short script, short region, nsACString&
   if (NS_SUCCEEDED(rv))
     CopyUCS2toASCII(uCharset, outCharset);
   else {
-    key.AssignLiteral("script.");
+    key.Assign(NS_LITERAL_STRING("script."));
     key.AppendInt(script, 10);
     rv = gInfo->Get(key, uCharset);
     // not found in the .property file, assign x-mac-roman
     if (NS_SUCCEEDED(rv))
       CopyUCS2toASCII(uCharset, outCharset);
     else {
-      outCharset.AssignLiteral("x-mac-roman");
+      outCharset.Assign(NS_LITERAL_CSTRING("x-mac-roman"));
     }
   }
   
@@ -136,7 +136,7 @@ nsPlatformCharset::GetCharset(nsPlatformCharsetSel selector, nsACString& oResult
   switch (selector) {
 #ifdef XP_MACOSX  
     case kPlatformCharsetSel_FileName:
-      oResult.AssignLiteral("UTF-8");
+      oResult.Assign(NS_LITERAL_CSTRING("UTF-8"));
       break;
 #endif
     case  kPlatformCharsetSel_KeyboardInput:
@@ -170,7 +170,7 @@ nsPlatformCharset::GetDefaultCharsetForLocale(const nsAString& localeName, nsACS
   }
 
   // fallback 
-  oResult.AssignLiteral("x-mac-roman");
+  oResult.Assign(NS_LITERAL_CSTRING("x-mac-roman"));
   return NS_SUCCESS_USING_FALLBACK_LOCALE;
 }
 

@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <sicking@bigfoot.com>
@@ -39,6 +39,8 @@
 #ifndef TRANSFRMX_TXNAMESPACEMAP_H
 #define TRANSFRMX_TXNAMESPACEMAP_H
 
+#include "txError.h"
+#include "baseutils.h"
 #include "nsIAtom.h"
 #include "nsCOMArray.h"
 
@@ -62,7 +64,7 @@ public:
         return mRefCnt;
     }
 
-    nsresult mapNamespace(nsIAtom* aPrefix, const nsAString& aNamespaceURI);
+    nsresult addNamespace(nsIAtom* aPrefix, const nsAString& aNamespaceURI);
     PRInt32 lookupNamespace(nsIAtom* aPrefix);
     PRInt32 lookupNamespace(const nsAString& aPrefix);
     PRInt32 lookupNamespaceWithDefault(const nsAString& aPrefix);

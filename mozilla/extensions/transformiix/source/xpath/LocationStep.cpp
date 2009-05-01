@@ -1,40 +1,27 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
+ * The Original Code is TransforMiiX XSLT processor.
+ * 
+ * The Initial Developer of the Original Code is The MITRE Corporation.
+ * Portions created by MITRE are Copyright (C) 1999 The MITRE Corporation.
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is TransforMiiX XSLT processor code.
- *
- * The Initial Developer of the Original Code is
- * The MITRE Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Keith Visco <kvisco@ziplink.net> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Portions created by Keith Visco as a Non MITRE employee,
+ * (C) 1999 Keith Visco. All Rights Reserved.
+ * 
+ * Contributor(s): 
+ * Keith Visco, kvisco@ziplink.net
+ *   -- original author.
+ * 
+ */
 
 /*
   Implementation of an XPath LocationStep
@@ -115,7 +102,7 @@ LocationStep::evaluate(txIEvalContext* aContext, txAExprResult** aResult)
         }
         case FOLLOWING_AXIS:
         {
-            if (txXPathNodeUtils::isAttribute(walker.getCurrentPosition())) {
+            if (walker.getNodeType() == txXPathNodeType::ATTRIBUTE_NODE) {
                 walker.moveToParent();
                 fromDescendants(walker.getCurrentPosition(), aContext, nodes);
             }
@@ -276,46 +263,48 @@ void LocationStep::fromDescendantsRev(const txXPathNode& aNode,
     } while (walker.moveToPreviousSibling());
 }
 
-#ifdef TX_TO_STRING
-void
-LocationStep::toString(nsAString& str)
-{
+/**
+ * Creates a String representation of this Expr
+ * @param str the destination String to append to
+ * @see Expr
+**/
+void LocationStep::toString(nsAString& str) {
     switch (mAxisIdentifier) {
         case ANCESTOR_AXIS :
-            str.AppendLiteral("ancestor::");
+            str.Append(NS_LITERAL_STRING("ancestor::"));
             break;
         case ANCESTOR_OR_SELF_AXIS :
-            str.AppendLiteral("ancestor-or-self::");
+            str.Append(NS_LITERAL_STRING("ancestor-or-self::"));
             break;
         case ATTRIBUTE_AXIS:
             str.Append(PRUnichar('@'));
             break;
         case DESCENDANT_AXIS:
-            str.AppendLiteral("descendant::");
+            str.Append(NS_LITERAL_STRING("descendant::"));
             break;
         case DESCENDANT_OR_SELF_AXIS:
-            str.AppendLiteral("descendant-or-self::");
+            str.Append(NS_LITERAL_STRING("descendant-or-self::"));
             break;
         case FOLLOWING_AXIS :
-            str.AppendLiteral("following::");
+            str.Append(NS_LITERAL_STRING("following::"));
             break;
         case FOLLOWING_SIBLING_AXIS:
-            str.AppendLiteral("following-sibling::");
+            str.Append(NS_LITERAL_STRING("following-sibling::"));
             break;
         case NAMESPACE_AXIS:
-            str.AppendLiteral("namespace::");
+            str.Append(NS_LITERAL_STRING("namespace::"));
             break;
         case PARENT_AXIS :
-            str.AppendLiteral("parent::");
+            str.Append(NS_LITERAL_STRING("parent::"));
             break;
         case PRECEDING_AXIS :
-            str.AppendLiteral("preceding::");
+            str.Append(NS_LITERAL_STRING("preceding::"));
             break;
         case PRECEDING_SIBLING_AXIS :
-            str.AppendLiteral("preceding-sibling::");
+            str.Append(NS_LITERAL_STRING("preceding-sibling::"));
             break;
         case SELF_AXIS :
-            str.AppendLiteral("self::");
+            str.Append(NS_LITERAL_STRING("self::"));
             break;
         default:
             break;
@@ -324,5 +313,5 @@ LocationStep::toString(nsAString& str)
     mNodeTest->toString(str);
 
     PredicateList::toString(str);
-}
-#endif
+} // toString
+

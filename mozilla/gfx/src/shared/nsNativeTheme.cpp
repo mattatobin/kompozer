@@ -41,7 +41,7 @@
 #include "nsIContent.h"
 #include "nsIFrame.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIEventStateManager.h"
 #include "nsString.h"
 #include "nsINameSpaceManager.h"
@@ -52,24 +52,8 @@
 
 nsMargin nsNativeTheme::sButtonBorderSize(2, 2, 2, 2);
 nsMargin nsNativeTheme::sButtonDisabledBorderSize(1, 1, 1, 1);
-PRUint8  nsNativeTheme::sButtonActiveBorderStyle = NS_STYLE_BORDER_STYLE_INSET;
-PRUint8  nsNativeTheme::sButtonInactiveBorderStyle = NS_STYLE_BORDER_STYLE_OUTSET;
-nsILookAndFeel::nsColorID nsNativeTheme::sButtonBorderColorID = nsILookAndFeel::eColor_threedface;
-nsILookAndFeel::nsColorID nsNativeTheme::sButtonDisabledBorderColorID = nsILookAndFeel::eColor_threedshadow;
-nsILookAndFeel::nsColorID nsNativeTheme::sButtonBGColorID = nsILookAndFeel::eColor_threedface;
-nsILookAndFeel::nsColorID nsNativeTheme::sButtonDisabledBGColorID = nsILookAndFeel::eColor_threedface;
 nsMargin nsNativeTheme::sTextfieldBorderSize(2, 2, 2, 2);
-PRUint8  nsNativeTheme::sTextfieldBorderStyle = NS_STYLE_BORDER_STYLE_INSET;
-nsILookAndFeel::nsColorID nsNativeTheme::sTextfieldBorderColorID = nsILookAndFeel::eColor_threedface;
 PRBool   nsNativeTheme::sTextfieldBGTransparent = PR_FALSE;
-nsILookAndFeel::nsColorID nsNativeTheme::sTextfieldBGColorID = nsILookAndFeel::eColor__moz_field;
-nsILookAndFeel::nsColorID nsNativeTheme::sTextfieldDisabledBGColorID = nsILookAndFeel::eColor_threedface;
-nsMargin nsNativeTheme::sListboxBorderSize(2, 2, 2, 2);
-PRUint8  nsNativeTheme::sListboxBorderStyle = NS_STYLE_BORDER_STYLE_INSET;
-nsILookAndFeel::nsColorID nsNativeTheme::sListboxBorderColorID = nsILookAndFeel::eColor_threedface;
-PRBool   nsNativeTheme::sListboxBGTransparent = PR_FALSE;
-nsILookAndFeel::nsColorID nsNativeTheme::sListboxBGColorID = nsILookAndFeel::eColor__moz_field;
-nsILookAndFeel::nsColorID nsNativeTheme::sListboxDisabledBGColorID = nsILookAndFeel::eColor_threedface;
 
 nsNativeTheme::nsNativeTheme()
 {
@@ -83,19 +67,23 @@ nsNativeTheme::nsNativeTheme()
   mModeAtom = do_GetAtom("mode");
   mClassAtom = do_GetAtom("class");
   mSortDirectionAtom = do_GetAtom("sortDirection");
-  mReadOnlyAtom = do_GetAtom("readonly");
 }
 
 nsIPresShell *
-nsNativeTheme::GetPresShell(nsIFrame* aFrame)
+nsNativeTheme::GetPrimaryPresShell(nsIFrame* aFrame)
 {
   if (!aFrame)
     return nsnull;
 
-  // this is a workaround for the egcs 1.1.2 not inliningg
-  // aFrame->GetPresContext(), which causes an undefined symbol
-  nsPresContext *context = aFrame->GetStyleContext()->GetRuleNode()->GetPresContext();
-  return context ? context->GetPresShell() : nsnull;
+  nsIDocument *doc = aFrame->GetContent()->GetDocument();
+
+  nsIPresShell *shell = nsnull;
+
+  if (doc) {
+    shell = doc->GetShellAt(0);
+  }
+
+  return shell;
 }
 
 PRInt32
@@ -104,18 +92,19 @@ nsNativeTheme::GetContentState(nsIFrame* aFrame, PRUint8 aWidgetType)
   if (!aFrame)
     return 0;
 
-  PRBool isXULCheckboxRadio = 
-    (aWidgetType == NS_THEME_CHECKBOX || aWidgetType == NS_THEME_RADIO) &&
-    aFrame->GetContent()->IsContentOfType(nsIContent::eXUL);
-  if (isXULCheckboxRadio)
+  PRBool isXULCheckboxRadio = PR_FALSE;
+  if ((aWidgetType == NS_THEME_CHECKBOX || aWidgetType == NS_THEME_RADIO)
+      && aFrame->GetContent()->IsContentOfType(nsIContent::eXUL))
     aFrame = aFrame->GetParent();
 
-  nsIPresShell *shell = GetPresShell(aFrame);
+  nsIPresShell *shell = GetPrimaryPresShell(aFrame);
   if (!shell)
     return 0;
 
+  nsCOMPtr<nsIPresContext> context;
+  shell->GetPresContext(getter_AddRefs(context));
   PRInt32 flags = 0;
-  shell->GetPresContext()->EventStateManager()->GetContentState(aFrame->GetContent(), flags);
+  context->EventStateManager()->GetContentState(aFrame->GetContent(), flags);
   
   if (isXULCheckboxRadio && aWidgetType == NS_THEME_RADIO) {
     if (IsFocused(aFrame))
@@ -142,7 +131,7 @@ nsNativeTheme::CheckBooleanAttr(nsIFrame* aFrame, nsIAtom* aAtom)
   // string "true" to be counted as true.  An empty string should _not_
   // be counted as true.
 
-  return attr.EqualsLiteral("true");
+  return attr.Equals(NS_LITERAL_STRING("true"));
 }
 
 PRInt32
@@ -206,14 +195,12 @@ ConvertMarginToTwips(const nsMargin &aSource, nsMargin &aDest, float p2t)
 }
 
 PRBool
-nsNativeTheme::IsWidgetStyled(nsPresContext* aPresContext, nsIFrame* aFrame,
+nsNativeTheme::IsWidgetStyled(nsIPresContext* aPresContext, nsIFrame* aFrame,
                               PRUint8 aWidgetType)
 {
   // Check for specific widgets to see if HTML has overridden the style.
   if (aFrame && (aWidgetType == NS_THEME_BUTTON ||
-                 aWidgetType == NS_THEME_TEXTFIELD ||
-                 aWidgetType == NS_THEME_LISTBOX ||
-                 aWidgetType == NS_THEME_DROPDOWN)) {
+                 aWidgetType == NS_THEME_TEXTFIELD)) {
 
     if (aFrame->GetContent()->IsContentOfType(nsIContent::eHTML)) {
       nscolor defaultBGColor, defaultBorderColor;
@@ -230,54 +217,41 @@ nsNativeTheme::IsWidgetStyled(nsPresContext* aPresContext, nsIFrame* aFrame,
       case NS_THEME_BUTTON:
         if (IsDisabled(aFrame)) {
           ConvertMarginToTwips(sButtonDisabledBorderSize, defaultBorderSize, p2t);
-          defaultBorderStyle = sButtonInactiveBorderStyle;
-          lookAndFeel->GetColor(sButtonDisabledBorderColorID,
+          defaultBorderStyle = NS_STYLE_BORDER_STYLE_OUTSET;
+          lookAndFeel->GetColor(nsILookAndFeel::eColor_threedshadow,
                                 defaultBorderColor);
-          lookAndFeel->GetColor(sButtonDisabledBGColorID,
+          lookAndFeel->GetColor(nsILookAndFeel::eColor_threedface,
                                 defaultBGColor);
         } else {
           PRInt32 contentState = GetContentState(aFrame, aWidgetType);
           ConvertMarginToTwips(sButtonBorderSize, defaultBorderSize, p2t);
           if (contentState & NS_EVENT_STATE_HOVER &&
               contentState & NS_EVENT_STATE_ACTIVE)
-            defaultBorderStyle = sButtonActiveBorderStyle;
+            defaultBorderStyle = NS_STYLE_BORDER_STYLE_INSET;
           else
-            defaultBorderStyle = sButtonInactiveBorderStyle;
-          lookAndFeel->GetColor(sButtonBorderColorID,
+            defaultBorderStyle = NS_STYLE_BORDER_STYLE_OUTSET;
+          lookAndFeel->GetColor(nsILookAndFeel::eColor_threedface,
                                 defaultBorderColor);
-          lookAndFeel->GetColor(sButtonBGColorID,
-                                defaultBGColor);
+          defaultBGColor = defaultBorderColor;
         }
         break;
 
       case NS_THEME_TEXTFIELD:
-        defaultBorderStyle = sTextfieldBorderStyle;
+        defaultBorderStyle = NS_STYLE_BORDER_STYLE_INSET;
         ConvertMarginToTwips(sTextfieldBorderSize, defaultBorderSize, p2t);
-        lookAndFeel->GetColor(sTextfieldBorderColorID,
+        lookAndFeel->GetColor(nsILookAndFeel::eColor_threedface,
                               defaultBorderColor);
         if (!(defaultBGTransparent = sTextfieldBGTransparent)) {
+#ifndef MOZ_WIDGET_COCOA
           if (IsDisabled(aFrame))
-            lookAndFeel->GetColor(sTextfieldDisabledBGColorID,
-                                  defaultBGColor);
+            defaultBGColor = defaultBorderColor;
           else
-            lookAndFeel->GetColor(sTextfieldBGColorID,
+            lookAndFeel->GetColor(nsILookAndFeel::eColor__moz_field,
                                   defaultBGColor);
-        }
-        break;
-
-      case NS_THEME_LISTBOX:
-      case NS_THEME_DROPDOWN:
-        defaultBorderStyle = sListboxBorderStyle;
-        ConvertMarginToTwips(sListboxBorderSize, defaultBorderSize, p2t);
-        lookAndFeel->GetColor(sListboxBorderColorID,
-                              defaultBorderColor);
-        if (!(defaultBGTransparent = sListboxBGTransparent)) {
-          if (IsDisabled(aFrame))
-            lookAndFeel->GetColor(sListboxDisabledBGColorID,
-                                  defaultBGColor);
-          else
-            lookAndFeel->GetColor(sListboxBGColorID,
-                                  defaultBGColor);
+#else
+          lookAndFeel->GetColor(nsILookAndFeel::eColor__moz_field,
+                                defaultBGColor);
+#endif
         }
         break;
 
@@ -314,7 +288,8 @@ nsNativeTheme::IsWidgetStyled(nsPresContext* aPresContext, nsIFrame* aFrame,
       }
 
       // Check whether border size differs from default
-      if (ourBorder->GetBorder() != defaultBorderSize)
+      nsMargin borderSize;
+      if (ourBorder->GetBorder(borderSize) && borderSize != defaultBorderSize)
         return PR_TRUE;
     }
   }

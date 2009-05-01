@@ -64,7 +64,7 @@ ipcModuleMethods *IPC_GetModuleByTarget(const nsID &target);
 //
 // notifies all modules of client connect/disconnect
 //
-void IPC_NotifyModulesClientUp(ipcClient *);
-void IPC_NotifyModulesClientDown(ipcClient *);
+void IPC_NotifyClientUp(ipcClient *);
+void IPC_NotifyClientDown(ipcClient *);
 
 #endif // !ipcModuleReg_h__

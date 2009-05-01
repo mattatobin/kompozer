@@ -1,41 +1,26 @@
 /* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code,
+ * released March 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Sean Su <ssu@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *     Sean Su <ssu@netscape.com>
+ */
 
 #include "extern.h"
 #include "extra.h"
@@ -74,7 +59,7 @@ void ParseDefaultsInfo()
   int  iIndex;
   DWORD dwIconsVisible;
 
-  // If szAppPath is a null string, i.e. we cannot find where the app has been installed:
+  // If szAppPath is a null sting, i.e. we cannot find where the app has been installed:
   //   - HIDEICONS will still remove the shortcuts but
   //   - SHOWICONS will do nothing because we won't be able to find the shortcuts to display.
   ParsePath(ugUninstall.szAppPath, szStorageDir, MAX_BUF, PP_PATH_ONLY);
@@ -267,12 +252,12 @@ void ParseAllUninstallLogs()
     lstrcat(szKey, ugUninstall.szUninstallKeyDescription);
     RegDeleteKey(HKEY_LOCAL_MACHINE, szKey);
 
+    /* update Wininit.ini to remove itself at reboot */
+    RemoveUninstaller(ugUninstall.szUninstallFilename);
+
     // Calling SHChangeNotify() will update the file association icons
     // in case they had been reset.
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
-
-    // Note completion of the uninstall process.
-    gbUninstallCompleted = TRUE;
   }
 
   /* Broadcast message only if the windows registry keys exist
@@ -334,9 +319,7 @@ LRESULT CALLBACK DlgProcUninstall(HWND hDlg, UINT msg, WPARAM wParam, LONG lPara
           EnableWindow(GetDlgItem(hDlg, IDWIZNEXT), FALSE);
           EnableWindow(GetDlgItem(hDlg, IDCANCEL), FALSE);
           ParseAllUninstallLogs();
-          // skip directory nuking for now (bug 233625) but may come back
-          // if the issues can be resolved in a better way by bug 281235
-          // VerifyAndDeleteInstallationFolder();
+          VerifyAndDeleteInstallationFolder();
           DestroyWindow(hDlg);
           PostQuitMessage(0);
           break;
@@ -484,66 +467,6 @@ LRESULT CALLBACK DlgProcMessage(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
           SetDlgItemText(hDlg, IDC_MESSAGE, (LPSTR)lParam);
           break;
       }
-      break;
-  }
-  return(0);
-}
-
-// This dialog proc must be used in conjunction with DLG_MESSAGE_CHK.
-LRESULT CALLBACK DlgProcComplete(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
-{
-  RECT rDlg;
-  char text[256];
-  LRESULT result = 0;
-
-  switch(msg)
-  {
-    case WM_INITDIALOG:
-      SetWindowText(hDlg, diUninstall.szTitle);
-
-      GetPrivateProfileString("Dialog Uninstall", "OK", "",
-                              text, sizeof(text), szFileIniUninstall);
-      SetDlgItemText(hDlg, IDOK, text);
-
-      GetPrivateProfileString("Messages", "MSG_UNINSTALL_COMPLETE", "",
-                              text, sizeof(text), szFileIniUninstall);
-      SetDlgItemText(hDlg, IDC_MESSAGE, text);
-
-      GetPrivateProfileString("Messages", "MSG_UNINSTALL_SURVEY", "",
-                              text, sizeof(text), szFileIniUninstall);
-      if (text[0]) 
-      {
-        SetDlgItemText(hDlg, IDC_CHECKBOX, text);
-      }
-      else
-      {
-        // Hide the checkbox control if there is not survey text.
-        ShowWindow(GetDlgItem(hDlg, IDC_CHECKBOX), SW_HIDE);
-      }
-
-      if(GetClientRect(hDlg, &rDlg))
-        SetWindowPos(hDlg, HWND_TOP, (dwScreenX/2)-(rDlg.right/2), (dwScreenY/2)-(rDlg.bottom/2), 0, 0, SWP_NOSIZE);
-
-      break;
-
-    case WM_COMMAND:
-      switch(LOWORD(wParam))
-      {
-        case IDOK:
-          if (SendDlgItemMessage(hDlg, IDC_CHECKBOX, BM_GETCHECK, 0, 0) == BST_CHECKED)
-          {
-            EndDialog(hDlg, ID_YES_TO_ALL);
-          }
-          else 
-          {
-            EndDialog(hDlg, IDOK);
-          }            
-          break;
-      }
-      break;
-
-    case WM_CLOSE:
-      EndDialog(hDlg, IDOK);
       break;
   }
   return(0);

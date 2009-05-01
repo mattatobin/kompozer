@@ -117,7 +117,9 @@ protected:
     bool                    mUserCanceled;
     nsresult                mStatus;
     
-    nsCOMPtr<nsICancelable> mCancelable;
+    // These two are mutually exclusive.
+    nsCOMPtr<nsIWebBrowserPersist> mWebPersist;
+    nsCOMPtr<nsIHelperAppLauncher> mHelperAppLauncher;
     
     static ADownloadProgressView *sProgressView;
 };

@@ -49,21 +49,21 @@
 
 #include "nsScrollbarFrame.h"
 #include "nsIWidget.h"
-#include "nsIScrollbarMediator.h"
 
 class nsISupportsArray;
 class nsIPresShell;
-class nsPresContext;
+class nsIPresContext;
 class nsIContent;
 class nsStyleContext;
 
 nsresult NS_NewNativeScrollbarFrame(nsIPresShell* aPresShell, nsIFrame** aResult) ;
 
 
-class nsNativeScrollbarFrame : public nsBoxFrame, public nsIScrollbarMediator
+class nsNativeScrollbarFrame : public nsBoxFrame
 {
 public:
   nsNativeScrollbarFrame(nsIPresShell* aShell);
+  virtual ~nsNativeScrollbarFrame ( ) ;
 
 #ifdef DEBUG
   NS_IMETHOD GetFrameName(nsAString& aResult) const {
@@ -71,46 +71,31 @@ public:
   }
 #endif
 
-  NS_IMETHOD Init(nsPresContext* aPresContext, nsIContent* aContent,
+  NS_IMETHOD Init(nsIPresContext* aPresContext, nsIContent* aContent,
                     nsIFrame* aParent, nsStyleContext* aContext, nsIFrame* aPrevInFlow);
            
   // nsIFrame overrides
-  NS_IMETHOD AttributeChanged(nsIContent* aChild, PRInt32 aNameSpaceID,
-                              nsIAtom* aAttribute, PRInt32 aModType);
+  NS_IMETHOD AttributeChanged(nsIPresContext* aPresContext, nsIContent* aChild,
+                              PRInt32 aNameSpaceID, nsIAtom* aAttribute,
+                              PRInt32 aModType);
 
   NS_IMETHOD QueryInterface(const nsIID& aIID, void** aInstancePtr);
   NS_IMETHOD_(nsrefcnt) AddRef() { return NS_OK; }
   NS_IMETHOD_(nsrefcnt) Release() { return NS_OK; }
 
-  NS_IMETHOD Reflow(nsPresContext*          aPresContext,
+  NS_IMETHOD Reflow(nsIPresContext*          aPresContext,
                     nsHTMLReflowMetrics&     aDesiredSize,
                     const nsHTMLReflowState& aReflowState,
                     nsReflowStatus&          aStatus);
 
   NS_IMETHOD GetPrefSize(nsBoxLayoutState& aState, nsSize& aSize);
-
-  NS_IMETHOD Destroy(nsPresContext* aPresContext);
- 
-  // nsIScrollbarMediator forwarding
-  NS_IMETHOD PositionChanged(nsISupports* aScrollbar, PRInt32 aOldIndex, PRInt32& aNewIndex);
-  NS_IMETHOD ScrollbarButtonPressed(nsISupports* aScrollbar, PRInt32 aOldIndex,
-                                    PRInt32 aNewIndex);
-  NS_IMETHOD VisibilityChanged(nsISupports* aScrollbar, PRBool aVisible);
-
+                        
 protected:
   
   void Hookup();
 
-  struct Parts {
-    nsIFrame*             mScrollbarFrame;
-    nsIScrollbarFrame*    mIScrollbarFrame;
-    nsIScrollbarMediator* mMediator;
-     
-    Parts(nsIFrame* aFrame, nsIScrollbarFrame* aIScrollbarFrame, nsIScrollbarMediator* aMediator) :
-      mScrollbarFrame(aFrame), mIScrollbarFrame(aIScrollbarFrame), mMediator(aMediator) {}
-  };
-  Parts FindParts();
-   
+  nsresult FindScrollbar(nsIFrame* start, nsIFrame** outFrame, nsIContent** outContent);
+  
   PRBool IsVertical() const { return mIsVertical; }
                   
 private:

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,60 +22,116 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
-
 #ifndef __nsAppShellService_h
 #define __nsAppShellService_h
 
 #include "nsIAppShellService.h"
+#include "nsINativeAppSupport.h"
 #include "nsIObserver.h"
+#include "nsWeakReference.h"
+#include "nsIAppShell.h"
+#include "plevent.h"
 
 //Interfaces Needed
-#include "nsWebShellWindow.h"
-#include "nsStringFwd.h"
-#include "nsAutoPtr.h"
+#include "nsIXULWindow.h"
+#include "nsIWindowMediator.h"
+#include "nsPIWindowWatcher.h"
+#include "nsISplashScreen.h"
 
-// {0099907D-123C-4853-A46A-43098B5FB68C}
-#define NS_APPSHELLSERVICE_CID \
-{ 0x99907d, 0x123c, 0x4853, { 0xa4, 0x6a, 0x43, 0x9, 0x8b, 0x5f, 0xb6, 0x8c } }
+#ifdef MOZ_THUNDERBIRD
+#include "nsIURIContentListener.h"
+#include "nsIInterfaceRequestor.h"
+#endif
 
 class nsAppShellService : public nsIAppShellService,
-                          public nsIObserver
+                          public nsIObserver,
+                          public nsSupportsWeakReference
 {
 public:
+  nsAppShellService(void);
+
   NS_DECL_ISUPPORTS
   NS_DECL_NSIAPPSHELLSERVICE
   NS_DECL_NSIOBSERVER
 
-  nsAppShellService();
-
 protected:
-  ~nsAppShellService();
+  virtual ~nsAppShellService();
 
-  nsresult JustCreateTopWindow(nsIXULWindow *aParent,
-                               nsIURI *aUrl, 
-                               PRUint32 aChromeMask,
-                               PRInt32 aInitialWidth, PRInt32 aInitialHeight,
-                               PRBool aIsHiddenWindow, nsIAppShell* aAppShell,
-                               nsWebShellWindow **aResult);
+  void RegisterObserver(PRBool aRegister);
+  NS_IMETHOD JustCreateTopWindow(nsIXULWindow *aParent,
+                                 nsIURI *aUrl, 
+                                 PRBool aShowWindow, PRBool aLoadDefaultPage,
+                                 PRUint32 aChromeMask,
+                                 PRInt32 aInitialWidth, PRInt32 aInitialHeight,
+                                 PRBool aIsHiddenWindow, nsIXULWindow **aResult);
   PRUint32 CalculateWindowZLevel(nsIXULWindow *aParent, PRUint32 aChromeMask);
   nsresult SetXPConnectSafeContext();
   nsresult ClearXPConnectSafeContext();
+  void     AttemptingQuit(PRBool aAttempt);
 
-  nsRefPtr<nsWebShellWindow>  mHiddenWindow;
-  PRPackedBool                mXPCOMShuttingDown;
-  PRUint16                    mModalWindowCount;
+  nsCOMPtr<nsIAppShell> mAppShell;
+  nsCOMPtr<nsICmdLineService> mCmdLineService;
+  nsCOMPtr<nsIWindowMediator> mWindowMediator;
+  nsCOMPtr<nsPIWindowWatcher> mWindowWatcher;
+  nsCOMPtr<nsIXULWindow>      mHiddenWindow;
+  PRBool mDeleteCalled;
+#ifndef MOZ_XUL_APP
+  nsCOMPtr<nsISplashScreen> mSplashScreen;
+#endif
+  nsCOMPtr<nsINativeAppSupport> mNativeAppSupport;
+
+  PRUint16     mModalWindowCount;
+  PRInt32      mConsiderQuitStopper; // if > 0, Quit(eConsiderQuit) fails
+  PRPackedBool mShuttingDown;   // Quit method reentrancy check
+  PRPackedBool mAttemptingQuit; // Quit(eAttemptQuit) still trying
+
+  // A "last event" that is used to flush the appshell's event queue.
+  PR_STATIC_CALLBACK(void*) HandleExitEvent(PLEvent* aEvent);
+  PR_STATIC_CALLBACK(void) DestroyExitEvent(PLEvent* aEvent);
+
+private:
+#ifndef MOZ_XUL_APP
+  nsresult CheckAndRemigrateDefunctProfile();
+#endif
+
+  nsresult LaunchTask(const char *aParam,
+                      PRInt32 height, PRInt32 width,
+                      PRBool *windowOpened);
+  
+  nsresult OpenWindow(const nsAFlatCString& aChromeURL,
+                      const nsAFlatString& aAppArgs,
+                      PRInt32 aWidth, PRInt32 aHeight);
+                      
+  nsresult OpenBrowserWindow(PRInt32 height, PRInt32 width);
 };
+
+#ifdef MOZ_THUNDERBIRD
+class nsAppShellServiceContentListener : public nsIURIContentListener,
+                                         public nsIInterfaceRequestor
+{
+public:
+  nsAppShellServiceContentListener();
+  virtual ~nsAppShellServiceContentListener();
+ 
+  NS_DECL_ISUPPORTS
+  NS_DECL_NSIURICONTENTLISTENER
+  NS_DECL_NSIINTERFACEREQUESTOR
+ 
+private:
+  nsCOMPtr<nsISupports> mLoadCookie;
+};
+#endif
 
 #endif

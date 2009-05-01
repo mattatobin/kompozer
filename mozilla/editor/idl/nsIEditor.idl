@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Daniel Glazman <glazman@netscape.com>
  *   Akkana Peck <akkana@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsISupports.idl"
 #include "domstubs.idl"
@@ -51,9 +34,11 @@ interface nsITransactionManager;
 interface nsITransaction;
 interface nsIEditorObserver;
 interface nsIEditActionListener;
-interface nsIInlineSpellChecker;
-
+interface mozIRealTimeSpell;
 %{C++
+
+#include "nsAString.h"
+
 class nsIPresShell;
 class nsIContent;
 typedef short EDirection;
@@ -63,7 +48,8 @@ typedef short EDirection;
 [ptr] native nsIPresShellPtr(nsIPresShell);
 [ptr] native nsIContentPtr(nsIContent);
 
-[scriptable, uuid(D4882FFB-E927-408b-96BE-D4391B456FA9)]
+
+[scriptable, uuid(06b979ce-1dd2-11b2-b6c7-a8bc47aa06b6)]
 
 interface nsIEditor  : nsISupports
 {
@@ -283,10 +269,6 @@ interface nsIEditor  : nsISupports
     */
   void setShouldTxnSetSelection(in boolean should);
 
-  /* ------------ Inline Spell Checking methods -------------- */
-
-  readonly attribute nsIInlineSpellChecker inlineSpellChecker;
-
   /* ------------ Clipboard methods -------------- */
 
   /** cut the currently selected text, putting it into the OS clipboard
@@ -445,6 +427,9 @@ interface nsIEditor  : nsISupports
                   in nsIDOMNode parent,
                   in long       aPosition);
 
+  void insertNodeAfter(in nsIDOMNode node,
+                       in nsIDOMNode parent,
+                       in nsIDOMNode refNode);
 
   /** 
    * splitNode() creates a new node identical to an existing node,
@@ -487,13 +472,17 @@ interface nsIEditor  : nsISupports
    */
   void markNodeDirty(in nsIDOMNode node);
 
-/* ---------- direction controller ---------- */
-
-  /** 
-   * Switches the editor element direction; from "Left-to-Right" to
-   * "Right-to-Left", and vice versa.
+  /** helper method for scrolling the selection into view after
+   *  an edit operation. aScrollToAnchor should be PR_TRUE if you
+   *  want to scroll to the point where the selection was started.
+   *  If PR_FALSE, it attempts to scroll the end of the selection into view.
+   *
+   *  Editor methods *should* call this method instead of the versions
+   *  in the various selection interfaces, since this version makes sure
+   *  that the editor's sync/async settings for reflowing, painting, and
+   *  scrolling match.
    */
-  void switchTextDirection();
+  void scrollSelectionIntoView(in boolean aScrollToAnchor);
 
 /* ------------ Output methods -------------- */
 
@@ -542,40 +531,8 @@ interface nsIEditor  : nsISupports
 
   /* Run unit tests. Noop in optimized builds */
   void debugUnitTests(out long outNumTests, out long  outNumTestsFailed);
-};
 
-/**
- * This enables optional lazy creation of the spellchecking object. On the
- * trunk getInlineSpellChecker replaces the attribute inlineSpellChecker. Here,
- * we support that on a special interface to avoid changing branch interfaces,
- * and rename it to getInlineSpellCheckerOptionally to avoid conflicting with
- * the automatically generated getter for the attribute.
- *
- * @status TEMPORARY
- */
-[scriptable, uuid(60fbf998-e021-4f81-bdf0-749cc651e221)]
-interface nsIEditor_MOZILLA_1_8_BRANCH : nsIEditor
-{
-  /** Returns the inline spell checker associated with this object. The spell
-   * checker is lazily created, so this function may create the object for
-   * you during this call.
-   * @param  autoCreate  If true, this will create a spell checker object
-   *                     if one does not exist yet for this editor. If false
-   *                     and the object has not been created, this function
-   *                     WILL RETURN NULL.
-   */
-  nsIInlineSpellChecker getInlineSpellCheckerOptionally(in boolean autoCreate);
+  /* ------------ Real-time spell methods -------------- */
 
-  /** Resyncs spellchecking state (enabled/disabled).  This should be called
-    * when anything that affects spellchecking state changes, such as the
-    * spellcheck attribute value.
-    */
-  void syncRealTimeSpell();
-
-  /** Called when the user manually overrides the spellchecking state for this
-    * editor.
-    * @param  enable  The new state of spellchecking in this editor, as
-    *                 requested by the user.
-    */
-  void setSpellcheckUserOverride(in boolean enable);
+  mozIRealTimeSpell enableRealTimeSpell(in PRBool enable);
 };

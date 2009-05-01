@@ -43,8 +43,6 @@
 #include "nsHTMLFormControlAccessible.h"
 #include "nsAccessibleText.h"
 
-typedef class nsHTMLRadioButtonAccessible nsHTMLRadioButtonAccessibleWrap;
-
 class nsHTMLTextFieldAccessibleWrap : public nsHTMLTextFieldAccessible,
                                       public nsAccessibleEditableText
 {
@@ -52,9 +50,7 @@ public:
   NS_DECL_ISUPPORTS_INHERITED
 
   nsHTMLTextFieldAccessibleWrap(nsIDOMNode* aNode, nsIWeakReference* aShell);
-  NS_IMETHOD GetRole(PRUint32* aRole);
 
-  NS_IMETHOD GetExtState(PRUint32 *aState);
   NS_IMETHOD Shutdown();
 };
 

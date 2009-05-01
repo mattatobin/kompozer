@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,21 +24,21 @@
  *   Joe Hewitt (hewitt@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsCOMPtr.h"
-#include "nsPIListBoxObject.h"
+#include "nsIListBoxObject.h"
 #include "nsBoxObject.h"
 #include "nsIFrame.h"
 #include "nsIDocument.h"
@@ -46,44 +46,42 @@
 #include "nsIDOMElement.h"
 #include "nsIDOMNodeList.h"
 #include "nsXULAtoms.h"
-#include "nsIScrollableFrame.h"
 
-class nsListBoxObject : public nsPIListBoxObject_MOZILLA_1_8_BRANCH,
-                        public nsBoxObject
+class nsListBoxObject : public nsIListBoxObject, public nsBoxObject
 {
 public:
-  NS_DECL_ISUPPORTS_INHERITED
+  NS_DECL_ISUPPORTS
   NS_DECL_NSILISTBOXOBJECT
-
-  // nsPIListBoxObject
-  virtual void ClearCachedListBoxBody();
-  virtual nsIListBoxObject* GetListBoxBody()
-  {
-    return GetListBoxBodyImpl(PR_TRUE);
-  }
-
-  // nsPIListBoxObject_MOZILLA_1_8_BRANCH
-  virtual nsIListBoxObject* GetListBoxBody(PRBool aFlush)
-  {
-    return GetListBoxBodyImpl(aFlush);
-  }
-
-  nsIListBoxObject* GetListBoxBodyImpl(PRBool aFlush);
 
   nsListBoxObject();
   virtual ~nsListBoxObject();
 
+  nsIListBoxObject* GetListBoxBody();
+
   NS_IMETHOD InvalidatePresentationStuff();
   
 protected:
-  nsIListBoxObject* mListBoxBody;
 };
 
-NS_IMPL_ISUPPORTS_INHERITED3(nsListBoxObject, nsBoxObject, nsIListBoxObject,
-                             nsPIListBoxObject, nsPIListBoxObject_MOZILLA_1_8_BRANCH)
+NS_IMPL_ADDREF(nsListBoxObject)
+NS_IMPL_RELEASE(nsListBoxObject)
 
+NS_IMETHODIMP 
+nsListBoxObject::QueryInterface(REFNSIID iid, void** aResult)
+{
+  if (!aResult)
+    return NS_ERROR_NULL_POINTER;
+  
+  if (iid.Equals(NS_GET_IID(nsIListBoxObject))) {
+    *aResult = (nsIListBoxObject*)this;
+    NS_ADDREF(this);
+    return NS_OK;
+  }
+
+  return nsBoxObject::QueryInterface(iid, aResult);
+}
+  
 nsListBoxObject::nsListBoxObject()
-  : mListBoxBody(nsnull)
 {
 }
 
@@ -98,7 +96,8 @@ nsListBoxObject::~nsListBoxObject()
 NS_IMETHODIMP
 nsListBoxObject::GetListboxBody(nsIListBoxObject * *aListboxBody)
 {
-  *aListboxBody = nsnull;
+  *aListboxBody = GetListBoxBody();
+  NS_IF_ADDREF(*aListboxBody);
   return NS_OK;
 }
 
@@ -175,12 +174,6 @@ nsListBoxObject::GetIndexOfItem(nsIDOMElement* aElement, PRInt32 *aResult)
   return NS_OK;
 }
 
-void
-nsListBoxObject::ClearCachedListBoxBody()
-{
-  mListBoxBody = nsnull;
-}
-
 //////////////////////
 
 static void
@@ -192,7 +185,7 @@ FindBodyContent(nsIContent* aParent, nsIContent** aResult)
   }
   else {
     nsCOMPtr<nsIDOMNodeList> kids;
-    aParent->GetDocument()->BindingManager()->GetXBLChildNodesFor(aParent, getter_AddRefs(kids));
+    aParent->GetDocument()->GetBindingManager()->GetXBLChildNodesFor(aParent, getter_AddRefs(kids));
     if (!kids) return;
 
     PRUint32 i;
@@ -210,58 +203,52 @@ FindBodyContent(nsIContent* aParent, nsIContent** aResult)
 }
 
 nsIListBoxObject*
-nsListBoxObject::GetListBoxBodyImpl(PRBool aFlush)
+nsListBoxObject::GetListBoxBody()
 {
-  if (mListBoxBody) {
-    return mListBoxBody;
+  NS_NAMED_LITERAL_STRING(listboxbody, "listboxbody");
+
+  nsCOMPtr<nsISupports> supp;
+  GetPropertyAsSupports(listboxbody.get(), getter_AddRefs(supp));
+
+  if (supp) {
+    nsCOMPtr<nsIListBoxObject> body(do_QueryInterface(supp));
+    return body;
   }
 
-  nsIFrame* frame;
-  if (aFlush) {
-    frame = GetFrame(); // does Flush_Frames
-  }
-  else {
-    frame = nsnull;
-    nsCOMPtr<nsIPresShell> shell = GetPresShell();
-    if (shell) {
-      shell->GetPrimaryFrameFor(mContent, &frame);
-    }
-  }
+  nsIFrame* frame = GetFrame();
   if (!frame)
     return nsnull;
-
-  nsCOMPtr<nsIPresShell> shell = GetPresShell();
-  if (!shell) {
-    return nsnull;
-  }
 
   // Iterate over our content model children looking for the body.
   nsCOMPtr<nsIContent> content;
   FindBodyContent(frame->GetContent(), getter_AddRefs(content));
 
   // this frame will be a nsGFXScrollFrame
-  shell->GetPrimaryFrameFor(content, &frame);
+  mPresShell->GetPrimaryFrameFor(content, &frame);
   if (!frame)
      return nsnull;
-  nsIScrollableFrame* scrollFrame;
-  CallQueryInterface(frame, &scrollFrame);
-  if (!scrollFrame)
-    return nsnull;
+
+  // this frame will be a nsListBoxScrollPortFrame
+  nsIFrame* scrollPort = frame->GetFirstChild(nsnull);
+  if (!scrollPort)
+     return nsnull;
 
   // this frame will be the one we want
-  nsIFrame* yeahBaby = scrollFrame->GetScrolledFrame();
+  nsIFrame* yeahBaby = scrollPort->GetFirstChild(nsnull);
   if (!yeahBaby)
      return nsnull;
 
   // It's a frame. Refcounts are irrelevant.
-  CallQueryInterface(yeahBaby, &mListBoxBody);
-  return mListBoxBody;
+  nsCOMPtr<nsIListBoxObject> body;
+  yeahBaby->QueryInterface(NS_GET_IID(nsIListBoxObject), getter_AddRefs(body));
+  SetPropertyAsSupports(listboxbody.get(), body);
+  return body;
 }
 
 NS_IMETHODIMP
 nsListBoxObject::InvalidatePresentationStuff()
 {
-  ClearCachedListBoxBody();
+  SetPropertyAsSupports(NS_LITERAL_STRING("listboxbody").get(), nsnull);
 
   return nsBoxObject::InvalidatePresentationStuff();
 }

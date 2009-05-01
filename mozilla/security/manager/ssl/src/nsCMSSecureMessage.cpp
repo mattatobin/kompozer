@@ -55,8 +55,7 @@
 #include "cms.h"
 
 #include "nsIServiceManager.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
+#include "nsIPref.h"
 
 #include "prlog.h"
 #ifdef PR_LOGGING
@@ -97,7 +96,8 @@ GetCertByPrefID(const char *certID, char **_retval)
 
   *_retval = 0;
 
-  nsCOMPtr<nsIPrefBranch> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
+  static NS_DEFINE_CID(kPrefCID, NS_PREF_CID);
+  nsCOMPtr<nsIPref> prefs = do_GetService(kPrefCID, &rv);
   if (NS_FAILED(rv)) {
     goto done;
   }

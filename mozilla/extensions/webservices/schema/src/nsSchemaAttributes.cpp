@@ -1,40 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Vidur Apparao <vidur@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsSchemaPrivate.h"
 
@@ -59,9 +44,9 @@ NS_IMPL_ISUPPORTS3_CI(nsSchemaAttribute,
                       nsISchemaAttribute)
 
 
-/* void resolve (in nsIWebServiceErrorHandler aErrorHandler); */
-NS_IMETHODIMP
-nsSchemaAttribute::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
+/* void resolve (); */
+NS_IMETHODIMP 
+nsSchemaAttribute::Resolve()
 {
   if (mIsResolved) {
     return NS_OK;
@@ -71,7 +56,7 @@ nsSchemaAttribute::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
   nsresult rv = NS_OK;
   if (mType && mSchema) {
     nsCOMPtr<nsISchemaType> type;
-    rv = mSchema->ResolveTypePlaceholder(aErrorHandler, mType, getter_AddRefs(type));
+    rv = mSchema->ResolveTypePlaceholder(mType, getter_AddRefs(type));
     if (NS_FAILED(rv)) {
       return NS_ERROR_FAILURE;
     }
@@ -79,14 +64,14 @@ nsSchemaAttribute::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
     if (!mType) {
       return NS_ERROR_FAILURE;
     }
-    rv = mType->Resolve(aErrorHandler);
+    rv = mType->Resolve();
   }
 
   return rv;
 }
 
 /* void clear (); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::Clear()
 {
   if (mIsCleared) {
@@ -103,7 +88,7 @@ nsSchemaAttribute::Clear()
 }
 
 /* readonly attribute AString name; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::GetName(nsAString & aName)
 {
   aName.Assign(mName);
@@ -112,7 +97,7 @@ nsSchemaAttribute::GetName(nsAString & aName)
 }
 
 /* readonly attribute unsigned short componentType; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::GetComponentType(PRUint16 *aComponentType)
 {
   NS_ENSURE_ARG_POINTER(aComponentType);
@@ -123,18 +108,19 @@ nsSchemaAttribute::GetComponentType(PRUint16 *aComponentType)
 }
 
 /* readonly attribute nsISchemaSimpleType type; */
-NS_IMETHODIMP
-nsSchemaAttribute::GetType(nsISchemaSimpleType** aType)
+NS_IMETHODIMP 
+nsSchemaAttribute::GetType(nsISchemaSimpleType * *aType)
 {
   NS_ENSURE_ARG_POINTER(aType);
 
-  NS_IF_ADDREF(*aType = mType);
+  *aType = mType;
+  NS_IF_ADDREF(*aType);
 
   return NS_OK;
 }
 
 /* readonly attribute AString defaultValue; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::GetDefaultValue(nsAString & aDefaultValue)
 {
   aDefaultValue.Assign(mDefaultValue);
@@ -143,7 +129,7 @@ nsSchemaAttribute::GetDefaultValue(nsAString & aDefaultValue)
 }
 
 /* readonly attribute AString fixedValue; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::GetFixedValue(nsAString & aFixedValue)
 {
   aFixedValue.Assign(mFixedValue);
@@ -152,7 +138,7 @@ nsSchemaAttribute::GetFixedValue(nsAString & aFixedValue)
 }
 
 /* readonly attribute unsigned short use; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::GetUse(PRUint16 *aUse)
 {
   NS_ENSURE_ARG_POINTER(aUse);
@@ -162,7 +148,7 @@ nsSchemaAttribute::GetUse(PRUint16 *aUse)
   return NS_OK;
 }
 
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttribute::SetType(nsISchemaSimpleType* aType)
 {
   NS_ENSURE_ARG(aType);
@@ -196,9 +182,8 @@ nsSchemaAttribute::SetUse(PRUint16 aUse)
 //
 ////////////////////////////////////////////////////////////
 nsSchemaAttributeRef::nsSchemaAttributeRef(nsSchema* aSchema, 
-                                           const nsAString& aRef,
-                                           const nsAString& aRefNS)
-  : nsSchemaComponentBase(aSchema), mRef(aRef), mRefNS(aRefNS)
+                                           const nsAString& aRef)
+  : nsSchemaComponentBase(aSchema), mRef(aRef)
 {
 }
 
@@ -212,9 +197,9 @@ NS_IMPL_ISUPPORTS3_CI(nsSchemaAttributeRef,
                       nsISchemaAttribute)
 
 
-/* void resolve (in nsIWebServiceErrorHandler aErrorHandler); */
-NS_IMETHODIMP
-nsSchemaAttributeRef::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
+/* void resolve (); */
+NS_IMETHODIMP 
+nsSchemaAttributeRef::Resolve()
 {
   nsresult rv = NS_OK;
   if (mIsResolved) {
@@ -223,27 +208,18 @@ nsSchemaAttributeRef::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
   
   mIsResolved = PR_TRUE;
   if (!mAttribute && mSchema) {
-    if (mRefNS.IsEmpty()) {
     mSchema->GetAttributeByName(mRef, getter_AddRefs(mAttribute));
-    } else {
-      // use the namespace and type
-      nsCOMPtr<nsISchemaCollection> schemaColl;
-      mSchema->GetCollection(getter_AddRefs(schemaColl));
-      NS_ENSURE_STATE(schemaColl);
-
-      schemaColl->GetAttribute(mRef, mRefNS, getter_AddRefs(mAttribute));
-    }
   }
 
   if (mAttribute) {
-    rv = mAttribute->Resolve(aErrorHandler);
+    rv = mAttribute->Resolve();
   }
 
   return rv;
 }
 
 /* void clear (); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::Clear()
 {
   if (mIsCleared) {
@@ -260,7 +236,7 @@ nsSchemaAttributeRef::Clear()
 }
 
 /* readonly attribute AString name; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetName(nsAString & aName)
 {
   if (!mAttribute) {
@@ -271,7 +247,7 @@ nsSchemaAttributeRef::GetName(nsAString & aName)
 }
 
 /* readonly attribute unsigned short componentType; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetComponentType(PRUint16 *aComponentType)
 {
   NS_ENSURE_ARG_POINTER(aComponentType);
@@ -282,7 +258,7 @@ nsSchemaAttributeRef::GetComponentType(PRUint16 *aComponentType)
 }
 
 /* readonly attribute nsISchemaSimpleType type; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetType(nsISchemaSimpleType * *aType)
 {
   NS_ENSURE_ARG_POINTER(aType);
@@ -295,7 +271,7 @@ nsSchemaAttributeRef::GetType(nsISchemaSimpleType * *aType)
 }
 
 /* readonly attribute AString defaultValue; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetDefaultValue(nsAString & aDefaultValue)
 {
   aDefaultValue.Assign(mDefaultValue);
@@ -304,7 +280,7 @@ nsSchemaAttributeRef::GetDefaultValue(nsAString & aDefaultValue)
 }
 
 /* readonly attribute AString fixedValue; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetFixedValue(nsAString & aFixedValue)
 {
   aFixedValue.Assign(mFixedValue);
@@ -313,7 +289,7 @@ nsSchemaAttributeRef::GetFixedValue(nsAString & aFixedValue)
 }
 
 /* readonly attribute unsigned short use; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeRef::GetUse(PRUint16 *aUse)
 {
   NS_ENSURE_ARG_POINTER(aUse);
@@ -361,9 +337,9 @@ NS_IMPL_ISUPPORTS3_CI(nsSchemaAttributeGroup,
                       nsISchemaAttributeComponent,
                       nsISchemaAttributeGroup)
 
-/* void resolve (in nsIWebServiceErrorHandler aErrorHandler); */
-NS_IMETHODIMP
-nsSchemaAttributeGroup::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
+/* void resolve (); */
+NS_IMETHODIMP 
+nsSchemaAttributeGroup::Resolve()
 {
   if (mIsResolved) {
     return NS_OK;
@@ -373,11 +349,17 @@ nsSchemaAttributeGroup::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
   nsresult rv;
   PRUint32 i, count;
 
-  count = mAttributes.Count();
-  for (i = 0; i < count; ++i) {
-    rv = mAttributes.ObjectAt(i)->Resolve(aErrorHandler);
-    if (NS_FAILED(rv)) {
-      return rv;
+  mAttributes.Count(&count);
+  for (i = 0; i < count; i++) {
+    nsCOMPtr<nsISchemaAttributeComponent> attribute;
+    
+    rv = mAttributes.QueryElementAt(i, NS_GET_IID(nsISchemaAttributeComponent),
+                                    getter_AddRefs(attribute));
+    if (NS_SUCCEEDED(rv)) {
+      rv = attribute->Resolve();
+      if (NS_FAILED(rv)) {
+        return rv;
+      }
     }
   }
   
@@ -385,7 +367,7 @@ nsSchemaAttributeGroup::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
 }
 
 /* void clear (); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroup::Clear()
 {
   if (mIsCleared) {
@@ -393,20 +375,26 @@ nsSchemaAttributeGroup::Clear()
   }
 
   mIsCleared = PR_TRUE;
-
+  nsresult rv;
   PRUint32 i, count;
-  count = mAttributes.Count();
-  for (i = 0; i < count; ++i) {
-    mAttributes.ObjectAt(i)->Clear();
+  mAttributes.Count(&count);
+  for (i = 0; i < count; i++) {
+    nsCOMPtr<nsISchemaAttributeComponent> attribute;
+    
+    rv = mAttributes.QueryElementAt(i, NS_GET_IID(nsISchemaAttributeComponent),
+                                    getter_AddRefs(attribute));
+    if (NS_SUCCEEDED(rv)) {
+      attribute->Clear();
+    }
   }
   mAttributes.Clear();
-  mAttributesHash.Clear();
+  mAttributesHash.Reset();
 
   return NS_OK;
 }
 
 /* readonly attribute AString name; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroup::GetName(nsAString & aName)
 {
   aName.Assign(mName);
@@ -415,7 +403,7 @@ nsSchemaAttributeGroup::GetName(nsAString & aName)
 }
 
 /* readonly attribute unsigned short componentType; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroup::GetComponentType(PRUint16 *aComponentType)
 {
   NS_ENSURE_ARG_POINTER(aComponentType);
@@ -426,40 +414,39 @@ nsSchemaAttributeGroup::GetComponentType(PRUint16 *aComponentType)
 }
 
 /* readonly attribute PRUint32 attributeCount; */
-NS_IMETHODIMP
-nsSchemaAttributeGroup::GetAttributeCount(PRUint32* aAttributeCount)
+NS_IMETHODIMP 
+nsSchemaAttributeGroup::GetAttributeCount(PRUint32 *aAttributeCount)
 {
   NS_ENSURE_ARG_POINTER(aAttributeCount);
-
-  *aAttributeCount = mAttributes.Count();
-
-  return NS_OK;
+  
+  return mAttributes.Count(aAttributeCount);
 }
 
 /* nsISchemaAttributeComponent getAttributeByIndex (in PRUint32 index); */
-NS_IMETHODIMP
-nsSchemaAttributeGroup::GetAttributeByIndex(PRUint32 aIndex, 
-                                            nsISchemaAttributeComponent** aResult)
+NS_IMETHODIMP 
+nsSchemaAttributeGroup::GetAttributeByIndex(PRUint32 index, 
+                                            nsISchemaAttributeComponent **_retval)
 {
-  NS_ENSURE_ARG_POINTER(aResult);
+  NS_ENSURE_ARG_POINTER(_retval);
 
-  if (aIndex >= (PRUint32)mAttributes.Count()) {
-    return NS_ERROR_FAILURE;
-  }
-
-  NS_ADDREF(*aResult = mAttributes.ObjectAt(aIndex));
-
-  return NS_OK;
+  return mAttributes.QueryElementAt(index, 
+                                    NS_GET_IID(nsISchemaAttributeComponent),
+                                    (void**)_retval);
 }
 
 /* nsISchemaAttributeComponent getAttributeByName (in AString name); */
-NS_IMETHODIMP
-nsSchemaAttributeGroup::GetAttributeByName(const nsAString& aName, 
-                                           nsISchemaAttributeComponent** aResult)
+NS_IMETHODIMP 
+nsSchemaAttributeGroup::GetAttributeByName(const nsAString & name, 
+                                           nsISchemaAttributeComponent **_retval)
 {
-  NS_ENSURE_ARG_POINTER(aResult);
+  NS_ENSURE_ARG_POINTER(_retval);
 
-  mAttributesHash.Get(aName, aResult);
+  nsStringKey key(name);
+  nsCOMPtr<nsISupports> sup = dont_AddRef(mAttributesHash.Get(&key));
+
+  if (sup) {
+    return CallQueryInterface(sup, _retval);
+  }
 
   return NS_OK;
 }
@@ -472,8 +459,9 @@ nsSchemaAttributeGroup::AddAttribute(nsISchemaAttributeComponent* aAttribute)
   nsAutoString name;
   aAttribute->GetName(name);
 
-  mAttributes.AppendObject(aAttribute);
-  mAttributesHash.Put(name, aAttribute);
+  mAttributes.AppendElement(aAttribute);
+  nsStringKey key(name);
+  mAttributesHash.Put(&key, aAttribute);
 
   return NS_OK;    
 }
@@ -484,9 +472,8 @@ nsSchemaAttributeGroup::AddAttribute(nsISchemaAttributeComponent* aAttribute)
 //
 ////////////////////////////////////////////////////////////
 nsSchemaAttributeGroupRef::nsSchemaAttributeGroupRef(nsSchema* aSchema,
-                                                     const nsAString& aRef,
-                                                     const nsAString& aRefNS)
-  : nsSchemaComponentBase(aSchema), mRef(aRef), mRefNS(aRefNS)
+                                                     const nsAString& aRef)
+  : nsSchemaComponentBase(aSchema), mRef(aRef)
 {
 }
 
@@ -499,9 +486,9 @@ NS_IMPL_ISUPPORTS3_CI(nsSchemaAttributeGroupRef,
                       nsISchemaAttributeComponent,
                       nsISchemaAttributeGroup)
 
-/* void resolve (in nsIWebServiceErrorHandler aErrorHandler); */
-NS_IMETHODIMP
-nsSchemaAttributeGroupRef::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
+/* void resolve (); */
+NS_IMETHODIMP 
+nsSchemaAttributeGroupRef::Resolve()
 {
   nsresult rv = NS_OK;
   if (mIsResolved) {
@@ -510,32 +497,18 @@ nsSchemaAttributeGroupRef::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
 
   mIsResolved = PR_TRUE;
   if (!mAttributeGroup && mSchema) {
-    if (mRefNS.IsEmpty()) {
     mSchema->GetAttributeGroupByName(mRef, getter_AddRefs(mAttributeGroup));
-    } else {
-      // use the namespace and type
-      nsCOMPtr<nsISchemaCollection> schemaColl;
-      mSchema->GetCollection(getter_AddRefs(schemaColl));
-      NS_ENSURE_STATE(schemaColl);
-
-      // get the right schema
-      nsCOMPtr<nsISchema> schema;
-      schemaColl->GetSchema(mRefNS, getter_AddRefs(schema));
-      NS_ENSURE_STATE(schema);
-
-      schema->GetAttributeGroupByName(mRef, getter_AddRefs(mAttributeGroup));
-    }
   }
 
   if (mAttributeGroup) {
-    rv = mAttributeGroup->Resolve(aErrorHandler);
+    rv = mAttributeGroup->Resolve();
   }
   
   return rv;
 }
 
 /* void clear (); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::Clear()
 {
   if (mIsCleared) {
@@ -552,7 +525,7 @@ nsSchemaAttributeGroupRef::Clear()
 }
 
 /* readonly attribute AString name; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::GetName(nsAString & aName)
 {
   if (!mAttributeGroup) {
@@ -563,7 +536,7 @@ nsSchemaAttributeGroupRef::GetName(nsAString & aName)
 }
 
 /* readonly attribute unsigned short componentType; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::GetComponentType(PRUint16 *aComponentType)
 {
   NS_ENSURE_ARG_POINTER(aComponentType);
@@ -574,7 +547,7 @@ nsSchemaAttributeGroupRef::GetComponentType(PRUint16 *aComponentType)
 }
 
 /* readonly attribute PRUint32 attributeCount; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::GetAttributeCount(PRUint32 *aAttributeCount)
 {
   NS_ENSURE_ARG_POINTER(aAttributeCount);
@@ -587,7 +560,7 @@ nsSchemaAttributeGroupRef::GetAttributeCount(PRUint32 *aAttributeCount)
 }
 
 /* nsISchemaAttributeComponent getAttributeByIndex (in PRUint32 index); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::GetAttributeByIndex(PRUint32 index, 
                                                nsISchemaAttributeComponent **_retval)
 {
@@ -601,7 +574,7 @@ nsSchemaAttributeGroupRef::GetAttributeByIndex(PRUint32 index,
 }
 
 /* nsISchemaAttributeComponent getAttributeByName (in AString name); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAttributeGroupRef::GetAttributeByName(const nsAString & name, 
                                               nsISchemaAttributeComponent **_retval)
 {
@@ -633,22 +606,22 @@ NS_IMPL_ISUPPORTS3_CI(nsSchemaAnyAttribute,
                       nsISchemaAttributeComponent,
                       nsISchemaAnyAttribute)
 
-/* void resolve (in nsIWebServiceErrorHandler aErrorHandler); */
-NS_IMETHODIMP
-nsSchemaAnyAttribute::Resolve(nsIWebServiceErrorHandler* aErrorHandler)
+/* void resolve (); */
+NS_IMETHODIMP 
+nsSchemaAnyAttribute::Resolve()
 {
   return NS_OK;
 }
 
 /* void clear (); */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::Clear()
 {
   return NS_OK;
 }
 
 /* readonly attribute unsigned short componentType; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::GetComponentType(PRUint16 *aComponentType)
 {
   NS_ENSURE_ARG_POINTER(aComponentType);
@@ -659,16 +632,16 @@ nsSchemaAnyAttribute::GetComponentType(PRUint16 *aComponentType)
 }
 
 /* readonly attribute AString name; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::GetName(nsAString & aName)
 {
-  aName.AssignLiteral("anyAttribute");
+  aName.Assign(NS_LITERAL_STRING("anyAttribute"));
 
   return NS_OK;
 }
 
 /* readonly attribute unsigned short process; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::GetProcess(PRUint16 *aProcess)
 {
   NS_ENSURE_ARG_POINTER(aProcess);
@@ -679,7 +652,7 @@ nsSchemaAnyAttribute::GetProcess(PRUint16 *aProcess)
 }
 
 /* readonly attribute AString namespace; */
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::GetNamespace(nsAString & aNamespace)
 {
   aNamespace.Assign(mNamespace);
@@ -687,7 +660,7 @@ nsSchemaAnyAttribute::GetNamespace(nsAString & aNamespace)
   return NS_OK;
 }
 
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::SetProcess(PRUint16 aProcess)
 {
   mProcess = aProcess;
@@ -695,7 +668,7 @@ nsSchemaAnyAttribute::SetProcess(PRUint16 aProcess)
   return NS_OK;
 }
  
-NS_IMETHODIMP
+NS_IMETHODIMP 
 nsSchemaAnyAttribute::SetNamespace(const nsAString& aNamespace)
 {
   mNamespace.Assign(aNamespace);

@@ -38,7 +38,6 @@
 #include "nsStreamTransportService.h"
 #include "nsNetSegmentUtils.h"
 #include "nsAutoLock.h"
-#include "nsInt64.h"
 #include "nsTransportUtils.h"
 #include "nsStreamUtils.h"
 #include "nsNetError.h"
@@ -71,8 +70,8 @@ public:
     NS_DECL_NSIINPUTSTREAM
 
     nsInputStreamTransport(nsIInputStream *source,
-                           PRUint64 offset,
-                           PRUint64 limit,
+                           PRUint32 offset,
+                           PRUint32 limit,
                            PRBool closeWhenDone)
         : mSource(source)
         , mOffset(offset)
@@ -94,8 +93,8 @@ private:
     // nsIInputStream implementation.
     nsCOMPtr<nsITransportEventSink> mEventSink;
     nsCOMPtr<nsIInputStream>        mSource;
-    nsUint64                        mOffset;
-    nsUint64                        mLimit;
+    PRUint32                        mOffset;
+    PRUint32                        mLimit;
     PRPackedBool                    mCloseWhenDone;
     PRPackedBool                    mFirstTime;
 
@@ -208,14 +207,12 @@ nsInputStreamTransport::Read(char *buf, PRUint32 count, PRUint32 *result)
 {
     if (mFirstTime) {
         mFirstTime = PR_FALSE;
-        if (mOffset != nsUint64(0)) {
+        if (mOffset) {
             // read from current position if offset equal to max
-            if (mOffset != LL_MAXUINT) {
+            if (mOffset != PR_UINT32_MAX) {
                 nsCOMPtr<nsISeekableStream> seekable = do_QueryInterface(mSource);
-                // Note: The casts to PRUint64 are needed to cast to PRInt64, as
-                // nsUint64 can't directly be cast to PRInt64
                 if (seekable)
-                    seekable->Seek(nsISeekableStream::NS_SEEK_SET, PRUint64(mOffset));
+                    seekable->Seek(nsISeekableStream::NS_SEEK_SET, mOffset);
             }
             // reset offset to zero so we can use it to enforce limit
             mOffset = 0;
@@ -273,8 +270,8 @@ public:
     NS_DECL_NSIOUTPUTSTREAM
 
     nsOutputStreamTransport(nsIOutputStream *sink,
-                            PRUint64 offset,
-                            PRUint64 limit,
+                            PRUint32 offset,
+                            PRUint32 limit,
                             PRBool closeWhenDone)
         : mSink(sink)
         , mOffset(offset)
@@ -296,8 +293,8 @@ private:
     // nsIOutputStream implementation.
     nsCOMPtr<nsITransportEventSink> mEventSink;
     nsCOMPtr<nsIOutputStream>       mSink;
-    nsUint64                        mOffset;
-    nsUint64                        mLimit;
+    PRUint32                        mOffset;
+    PRUint32                        mLimit;
     PRPackedBool                    mCloseWhenDone;
     PRPackedBool                    mFirstTime;
 
@@ -410,14 +407,12 @@ nsOutputStreamTransport::Write(const char *buf, PRUint32 count, PRUint32 *result
 {
     if (mFirstTime) {
         mFirstTime = PR_FALSE;
-        if (mOffset != nsUint64(0)) {
+        if (mOffset) {
             // write to current position if offset equal to max
-            if (mOffset != LL_MAXUINT) {
+            if (mOffset != PR_UINT32_MAX) {
                 nsCOMPtr<nsISeekableStream> seekable = do_QueryInterface(mSink);
-                // Note: The casts to PRUint64 are needed to cast to PRInt64, as
-                // nsUint64 can't directly be cast to PRInt64
                 if (seekable)
-                    seekable->Seek(nsISeekableStream::NS_SEEK_SET, PRUint64(mOffset));
+                    seekable->Seek(nsISeekableStream::NS_SEEK_SET, mOffset);
             }
             // reset offset to zero so we can use it to enforce limit
             mOffset = 0;
@@ -472,8 +467,8 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(nsStreamTransportService, nsIStreamTransportServic
 
 NS_IMETHODIMP
 nsStreamTransportService::CreateInputTransport(nsIInputStream *stream,
-                                               PRInt64 offset,
-                                               PRInt64 limit,
+                                               PRInt32 offset,
+                                               PRInt32 limit,
                                                PRBool closeWhenDone,
                                                nsITransport **result)
 {
@@ -487,8 +482,8 @@ nsStreamTransportService::CreateInputTransport(nsIInputStream *stream,
 
 NS_IMETHODIMP
 nsStreamTransportService::CreateOutputTransport(nsIOutputStream *stream,
-                                                PRInt64 offset,
-                                                PRInt64 limit,
+                                                PRInt32 offset,
+                                                PRInt32 limit,
                                                 PRBool closeWhenDone,
                                                 nsITransport **result)
 {

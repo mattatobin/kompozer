@@ -38,7 +38,7 @@
 /* Make carriage returns visible
 */
 
-br:before {
+br:before{
   content: "\21B5 ";
   font-size: large;
 }

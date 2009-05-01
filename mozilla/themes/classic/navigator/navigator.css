@@ -1,10 +1,10 @@
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -13,7 +13,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998-1999
  * the Initial Developer. All Rights Reserved.
@@ -22,21 +22,22 @@
  *   Joe Hewitt (hewitt@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 @import url("chrome://navigator/content/navigator.css");
 @import url("chrome://communicator/skin/");
+@import url("chrome://communicator/skin/sidebar/sidebar.css");
 @import url("chrome://communicator/skin/bookmarks/bookmarksToolbar.css");
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
@@ -51,11 +52,11 @@
   -moz-image-region: rect(0px 19px 20px 0px);
 }
 
-#back-button:hover {
+#back-button[buttonover="true"] {
   -moz-image-region: rect(0px 38px 20px 19px);
 }
 
-#back-button:hover:active {
+#back-button[buttondown="true"] {
   -moz-image-region: rect(0px 57px 20px 38px);
 }
 
@@ -67,11 +68,11 @@
   -moz-image-region: rect(20px 19px 40px 0px);
 }
 
-#forward-button:hover {
+#forward-button[buttonover="true"] {
   -moz-image-region: rect(20px 38px 40px 19px);
 }
 
-#forward-button:hover:active {
+#forward-button[buttondown="true"] {
   -moz-image-region: rect(20px 57px 40px 38px);
 }
 
@@ -117,11 +118,11 @@
   -moz-image-region: rect(0px 23px 21px 0px);
 }
 
-#print-button:hover {
+#print-button[buttonover="true"] {
   -moz-image-region: rect(0px 46px 21px 23px);
 }
 
-#print-button:hover:active {
+#print-button[buttondown="true"] {
   -moz-image-region: rect(0px 69px 21px 46px);
 }
 
@@ -195,13 +196,6 @@
   -moz-border-left-colors: transparent ThreeDShadow ThreeDDarkShadow;
 }
 
-#urlbar[level="high"] > .autocomplete-textbox-container,
-#urlbar[level="low"] > .autocomplete-textbox-container {
-  -moz-appearance: none;
-  background-color: InfoBackground;
-  color: InfoText;
-}
-
 /* ::::: page proxy icon ::::: */
 
 #page-proxy-deck,
@@ -250,8 +244,27 @@
   padding-left: 15px;
 }
 
+.autocomplete-treebody::-moz-tree-cell-text(comment) {
+  color: ThreeDShadow;
+}
+
+.autocomplete-search-box {
+  border-top: 2px groove -moz-Dialog;
+  background-color: -moz-Dialog;
+  color: ButtonText;
+}
+
+.autocomplete-result-popup[nomatch] > .autocomplete-search-box {
+  border-top: 1px solid ThreeDHighlight;
+}
+
 .autocomplete-search-engine {
   padding: 2px;
+}
+
+.autocomplete-search-engine[menuactive="true"] {
+  background-color: Highlight;
+  color: HighlightText;
 }
 
 .autocomplete-search-engine-img {
@@ -307,8 +320,10 @@
   list-style-image: url("chrome://communicator/skin/icons/lock-insecure.gif");
 }
 
-/* |high| and |low| styles could be different, to better reflect the secure level... */
-#security-button[level="high"],
+#security-button[level="high"] {
+  list-style-image: url("chrome://communicator/skin/icons/lock-secure.gif");
+}
+
 #security-button[level="low"] {
   list-style-image: url("chrome://communicator/skin/icons/lock-secure.gif");
 }
@@ -318,7 +333,7 @@
 }
 
 #privacy-button {
-  list-style-image: url("chrome://communicator/skin/permissions/taskbar-cookie.gif");
+  list-style-image: url("chrome://communicator/skin/cookie/taskbar-cookie.gif");
 }
 
 #popupIcon {
@@ -361,11 +376,4 @@ toolbarbutton.chevron {
 
 toolbarbutton.chevron > .toolbarbutton-menu-dropmarker {
   display: none;
-}
-
-/* For multi-line tooltips, we need our own style */
-.htmltooltip-label {
-  max-width: 40em;
-  margin: 0;
-  white-space: -moz-pre-wrap;
 }

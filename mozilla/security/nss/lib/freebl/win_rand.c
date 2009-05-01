@@ -1,41 +1,37 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "secrng.h"
-#include "secerr.h"
 #ifdef XP_WIN
 #include <windows.h>
 
@@ -57,7 +53,6 @@
 #endif
 
 #include "prio.h"
-#include "prerror.h"
 
 static PRInt32  filesToRead;
 static DWORD    totalFileBytes;
@@ -247,8 +242,8 @@ EnumSystemFiles(PRInt32 (*func)(const char *))
     char                szSysDir[_MAX_PATH];
     char                szFileName[_MAX_PATH];
 #ifdef _WIN32
-    WIN32_FIND_DATA     fdData;
-    HANDLE              lFindHandle;
+    struct _finddata_t  fdData;
+    long                lFindHandle;
 #else
     struct _find_t  fdData;
 #endif
@@ -262,27 +257,28 @@ EnumSystemFiles(PRInt32 (*func)(const char *))
     strcat(szFileName, "\\*.*");
 
 #ifdef _WIN32
-    lFindHandle = FindFirstFile(szFileName, &fdData);
-    if (lFindHandle == INVALID_HANDLE_VALUE)
+    lFindHandle = _findfirst(szFileName, &fdData);
+    if (lFindHandle == -1)
         return FALSE;
-    do {
-        // pass the full pathname to the callback
-        sprintf(szFileName, "%s\\%s", szSysDir, fdData.cFileName);
-        (*func)(szFileName);
-        iStatus = FindNextFile(lFindHandle, &fdData);
-    } while (iStatus != 0);
-    FindClose(lFindHandle);
 #else
-    if (_dos_findfirst(szFileName, 
-             _A_NORMAL | _A_RDONLY | _A_ARCH | _A_SUBDIR, &fdData) != 0)
+    if (_dos_findfirst(szFileName, _A_NORMAL | _A_RDONLY | _A_ARCH | _A_SUBDIR, &fdData) != 0)
         return FALSE;
+#endif
+
     do {
         // pass the full pathname to the callback
         sprintf(szFileName, "%s\\%s", szSysDir, fdData.name);
         (*func)(szFileName);
+
+#ifdef _WIN32
+        iStatus = _findnext(lFindHandle, &fdData);
+#else
         iStatus = _dos_findnext(&fdData);
+#endif
     } while (iStatus == 0);
-    _dos_findclose(&fdData);
+
+#ifdef _WIN32
+    _findclose(lFindHandle);
 #endif
 
     return TRUE;
@@ -546,98 +542,4 @@ void RNG_FileForRNG(const char *filename)
 }
 
 #endif  /* not WinCE */
-
-/*
- * CryptoAPI requires Windows NT 4.0 or Windows 95 OSR2 and later.
- * Until we drop support for Windows 95, we need to emulate some
- * definitions and declarations in <wincrypt.h> and look up the
- * functions in advapi32.dll at run time.
- */
-
-#ifndef WIN64
-typedef unsigned long HCRYPTPROV;
-#endif
-
-#define CRYPT_VERIFYCONTEXT 0xF0000000
-
-#define PROV_RSA_FULL 1
-
-typedef BOOL
-(WINAPI *CryptAcquireContextAFn)(
-    HCRYPTPROV *phProv,
-    LPCSTR pszContainer,
-    LPCSTR pszProvider,
-    DWORD dwProvType,
-    DWORD dwFlags);
-
-typedef BOOL
-(WINAPI *CryptReleaseContextFn)(
-    HCRYPTPROV hProv,
-    DWORD dwFlags);
-
-typedef BOOL
-(WINAPI *CryptGenRandomFn)(
-    HCRYPTPROV hProv,
-    DWORD dwLen,
-    BYTE *pbBuffer);
-
-/*
- * Windows XP and Windows Server 2003 and later have RtlGenRandom,
- * which must be looked up by the name SystemFunction036.
- */
-typedef BOOLEAN
-(APIENTRY *RtlGenRandomFn)(
-    PVOID RandomBuffer,
-    ULONG RandomBufferLength);
-
-size_t RNG_SystemRNG(void *dest, size_t maxLen)
-{
-    HMODULE hModule;
-    RtlGenRandomFn pRtlGenRandom;
-    CryptAcquireContextAFn pCryptAcquireContextA;
-    CryptReleaseContextFn pCryptReleaseContext;
-    CryptGenRandomFn pCryptGenRandom;
-    HCRYPTPROV hCryptProv;
-    size_t bytes = 0;
-
-    hModule = LoadLibrary("advapi32.dll");
-    if (hModule == NULL) {
-	PORT_SetError(PR_NOT_IMPLEMENTED_ERROR);
-	return 0;
-    }
-    pRtlGenRandom = (RtlGenRandomFn)
-	GetProcAddress(hModule, "SystemFunction036");
-    if (pRtlGenRandom) {
-	if (pRtlGenRandom(dest, maxLen)) {
-	    bytes = maxLen;
-	} else {
-	    PORT_SetError(SEC_ERROR_NEED_RANDOM);  /* system RNG failed */
-	}
-	goto done;
-    }
-    pCryptAcquireContextA = (CryptAcquireContextAFn)
-	GetProcAddress(hModule, "CryptAcquireContextA");
-    pCryptReleaseContext = (CryptReleaseContextFn)
-	GetProcAddress(hModule, "CryptReleaseContext");
-    pCryptGenRandom = (CryptGenRandomFn)
-	GetProcAddress(hModule, "CryptGenRandom");
-    if (!pCryptAcquireContextA || !pCryptReleaseContext || !pCryptGenRandom) {
-	PORT_SetError(PR_NOT_IMPLEMENTED_ERROR);
-	goto done;
-    }
-    if (pCryptAcquireContextA(&hCryptProv, NULL, NULL,
-	PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-	if (pCryptGenRandom(hCryptProv, maxLen, dest)) {
-	    bytes = maxLen;
-	}
-	pCryptReleaseContext(hCryptProv, 0);
-    }
-    if (bytes == 0) {
-	PORT_SetError(SEC_ERROR_NEED_RANDOM);  /* system RNG failed */
-    }
-done:
-    FreeLibrary(hModule);
-    return bytes;
-}
-
 #endif  /* is XP_WIN */

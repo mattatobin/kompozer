@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is the Netscape security libraries.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.	Portions created by Netscape are
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.	 All
+ * Rights Reserved.
  *
  * Contributor(s):
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable
+ * instead of those above.  If you wish to allow use of your
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "nspr.h"
 #include "secutil.h"
@@ -59,9 +56,6 @@ Usage(char *progName)
 				 progName);
     FPS "\t\t [-k slotpwfile | -K slotpw] [-w p12filepwfile | -W p12filepw]\n");
     FPS "\t\t [-v]\n");
-    FPS "Usage:	 %s -l listfile [-d certdir] [-P dbprefix] [-h tokenname]\n",
-				 progName);
-    FPS "\t\t [-k slotpwfile | -K slotpw] [-w p12filepwfile | -W p12filepw]\n");
     FPS "Usage:	 %s -o exportfile -n certname [-d certdir] [-P dbprefix]\n", progName);
     FPS "\t\t [-k slotpwfile | -K slotpw] [-w p12filepwfile | -W p12filepw]\n");
     FPS "\t\t [-v]\n");
@@ -142,6 +136,9 @@ p12u_InitContext(PRBool fileImport, char *filename)
 SECItem *
 P12U_NicknameCollisionCallback(SECItem *old_nick, PRBool *cancel, void *wincx)
 {
+    char *nick = NULL;
+    SECItem *ret_nick = NULL;
+
     if(cancel == NULL) {
       pk12uErrno = PK12UERR_USER_CANCELLED;
       return NULL;
@@ -155,9 +152,6 @@ P12U_NicknameCollisionCallback(SECItem *old_nick, PRBool *cancel, void *wincx)
     return NULL;
 
 #if 0
-    char *nick = NULL;
-    SECItem *ret_nick = NULL;
-
     nick = strdup( DEFAULT_CERT_NICKNAME );
 
     if(old_nick && !PORT_Strcmp((char *)old_nick->data, nick)) {
@@ -282,42 +276,33 @@ P12U_UnicodeConversion(PRArenaPool *arena, SECItem *dest, SECItem *src,
 SECItem *
 P12U_GetP12FilePassword(PRBool confirmPw, secuPWData *p12FilePw)
 {
-    char *p0 = NULL;
+    char *p0 = NULL, *p1 = NULL;
     SECItem *pwItem = NULL;
 
     if (p12FilePw == NULL || p12FilePw->source == PW_NONE) {
-	char *p1 = NULL;
-	int   rc;
 	for (;;) {
 	    p0 = SECU_GetPasswordString(NULL,
 					"Enter password for PKCS12 file: ");
-	    if (!confirmPw || p0 == NULL)
+	    if (!confirmPw)
 		break;
 	    p1 = SECU_GetPasswordString(NULL, "Re-enter password: ");
-	    if (p1 == NULL) {
-		PORT_ZFree(p0, PL_strlen(p0));
-		p0 = NULL;
+	    if (PL_strcmp(p0, p1) == 0)
 		break;
-	    }
-	    rc = PL_strcmp(p0, p1);
-	    PORT_ZFree(p1, PL_strlen(p1));
-	    if (rc == 0)
-		break;
-	    PORT_ZFree(p0, PL_strlen(p0));
 	}
     } else if (p12FilePw->source == PW_FROMFILE) {
 	p0 = SECU_FilePasswd(NULL, PR_FALSE, p12FilePw->data);
     } else { /* Plaintext */
-	p0 = PORT_Strdup(p12FilePw->data);
+	p0 = p12FilePw->data;
     }
 
-    if (p0 == NULL) {
-        return NULL;
-    }
     pwItem = SECITEM_AllocItem(NULL, NULL, PL_strlen(p0) + 1);
     memcpy(pwItem->data, p0, pwItem->len);
 
-    PORT_ZFree(p0, PL_strlen(p0));
+    PORT_Memset(p0, 0, PL_strlen(p0));
+    PORT_Free(p0);
+
+    PORT_Memset(p1, 0, PL_strlen(p1));
+    PORT_Free(p1);
 
     return pwItem;
 }
@@ -350,121 +335,6 @@ P12U_InitSlot(PK11SlotInfo *slot, secuPWData *slotPw)
     return SECSuccess;
 }
 
-/* This routine takes care of getting the PKCS12 file password, then reading and
- * verifying the file. It returns the decoder context and a filled in password.
- * (The password is needed by P12U_ImportPKCS12Object() to import the private
- * key.)
- */
-SEC_PKCS12DecoderContext *
-p12U_ReadPKCS12File(SECItem *uniPwp, char *in_file, PK11SlotInfo *slot,
-                    secuPWData *slotPw, secuPWData *p12FilePw)
-{
-    SEC_PKCS12DecoderContext *p12dcx = NULL;
-    p12uContext *p12cxt = NULL;
-    SECItem *pwitem = NULL;
-    SECItem p12file = { 0 };
-    SECStatus rv = SECFailure;
-    PRBool swapUnicode = PR_FALSE;
-    PRBool trypw;
-    int error;
-    
-#ifdef IS_LITTLE_ENDIAN
-    swapUnicode = PR_TRUE;
-#endif
-
-    p12cxt = p12u_InitContext(PR_TRUE, in_file);
-    if(!p12cxt) {
-	SECU_PrintError(progName,"File Open failed: %s", in_file);
-	pk12uErrno = PK12UERR_INIT_FILE;
-        return NULL;
-    }
-
-    /* get the password */
-    pwitem = P12U_GetP12FilePassword(PR_FALSE, p12FilePw);
-    if (!pwitem) {
-	pk12uErrno = PK12UERR_USER_CANCELLED;
-	goto done;
-    }
-
-    if(P12U_UnicodeConversion(NULL, uniPwp, pwitem, PR_TRUE,
-                              swapUnicode) != SECSuccess) {
-	SECU_PrintError(progName,"Unicode conversion failed");
-	pk12uErrno = PK12UERR_UNICODECONV;
-	goto done;
-    }
-    rv = SECU_FileToItem(&p12file, p12cxt->file);
-    if (rv != SECSuccess) {
-        SECU_PrintError(progName,"Failed to read from import file");
-        goto done;
-    }
-
-    do {
-        trypw = PR_FALSE;                  /* normally we do this once */
-        rv = SECFailure;
-        /* init the decoder context */
-        p12dcx = SEC_PKCS12DecoderStart(uniPwp, slot, slotPw,
-                                        NULL, NULL, NULL, NULL, NULL);
-        if(!p12dcx) {
-            SECU_PrintError(progName,"PKCS12 decoder start failed");
-            pk12uErrno = PK12UERR_PK12DECODESTART;
-            break;
-        }
-
-        /* decode the item */
-        rv = SEC_PKCS12DecoderUpdate(p12dcx, p12file.data, p12file.len);
-
-        if(rv != SECSuccess) {
-            error = PR_GetError();
-            if(error == SEC_ERROR_DECRYPTION_DISALLOWED) {
-                PR_SetError(error, 0);
-                break;
-            }
-            SECU_PrintError(progName,"PKCS12 decoding failed");
-            pk12uErrno = PK12UERR_DECODE;
-        }
-
-        /* does the blob authenticate properly? */
-        rv = SEC_PKCS12DecoderVerify(p12dcx);
-        if (rv != SECSuccess) {
-            if(uniPwp->len == 2) {
-                /* this is a null PW, try once more with a zero-length PW
-                   instead of a null string */
-                SEC_PKCS12DecoderFinish(p12dcx);
-                uniPwp->len = 0;
-                trypw = PR_TRUE;
-            }
-            else {
-                SECU_PrintError(progName,"PKCS12 decode not verified");
-                pk12uErrno = PK12UERR_DECODEVERIFY;
-                break;
-            }
-        }
-    } while (trypw == PR_TRUE);
-    /* rv has been set at this point */
-
-
-done:
-    if (rv != SECSuccess) {
-        if (p12dcx != NULL) {
-            SEC_PKCS12DecoderFinish(p12dcx);
-            p12dcx = NULL;
-        }
-        if (uniPwp->data) {
-            SECITEM_ZfreeItem(uniPwp, PR_FALSE);
-            uniPwp->data = NULL;
-        }
-    }
-    PR_Close(p12cxt->file);
-    p12cxt->file = NULL;
-    /* PK11_FreeSlot(slot); */
-    p12u_DestroyContext(&p12cxt, PR_FALSE);
-
-    if (pwitem) {
-	SECITEM_ZfreeItem(pwitem, PR_TRUE);
-    }
-    return p12dcx;
-}
-
 /*
  * given a filename for pkcs12 file, imports certs and keys
  *
@@ -477,29 +347,94 @@ PRIntn
 P12U_ImportPKCS12Object(char *in_file, PK11SlotInfo *slot,
 			secuPWData *slotPw, secuPWData *p12FilePw)
 {
+    p12uContext *p12cxt = NULL;
     SEC_PKCS12DecoderContext *p12dcx = NULL;
-    SECItem uniPwitem = { 0 };
+    SECItem *pwitem = NULL, uniPwitem = { 0 };
+    SECItem p12file = { 0 };
     SECStatus rv = SECFailure;
+    PRBool swapUnicode = PR_FALSE;
     int error;
+
+#ifdef IS_LITTLE_ENDIAN
+    swapUnicode = PR_TRUE;
+#endif
 
     rv = P12U_InitSlot(slot, slotPw);
     if (rv != SECSuccess) {
 	SECU_PrintError(progName, "Failed to authenticate to \"%s\"",
 			       			 PK11_GetSlotName(slot));
 	pk12uErrno = PK12UERR_PK11GETSLOT;
-	return rv;
+	goto loser;
+    }
+
+    p12cxt = p12u_InitContext(PR_TRUE, in_file);
+    if(!p12cxt) {
+	SECU_PrintError(progName,"File Open failed: %s", in_file);
+	pk12uErrno = PK12UERR_INIT_FILE;
+	goto loser;
+    }
+
+    /* get the password */
+    pwitem = P12U_GetP12FilePassword(PR_FALSE, p12FilePw);
+    if (!pwitem) {
+	pk12uErrno = PK12UERR_USER_CANCELLED;
+	goto loser;
+    }
+
+    if(P12U_UnicodeConversion(NULL, &uniPwitem, pwitem, PR_TRUE,
+			      swapUnicode) != SECSuccess) {
+	SECU_PrintError(progName,"Unicode conversion failed");
+	pk12uErrno = PK12UERR_UNICODECONV;
+	goto loser;
+    }
+
+    /* init the decoder context */
+    p12dcx = SEC_PKCS12DecoderStart(&uniPwitem, slot, slotPw,
+				    NULL, NULL, NULL, NULL, NULL);
+    if(!p12dcx) {
+	SECU_PrintError(progName,"PKCS12 decoder start failed");
+	pk12uErrno = PK12UERR_PK12DECODESTART;
+	goto loser;
+    }
+
+    /* decode the item */
+    rv = SECU_FileToItem(&p12file, p12cxt->file);
+    if (rv != SECSuccess) {
+	SECU_PrintError(progName,"Failed to read from import file");
+	goto loser;
+    }
+    rv = SEC_PKCS12DecoderUpdate(p12dcx, p12file.data, p12file.len);
+
+    if(rv != SECSuccess) {
+	error = PR_GetError();
+	if(error == SEC_ERROR_DECRYPTION_DISALLOWED) {
+	    PR_SetError(error, 0);
+	    goto loser;
+	}
+#ifdef EXTRA
+	/* unable to import as a new blob, it might be an old one */
+	if(p12u_TryToImportOldPDU(p12cxt, pwitem, slot, import_arg->nickCb,
+				  import_arg->proto_win) != SECSuccess) {
+	    goto loser;
+	}
+	goto tried_pdu_import;
+#endif /* EXTRA */
+	SECU_PrintError(progName,"PKCS12 decoding failed");
+	pk12uErrno = PK12UERR_DECODE;
     }
 
     rv = SECFailure;
-    p12dcx = p12U_ReadPKCS12File(&uniPwitem, in_file, slot, slotPw, p12FilePw);
-    
-    if(p12dcx == NULL) {
-        goto loser;
+
+    /* does the blob authenticate properly? */
+    if(SEC_PKCS12DecoderVerify(p12dcx) != SECSuccess) {
+	SECU_PrintError(progName,"PKCS12 decode not verified");
+	pk12uErrno = PK12UERR_DECODEVERIFY;
+	goto loser;
     }
-    
+
     /* make sure the bags are okey dokey -- nicknames correct, etc. */
-    rv = SEC_PKCS12DecoderValidateBags(p12dcx, P12U_NicknameCollisionCallback);
-    if (rv != SECSuccess) {
+    if (SEC_PKCS12DecoderValidateBags(p12dcx, P12U_NicknameCollisionCallback)
+	 != SECSuccess) {
 	if (PORT_GetError() == SEC_ERROR_PKCS12_DUPLICATE_DATA) {
 	    pk12uErrno = PK12UERR_CERTALREADYEXISTS;
 	} else {
@@ -510,25 +445,49 @@ P12U_ImportPKCS12Object(char *in_file, PK11SlotInfo *slot,
     }
 
     /* stuff 'em in */
-    rv = SEC_PKCS12DecoderImportBags(p12dcx);
-    if (rv != SECSuccess) {
+    if(SEC_PKCS12DecoderImportBags(p12dcx) != SECSuccess) {
 	SECU_PrintError(progName,"PKCS12 decode import bags failed");
 	pk12uErrno = PK12UERR_DECODEIMPTBAGS;
 	goto loser;
     }
 
+#if 0
+    /* important - to add the password hash into the key database */
+    rv = PK11_CheckUserPassword(slot, pw_string);
+    if( rv != SECSuccess ) {
+	SECU_PrintError(progName,"Failed to CheckUserPassword");
+	exit(-1);
+    }
+#endif
+
+    PR_Close(p12cxt->file);
+    p12cxt->file = NULL;
+    /* PK11_FreeSlot(slot); */
+
     fprintf(stdout, "%s: PKCS12 IMPORT SUCCESSFUL\n", progName);
     rv = SECSuccess;
 
 loser:
+    if (rv != SECSuccess) {
+      /* pk12u_report_failure */
+    } else {
+      /* pk12u_report_success ? */
+    }
+
     if (p12dcx) {
 	SEC_PKCS12DecoderFinish(p12dcx);
     }
-    
+    p12u_DestroyContext(&p12cxt, PR_FALSE);
+
     if (uniPwitem.data) {
 	SECITEM_ZfreeItem(&uniPwitem, PR_FALSE);
     }
-    
+
+    if (pwitem) {
+	SECITEM_ZfreeItem(pwitem, PR_TRUE);
+    }
+
+
     return rv;
 }
 
@@ -576,7 +535,6 @@ p12u_WriteToExportFile(void *arg, const char *buf, unsigned long len)
 	p12cxt->error = PR_TRUE;
     }
 }
-
 
 void
 P12U_ExportPKCS12Object(char *nn, char *outfile, PK11SlotInfo *inSlot,
@@ -711,85 +669,18 @@ loser:
         certlist = NULL;
     }    
 
+    if (slotPw)
+        PR_Free(slotPw->data);
+
+    if (p12FilePw)
+        PR_Free(p12FilePw->data);
+
     p12u_DestroyContext(&p12cxt, PR_TRUE);
     if(pwitem) {
         SECITEM_ZfreeItem(pwitem, PR_TRUE);
     }
     p12u_DoPKCS12ExportErrors();
     return;
-}
-
-
-PRIntn
-P12U_ListPKCS12File(char *in_file, PK11SlotInfo *slot,
-			secuPWData *slotPw, secuPWData *p12FilePw)
-{
-    SEC_PKCS12DecoderContext *p12dcx = NULL;
-    SECItem uniPwitem = { 0 };
-    SECStatus rv = SECFailure;
-    const SEC_PKCS12DecoderItem *dip;
-    int error;
-
-    p12dcx = p12U_ReadPKCS12File(&uniPwitem, in_file, slot, slotPw,
-                             p12FilePw);
-    /* did the blob authenticate properly? */
-    if(p12dcx == NULL) {
-	SECU_PrintError(progName,"PKCS12 decode not verified");
-	pk12uErrno = PK12UERR_DECODEVERIFY;
-        goto loser;
-    }
-    rv = SEC_PKCS12DecoderIterateInit(p12dcx);
-    if(rv != SECSuccess) {
-	SECU_PrintError(progName,"PKCS12 decode iterate bags failed");
-	pk12uErrno = PK12UERR_DECODEIMPTBAGS;
-        rv = SECFailure;
-    }
-    else {
-        while (SEC_PKCS12DecoderIterateNext(p12dcx, &dip) == SECSuccess) {
-            switch (dip->type) {
-                case SEC_OID_PKCS12_V1_CERT_BAG_ID:
-                    printf("Certificate");
-                    if (SECU_PrintSignedData(stdout, dip->der,
-                            (dip->hasKey) ? "(has private key)" : "",
-                             0, SECU_PrintCertificate) != 0) {
-                        SECU_PrintError(progName,"PKCS12 print cert bag failed");
-                    }
-                    if (dip->friendlyName != NULL) {
-                        printf("    Friendly Name: %s\n\n",
-                                dip->friendlyName->data);
-                    }
-                    break;
-                case SEC_OID_PKCS12_V1_KEY_BAG_ID:
-                case SEC_OID_PKCS12_V1_PKCS8_SHROUDED_KEY_BAG_ID:
-                    printf("Key");
-                    if (dip->type == SEC_OID_PKCS12_V1_PKCS8_SHROUDED_KEY_BAG_ID)
-                        printf("(shrouded)");
-                    printf(":\n");
-                    if (dip->friendlyName != NULL) {
-                        printf("    Friendly Name: %s\n\n",
-                                dip->friendlyName->data);
-                    }
-                    break;
-                default:
-                    printf("unknown bag type(%d): %s\n\n", dip->type,
-                            SECOID_FindOIDTagDescription(dip->type));
-                    break;
-            }
-        }
-        rv = SECSuccess;
-    }
-
-loser:
-    
-    if (p12dcx) {
-	SEC_PKCS12DecoderFinish(p12dcx);
-    }
-    
-    if (uniPwitem.data) {
-	SECITEM_ZfreeItem(&uniPwitem, PR_FALSE);
-    }
-    
-    return rv;
 }
 
 static void
@@ -805,18 +696,13 @@ p12u_EnableAllCiphers()
 }
 
 static PRUintn
-P12U_Init(char *dir, char *dbprefix, PRBool listonly)
+P12U_Init(char *dir, char *dbprefix)
 {
     SECStatus rv;
     PK11_SetPasswordFunc(SECU_GetModulePassword);
 
     PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
-    if (listonly && NSS_NoDB_Init("") == SECSuccess) {
-        rv = SECSuccess;
-    }
-    else {
-        rv = NSS_Initialize(dir,dbprefix,dbprefix,"secmod.db",0);
-    }
+    rv = NSS_Initialize(dir,dbprefix,dbprefix,"secmod.db",0);
     if (rv != SECSuccess) {
     	SECU_PrintPRandOSError(progName);
         exit(-1);
@@ -837,7 +723,6 @@ enum {
     opt_Import,
     opt_SlotPWFile,
     opt_SlotPW,
-    opt_List,
     opt_Nickname,
     opt_Export,
     opt_P12FilePWFile,
@@ -853,7 +738,6 @@ static secuCommandFlag pk12util_options[] =
     { /* opt_Import	       */ 'i', PR_TRUE,	 0, PR_FALSE },
     { /* opt_SlotPWFile	       */ 'k', PR_TRUE,	 0, PR_FALSE },
     { /* opt_SlotPW	       */ 'K', PR_TRUE,	 0, PR_FALSE },
-    { /* opt_List              */ 'l', PR_TRUE,  0, PR_FALSE },
     { /* opt_Nickname	       */ 'n', PR_TRUE,	 0, PR_FALSE },
     { /* opt_Export	       */ 'o', PR_TRUE,	 0, PR_FALSE },
     { /* opt_P12FilePWFile     */ 'w', PR_TRUE,	 0, PR_FALSE },
@@ -865,6 +749,7 @@ static secuCommandFlag pk12util_options[] =
 int
 main(int argc, char **argv)
 {
+    PRIntn ret = 0;
     secuPWData slotPw = { PW_NONE, NULL };
     secuPWData p12FilePw = { PW_NONE, NULL };
     PK11SlotInfo *slot;
@@ -890,9 +775,8 @@ main(int argc, char **argv)
 
     pk12_debugging = pk12util.options[opt_Debug].activated;
 
-    if ((pk12util.options[opt_Import].activated +
-	pk12util.options[opt_Export].activated +
-        pk12util.options[opt_List].activated) != 1) {
+    if (pk12util.options[opt_Import].activated +
+	pk12util.options[opt_Export].activated != 1) {
 	Usage(progName);
     }
 
@@ -902,10 +786,7 @@ main(int argc, char **argv)
     }
 
     slotname = SECU_GetOptionArg(&pk12util, opt_TokenName);
-
-    import_file = (pk12util.options[opt_List].activated) ?
-                    SECU_GetOptionArg(&pk12util, opt_List) :
-                    SECU_GetOptionArg(&pk12util, opt_Import);
+    import_file = SECU_GetOptionArg(&pk12util, opt_Import);
     export_file = SECU_GetOptionArg(&pk12util, opt_Export);
 
     if (pk12util.options[opt_P12FilePWFile].activated) {
@@ -934,8 +815,7 @@ main(int argc, char **argv)
     if (pk12util.options[opt_DBPrefix].activated) {
     	dbprefix = pk12util.options[opt_DBPrefix].arg;
     }
-    P12U_Init(SECU_ConfigDirectory(NULL), dbprefix,
-                pk12util.options[opt_List].activated);
+    P12U_Init(SECU_ConfigDirectory(NULL),dbprefix);
 
     if (!slotname || PL_strcmp(slotname, "internal") == 0)
 	slot = PK11_GetInternalKeySlot();
@@ -949,26 +829,20 @@ main(int argc, char **argv)
     }
 
     if (pk12util.options[opt_Import].activated) {
-	P12U_ImportPKCS12Object(import_file, slot, &slotPw,
-					   &p12FilePw);
+
+	if ((ret = P12U_ImportPKCS12Object(import_file, slot, &slotPw,
+					   &p12FilePw)) != 0)
+	    goto done;
 
     } else if (pk12util.options[opt_Export].activated) {
 	P12U_ExportPKCS12Object(pk12util.options[opt_Nickname].arg,
 				export_file, slot, &slotPw, &p12FilePw);
-        
-    } else if (pk12util.options[opt_List].activated) {
-	P12U_ListPKCS12File(import_file, slot, &slotPw, &p12FilePw);
-                                           
     } else {
 	Usage(progName);
 	pk12uErrno = PK12UERR_USAGE;
     }
 
 done:
-    if (slotPw.data != NULL)
-	PORT_ZFree(slotPw.data, PL_strlen(slotPw.data));
-    if (p12FilePw.data != NULL)
-	PORT_ZFree(p12FilePw.data, PL_strlen(p12FilePw.data));
     if (slot) PK11_FreeSlot(slot);
     if (NSS_Shutdown() != SECSuccess) {
 	pk12uErrno = 1;

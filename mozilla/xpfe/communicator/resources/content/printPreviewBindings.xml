@@ -51,36 +51,39 @@
 
     <content>
       <xul:button label="&print.label;" accesskey="&print.accesskey;"
-        oncommand="PrintUtils.print();"/>
+        oncommand="NSPrint();"/>
 
       <xul:button label="&pageSetup.label;" accesskey="&pageSetup.accesskey;"
-        oncommand="this.parentNode.doPageSetup();"/>
+        oncommand="doPageSetup();"/>
+      
+      <xul:toolbarseparator/>
 
       <xul:vbox align="center" pack="center">
-        <xul:label value="&page.label;" accesskey="&page.accesskey;" control="pageNumber"/>
+        <xul:label value="&page.label;"/>
       </xul:vbox>
       <xul:toolbarbutton class="toolbarbutton-icon home-arrow"
-        oncommand="parentNode.navigate(0, 0, 'home');" tooltiptext="&homearrow.tooltip;"/>
+        oncommand="parentNode.navigate(0, 0, 'home');"/>
       <xul:toolbarbutton class="toolbarbutton-icon last-arrow" 
-        oncommand="parentNode.navigate(-1, 0, 0);" tooltiptext="&leftarrow.tooltip;"/>
+        oncommand="parentNode.navigate(-1, 0, 0);"/>
       <xul:hbox align="center" pack="center">
-        <xul:textbox id="pageNumber" size="3" value="1" lastvalid="1"
-          onchange="navigate(0, this.value, 0);"/>
+        <xul:textbox size="3" value="1" lastvalid="1"
+          onblur="navigate(0, this.value, 0);"
+          onkeypress="if (event.keyCode==13) navigate(0, this.value, 0);"/>
         <xul:label value="&of.label;"/>
         <xul:label value="1"/>
       </xul:hbox>
       <xul:toolbarbutton class="toolbarbutton-icon next-arrow" 
-        oncommand="parentNode.navigate(1, 0, 0);" tooltiptext="&rightarrow.tooltip;"/>
+        oncommand="parentNode.navigate(1, 0, 0);"/>
       <xul:toolbarbutton class="toolbarbutton-icon end-arrow"
-        oncommand="parentNode.navigate(0, 0, 'end');" tooltiptext="&endarrow.tooltip;"/>
+        oncommand="parentNode.navigate(0, 0, 'end');"/>
 
-      <xul:toolbarseparator class="toolbarseparator-primary"/>
+      <xul:toolbarseparator/>
       <xul:vbox align="center" pack="center">
-        <xul:label value="&scale.label;" accesskey="&scale.accesskey;" control="scale"/>
+        <xul:label value="&scale.label;"/>
       </xul:vbox>
 
       <xul:hbox align="center" pack="center">
-        <xul:menulist id="scale" crop="none"
+        <xul:menulist crop="none"
           oncommand="parentNode.parentNode.scale(this.selectedItem.value);">
           <xul:menupopup>
             <xul:menuitem value="0.3" label="&p30.label;"/>
@@ -103,21 +106,22 @@
         </xul:menulist>
       </xul:hbox>
 
-      <xul:toolbarseparator class="toolbarseparator-primary"/>
-      <xul:hbox align="center" pack="center">
-        <xul:toolbarbutton label="&portrait.label;" checked="true"
-          accesskey="&portrait.accesskey;"
-          type="radio" group="orient" class="toolbar-portrait-page"
-          oncommand="parentNode.parentNode.orient('portrait');"/>
-        <xul:toolbarbutton label="&landscape.label;"
-          accesskey="&landscape.accesskey;"
-          type="radio" group="orient" class="toolbar-landscape-page"
-          oncommand="parentNode.parentNode.orient('landscape');"/>
-      </xul:hbox>
+      <xul:toolbarseparator/>
+      <xul:vbox align="center" pack="center">
+        <xul:hbox align="center" pack="center">
+          <xul:toolbarbutton label="&portrait.label;" 
+            accesskey="&portrait.accesskey;" checked="true"
+            type="radio" group="orient" class="toolbar-portrait-page"
+            oncommand="parentNode.parentNode.parentNode.orient('portrait');"/>
+          <xul:toolbarbutton label="&landscape.label;" accesskey="&landscape.accesskey;"
+            type="radio" group="orient" class="toolbar-landscape-page"
+            oncommand="parentNode.parentNode.parentNode.orient('landscape');"/>
+        </xul:hbox>
+      </xul:vbox>
 
-      <xul:toolbarseparator class="toolbarseparator-primary"/>
+      <xul:toolbarseparator/>
       <xul:button label="&close.label;" accesskey="&close.accesskey;"
-        oncommand="PrintUtils.exitPrintPreview();"/>
+        oncommand="BrowserExitPrintPreview();"/>
       <xul:data value="&customPrompt.title;"/>
     </content>
 
@@ -129,28 +133,28 @@
         document.getAnonymousNodes(this)[0]
       </field>
       <field name="mPageTextBox">
-        document.getAnonymousNodes(this)[5].firstChild
+        document.getAnonymousNodes(this)[6].firstChild
       </field>
       <field name="mTotalPages">
-        document.getAnonymousNodes(this)[5].lastChild
+        document.getAnonymousNodes(this)[6].lastChild
       </field>
       <field name="mScaleLabel">
-        document.getAnonymousNodes(this)[9].firstChild
-      </field>
-      <field name="mScaleCombobox">
         document.getAnonymousNodes(this)[10].firstChild
       </field>
+      <field name="mScaleCombobox">
+        document.getAnonymousNodes(this)[11].firstChild
+      </field>
       <field name="mOrientButtonsBox">
-        document.getAnonymousNodes(this)[12]
+        document.getAnonymousNodes(this)[13].firstChild
       </field>
       <field name="mPortaitButton">
-        this.mOrientButtonsBox.childNodes[0]
+        this.mOrientButtonsBox.firstChild
       </field>
       <field name="mLandscapeButton">
-        this.mOrientButtonsBox.childNodes[1]
+        this.mOrientButtonsBox.lastChild
       </field>
       <field name="mCustomTitle">
-        document.getAnonymousNodes(this)[15].firstChild
+        document.getAnonymousNodes(this)[16].getAttribute("value");
       </field>
       <field name="mPrintPreviewObs">
       </field>
@@ -161,10 +165,12 @@
       <![CDATA[
         this._debug("constructor");
 
-        var print = PrintUtils.getWebBrowserPrint();
-        this.mTotalPages.value = print.printPreviewNumPages;
+        var print = _getWebBrowserPrint();
+        try {
+          this.mTotalPages.value = print.printPreviewNumPages;
+          _getValuesFromPS();
+        } catch(e) {}
 
-        this.updateToolbar();
 
         // Hide the ``Print...'' button when the underlying gfx code does not
         // support multiple devicecontext to be used concurrently
@@ -205,9 +211,9 @@
           // hide page setup button
           document.getAnonymousNodes(this)[1].setAttribute("hidden", "true");
 
-          // hide scale widgets (indices: 8, 9, 10, 11)
-          // hide orient widgets (indices: 12, 13)
-          for (var i = 8; i <= 13; ++i)
+          // hide scale widgets (indices: 9, 10, 11, 12)
+          // hide orient widget (index: 13)
+          for (var i = 9; i <= 13; ++i)
           {
             document.getAnonymousNodes(this)[i].setAttribute("hidden", "true");
           }
@@ -218,13 +224,14 @@
       <method name="doPageSetup">
         <body>
         <![CDATA[
-          var didOK = PrintUtils.showPageSetup();
-          if (didOK) {
+          if (NSPrintSetup()) {
             // the changes that effect the UI
-            this.updateToolbar();
+            this._getValuesFromPS();
 
             // Now do PrintPreview
-            PrintUtils.printPreview();
+            var print    = this._getWebBrowserPrint();
+            this.doPrintPreview(print, print.currentPrintSettings,
+                                this.mTotalPages, null);
           }
         ]]>
         </body>
@@ -238,10 +245,13 @@
         <![CDATA[
           this._debug("navigate: " + aDirection + " " + aPageNum + 
                       " " + aHomeOrEnd);
-
-          var print = PrintUtils.getWebBrowserPrint();
+          
+          if (this.mPageTextBox.getAttribute("lastvalid") == aPageNum) {
+            return;
+          }
+          
+          var print = this._getWebBrowserPrint();
           var validInput = false;
-          var total;
 
           // we use only one of aHomeOrEnd, aDirection, or aPageNum
           if (aHomeOrEnd)
@@ -263,12 +273,10 @@
           }
           else if (aDirection)
           {
-            var textBoxStr = this.mPageTextBox.value;
-            var newPageNum = parseInt(textBoxStr) + aDirection;
-            total = print.printPreviewNumPages;
+            var newPageNum = parseInt(this.mPageTextBox.value) + aDirection;
 
             // bounds check potentially user-entered number
-            if (newPageNum > 0 && newPageNum <= total)
+            if (newPageNum > 0 && newPageNum <= print.printPreviewNumPages)
             {
               this.mPageTextBox.value = newPageNum;
               print.printPreviewNavigate(
@@ -278,10 +286,8 @@
           }
           else 
           {
-            total = print.printPreviewNumPages;
-
             // bounds check potentially user-entered number
-            if (aPageNum > 0 && aPageNum <= total)
+            if (aPageNum > 0 && aPageNum <= print.printPreviewNumPages)
             {
               print.printPreviewNavigate(
                 print.PRINTPREVIEW_GOTO_PAGENUM, aPageNum);
@@ -310,15 +316,13 @@
         <parameter name="aValue"/>
         <body>
         <![CDATA[
-          var value = Math.round(aValue);
-          var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                                        .getService(Components.interfaces.nsIPromptService);
-          var result = {value:value};
+          var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"].getService(Components.interfaces.nsIPromptService);
+          var result = {value:aValue};
           var confirmed = promptService.prompt(window, this.mCustomTitle,
                                                this.mScaleLabel.value, result,
-                                               null, {value:value});
+                                               null, {value:aValue});
           this._debug("confirmed: " + confirmed);
-          if (!confirmed || !result.value || result.value == "" || result.value == value) {
+          if (!confirmed || !result.value || result.value == "") {
             return(-1);
           }
           return result.value;
@@ -334,16 +338,93 @@
 
           aValue = new Number(aValue);
 
-          for (var i = 0; i < scaleValues.length; i++) {
+          for (var i=0;i<scaleValues.length;i++) {
             if (aValue == scaleValues[i]) {
               this.mScaleCombobox.selectedIndex = i;
+              this.mScaleCombobox.setAttribute('lastValidInx', this.mScaleCombobox.selectedIndex);
               return;
             }
           }
+
           this.mScaleCombobox.value = "Custom";
+          this.mScaleCombobox.setAttribute('lastValidInx', 14);
         ]]>
         </body>
       </method>
+
+      <method name="doPrintPreview">
+        <parameter name="aWebBrowserPrint"/>
+        <parameter name="aPrintSettings"/>
+        <parameter name="aTotalPages"/>
+        <parameter name="aScaleCombobox"/>
+        <body>
+        <![CDATA[
+
+          // This observer is called once the progress dialog has been "opened"
+          this.mPrintPreviewObs = {
+              mDOMWin:null,
+              mWebBrowserPrint:null,
+              mPrintSettings:null,
+              mWebProgress:null,
+              mTotalPages:null,
+              mScaleCombobox:null,
+
+              observe: function(aSubject, aTopic, aData)
+              {
+                // First do PrintPreview
+                this.mWebBrowserPrint.printPreview(this.mPrintSettings, this.mDOMWin, this.mWebProgress.value);
+
+                // update total number of pages since this could have changed
+                this.mTotalPages.value = this.mWebBrowserPrint.printPreviewNumPages;
+                if (this.mScaleCombobox) {
+                  this.mScaleCombobox.setAttribute('lastValidInx', this.mScaleCombobox.selectedIndex);
+                }
+              },
+
+              QueryInterface : function(iid)
+              {
+               if (iid.equals(Components.interfaces.nsIObserver) || iid.equals(Components.interfaces.nsISupportsWeakReference))
+                return this;
+     
+               throw Components.results.NS_NOINTERFACE;
+              }
+          };
+
+          // Here we get the PrintingPromptService tso we can display the PP Progress from script
+          // For the browser implemented via XUL with the PP toolbar we cannot let it be
+          // automatically opened from the print engine because the XUL scrollbars in the PP window
+          // will layout before the content window and a crash will occur.
+          //
+          // Doing it all from script, means it lays out before hand and we can let printing do it's own thing
+          this.mWebProgress = new Object();
+
+          // set up observer's global data for invoking Print Preview
+          this.mPrintPreviewObs.mDOMWin          = content;
+          this.mPrintPreviewObs.mWebBrowserPrint = aWebBrowserPrint;
+          this.mPrintPreviewObs.mPrintSettings   = aPrintSettings;
+          this.mPrintPreviewObs.mWebProgress     = this.mWebProgress;
+          this.mPrintPreviewObs.mTotalPages      = aTotalPages;
+          this.mPrintPreviewObs.mScaleCombobox   = aScaleCombobox;
+
+          var printPreviewParams    = new Object();
+          var notifyOnOpen          = new Object();
+          var printingPromptService = Components.classes["@mozilla.org/embedcomp/printingprompt-service;1"]
+                                          .getService(Components.interfaces.nsIPrintingPromptService);
+          if (printingPromptService) {
+            printingPromptService.showProgress(content, aWebBrowserPrint,
+                                               aPrintSettings,
+                                               this.mPrintPreviewObs, false, this.mWebProgress, 
+                                               printPreviewParams, notifyOnOpen);
+            if (printPreviewParams.value) {
+              var webNav = getWebNavigation();
+              printPreviewParams.value.docTitle = webNav.document.title;
+              printPreviewParams.value.docURL   = webNav.currentURI.spec;
+            }
+          }
+        ]]>
+        </body>
+      </method>
+
 
       <method name="scale">
         <parameter name="aValue"/>
@@ -351,12 +432,12 @@
         <![CDATA[
           this._debug("scale: " + aValue);
 
-          var settings = PrintUtils.getPrintSettings();
+          var print = this._getWebBrowserPrint();
+          var settings = print.currentPrintSettings;
           if (aValue == "ShrinkToFit") {
             if (!settings.shrinkToFit) {
               settings.shrinkToFit = true;
-              this.savePrintSettings(settings, settings.kInitSaveShrinkToFit | settings.kInitSaveScaling);
-              PrintUtils.printPreview();
+              this.doPrintPreview(print, settings, this.mTotalPages, this.mScaleCombobox);
             }
             return;
           }
@@ -373,15 +454,10 @@
           }
 
           this.setScaleCombobox(aValue);
-          this.mScaleCombobox.setAttribute('lastValidInx', this.mScaleCombobox.selectedIndex);
 
-          if (settings.scaling != aValue)
-          {
-            settings.shrinkToFit = false;
-            settings.scaling = aValue;
-            this.savePrintSettings(settings, settings.kInitSaveShrinkToFit | settings.kInitSaveScaling);
-            PrintUtils.printPreview();
-          }
+          settings.shrinkToFit = false;
+          settings.scaling = aValue;
+          this.doPrintPreview(print, settings, this.mTotalPages, null);
         ]]>
         </body>
       </method>
@@ -392,25 +468,43 @@
         <![CDATA[
           this._debug("orient: " + aOrientation);
 
+          var orientValue;
           const kIPrintSettings = Components.interfaces.nsIPrintSettings;
-          var orientValue = (aOrientation == "portrait") ? kIPrintSettings.kPortraitOrientation :
-                                                           kIPrintSettings.kLandscapeOrientation;
-          var settings = PrintUtils.getPrintSettings();
-          if (settings.orientation != orientValue)
+          if (aOrientation == "portrait")
           {
-            settings.orientation = orientValue;
-            this.savePrintSettings(settings, settings.kInitSaveOrientation);
-            PrintUtils.printPreview();
+            this.mPortaitButton.checked = true;
+            this.mLandscapeButton.checked = false;
+            orientValue = kIPrintSettings.kPortraitOrientation;
+          } 
+          else
+          {
+            this.mPortaitButton.checked = false;
+            this.mLandscapeButton.checked = true;
+            orientValue = kIPrintSettings.kLandscapeOrientation;
           }
+
+          var print = this._getWebBrowserPrint();
+          var settings = print.currentPrintSettings;
+          settings.orientation = orientValue;
+          this.doPrintPreview(print, settings, this.mTotalPages, null);
         ]]>
         </body>
       </method>
 
-      <method name="updateToolbar">
+      <method name="_getWebBrowserPrint">
         <body>
         <![CDATA[
-          var print = PrintUtils.getWebBrowserPrint();
-          var settings = PrintUtils.getPrintSettings();
+          return _content
+                   .QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+                   .getInterface(Components.interfaces.nsIWebBrowserPrint);
+        ]]>
+        </body>
+      </method>
+
+      <method name="_getValuesFromPS">
+        <body>
+        <![CDATA[
+          var settings = this._getWebBrowserPrint().currentPrintSettings;
 
           var isPortrait = settings.orientation == Components.interfaces.nsIPrintSettings.kPortraitOrientation;
 
@@ -420,24 +514,13 @@
           if (settings.shrinkToFit) {
             this._debug("setting ShrinkToFit");
             this.mScaleCombobox.value = "ShrinkToFit";
+            this.mScaleCombobox.setAttribute('lastValidInx', 13);
           } else {
             this.setScaleCombobox(settings.scaling);
           }
 
-          this.mTotalPages.value = print.printPreviewNumPages;
-          this.mPageTextBox.value = 1;
         ]]>
         </body>
-      </method>
-
-      <method name="savePrintSettings">
-        <parameter name="settings"/>
-        <parameter name="flags"/>
-        <body><![CDATA[
-          var printService = Components.classes["@mozilla.org/gfx/printsettings-service;1"]
-                                       .getService(Components.interfaces.nsIPrintSettingsService);
-          printService.savePrintSettingsToPrefs(settings, true, flags);
-        ]]></body>
       </method>
 
       <method name="_debug">

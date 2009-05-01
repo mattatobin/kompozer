@@ -37,6 +37,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsAttrValue.h"
+#include "nsHTMLValue.h"
 #include "nsIAtom.h"
 #include "nsUnicharUtils.h"
 #include "nsICSSStyleRule.h"
@@ -47,8 +48,6 @@
 #ifdef MOZ_SVG
 #include "nsISVGValue.h"
 #endif
-
-nsVoidArray* nsAttrValue::sEnumTableArray = nsnull;
 
 nsAttrValue::nsAttrValue()
     : mBits(0)
@@ -86,26 +85,6 @@ nsAttrValue::~nsAttrValue()
   ResetIfSet();
 }
 
-/* static */
-nsresult
-nsAttrValue::Init()
-{
-  NS_ASSERTION(!sEnumTableArray, "nsAttrValue already initialized");
-
-  sEnumTableArray = new nsVoidArray;
-  NS_ENSURE_TRUE(sEnumTableArray, NS_ERROR_OUT_OF_MEMORY);
-  
-  return NS_OK;
-}
-
-/* static */
-void
-nsAttrValue::Shutdown()
-{
-  delete sEnumTableArray;
-  sEnumTableArray = nsnull;
-}
-
 nsAttrValue::ValueType
 nsAttrValue::Type() const
 {
@@ -131,9 +110,9 @@ nsAttrValue::Reset()
   switch(BaseType()) {
     case eStringBase:
     {
-      nsStringBuffer* str = NS_STATIC_CAST(nsStringBuffer*, GetPtr());
+      PRUnichar* str = NS_STATIC_CAST(PRUnichar*, GetPtr());
       if (str) {
-        str->Release();
+        nsCheapStringBufferUtils::Free(str);
       }
 
       break;
@@ -167,12 +146,7 @@ nsAttrValue::SetTo(const nsAttrValue& aOther)
   switch (aOther.BaseType()) {
     case eStringBase:
     {
-      ResetIfSet();
-      nsStringBuffer* str = NS_STATIC_CAST(nsStringBuffer*, aOther.GetPtr());
-      if (str) {
-        str->AddRef();
-        SetPtrValueAndType(str, eStringBase);
-      }
+      SetTo(aOther.GetStringValue());
       return;
     }
     case eOtherBase:
@@ -236,34 +210,32 @@ nsAttrValue::SetTo(const nsAttrValue& aOther)
 void
 nsAttrValue::SetTo(const nsAString& aValue)
 {
-  ResetIfSet();
-  if (!aValue.IsEmpty()) {
-    PRUint32 len = aValue.Length();
-
-    nsStringBuffer* buf = nsStringBuffer::FromString(aValue);
-    if (buf && (buf->StorageSize()/sizeof(PRUnichar) - 1) == len) {
-      buf->AddRef();
-      SetPtrValueAndType(buf, eStringBase);
-      return;
+  PRUnichar* str = nsnull;
+  PRBool empty = aValue.IsEmpty();
+  void* ptr;
+  if (BaseType() == eStringBase && (ptr = GetPtr())) {
+    if (!empty) {
+      nsCheapStringBufferUtils::
+        CopyToExistingBuffer(str, NS_STATIC_CAST(PRUnichar*, ptr), aValue);
     }
-
-    buf = nsStringBuffer::Alloc((len + 1) * sizeof(PRUnichar));
-    if (!buf) {
-      return;
+    else {
+      nsCheapStringBufferUtils::Free(NS_STATIC_CAST(PRUnichar*, ptr));
     }
-    PRUnichar *data = NS_STATIC_CAST(PRUnichar*, buf->Data());
-    CopyUnicodeTo(aValue, 0, data, len);
-    data[len] = PRUnichar(0);
-
-    SetPtrValueAndType(buf, eStringBase);
   }
+  else {
+    ResetIfSet();
+    if (!empty) {
+      nsCheapStringBufferUtils::CopyToBuffer(str, aValue);
+    }
+  }
+  SetPtrValueAndType(str, eStringBase);
 }
 
 void
-nsAttrValue::SetTo(PRInt16 aInt)
+nsAttrValue::SetTo(PRInt16 aInt, ValueType aType)
 {
   ResetIfSet();
-  SetIntValueAndType(aInt, eInteger);
+  SetIntValueAndType(aInt, aType);
 }
 
 void
@@ -302,9 +274,9 @@ nsAttrValue::ToString(nsAString& aResult) const
   switch(Type()) {
     case eString:
     {
-      nsStringBuffer* str = NS_STATIC_CAST(nsStringBuffer*, GetPtr());
+      PRUnichar* str = NS_STATIC_CAST(PRUnichar*, GetPtr());
       if (str) {
-        str->ToString(str->StorageSize()/sizeof(PRUnichar) - 1, aResult);
+        aResult = nsCheapStringBufferUtils::GetDependentString(str);
       }
       else {
         aResult.Truncate();
@@ -343,19 +315,7 @@ nsAttrValue::ToString(nsAString& aResult) const
     }
     case eEnum:
     {
-      PRInt16 val = GetEnumValue();
-      EnumTable* table = NS_STATIC_CAST(EnumTable*, sEnumTableArray->
-          FastElementAt(GetIntInternal() & NS_ATTRVALUE_ENUMTABLEINDEX_MASK));
-      while (table->tag) {
-        if (table->value == val) {
-          aResult.AssignASCII(table->tag);
-
-          return;
-        }
-        table++;
-      }
-
-      NS_NOTREACHED("couldn't find value in EnumTable");
+      NS_NOTREACHED("trying to convert enum to string");
 
       break;
     }
@@ -405,12 +365,81 @@ nsAttrValue::ToString(nsAString& aResult) const
   }
 }
 
-const nsCheapString
+void
+nsAttrValue::ToHTMLValue(nsHTMLValue& aResult) const
+{
+  switch(Type()) {
+    case eString:
+    {
+      aResult.SetStringValue(GetStringValue());
+      break;
+    }
+    case eAtom:
+    {
+      nsAutoString tmp;
+      GetAtomValue()->ToString(tmp);
+      aResult.SetStringValue(tmp);
+      break;
+    }
+    case eInteger:
+    {
+      aResult.SetIntValue(GetIntInternal(), eHTMLUnit_Integer);
+      break;
+    }
+    case eColor:
+    {
+      nscolor v;
+      GetColorValue(v);
+      aResult.SetColorValue(v);
+      break;
+    }
+    case eProportional:
+    {
+      aResult.SetIntValue(GetProportionalValue(), eHTMLUnit_Proportional);
+      break;
+    }
+    case eEnum:
+    {
+      aResult.SetIntValue(GetEnumValue(), eHTMLUnit_Enumerated);
+      break;
+    }
+    case ePercent:
+    {
+      aResult.SetPercentValue(GetPercentValue());
+      break;
+    }
+    case eCSSStyleRule:
+    {
+      aResult.SetCSSStyleRuleValue(GetCSSStyleRuleValue());
+      break;
+    }
+    case eAtomArray:
+    {
+      nsCOMArray<nsIAtom>* array = new nsCOMArray<nsIAtom>(*GetAtomArrayValue());
+      aResult.SetAtomArrayValue(array);
+      break;
+    }
+#ifdef MOZ_SVG
+    case eSVGValue:
+    {
+      nsAutoString tmp;
+      GetSVGValue()->GetValueString(tmp);
+      aResult.SetStringValue(tmp);
+    }
+#endif
+  }
+}
+
+const nsDependentSubstring
 nsAttrValue::GetStringValue() const
 {
   NS_PRECONDITION(Type() == eString, "wrong type");
 
-  return nsCheapString(NS_STATIC_CAST(nsStringBuffer*, GetPtr()));
+  static const PRUnichar blankStr[] = { '\0' };
+  void* ptr = GetPtr();
+  return ptr
+         ? nsCheapStringBufferUtils::GetDependentString(NS_STATIC_CAST(PRUnichar*, ptr))
+         : Substring(blankStr, blankStr);
 }
 
 PRBool
@@ -482,13 +511,8 @@ nsAttrValue::HashValue() const
   switch(BaseType()) {
     case eStringBase:
     {
-      nsStringBuffer* str = NS_STATIC_CAST(nsStringBuffer*, GetPtr());
-      if (str) {
-        PRUint32 len = str->StorageSize()/sizeof(PRUnichar) - 1;
-        return nsCRT::BufferHashCode(NS_STATIC_CAST(PRUnichar*, str->Data()), len);
-      }
-
-      return 0;
+      PRUnichar* str = NS_STATIC_CAST(PRUnichar*, GetPtr());
+      return str ? nsCheapStringBufferUtils::HashCode(str) : 0;
     }
     case eOtherBase:
     {
@@ -714,36 +738,16 @@ nsAttrValue::ParseStringOrAtom(const nsAString& aValue)
 
 PRBool
 nsAttrValue::ParseEnumValue(const nsAString& aValue,
-                            const EnumTable* aTable,
+                            const nsHTMLValue::EnumTable* aTable,
                             PRBool aCaseSensitive)
 {
   ResetIfSet();
 
-  // Have to const cast here since nsVoidArray can't deal with constpointers
-  EnumTable* tableStart = NS_CONST_CAST(EnumTable*, aTable);
-
   nsAutoString val(aValue);
   while (aTable->tag) {
-    if (aCaseSensitive ? val.EqualsASCII(aTable->tag) :
+    if (aCaseSensitive ? val.EqualsWithConversion(aTable->tag) :
                          val.EqualsIgnoreCase(aTable->tag)) {
-
-      // Find index of EnumTable
-      PRInt16 index = sEnumTableArray->IndexOf(tableStart);
-      if (index < 0) {
-        index = sEnumTableArray->Count();
-        NS_ASSERTION(index <= NS_ATTRVALUE_ENUMTABLEINDEX_MAXVALUE,
-                     "too many enum tables");
-        if (!sEnumTableArray->AppendElement(tableStart)) {
-          return PR_FALSE;
-        }
-      }
-
-      PRInt32 value = (aTable->value << NS_ATTRVALUE_ENUMTABLEINDEX_BITS) +
-                      index;
-
-      SetIntValueAndType(value, eEnum);
-      NS_ASSERTION(GetEnumValue() == aTable->value,
-                   "failed to store enum properly");
+      SetIntValueAndType(aTable->value, eEnum);
 
       return PR_TRUE;
     }
@@ -895,13 +899,6 @@ nsAttrValue::EnsureEmptyMiscContainer()
         delete cont->mAtomArray;
         break;
       }
-#ifdef MOZ_SVG
-      case eSVGValue:
-      {
-        NS_RELEASE(cont->mSVGValue);
-        break;
-      }
-#endif
       default:
       {
         break;

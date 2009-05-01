@@ -1,43 +1,26 @@
 /* -*- Mode: C++; tab-width: 3; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications, Inc.  Portions created by Netscape are
+ * Copyright (C) 1999, Mozilla.  All Rights Reserved.
+ * 
  * Contributor(s):
  *   Scott MacGregor <mscott@netscape.com>
  *   Boris Zbarsky <bzbarsky@mit.edu>  (Added mailcap and mime.types support)
  *   Peter Weilbacher <mozilla@Weilbacher.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsOSHelperAppService.h"
 #include "nsISupports.h"
@@ -70,8 +53,6 @@ static NS_DEFINE_CID(kStandardURLCID, NS_STANDARDURL_CID); // XXX need to conver
 #define INCL_DOSERRORS
 #define INCL_WINSHELLDATA
 #include <os2.h>
-
-#define MAXINIPARAMLENGTH 1024 // max length of OS/2 INI key for application parameters
 
 #define LOG(args) PR_LOG(mLog, PR_LOG_DEBUG, args)
 #define LOG_ENABLED() PR_LOG_TEST(mLog, PR_LOG_DEBUG)
@@ -1093,11 +1074,11 @@ nsOSHelperAppService::GetHandlerAndDescriptionFromMailcapFile(const nsAString& a
               nsDependentSubstring optionName(start_option_iter, end_optionname_iter);
               if (equalSignFound) {
                 // This is an option that has a name and value
-                if (optionName.EqualsLiteral("description")) {
+                if (optionName.Equals(NS_LITERAL_STRING("description"))) {
                   aDescription = Substring(++equal_sign_iter, semicolon_iter);
-                } else if (optionName.EqualsLiteral("x-mozilla-flags")) {
+                } else if (optionName.Equals(NS_LITERAL_STRING("x-mozilla-flags"))) {
                   aMozillaFlags = Substring(++equal_sign_iter, semicolon_iter);
-                } else if (optionName.EqualsLiteral("test")) {
+                } else if (optionName.Equals(NS_LITERAL_STRING("test"))) {
                   nsCAutoString testCommand;
                   rv = UnescapeCommand(Substring(++equal_sign_iter, semicolon_iter),
                                        aMajorType,
@@ -1141,105 +1122,6 @@ nsOSHelperAppService::GetHandlerAndDescriptionFromMailcapFile(const nsAString& a
   return rv;
 }
 
-// Check OS/2 INI for application and parameters for the protocol
-// return NS_OK, if application exists for protocol in INI and is not empty
-nsresult
-nsOSHelperAppService::GetApplicationAndParametersFromINI(const nsACString& aProtocol,
-                                                         char * app, ULONG appLength,
-                                                         char * param, ULONG paramLength)
-{
-  /* initialize app to '\0' for later check */
-  *app = '\0';
-
-  /* http or https */
-  if ((aProtocol == NS_LITERAL_CSTRING("http")) ||
-      (aProtocol == NS_LITERAL_CSTRING("https"))) {
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultBrowserExe",
-                          "",
-                          app,
-                          appLength);
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultParameters",
-                          "",
-                          param,
-                          paramLength);
-  }
-  /* mailto: */
-  else if (aProtocol == NS_LITERAL_CSTRING("mailto")) {
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultMailExe",
-                          "",
-                          app,
-                          appLength);
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultMailParameters",
-                          "",
-                          param,
-                          paramLength);
-  }
-  /* ftp */
-  else if (aProtocol == NS_LITERAL_CSTRING("ftp")) {
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultFTPExe",
-                          "",
-                          app,
-                          appLength);
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultFTPParameters",
-                          "",
-                          param,
-                          paramLength);
-  }
-  /* news: or snews: */
-  else if ((aProtocol == NS_LITERAL_CSTRING("news")) ||
-           (aProtocol == NS_LITERAL_CSTRING("snews"))) {
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultNewsExe",
-                          "",
-                          app,
-                          appLength);
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultNewsParameters",
-                          "",
-                          param,
-                          paramLength);
-  }
-  /* irc: */
-  else if (aProtocol == NS_LITERAL_CSTRING("irc")) {
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultIRCExe",
-                          "",
-                          app,
-                          appLength);
-    PrfQueryProfileString(HINI_USER,
-                          "WPURLDEFAULTSETTINGS",
-                          "DefaultIRCParameters",
-                          "",
-                          param,
-                          paramLength);
-  }
-  else {
-    NS_WARNING("GetApplicationAndParametersFromINI(): unsupported protocol scheme");
-    return NS_ERROR_FAILURE;
-  }
-
-  /* application string in INI was empty */
-  if (app[0] == '\0')
-    return NS_ERROR_FAILURE;
-
-  return NS_OK;
-}
-
 NS_IMETHODIMP nsOSHelperAppService::ExternalProtocolHandlerExists(const char * aProtocolScheme, PRBool * aHandlerExists)
 {
   LOG(("-- nsOSHelperAppService::ExternalProtocolHandlerExists for '%s'\n",
@@ -1261,22 +1143,66 @@ NS_IMETHODIMP nsOSHelperAppService::ExternalProtocolHandlerExists(const char * a
     }
   }
   /* Check the OS/2 INI for the protocol */
-  char szAppFromINI[CCHMAXPATH];
-  char szParamsFromINI[MAXINIPARAMLENGTH];
-  rv = GetApplicationAndParametersFromINI(nsDependentCString(aProtocolScheme),
-                                          szAppFromINI, sizeof(szAppFromINI),
-                                          szParamsFromINI, sizeof(szParamsFromINI));
-  if (NS_SUCCEEDED(rv)) {
-    *aHandlerExists = PR_TRUE;
+  char szAppFromINI[CCHMAXPATH] = "\0";
+  nsDependentCString protocol(aProtocolScheme);
+  if ((protocol.Equals("http")) ||
+      (protocol.Equals("https"))) {
+    PrfQueryProfileString(HINI_USER,
+                          "WPURLDEFAULTSETTINGS",
+                          "DefaultBrowserExe",
+                          "",
+                          szAppFromINI,
+                          sizeof(szAppFromINI));
+    *aHandlerExists = (*szAppFromINI != 0);
     return NS_OK;
   }
-
-  return NS_ERROR_FAILURE;
+  if ((protocol.Equals("ftp"))) {
+    PrfQueryProfileString(HINI_USER,
+                          "WPURLDEFAULTSETTINGS",
+                          "DefaultFTPExe",
+                          "",
+                          szAppFromINI,
+                          sizeof(szAppFromINI));
+    *aHandlerExists = (*szAppFromINI != 0);
+    return NS_OK;
+  }
+  if ((protocol.Equals("mailto"))) {
+    PrfQueryProfileString(HINI_USER,
+                          "WPURLDEFAULTSETTINGS",
+                          "DefaultMailExe",
+                          "",
+                          szAppFromINI,
+                          sizeof(szAppFromINI));
+    *aHandlerExists = (*szAppFromINI != 0);
+    return NS_OK;
+  }
+  if ((protocol.Equals("news")) ||
+      (protocol.Equals("snews"))) {
+    PrfQueryProfileString(HINI_USER,
+                          "WPURLDEFAULTSETTINGS",
+                          "DefaultNewsExe",
+                          "",
+                          szAppFromINI,
+                          sizeof(szAppFromINI));
+    *aHandlerExists = (*szAppFromINI != 0);
+    return NS_OK;
+  }
+  if (protocol.Equals("irc")) {
+    PrfQueryProfileString(HINI_USER,
+                          "WPURLDEFAULTSETTINGS",
+                          "DefaultIRCExe",
+                          "",
+                          szAppFromINI,
+                          sizeof(szAppFromINI));
+    *aHandlerExists = (*szAppFromINI != 0);
+    return NS_OK;
+  }
+  return NS_OK;
 }
 
 nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
 {
-  LOG(("-- nsOSHelperAppService::LoadUriInternal\n"));
+  LOG(("-- nsOSHelperAppService::LoadUrl\n"));
   nsCOMPtr<nsIPref> thePrefsService(do_GetService(NS_PREF_CONTRACTID));
   if (!thePrefsService) {
     return NS_ERROR_FAILURE;
@@ -1305,13 +1231,92 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
 
   rv = thePrefsService->CopyCharPref(prefName.get(), getter_Copies(prefString));
   if (NS_FAILED(rv) || prefString.IsEmpty()) {
-    char szAppFromINI[CCHMAXPATH];
-    char szParamsFromINI[MAXINIPARAMLENGTH];
+    char szAppFromINI[CCHMAXPATH] = "\0";
+    char szParamsFromINI[CCHMAXPATH];
+    /* http or https */
+    if ((uProtocol == NS_LITERAL_CSTRING("http")) ||
+        (uProtocol == NS_LITERAL_CSTRING("https"))) {
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultBrowserExe",
+                            "",
+                            szAppFromINI,
+                            sizeof(szAppFromINI));
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultParameters",
+                            "",
+                            szParamsFromINI,
+                            sizeof(szParamsFromINI));
+    }
+    /* mailto: */
+    else if (uProtocol == NS_LITERAL_CSTRING("mailto")) {
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultMailExe",
+                            "",
+                            szAppFromINI,
+                            sizeof(szAppFromINI));
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultMailParameters",
+                            "",
+                            szParamsFromINI,
+                            sizeof(szParamsFromINI));
+    }
+    /* ftp */
+    else if (uProtocol == NS_LITERAL_CSTRING("ftp")) {
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultFTPExe",
+                            "",
+                            szAppFromINI,
+                            sizeof(szAppFromINI));
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultFTPParameters",
+                            "",
+                            szParamsFromINI,
+                            sizeof(szParamsFromINI));
+    }
+    /* news: or snews: */
+    else if ((uProtocol == NS_LITERAL_CSTRING("news")) ||
+             (uProtocol == NS_LITERAL_CSTRING("snews"))) {
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultNewsExe",
+                            "",
+                            szAppFromINI,
+                            sizeof(szAppFromINI));
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultNewsParameters",
+                            "",
+                            szParamsFromINI,
+                            sizeof(szParamsFromINI));
+    }
+    /* irc: */
+    else if (uProtocol == NS_LITERAL_CSTRING("irc")) {
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultIRCExe",
+                            "",
+                            szAppFromINI,
+                            sizeof(szAppFromINI));
+      PrfQueryProfileString(HINI_USER,
+                            "WPURLDEFAULTSETTINGS",
+                            "DefaultIRCParameters",
+                            "",
+                            szParamsFromINI,
+                            sizeof(szParamsFromINI));
+    }
+    /* unsupported protocol scheme */
+    else {
+      return NS_ERROR_FAILURE;
+    }
+
     /* did OS2.INI contain application? */
-    rv = GetApplicationAndParametersFromINI(uProtocol,
-                                            szAppFromINI, sizeof(szAppFromINI),
-                                            szParamsFromINI, sizeof(szParamsFromINI));
-    if (NS_SUCCEEDED(rv)) {
+    if (szAppFromINI[0]) {
       applicationName = szAppFromINI;
       parameters = szParamsFromINI;
     } else {
@@ -1356,12 +1361,11 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
   NS_NAMED_LITERAL_CSTRING(group, "%group%");
   NS_NAMED_LITERAL_CSTRING(msgid, "%msgid%");
   NS_NAMED_LITERAL_CSTRING(channel, "%channel%");
-
-  PRBool replaced = PR_FALSE;
+  
   if (applicationName.IsEmpty() && parameters.IsEmpty()) {
     /* Put application name in parameters */
     applicationName.Append(prefString);
-
+  
     prefName.Append(".");
     nsCOMPtr<nsIPrefBranch> prefBranch;
     rv = thePrefsService->GetBranch(prefName.get(), getter_AddRefs(prefBranch));
@@ -1371,7 +1375,7 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
       if (NS_SUCCEEDED(rv) && !prefString.IsEmpty()) {
         parameters.Append(" ");
         parameters.Append(prefString);
-
+  
         PRInt32 pos = parameters.Find(url.get());
         if (pos != kNotFound) {
           nsCAutoString uURL;
@@ -1379,7 +1383,6 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
           NS_UnescapeURL(uURL);
           uURL.Cut(0, uProtocol.Length()+1);
           parameters.Replace(pos, url.Length(), uURL);
-          replaced = PR_TRUE;
         }
       } else {
         /* port */
@@ -1428,8 +1431,9 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
   printf("uEmail=%s\n", uEmail.get());
   printf("uGroup=%s\n", uGroup.get());
 #endif
-
+  
   PRInt32 pos;
+  PRBool replaced = PR_FALSE;
   pos = parameters.Find(url.get());
   if (pos != kNotFound) {
     replaced = PR_TRUE;
@@ -1507,7 +1511,7 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
        if (NS_FAILED(rv)) {
          return rv;
        }
-
+  
        params[0] = "/c";
        params[1] = applicationName.get();
        params[2] = parameters.get();
@@ -1528,12 +1532,12 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
 }
 
 already_AddRefed<nsMIMEInfoOS2>
-nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
-  // if the extension is empty, return immediately
-  if (aFileExt.IsEmpty())
+nsOSHelperAppService::GetFromExtension(const char *aFileExt) {
+  // if the extension is null, return immediately
+  if (!aFileExt || !*aFileExt)
     return nsnull;
   
-  LOG(("Here we do an extension lookup for '%s'\n", aFileExt.get()));
+  LOG(("Here we do an extension lookup for '%s'\n", aFileExt));
 
   nsresult rv;
 
@@ -1562,7 +1566,7 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
   }
 
   nsCAutoString mimeType(asciiMajorType + NS_LITERAL_CSTRING("/") + asciiMinorType);
-  nsMIMEInfoOS2* mimeInfo = new nsMIMEInfoOS2(mimeType);
+  nsMIMEInfoOS2* mimeInfo = new nsMIMEInfoOS2(mimeType.get());
   if (!mimeInfo)
     return nsnull;
   NS_ADDREF(mimeInfo);
@@ -1592,9 +1596,9 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
   mailcap_description.Trim(" \t\"");
   mozillaFlags.Trim(" \t");
   if (!mime_types_description.IsEmpty()) {
-    mimeInfo->SetDescription(mime_types_description);
+    mimeInfo->SetDescription(mime_types_description.get());
   } else {
-    mimeInfo->SetDescription(mailcap_description);
+    mimeInfo->SetDescription(mailcap_description.get());
   }
   if (NS_SUCCEEDED(rv) && !handler.IsEmpty()) {
     nsCOMPtr<nsIFile> handlerFile;
@@ -1603,7 +1607,7 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
     if (NS_SUCCEEDED(rv)) {
       mimeInfo->SetDefaultApplication(handlerFile);
       mimeInfo->SetPreferredAction(nsIMIMEInfo::useSystemDefault);
-      mimeInfo->SetDefaultDescription(handler);
+      mimeInfo->SetDefaultDescription(handler.get());
     }
   } else {
     mimeInfo->SetPreferredAction(nsIMIMEInfo::saveToDisk);
@@ -1613,12 +1617,12 @@ nsOSHelperAppService::GetFromExtension(const nsCString& aFileExt) {
 }
 
 already_AddRefed<nsMIMEInfoOS2>
-nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
-  // if the extension is empty, return immediately
-  if (aMIMEType.IsEmpty())
+nsOSHelperAppService::GetFromType(const char *aMIMEType) {
+  // if the extension is null, return immediately
+  if (!aMIMEType || !*aMIMEType)
     return nsnull;
   
-  LOG(("Here we do a mimetype lookup for '%s'\n", aMIMEType.get()));
+  LOG(("Here we do a mimetype lookup for '%s'\n", aMIMEType));
   nsresult rv;
   nsAutoString extensions,
     mime_types_description, mailcap_description,
@@ -1627,7 +1631,8 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
   nsHashtable typeOptions;
   
   // extract the major and minor types
-  NS_ConvertASCIItoUTF16 mimeType(aMIMEType);
+  nsAutoString mimeType;
+  mimeType.AssignWithConversion(aMIMEType);
   nsAString::const_iterator start_iter, end_iter,
                             majorTypeStart, majorTypeEnd,
                             minorTypeStart, minorTypeEnd;
@@ -1689,11 +1694,11 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
     return nsnull;
   NS_ADDREF(mimeInfo);
 
-  mimeInfo->SetFileExtensions(NS_ConvertUCS2toUTF8(extensions));
+  mimeInfo->SetFileExtensions(NS_ConvertUCS2toUTF8(extensions).get());
   if (! mime_types_description.IsEmpty()) {
-    mimeInfo->SetDescription(mime_types_description);
+    mimeInfo->SetDescription(mime_types_description.get());
   } else {
-    mimeInfo->SetDescription(mailcap_description);
+    mimeInfo->SetDescription(mailcap_description.get());
   }
 
   nsCOMPtr<nsIFile> handlerFile;
@@ -1702,7 +1707,7 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
   if (NS_SUCCEEDED(rv)) {
     mimeInfo->SetDefaultApplication(handlerFile);
     mimeInfo->SetPreferredAction(nsIMIMEInfo::useSystemDefault);
-    mimeInfo->SetDefaultDescription(handler);
+    mimeInfo->SetDefaultDescription(handler.get());
   } else {
     mimeInfo->SetPreferredAction(nsIMIMEInfo::saveToDisk);
   }
@@ -1712,23 +1717,23 @@ nsOSHelperAppService::GetFromType(const nsCString& aMIMEType) {
 
 
 already_AddRefed<nsIMIMEInfo>
-nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
-                                        const nsACString& aFileExt,
+nsOSHelperAppService::GetMIMEInfoFromOS(const char *aType,
+                                        const char *aFileExt,
                                         PRBool     *aFound) {
   *aFound = PR_TRUE;
-  nsMIMEInfoOS2* retval = GetFromType(PromiseFlatCString(aType)).get();
+  nsMIMEInfoOS2* retval = GetFromType(aType).get();
   PRBool hasDefault = PR_FALSE;
   if (retval)
     retval->GetHasDefaultHandler(&hasDefault);
   if (!retval || !hasDefault) {
-    nsRefPtr<nsMIMEInfoOS2> miByExt = GetFromExtension(PromiseFlatCString(aFileExt));
+    nsRefPtr<nsMIMEInfoOS2> miByExt = GetFromExtension(aFileExt);
     // If we had no extension match, but a type match, use that
     if (!miByExt && retval)
       return retval;
     // If we had an extension match but no type match, set the mimetype and use
     // it
     if (!retval && miByExt) {
-      if (!aType.IsEmpty())
+      if (aType)
         miByExt->SetMIMEType(aType);
       miByExt.swap(retval);
 
@@ -1737,10 +1742,12 @@ nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
     // If we got nothing, make a new mimeinfo
     if (!retval) {
       *aFound = PR_FALSE;
-      retval = new nsMIMEInfoOS2(aType);
+      retval = new nsMIMEInfoOS2();
       if (retval) {
         NS_ADDREF(retval);
-        if (!aFileExt.IsEmpty())
+        if (aType && *aType)
+          retval->SetMIMEType(aType);
+        if (aFileExt && *aFileExt)
           retval->AppendExtension(aFileExt);
       }
       
@@ -1753,57 +1760,5 @@ nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aType,
     miByExt.swap(retval);
   }
   return retval;
-}
-
-
-NS_IMETHODIMP
-nsOSHelperAppService::GetApplicationDescription(const nsACString& aScheme, nsAString& _retval)
-{
-  nsCOMPtr<nsIPref> thePrefsService(do_GetService(NS_PREF_CONTRACTID));
-  if (!thePrefsService) {
-    return NS_ERROR_FAILURE;
-  }
-  nsCAutoString prefName = NS_LITERAL_CSTRING("applications.") + aScheme;
-  nsXPIDLCString prefString;
-  nsCAutoString applicationName;
-
-  nsresult rv = thePrefsService->CopyCharPref(prefName.get(), getter_Copies(prefString));
-  if (NS_FAILED(rv) || prefString.IsEmpty()) {
-    char szAppFromINI[CCHMAXPATH];
-    char szParamsFromINI[MAXINIPARAMLENGTH];
-    /* did OS2.INI contain application? */
-    rv = GetApplicationAndParametersFromINI(aScheme,
-                                            szAppFromINI, sizeof(szAppFromINI),
-                                            szParamsFromINI, sizeof(szParamsFromINI));
-    if (NS_SUCCEEDED(rv)) {
-      applicationName = szAppFromINI;
-    } else {
-      return NS_ERROR_NOT_AVAILABLE;
-    }
-  } else {
-    applicationName.Append(prefString);
-  }
-
-
-  nsCOMPtr<nsILocalFile> application;
-  rv = NS_NewNativeLocalFile(nsDependentCString(applicationName.get()),
-                             PR_FALSE,
-                             getter_AddRefs(application));
-  if (NS_FAILED(rv)) {
-    char szAppPath[CCHMAXPATH];
-    APIRET rc = DosSearchPath(SEARCH_IGNORENETERRS | SEARCH_ENVIRONMENT,
-                              "PATH",
-                              applicationName.get(),
-                              szAppPath,
-                              sizeof(szAppPath));
-    /* if that worked, we can use the full pathname */
-    if (rc == NO_ERROR) {
-      _retval.Assign(NS_ConvertUTF8toUTF16(nsDependentCString(szAppPath)));
-      return NS_OK;
-    }
-  }
-  /* if the full path is given or not, use what we have */
-  _retval.Assign(NS_ConvertUTF8toUTF16(applicationName));
-  return NS_OK;
 }
 

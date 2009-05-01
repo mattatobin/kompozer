@@ -240,7 +240,11 @@ JavaArray_setPropertyById(JSContext *cx, JSObject *obj, jsval id, jsval *vp)
 
 JS_STATIC_DLL_CALLBACK(JSBool)
 JavaArray_lookupProperty(JSContext *cx, JSObject *obj, jsid id,
-                         JSObject **objp, JSProperty **propp)
+                         JSObject **objp, JSProperty **propp
+#if defined JS_THREADSAFE && defined DEBUG
+                            , const char *file, uintN line
+#endif
+                            )
 {
     JNIEnv *jEnv;
     JSErrorReporter old_reporter;

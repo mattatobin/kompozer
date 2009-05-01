@@ -420,39 +420,37 @@ function SwitchToValidatePanel()
   // Only EdTableProps.js currently implements this
 }
 
-// Kaze: nsIFilePicker might be already defined in the caller
-//const nsIFilePicker = Components.interfaces.nsIFilePicker;
+const nsIFilePicker = Components.interfaces.nsIFilePicker;
 
 function GetLocalFileURL(filterType)
 {
-  const filePicker = Components.interfaces.nsIFilePicker; // Kaze
-  var fp = Components.classes["@mozilla.org/filepicker;1"].createInstance(filePicker);
+  var fp = Components.classes["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
   var fileType = "html";
 
   if (filterType == "img")
   {
-    fp.init(window, GetString("SelectImageFile"), filePicker.modeOpen);
-    fp.appendFilters(filePicker.filterImages);
+    fp.init(window, GetString("SelectImageFile"), nsIFilePicker.modeOpen);
+    fp.appendFilters(nsIFilePicker.filterImages);
     fileType = "image";
   }
   // Current usage of this is in Link dialog,
   //  where we always want HTML first
   else if (filterType.indexOf("html") == 0)
   {
-    fp.init(window, GetString("OpenHTMLFile"), filePicker.modeOpen);
+    fp.init(window, GetString("OpenHTMLFile"), nsIFilePicker.modeOpen);
 
     // When loading into Composer, direct user to prefer HTML files and text files,
     //   so we call separately to control the order of the filter list
-    fp.appendFilters(filePicker.filterHTML);
-    fp.appendFilters(filePicker.filterText);
+    fp.appendFilters(nsIFilePicker.filterHTML);
+    fp.appendFilters(nsIFilePicker.filterText);
 
     // Link dialog also allows linking to images
     if (filterType.indexOf("img") > 0)
-      fp.appendFilters(filePicker.filterImages);
+      fp.appendFilters(nsIFilePicker.filterImages);
 
   }
   // Default or last filter is "All Files"
-  fp.appendFilters(filePicker.filterAll);
+  fp.appendFilters(nsIFilePicker.filterAll);
 
   // set the file picker's current directory to last-opened location saved in prefs
   SetFilePickerDirectory(fp, fileType);
@@ -461,7 +459,7 @@ function GetLocalFileURL(filterType)
   /* doesn't handle *.shtml files */
   try {
     var ret = fp.show();
-    if (ret == filePicker.returnCancel)
+    if (ret == nsIFilePicker.returnCancel)
       return null;
   }
   catch (ex) {

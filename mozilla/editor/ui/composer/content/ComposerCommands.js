@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,28 +14,29 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998-1999
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Simon Fraser (sfraser@netscape.com)
- *   Ryan Cassin (rcassin@supernova.org)
- *   Kathleen Brade (brade@netscape.com)
- *   Daniel Glazman (glazman@netscape.com)
+ *    Simon Fraser (sfraser@netscape.com)
+ *    Ryan Cassin (rcassin@supernova.org)
+ *    Kathleen Brade (brade@netscape.com)
+ *    Daniel Glazman (glazman@netscape.com)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -398,15 +399,8 @@ function pokeMultiStateUI(uiID, cmdParams)
     var desiredAttrib;
     if (isMixed)
       desiredAttrib = "mixed";
-    else {
-      var valuetype = cmdParams.getValueType("state_attribute");
-      if (valuetype == Components.interfaces.nsICommandParams.eStringType) {
-        desiredAttrib = cmdParams.getCStringValue("state_attribute");      
-      } else {
-        desiredAttrib = cmdParams.getStringValue("state_attribute");      
-      }
-
-    }
+    else
+      desiredAttrib = cmdParams.getCStringValue("state_attribute");
 
     var uiState = commandNode.getAttribute("state");
     if (desiredAttrib != uiState)
@@ -428,7 +422,7 @@ function doStatefulCommand(commandID, newState)
     var cmdParams = newCommandParams();
     if (!cmdParams) return;
 
-    cmdParams.setStringValue("state_attribute", newState);
+    cmdParams.setCStringValue("state_attribute", newState);
     goDoCommandParams(commandID, cmdParams);
 
     pokeMultiStateUI(commandID, cmdParams);
@@ -936,7 +930,7 @@ function OutputFileWithPersistAPI(editorDoc, aDestinationLocation, aRelatedFiles
   var editor = GetCurrentEditor();
   try {
     var imeEditor = editor.QueryInterface(Components.interfaces.nsIEditorIMESupport);
-    imeEditor.forceCompositionEnd();
+    imeEditor.ForceCompositionEnd();
     } catch (e) {}
 
   var isLocalFile = false;
@@ -1634,9 +1628,6 @@ const kSupportedTextMimeTypes =
   "text/rdf",
   "text/xsl",
   "text/javascript",
-  "text/ecmascript",
-  "application/javascript",
-  "application/ecmascript",
   "application/x-javascript",
   "text/xul",
   "application/vnd.mozilla.xul+xml"
@@ -1657,23 +1648,23 @@ function SaveDocument(aSaveAs, aSaveCopy, aMimeType)
 {
   var editor = GetCurrentEditor();
   if (!aMimeType || aMimeType == "" || !editor)
-    throw Components.results.NS_ERROR_NOT_INITIALIZED;
+    throw NS_ERROR_NOT_INITIALIZED;
 
   var editorDoc = editor.document;
   if (!editorDoc)
-    throw Components.results.NS_ERROR_NOT_INITIALIZED;
+    throw NS_ERROR_NOT_INITIALIZED;
 
   // if we don't have the right editor type bail (we handle text and html)
   var editorType = GetCurrentEditorType();
   if (editorType != "text" && editorType != "html" 
       && editorType != "htmlmail" && editorType != "textmail")
-    throw Components.results.NS_ERROR_NOT_IMPLEMENTED;
+    throw NS_ERROR_NOT_IMPLEMENTED;
 
   var saveAsTextFile = IsSupportedTextMimeType(aMimeType);
 
   // check if the file is to be saved is a format we don't understand; if so, bail
   if (aMimeType != "text/html" && !saveAsTextFile)
-    throw Components.results.NS_ERROR_NOT_IMPLEMENTED;
+    throw NS_ERROR_NOT_IMPLEMENTED;
 
   if (saveAsTextFile)
     aMimeType = "text/plain";
@@ -2174,32 +2165,12 @@ var nsOpenRemoteCommand =
 
   doCommand: function(aCommand)
   {
-    var params = { browser: null, action: null, url: "" };
-    openDialog( "chrome://communicator/content/openLocation.xul", "_blank", "chrome,modal,titlebar", params);
-    var win = getTopWin();
-    switch (params.action) {
-      case "0": // current window
-        win.focus();
-        win.loadURI(params.url, null,
-                    nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-        break;
-      case "1": // new window
-        openDialog(getBrowserURL(), "_blank", "all,dialog=no", params.url, null,
-                   null, nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-        break;
-      case "2": // edit
-        editPage(params.url);
-        break;
-      case "3": // new tab
-        win.focus();
-        var browser = win.getBrowser();
-        browser.selectedTab = browser.addTab(params.url, null, null, false,
-                nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP);
-        break;
-      default:
-        window.content.focus();
-        break;
-    }
+	  /* The last parameter is the current browser window.
+	     Use 0 and the default checkbox will be to load into an editor
+	     and loading into existing browser option is removed
+	   */
+	  window.openDialog( "chrome://communicator/content/openLocation.xul", "_blank", "chrome,modal,titlebar", 0);
+    window.content.focus();
   }
 };
 
@@ -2440,7 +2411,7 @@ var nsSpellingCommand =
   {
     window.cancelSendMessage = false;
     try {
-      var skipBlockQuotes = (window.document.documentElement.getAttribute("windowtype") == "msgcompose");
+      var skipBlockQuotes = (window.document.firstChild.getAttribute("windowtype") == "msgcompose");
       window.openDialog("chrome://editor/content/EdSpellCheck.xul", "_blank",
               "chrome,close,titlebar,modal", false, skipBlockQuotes, true);
     }
@@ -3077,7 +3048,7 @@ var nsSetSmiley =
   getCommandStateParams: function(aCommand, aParams, aRefCon) {},
   doCommandParams: function(aCommand, aParams, aRefCon)
   {
-    var smileyCode = aParams.getStringValue("state_attribute");
+    var smileyCode = aParams.getCStringValue("state_attribute");
 
     var strSml;
     switch(smileyCode)
@@ -3096,8 +3067,6 @@ var nsSetSmiley =
         break;
         case ":-[": strSml="s6";
         break;
-        case ":-/":
-        case ":/":
         case ":-\\":
         case ":\\": strSml="s7";
         break;

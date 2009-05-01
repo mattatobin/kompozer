@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -42,7 +42,7 @@
 #include "nsISupports.h"
 #include "nsString.h"
 
-#include "nsIDocShell.h"
+#include "nsIWebShell.h"
 #include "nsIDOMElement.h"
 
 
@@ -81,7 +81,7 @@ class nsIMenuItem : public nsISupports {
     */
     NS_IMETHOD Create ( nsIMenu* aParent, const nsString & aLabel, PRBool isSeparator, 
                           EMenuItemType aItemType, PRBool aEnabled, 
-                          nsIChangeManager* aManager, nsIDocShell* aShell, nsIContent* aNode ) = 0;
+                          nsIChangeManager* aManager, nsIWebShell* aShell, nsIContent* aNode ) = 0;
     
    /**
     * Get the MenuItem label
@@ -166,28 +166,6 @@ class nsIMenuItem : public nsISupports {
     */
     NS_IMETHOD SetModifiers(PRUint8 aModifiers) = 0;
     NS_IMETHOD GetModifiers(PRUint8 * aModifiers) = 0;
-};
-
-// {58C5DE16-931C-4D31-AB7E-1B5FBDF596C4}
-#define NS_IMENUITEM_MOZILLA_1_8_BRANCH_IID \
-{ 0x58C5DE16, 0x931C, 0x4D31, \
-  { 0xAB, 0x7E, 0x1B, 0x5F, 0xBD, 0xF5, 0x96, 0xC4 } };
-
-class nsIMenuItem_MOZILLA_1_8_BRANCH : public nsIMenuItem  {
-  
-  public:
-    NS_DEFINE_STATIC_IID_ACCESSOR(NS_IMENUITEM_MOZILLA_1_8_BRANCH_IID)
-
-    /**
-     * Sends a DOM event to the menu item's content node 
-     * @return NS_OK if the event was sent properly, otherwise an error code
-     */
-    NS_IMETHOD DispatchDOMEvent(const nsString &eventName, PRBool *preventDefaultCalled) = 0;
-
-   /**
-    * Sets an appropriate icon for the menu item.
-    */
-    NS_IMETHOD SetupIcon() = 0;
 };
 
 #endif

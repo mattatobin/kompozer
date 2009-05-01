@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 /* AUTO-GENERATED. DO NOT EDIT!!! */
@@ -49,40 +49,6 @@
 
 #include "nsSoftwareUpdateIIDs.h"
 
-
-PR_STATIC_CALLBACK(JSBool)
-GetInstallVersionProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp);
-
-PR_STATIC_CALLBACK(JSBool)
-SetInstallVersionProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp);
-
-PR_STATIC_CALLBACK(JSBool)
-EnumerateInstallVersion(JSContext *cx, JSObject *obj);
-
-PR_STATIC_CALLBACK(JSBool)
-ResolveInstallVersion(JSContext *cx, JSObject *obj, jsval id);
-
-PR_STATIC_CALLBACK(void)
-FinalizeInstallVersion(JSContext *cx, JSObject *obj);
-
-/***********************************************************************/
-//
-// class for InstallVersion
-//
-JSClass InstallVersionClass = {
-  "InstallVersion",
-  JSCLASS_HAS_PRIVATE | JSCLASS_PRIVATE_IS_NSISUPPORTS,
-  JS_PropertyStub,
-  JS_PropertyStub,
-  GetInstallVersionProperty,
-  SetInstallVersionProperty,
-  EnumerateInstallVersion,
-  ResolveInstallVersion,
-  JS_ConvertStub,
-  FinalizeInstallVersion
-};
-
-
 extern void ConvertJSValToStr(nsString&  aString,
                              JSContext* aContext,
                              jsval      aValue);
@@ -97,7 +63,7 @@ extern PRBool ConvertJSValToBool(PRBool* aProp,
 
 extern PRBool ConvertJSValToObj(nsISupports** aSupports,
                                REFNSIID aIID,
-                               JSClass* aClass,
+                               const nsString& aTypeName,
                                JSContext* aContext,
                                jsval aValue);
 
@@ -316,12 +282,7 @@ ResolveInstallVersion(JSContext *cx, JSObject *obj, jsval id)
 PR_STATIC_CALLBACK(JSBool)
 InstallVersionInit(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallVersion *nativeThis =
-    (nsIDOMInstallVersion*)JS_GetInstancePrivate(cx, obj, &InstallVersionClass,
-                                                 argv);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallVersion *nativeThis = (nsIDOMInstallVersion*)JS_GetPrivate(cx, obj);
   nsAutoString b0;
 
   *rval = JSVAL_NULL;
@@ -341,7 +302,7 @@ InstallVersionInit(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval 
   }
   else 
   {
-      b0.AssignLiteral("0.0.0.0");
+      b0.Assign(NS_LITERAL_STRING("0.0.0.0"));
   }
     
   if (NS_OK != nativeThis->Init(b0)) 
@@ -359,12 +320,7 @@ InstallVersionInit(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval 
 PR_STATIC_CALLBACK(JSBool)
 InstallVersionToString(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallVersion *nativeThis =
-    (nsIDOMInstallVersion*)JS_GetInstancePrivate(cx, obj, &InstallVersionClass,
-                                                 argv);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallVersion *nativeThis = (nsIDOMInstallVersion*)JS_GetPrivate(cx, obj);
   nsAutoString nativeRet;
 
   *rval = JSVAL_NULL;
@@ -395,12 +351,7 @@ InstallVersionToString(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, js
 PR_STATIC_CALLBACK(JSBool)
 InstallVersionCompareTo(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallVersion *nativeThis =
-    (nsIDOMInstallVersion*)JS_GetInstancePrivate(cx, obj, &InstallVersionClass,
-                                                 argv);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallVersion *nativeThis = (nsIDOMInstallVersion*)JS_GetPrivate(cx, obj);
   PRInt32                 nativeRet;
   nsString                b0str;
   PRInt32                 b0int;
@@ -465,16 +416,10 @@ InstallVersionCompareTo(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, j
 
         if(JS_FALSE == ConvertJSValToObj(getter_AddRefs(versionObj),
                                          NS_GET_IID(nsIDOMInstallVersion),
-                                         &InstallVersionClass,
+                                         NS_ConvertASCIItoUCS2("InstallVersion"),
                                          cx,
                                          argv[0]))
         {
-          return JS_FALSE;
-        }
-
-        if (!versionObj)
-        {
-          JS_ReportError(cx, "Function compareTo expects a non null object.");
           return JS_FALSE;
         }
 
@@ -503,6 +448,24 @@ InstallVersionCompareTo(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, j
 
   return JS_TRUE;
 }
+
+
+/***********************************************************************/
+//
+// class for InstallVersion
+//
+JSClass InstallVersionClass = {
+  "InstallVersion", 
+  JSCLASS_HAS_PRIVATE,
+  JS_PropertyStub,
+  JS_PropertyStub,
+  GetInstallVersionProperty,
+  SetInstallVersionProperty,
+  EnumerateInstallVersion,
+  ResolveInstallVersion,
+  JS_ConvertStub,
+  FinalizeInstallVersion
+};
 
 
 //
@@ -558,13 +521,16 @@ InstallVersion(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rva
 
   static NS_DEFINE_IID(kInstallVersion_CID, NS_SoftwareUpdateInstallVersion_CID);
 
-  result = CallCreateInstance(kInstallVersion_CID, &nativeThis);
-  if (NS_FAILED(result)) return JS_FALSE;
+  result = nsComponentManager::CreateInstance(kInstallVersion_CID,
+                                        nsnull,
+                                        NS_GET_IID(nsIDOMInstallVersion),
+                                        (void **)&nativeThis);
+  if (NS_OK != result) return JS_FALSE;
 
             
   result = nativeThis->QueryInterface(NS_GET_IID(nsIScriptObjectOwner),
                                       (void **)&owner);
-  if (NS_FAILED(result)) {
+  if (NS_OK != result) {
     NS_RELEASE(nativeThis);
     return JS_FALSE;
   }

@@ -24,6 +24,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Contributor(s):
+ *
  *   Adam Lock <adamlock@netscape.com>
  *
  * ***** END LICENSE BLOCK ***** */
@@ -34,7 +35,6 @@
 #include "nsNetUtil.h"
 #include "nsIGenericFactory.h"
 #include "nsIComponentManager.h"
-#include "nsIComponentRegistrar.h"
 #include "nsIProgressEventSink.h"
 #include "nsILoadGroup.h"
 #include "nsIInterfaceRequestor.h"
@@ -153,11 +153,8 @@ nsresult GeckoProtocolHandler::RegisterHandler(const char *aScheme, const char *
     // Create a factory object which will create the protocol handler on demand
     nsCOMPtr<nsIGenericFactory> factory;
     NS_NewGenericFactory(getter_AddRefs(factory), &ci);
-
-    nsCOMPtr<nsIComponentRegistrar> registrar;
-    NS_GetComponentRegistrar(getter_AddRefs(registrar));
-    if (registrar)
-        registrar->RegisterFactory(cid, aDescription, contractID.get(), factory);
+    nsComponentManager::RegisterFactory(
+        cid, aDescription, contractID.get(), factory, PR_FALSE);
 
     return NS_OK;
 }
@@ -228,8 +225,9 @@ NS_IMETHODIMP GeckoProtocolHandlerImpl::GetProtocolFlags(PRUint32 *aProtocolFlag
 NS_IMETHODIMP GeckoProtocolHandlerImpl::NewURI(const nsACString & aSpec, const char *aOriginCharset, nsIURI *aBaseURI, nsIURI **_retval)
 {
     nsresult rv;
-    nsIURI* url;
-    rv = CallCreateInstance(kSimpleURICID, &url);
+    nsIURI* url = nsnull;
+    rv = nsComponentManager::CreateInstance(
+        kSimpleURICID, nsnull, NS_GET_IID(nsIURI), (void**) &url);
     if (NS_FAILED(rv))
         return rv;
     rv = url->SetSpec(aSpec);
@@ -245,7 +243,6 @@ NS_IMETHODIMP GeckoProtocolHandlerImpl::NewURI(const nsACString & aSpec, const c
 /* nsIChannel newChannel (in nsIURI aURI); */
 NS_IMETHODIMP GeckoProtocolHandlerImpl::NewChannel(nsIURI *aURI, nsIChannel **_retval)
 {
-    NS_ENSURE_ARG_POINTER(aURI);
     GeckoProtocolChannel *channel = new GeckoProtocolChannel;
     if (!channel)
     {
@@ -377,10 +374,8 @@ GeckoProtocolChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *aCont
             mListenerContext = aContext;
             mListener = aListener;
 
-            // XXX should this use 64-bit content lengths?
             nsresult rv = NS_NewInputStreamPump(
-                getter_AddRefs(mPump), mContentStream, nsInt64(-1),
-                nsInt64(mContentLength), 0, 0, PR_TRUE);
+                getter_AddRefs(mPump), mContentStream, -1, mContentLength, 0, 0, PR_TRUE);
             if (NS_FAILED(rv)) return rv;
 
             if (mLoadGroup)
@@ -533,11 +528,6 @@ GeckoProtocolChannel::OnStopRequest(nsIRequest *req, nsISupports *ctx, nsresult 
 
     mPump = 0;
     mContentStream = 0;
-
-    // Drop notification callbacks to prevent cycles.
-    mCallbacks = 0;
-    mProgressSink = 0;
-
     return NS_OK;
 }
 
@@ -550,10 +540,8 @@ GeckoProtocolChannel::OnDataAvailable(nsIRequest *req, nsISupports *ctx,
 
     rv = mListener->OnDataAvailable(this, mListenerContext, stream, offset, count);
 
-    // XXX can this use real 64-bit ints?
     if (mProgressSink && NS_SUCCEEDED(rv) && !(mLoadFlags & LOAD_BACKGROUND))
-        mProgressSink->OnProgress(this, nsnull, nsUint64(offset + count),
-                                  nsUint64(mContentLength));
+        mProgressSink->OnProgress(this, nsnull, offset + count, mContentLength);
 
     return rv; // let the pump cancel on failure
 }

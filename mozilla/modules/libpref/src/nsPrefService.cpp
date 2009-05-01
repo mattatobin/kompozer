@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,29 +14,30 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
+ * Alec Flett <alecf@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsPrefService.h"
+#include "jsapi.h"
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsICategoryManager.h"
@@ -49,7 +50,6 @@
 #include "nsXPIDLString.h"
 #include "nsCRT.h"
 #include "nsCOMArray.h"
-#include "nsXPCOMCID.h"
 
 #include "nsQuickSort.h"
 #include "prmem.h"
@@ -58,6 +58,9 @@
 #include "prefapi.h"
 #include "prefread.h"
 #include "prefapi_private_data.h"
+
+// supporting PREF_Init()
+#include "nsIJSRuntimeService.h"
 
 #include "nsITimelineService.h"
 
@@ -78,6 +81,9 @@ static PRBool isSharingEnabled();
 static nsresult openPrefFile(nsIFile* aFile);
 static nsresult pref_InitInitialObjects(void);
 
+  // needed so we can still get the JS Runtime Service during XPCOM shutdown
+static nsIJSRuntimeService* gJSRuntimeService = nsnull; // owning reference
+
 //-----------------------------------------------------------------------------
 
 /*
@@ -95,6 +101,7 @@ nsPrefService::nsPrefService()
 nsPrefService::~nsPrefService()
 {
   PREF_Cleanup();
+  NS_IF_RELEASE(gJSRuntimeService);
 
 #ifdef MOZ_PROFILESHARING
   NS_IF_RELEASE(gSharedPrefHandler);
@@ -114,7 +121,6 @@ NS_INTERFACE_MAP_BEGIN(nsPrefService)
     NS_INTERFACE_MAP_ENTRY(nsIPrefService)
     NS_INTERFACE_MAP_ENTRY(nsIObserver)
     NS_INTERFACE_MAP_ENTRY(nsIPrefBranch)
-    NS_INTERFACE_MAP_ENTRY(nsIPrefBranch2)
     NS_INTERFACE_MAP_ENTRY(nsIPrefBranchInternal)
     NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
 NS_INTERFACE_MAP_END
@@ -130,7 +136,7 @@ nsresult nsPrefService::Init()
   if (!rootBranch)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  mRootBranch = (nsIPrefBranch2 *)rootBranch;
+  mRootBranch = (nsIPrefBranchInternal *)rootBranch;
   
   nsXPIDLCString lockFileName;
   nsresult rv;
@@ -199,9 +205,6 @@ NS_IMETHODIMP nsPrefService::Observe(nsISupports *aSubject, const char *aTopic, 
       ResetUserPrefs();
       rv = ReadUserPrefs(nsnull);
     }
-  } else if (!nsCRT::strcmp(aTopic, "reload-default-prefs")) {
-    // Reload the default prefs from file.
-    pref_InitInitialObjects();
   }
   return rv;
 }
@@ -449,9 +452,9 @@ nsresult nsPrefService::WritePrefFile(nsIFile* aFile)
     NS_LINEBREAK
     " *"
     NS_LINEBREAK
-    " * If you make changes to this file while the application is running,"
+    " * If you make changes to this file while the browser is running,"
     NS_LINEBREAK
-    " * the changes will be overwritten when the application exits."
+    " * the changes will be overwritten when the browser exits."
     NS_LINEBREAK
     " *"
     NS_LINEBREAK
@@ -618,13 +621,7 @@ pref_LoadPrefsInDir(nsIFile* aDir, char const *const *aSpecialFiles, PRUint32 aS
 
   // this may fail in some normal cases, such as embedders who do not use a GRE
   rv = aDir->GetDirectoryEntries(getter_AddRefs(dirIterator));
-  if (NS_FAILED(rv)) {
-    // If the directory doesn't exist, then we have no reason to complain.  We
-    // loaded everything (and nothing) successfully.
-    if (rv == NS_ERROR_FILE_NOT_FOUND)
-      rv = NS_OK;
-    return rv;
-  }
+  if (NS_FAILED(rv)) return rv;
 
   rv = dirIterator->HasMoreElements(&hasMoreElements);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -645,8 +642,7 @@ pref_LoadPrefsInDir(nsIFile* aDir, char const *const *aSpecialFiles, PRUint32 aS
     NS_ASSERTION(!leafName.IsEmpty(), "Failure in default prefs: directory enumerator returned empty file?");
 
     // Skip non-js files
-    if (StringEndsWith(leafName, NS_LITERAL_CSTRING(".js"),
-                       nsCaseInsensitiveCStringComparator())) {
+    if (StringEndsWith(leafName, NS_LITERAL_CSTRING(".js"))) {
       PRBool shouldParse = PR_TRUE;
       // separate out special files
       for (PRUint32 i = 0; i < aSpecialFilesCount; ++i) {
@@ -758,25 +754,11 @@ static nsresult pref_InitInitialObjects()
     NS_WARNING("Error parsing application default preferences.");
   }
 
-  // Load files from defaults/syspref
-  nsCOMPtr<nsIFile> SysPrefDir;
-  rv = defaultPrefDir->GetParent(getter_AddRefs(SysPrefDir));
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = SysPrefDir->AppendNative(NS_LITERAL_CSTRING("syspref"));
-  NS_ENSURE_SUCCESS(rv, rv);
-  PRBool exists;
-  if (NS_SUCCEEDED(SysPrefDir->Exists(&exists)) && exists) {
-    rv = pref_LoadPrefsInDir(SysPrefDir, nsnull, 0);
-    if (NS_FAILED(rv)) {
-      NS_WARNING("Error parsing system default preferences.");
-    }
-
-  }
-
   // xxxbsmedberg: TODO load default prefs from a category
   // but the architecture is not quite there yet
 
-  nsCOMPtr<nsIProperties> dirSvc(do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv));
+  static NS_DEFINE_CID(kDirectoryServiceCID, NS_DIRECTORY_SERVICE_CID);
+  nsCOMPtr<nsIProperties> dirSvc(do_GetService(kDirectoryServiceCID, &rv));
   if (NS_FAILED(rv)) return rv;
 
   nsCOMPtr<nsISimpleEnumerator> dirList;

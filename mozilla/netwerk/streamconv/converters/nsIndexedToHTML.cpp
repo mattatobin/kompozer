@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *   Bradley Baetz <bbaetz@cs.mcgill.ca>
- *   Christopher A. Aillon <christopher@aillon.com>
+ * Contributor(s): Bradley Baetz <bbaetz@cs.mcgill.ca>
+ *                 Christopher A. Aillon <christopher@aillon.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -71,7 +70,7 @@ static void ConvertNonAsciiToNCR(const nsAString& in, nsAFlatString& out)
     if (*start < 128) {
       out.Append(*start++);
     } else {
-      out.AppendLiteral("&#x");
+      out.Append(NS_LITERAL_STRING("&#x"));
       nsAutoString hex;
       hex.AppendInt(*start++, 16);
       out.Append(hex);
@@ -116,16 +115,16 @@ nsIndexedToHTML::Init(nsIStreamListener* aListener) {
 
 NS_IMETHODIMP
 nsIndexedToHTML::Convert(nsIInputStream* aFromStream,
-                         const char* aFromType,
-                         const char* aToType,
+                         const PRUnichar* aFromType,
+                         const PRUnichar* aToType,
                          nsISupports* aCtxt,
                          nsIInputStream** res) {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsIndexedToHTML::AsyncConvertData(const char *aFromType,
-                                  const char *aToType,
+nsIndexedToHTML::AsyncConvertData(const PRUnichar *aFromType,
+                                  const PRUnichar *aToType,
                                   nsIStreamListener *aListener,
                                   nsISupports *aCtxt) {
     return Init(aListener);
@@ -167,7 +166,6 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
     // - bbaetz
 
     PRBool isScheme = PR_FALSE;
-    PRBool isSchemeFile = PR_FALSE;
     if (NS_SUCCEEDED(uri->SchemeIs("ftp", &isScheme)) && isScheme) {
 
         // ftp urls don't always end in a /
@@ -176,7 +174,7 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
         nsCAutoString path;
         rv = uri->GetPath(path);
         if (NS_FAILED(rv)) return rv;
-        if (baseUri.Last() != '/' && !path.LowerCaseEqualsLiteral("/%2f")) {
+        if (baseUri.Last() != '/' && !path.EqualsIgnoreCase("/%2F")) {
             baseUri.Append('/');
             path.Append('/');
             uri->SetPath(path);
@@ -197,15 +195,15 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
              if (NS_FAILED(rv)) return rv;
              rv = newUri->GetAsciiSpec(titleUri);
              if (NS_FAILED(rv)) return rv;
-             if (titleUri.Last() != '/' && !path.LowerCaseEqualsLiteral("/%2f"))
+             if (titleUri.Last() != '/' && !path.EqualsIgnoreCase("/%2F"))
                  titleUri.Append('/');
         }
 
-        if (!path.EqualsLiteral("//") && !path.LowerCaseEqualsLiteral("/%2f")) {
+        if (!path.Equals("//") && !path.EqualsIgnoreCase("/%2F")) {
             rv = uri->Resolve(NS_LITERAL_CSTRING(".."),parentStr);
             if (NS_FAILED(rv)) return rv;
         }
-    } else if (NS_SUCCEEDED(uri->SchemeIs("file", &isSchemeFile)) && isSchemeFile) {
+    } else if (NS_SUCCEEDED(uri->SchemeIs("file", &isScheme)) && isScheme) {
         nsCOMPtr<nsIFileURL> fileUrl = do_QueryInterface(uri);
         nsCOMPtr<nsIFile> file;
         rv = fileUrl->GetFile(getter_AddRefs(file));
@@ -228,8 +226,13 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
             parentStr.Assign(url);
         }
 
-        // Directory index will be always encoded in UTF-8 if this is file url
-        rv = mParser->SetEncoding("UTF-8");
+        // reset parser's charset to platform's default if this is file url
+        nsCOMPtr<nsIPlatformCharset> platformCharset(do_GetService(NS_PLATFORMCHARSET_CONTRACTID, &rv));
+        NS_ENSURE_SUCCESS(rv, rv);
+        nsCAutoString charset;
+        rv = platformCharset->GetCharset(kPlatformCharsetSel_FileName, charset);
+        NS_ENSURE_SUCCESS(rv, rv);
+        rv = mParser->SetEncoding(charset.get());
         NS_ENSURE_SUCCESS(rv, rv);
 
     } else if (NS_SUCCEEDED(uri->SchemeIs("gopher", &isScheme)) && isScheme) {
@@ -246,14 +249,14 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
             path.Append('/');
             uri->SetPath(path);
         }
-        if (!path.EqualsLiteral("/")) {
+        if (!path.Equals("/")) {
             rv = uri->Resolve(NS_LITERAL_CSTRING(".."), parentStr);
             if (NS_FAILED(rv)) return rv;
         }
     }
 
     nsString buffer;
-    buffer.AssignLiteral("<?xml version=\"1.0\" encoding=\"");
+    buffer.Assign(NS_LITERAL_STRING("<?xml version=\"1.0\" encoding=\""));
     
     // Get the encoding from the parser
     // XXX - this won't work for any encoding set via a 301: line in the
@@ -267,14 +270,14 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
 
     AppendASCIItoUTF16(encoding, buffer);
 
-    buffer.AppendLiteral("\"?>\n"
-                         "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" "
-                         "\"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n");
+    buffer.Append(NS_LITERAL_STRING("\"?>\n") +
+                  NS_LITERAL_STRING("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" ") +
+                  NS_LITERAL_STRING("\"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"));
 
     // Anything but a gopher url needs to end in a /,
     // otherwise we end up linking to file:///foo/dirfile
 
-    buffer.AppendLiteral("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head><title>");
+    buffer.Append(NS_LITERAL_STRING("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head><title>"));
 
     nsXPIDLString title;
 
@@ -286,22 +289,8 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
     nsXPIDLString unEscapeSpec;
     rv = mTextToSubURI->UnEscapeAndConvert(encoding, titleUri.get(),
                                            getter_Copies(unEscapeSpec));
-    // unescape may fail because
-    // 1. file URL may be encoded in platform charset for backward compatibility
-    // 2. query part may not be encoded in UTF-8 (see bug 261929)
-    // so try the platform's default if this is file url
-    if (NS_FAILED(rv) && isSchemeFile) {
-        nsCOMPtr<nsIPlatformCharset> platformCharset(do_GetService(NS_PLATFORMCHARSET_CONTRACTID, &rv));
-        NS_ENSURE_SUCCESS(rv, rv);
-        nsCAutoString charset;
-        rv = platformCharset->GetCharset(kPlatformCharsetSel_FileName, charset);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = mTextToSubURI->UnEscapeAndConvert(charset.get(), titleUri.get(),
-                                               getter_Copies(unEscapeSpec));
-    }
     if (NS_FAILED(rv)) return rv;
-
+    
     nsXPIDLString htmlEscSpec;
     htmlEscSpec.Adopt(nsEscapeHTML2(unEscapeSpec.get(),
                                     unEscapeSpec.Length()));
@@ -322,42 +311,19 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
     ConvertNonAsciiToNCR(title, strNCR);
     buffer.Append(strNCR);
 
-    buffer.AppendLiteral("</title>");    
+    buffer.Append(NS_LITERAL_STRING("</title><base href=\""));    
+    AppendASCIItoUTF16(baseUri, buffer);
+    buffer.Append(NS_LITERAL_STRING("\"/>\n"));
 
-    // If there is a quote character in the baseUri, then
-    // lets not add a base URL.  The reason for this is that
-    // if we stick baseUri containing a quote into a quoted
-    // string, the quote character will prematurely close
-    // the base href string.  This is a fall-back check;
-    // that's why it is OK to not use a base rather than
-    // trying to play nice and escaping the quotes.  See bug
-    // 358128.
+    buffer.Append(NS_LITERAL_STRING("<style type=\"text/css\">\n") +
+                  NS_LITERAL_STRING("img { border: 0; padding: 0 2px; vertical-align: text-bottom; }\n") +
+                  NS_LITERAL_STRING("td  { font-family: monospace; padding: 2px 3px; text-align: right; vertical-align: bottom; white-space: pre; }\n") +
+                  NS_LITERAL_STRING("td:first-child { text-align: left; padding: 2px 10px 2px 3px; }\n") +
+                  NS_LITERAL_STRING("table { border: 0; }\n") +
+                  NS_LITERAL_STRING("a.symlink { font-style: italic; }\n") +
+                  NS_LITERAL_STRING("</style>\n"));
 
-    if (baseUri.FindChar('"') == kNotFound)
-    {
-        // Great, the baseUri does not contain a char that
-        // will prematurely close the string.  Go ahead an
-        // add a base href.
-        buffer.AppendLiteral("<base href=\"");
-        NS_ConvertUTF8toUTF16 utf16BaseURI(baseUri);
-        nsString htmlEscapedUri;
-        htmlEscapedUri.Adopt(nsEscapeHTML2(utf16BaseURI.get(), utf16BaseURI.Length()));
-        buffer.Append(htmlEscapedUri);
-        buffer.AppendLiteral("\"/>\n");
-    }
-    else
-    {
-        NS_ERROR("broken protocol handler didn't escape double-quote.");
-    }
-
-    buffer.AppendLiteral("<style type=\"text/css\">\n"
-                         "img { border: 0; padding: 0 2px; vertical-align: text-bottom; }\n"
-                         "td  { font-family: monospace; padding: 2px 3px; text-align: right; vertical-align: bottom; white-space: pre; }\n"
-                         "td:first-child { text-align: left; padding: 2px 10px 2px 3px; }\n"
-                         "table { border: 0; }\n"
-                         "a.symlink { font-style: italic; }\n"
-                         "</style>\n"
-                         "</head>\n<body>\n<h1>");
+    buffer.Append(NS_LITERAL_STRING("</head>\n<body>\n<h1>"));
     
     const PRUnichar* formatHeading[] = {
         htmlEscSpec.get()
@@ -371,26 +337,22 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
     
     ConvertNonAsciiToNCR(title, strNCR);
     buffer.Append(strNCR);
-    buffer.AppendLiteral("</h1>\n<hr/><table>\n");
+    buffer.Append(NS_LITERAL_STRING("</h1>\n<hr/><table>\n"));
 
-    //buffer.AppendLiteral("<tr><th>Name</th><th>Size</th><th>Last modified</th></tr>\n");
+    //buffer.Append(NS_LITERAL_STRING("<tr><th>Name</th><th>Size</th><th>Last modified</th></tr>\n"));
 
     if (!parentStr.IsEmpty()) {
         nsXPIDLString parentText;
         rv = mBundle->GetStringFromName(NS_LITERAL_STRING("DirGoUp").get(),
                                         getter_Copies(parentText));
         if (NS_FAILED(rv)) return rv;
-
+        
         ConvertNonAsciiToNCR(parentText, strNCR);
-        buffer.AppendLiteral("<tr><td colspan=\"3\"><a href=\"");
-
-        NS_ConvertUTF8toUTF16 utf16ParentStr(parentStr);
-        nsString htmlParentStr;
-        htmlParentStr.Adopt(nsEscapeHTML2(utf16ParentStr.get(), utf16ParentStr.Length()));
-        buffer.Append(htmlParentStr);
-        buffer.AppendLiteral("\">");
-        buffer.Append(strNCR);
-        buffer.AppendLiteral("</a></td></tr>\n");
+        buffer.Append(NS_LITERAL_STRING("<tr><td colspan=\"3\"><a href=\""));
+        AppendASCIItoUTF16(parentStr, buffer);
+        buffer.Append(NS_LITERAL_STRING("\">") +
+                      strNCR +
+                      NS_LITERAL_STRING("</a></td></tr>\n"));
     }
 
     // Push buffer to the listener now, so the initial HTML will not
@@ -399,26 +361,24 @@ nsIndexedToHTML::OnStartRequest(nsIRequest* request, nsISupports *aContext) {
     rv = mListener->OnStartRequest(request, aContext);
     if (NS_FAILED(rv)) return rv;
 
-    // The request may have been canceled, and if that happens, we want to
-    // suppress calls to OnDataAvailable.
-    request->GetStatus(&rv);
-    if (NS_FAILED(rv)) return rv;
-
     rv = FormatInputStream(request, aContext, buffer);
+
     return rv;
 }
 
 NS_IMETHODIMP
 nsIndexedToHTML::OnStopRequest(nsIRequest* request, nsISupports *aContext,
                                nsresult aStatus) {
-    if (NS_SUCCEEDED(aStatus)) {
-        nsString buffer;
-        buffer.AssignLiteral("</table><hr/></body></html>\n");
+    nsresult rv = NS_OK;
+    nsString buffer;
+    buffer.Assign(NS_LITERAL_STRING("</table><hr/></body></html>\n"));
 
-        aStatus = FormatInputStream(request, aContext, buffer);
-    }
+    rv = FormatInputStream(request, aContext, buffer);
+    if (NS_FAILED(rv)) return rv;
 
-    mParser->OnStopRequest(request, aContext, aStatus);
+    rv = mParser->OnStopRequest(request, aContext, aStatus);
+    if (NS_FAILED(rv)) return rv;
+
     mParser = 0;
     
     return mListener->OnStopRequest(request, aContext, aStatus);
@@ -515,15 +475,15 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
         return NS_ERROR_NULL_POINTER;
 
     nsString pushBuffer;
-    pushBuffer.AppendLiteral("<tr>\n <td><a");
+    pushBuffer.Append(NS_LITERAL_STRING("<tr>\n <td><a"));
 
     PRUint32 type;
     aIndex->GetType(&type);
     if (type == nsIDirIndex::TYPE_SYMLINK) {
-        pushBuffer.AppendLiteral(" class=\"symlink\"");
+        pushBuffer.Append(NS_LITERAL_STRING(" class=\"symlink\""));
     }
 
-    pushBuffer.AppendLiteral(" href=\"");
+    pushBuffer.Append(NS_LITERAL_STRING(" href=\""));
 
     nsXPIDLCString loc;
     aIndex->GetLocation(getter_Copies(loc));
@@ -532,7 +492,7 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
         mTextToSubURI = do_GetService(NS_ITEXTTOSUBURI_CONTRACTID, &rv);
         if (NS_FAILED(rv)) return rv;
     }
-
+    
     nsXPIDLCString encoding;
     rv = mParser->GetEncoding(getter_Copies(encoding));
     if (NS_FAILED(rv)) return rv;
@@ -541,7 +501,7 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
     rv = mTextToSubURI->UnEscapeAndConvert(encoding, loc,
                                            getter_Copies(unEscapeSpec));
     if (NS_FAILED(rv)) return rv;
-
+  
     // need to escape links
     nsCAutoString escapeBuf;
 
@@ -562,24 +522,22 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
         escFlags = esc_Forced | esc_OnlyASCII | esc_AlwaysCopy | esc_FileBaseName | esc_Colon;
     }
     NS_EscapeURL(utf8UnEscapeSpec.get(), utf8UnEscapeSpec.Length(), escFlags, escapeBuf);
-    NS_ConvertUTF8toUTF16 utf16URI(escapeBuf);
-    nsString htmlEscapedURL;
-    htmlEscapedURL.Adopt(nsEscapeHTML2(utf16URI.get(), utf16URI.Length()));
-    pushBuffer.Append(htmlEscapedURL);
   
-    pushBuffer.AppendLiteral("\"><img src=\"");
+    AppendUTF8toUTF16(escapeBuf, pushBuffer);
+    
+    pushBuffer.Append(NS_LITERAL_STRING("\"><img src=\""));
 
     switch (type) {
     case nsIDirIndex::TYPE_DIRECTORY:
     case nsIDirIndex::TYPE_SYMLINK:
-        pushBuffer.AppendLiteral("resource://gre/res/html/gopher-menu.gif\" alt=\"Directory: ");
+        pushBuffer.Append(NS_LITERAL_STRING("resource://gre/res/html/gopher-menu.gif\" alt=\"Directory: "));
         break;
     case nsIDirIndex::TYPE_FILE:
     case nsIDirIndex::TYPE_UNKNOWN:
-        pushBuffer.AppendLiteral("resource://gre/res/html/gopher-unknown.gif\" alt=\"File: ");
+        pushBuffer.Append(NS_LITERAL_STRING("resource://gre/res/html/gopher-unknown.gif\" alt=\"File: "));
         break;
     }
-    pushBuffer.AppendLiteral("\"/>");
+    pushBuffer.Append(NS_LITERAL_STRING("\"/>"));
 
     nsXPIDLString tmp;
     aIndex->GetDescription(getter_Copies(tmp));
@@ -587,12 +545,12 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
     pushBuffer.Append(escaped);
     nsMemory::Free(escaped);
 
-    pushBuffer.AppendLiteral("</a></td>\n <td>");
+    pushBuffer.Append(NS_LITERAL_STRING("</a></td>\n <td>"));
 
     PRInt64 size;
     aIndex->GetSize(&size);
     
-    if (nsUint64(PRUint64(size)) != nsUint64(LL_MAXUINT) &&
+    if (LL_NE(size, LL_INIT(0, -1)) &&
         type != nsIDirIndex::TYPE_DIRECTORY &&
         type != nsIDirIndex::TYPE_SYMLINK) {
         nsAutoString  sizeString;
@@ -600,13 +558,13 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
         pushBuffer.Append(sizeString);
     }
 
-    pushBuffer.AppendLiteral("</td>\n <td>");
+    pushBuffer.Append(NS_LITERAL_STRING("</td>\n <td>"));
 
     PRTime t;
     aIndex->GetLastModified(&t);
 
     if (t == -1) {
-        pushBuffer.AppendLiteral("</td>\n <td>");
+        pushBuffer.Append(NS_LITERAL_STRING("</td>\n <td>"));
     } else {
         nsAutoString formatted;
         nsAutoString strNCR;    // use NCR to show date in any doc charset
@@ -617,7 +575,7 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
                                 formatted);
         ConvertNonAsciiToNCR(formatted, strNCR);
         pushBuffer.Append(strNCR);
-        pushBuffer.AppendLiteral("</td>\n <td>");
+        pushBuffer.Append(NS_LITERAL_STRING("</td>\n <td>"));
         mDateTime->FormatPRTime(nsnull,
                                 kDateFormatNone,
                                 kTimeFormatSeconds,
@@ -627,37 +585,15 @@ nsIndexedToHTML::OnIndexAvailable(nsIRequest *aRequest,
         pushBuffer.Append(strNCR);
     }
 
-    pushBuffer.AppendLiteral("</td>\n</tr>\n");
+    pushBuffer.Append(NS_LITERAL_STRING("</td>\n</tr>\n"));
 
     // Split this up to avoid slow layout performance with large tables
     // - bug 85381
     if (++mRowCount > ROWS_PER_TABLE) {
-        pushBuffer.AppendLiteral("</table>\n<table>\n");
+        pushBuffer.Append(NS_LITERAL_STRING("</table>\n<table>\n"));
         mRowCount = 0;
     }
     
-    return FormatInputStream(aRequest, aCtxt, pushBuffer);
-}
-
-NS_IMETHODIMP
-nsIndexedToHTML::OnInformationAvailable(nsIRequest *aRequest,
-                                        nsISupports *aCtxt,
-                                        const nsAString& aInfo) {
-    nsAutoString pushBuffer;
-    PRUnichar* escaped = nsEscapeHTML2(PromiseFlatString(aInfo).get());
-    if (!escaped)
-        return NS_ERROR_OUT_OF_MEMORY;
-    pushBuffer.AppendLiteral("<tr>\n <td>");
-    pushBuffer.Append(escaped);
-    nsMemory::Free(escaped);
-    pushBuffer.AppendLiteral("</td>\n <td></td>\n <td></td>\n <td></td>\n</tr>\n");
-    
-    // Split this up to avoid slow layout performance with large tables
-    // - bug 85381
-    if (++mRowCount > ROWS_PER_TABLE) {
-        pushBuffer.AppendLiteral("</table>\n<table>\n");
-        mRowCount = 0;
-    }   
     return FormatInputStream(aRequest, aCtxt, pushBuffer);
 }
 
@@ -669,7 +605,7 @@ void nsIndexedToHTML::FormatSizeString(PRInt64 inSize, nsString& outSizeString)
         // round up to the nearest Kilobyte
         PRInt64  upperSize = (size + nsInt64(1023)) / nsInt64(1024);
         outSizeString.AppendInt(upperSize);
-        outSizeString.AppendLiteral(" KB");
+        outSizeString.Append(NS_LITERAL_STRING(" KB"));
     }
 }
 

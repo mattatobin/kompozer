@@ -44,7 +44,6 @@
 #include "nsDateTimeFormatCID.h"
 #include "mozSqlResult.h"
 #include "mozSqlConnection.h"
-#include "nsITreeColumns.h"
 
 static NS_DEFINE_CID(kRDFServiceCID, NS_RDFSERVICE_CID);
 static NS_DEFINE_CID(kDateTimeFormatCID, NS_DATETIMEFORMAT_CID);
@@ -55,14 +54,12 @@ nsIDateTimeFormat*      mozSqlResult::gFormat;
 nsIRDFResource*         mozSqlResult::kSQL_ResultRoot;
 nsIRDFResource*         mozSqlResult::kNC_Child;
 nsIRDFLiteral*          mozSqlResult::kNullLiteral;
-nsIRDFLiteral*          mozSqlResult::kEmptyLiteral;
 nsIRDFLiteral*          mozSqlResult::kTrueLiteral;
 nsIRDFLiteral*          mozSqlResult::kFalseLiteral;
 
 mozSqlResult::mozSqlResult(mozISqlConnection* aConnection,
                          const nsAString& aQuery)
-  : mDisplayNullAsText(PR_FALSE),
-    mConnection(aConnection),
+  : mConnection(aConnection),
     mQuery(aQuery),
     mSources(nsnull, nsnull, nsnull, nsnull),
     mCanInsert(-1),
@@ -77,10 +74,14 @@ mozSqlResult::Init()
   nsresult rv;
 
   if (gRefCnt++ == 0) {
-    rv = CallGetService(kRDFServiceCID, &gRDFService);
+    rv = nsServiceManager::GetService(kRDFServiceCID, NS_GET_IID(nsIRDFService),
+                                      (nsISupports**) &gRDFService);
     if (NS_FAILED(rv)) return rv;
 
-    rv = CallCreateInstance(kDateTimeFormatCID, &gFormat);
+    rv = nsComponentManager::CreateInstance(kDateTimeFormatCID,
+                                            nsnull,
+                                            NS_GET_IID(nsIDateTimeFormat),
+                                            (void**) &gFormat);
     if (NS_FAILED(rv)) return rv;
 
     rv = gRDFService->GetResource(NS_LITERAL_CSTRING("SQL:ResultRoot"),
@@ -91,8 +92,6 @@ mozSqlResult::Init()
     if (NS_FAILED(rv)) return rv;
 
     rv = gRDFService->GetLiteral(NS_LITERAL_STRING("null").get(), &kNullLiteral);
-    if (NS_FAILED(rv)) return rv;
-    rv = gRDFService->GetLiteral(EmptyString().get(), &kEmptyLiteral);
     if (NS_FAILED(rv)) return rv;
     rv = gRDFService->GetLiteral(NS_LITERAL_STRING("true").get(), &kTrueLiteral);
     if (NS_FAILED(rv)) return rv;
@@ -138,38 +137,22 @@ mozSqlResult::~mozSqlResult()
   if (--gRefCnt == 0) {
     NS_IF_RELEASE(kFalseLiteral);
     NS_IF_RELEASE(kTrueLiteral);
-    NS_IF_RELEASE(kEmptyLiteral);
     NS_IF_RELEASE(kNullLiteral);
     NS_IF_RELEASE(kNC_Child);
     NS_IF_RELEASE(kSQL_ResultRoot);
 
     NS_IF_RELEASE(gFormat);
-    NS_IF_RELEASE(gRDFService);
+    nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
     gRDFService = nsnull;
   }
 }
 
 
-NS_IMPL_THREADSAFE_ISUPPORTS5(mozSqlResult,
+NS_IMPL_THREADSAFE_ISUPPORTS4(mozSqlResult,
                               mozISqlResult,
                               mozISqlDataSource,
                               nsIRDFDataSource,
-                              nsIRDFRemoteDataSource,
-                              nsITreeView)
-
-NS_IMETHODIMP
-mozSqlResult::GetDisplayNullAsText(PRBool* aDisplayNullAsText)
-{
-  *aDisplayNullAsText = mDisplayNullAsText;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::SetDisplayNullAsText(PRBool aDisplayNullAsText)
-{
-  mDisplayNullAsText = aDisplayNullAsText;
-  return NS_OK;
-}
+                              nsIRDFRemoteDataSource);
 
 NS_IMETHODIMP
 mozSqlResult::GetConnection(mozISqlConnection** aConnection)
@@ -252,28 +235,28 @@ mozSqlResult::GetColumnTypeAsString(PRInt32 aColumnIndex, nsAString& _retval)
   PRInt32 type = ((ColumnInfo*)mColumnInfo[aColumnIndex])->mType;
   switch (type) {
     case mozISqlResult::TYPE_STRING:
-      _retval.AssignLiteral("string");
+      _retval.Assign(NS_LITERAL_STRING("string"));
       break;
     case mozISqlResult::TYPE_INT:
-      _retval.AssignLiteral("int");
+      _retval.Assign(NS_LITERAL_STRING("int"));
       break;
     case mozISqlResult::TYPE_FLOAT:
-      _retval.AssignLiteral("float");
+      _retval.Assign(NS_LITERAL_STRING("float"));
       break;
     case mozISqlResult::TYPE_DECIMAL:
-      _retval.AssignLiteral("decimal");
+      _retval.Assign(NS_LITERAL_STRING("decimal"));
       break;
     case mozISqlResult::TYPE_DATE:
-      _retval.AssignLiteral("date");
+      _retval.Assign(NS_LITERAL_STRING("date"));
       break;
     case mozISqlResult::TYPE_TIME:
-      _retval.AssignLiteral("time");
+      _retval.Assign(NS_LITERAL_STRING("time"));
       break;
     case mozISqlResult::TYPE_DATETIME:
-      _retval.AssignLiteral("datetime");
+      _retval.Assign(NS_LITERAL_STRING("datetime"));
       break;
     case mozISqlResult::TYPE_BOOL:
-      _retval.AssignLiteral("bool");
+      _retval.Assign(NS_LITERAL_STRING("bool"));
       break;
   }
 
@@ -436,10 +419,7 @@ mozSqlResult::GetTarget(nsIRDFResource* aSource,
 
   Cell* cell = row->mCells[columnIndex];
   if (cell->IsNull())
-    if (mDisplayNullAsText)
-      node = kNullLiteral;
-    else
-      node = kEmptyLiteral;
+    node = kNullLiteral;
   else {
     PRInt32 type = cell->GetType();
     if (type == mozISqlResult::TYPE_STRING) {
@@ -687,288 +667,6 @@ mozSqlResult::FlushTo(const char *aURI)
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-
-/*
-NS_IMETHODIMP
-mozSqlResult::GetRowCount(PRInt32 *aRowCount)
-{
-  *aRowCount = mRows.Count();
-  return NS_OK;
-}
-*/
-
-NS_IMETHODIMP
-mozSqlResult::GetSelection(nsITreeSelection * *aSelection)
-{
-  NS_IF_ADDREF(*aSelection = mSelection);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::SetSelection(nsITreeSelection * aSelection)
-{
-  mSelection = aSelection;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetRowProperties(PRInt32 index, nsISupportsArray *properties)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetCellProperties(PRInt32 row, nsITreeColumn* col, nsISupportsArray *properties)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetColumnProperties(nsITreeColumn* aCol, nsISupportsArray *properties)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsContainer(PRInt32 index, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsContainerOpen(PRInt32 index, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsContainerEmpty(PRInt32 index, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsSeparator(PRInt32 index, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsSorted(PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::CanDrop(PRInt32 index, PRInt32 orientation, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::Drop(PRInt32 row, PRInt32 orientation)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetParentIndex(PRInt32 rowIndex, PRInt32 *_retval)
-{
-  *_retval = -1;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::HasNextSibling(PRInt32 rowIndex, PRInt32 afterIndex, PRBool *_retval)
-{
-  *_retval = PR_FALSE;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetLevel(PRInt32 index, PRInt32 *_retval)
-{
-  *_retval = 0;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetImageSrc(PRInt32 row, nsITreeColumn* col, nsAString & _retval)
-{
-  _retval.Truncate();
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetProgressMode(PRInt32 row, nsITreeColumn* col, PRInt32 *_retval)
-{
-  *_retval = 0;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetCellValue(PRInt32 row, nsITreeColumn* col, nsAString & _retval)
-{
-  PRInt32 columnIndex;
-  col->GetIndex(&columnIndex);
-
-  Cell* cell = ((Row*)mRows[row])->mCells[columnIndex];
-  if (! cell->IsNull()) {
-    PRInt32 type = cell->GetType();
-    if (type == mozISqlResult::TYPE_BOOL) {
-      if (cell->mBool)
-        _retval.AssignLiteral("true");
-      else
-        _retval.AssignLiteral("false");
-    }
-  }
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::GetCellText(PRInt32 row, nsITreeColumn* col, nsAString & _retval)
-{
-  PRInt32 columnIndex;
-  col->GetIndex(&columnIndex);
-
-  Cell* cell = ((Row*)mRows[row])->mCells[columnIndex];
-  if (cell->IsNull()) {
-    if (mDisplayNullAsText)
-      _retval.AssignLiteral("null");
-  }
-  else {
-    PRInt32 type = cell->GetType();
-    if (type == mozISqlResult::TYPE_STRING)
-      _retval.Assign(cell->mString);
-    else if (type == mozISqlResult::TYPE_INT) {
-      nsAutoString s;
-      s.AppendInt(cell->mInt);
-      _retval.Assign(s);
-    }
-    else if (type == mozISqlResult::TYPE_FLOAT ||
-             type == mozISqlResult::TYPE_DECIMAL) {
-      nsAutoString s;
-      s.AppendFloat(cell->mFloat);
-      _retval.Assign(s);
-    }
-    else if (type == mozISqlResult::TYPE_DATE ||
-             type == mozISqlResult::TYPE_TIME ||
-             type == mozISqlResult::TYPE_DATETIME) {
-      nsAutoString value;
-      mozSqlResult::gFormat->FormatPRTime(nsnull,
-                                          type != mozISqlResult::TYPE_TIME ? kDateFormatShort : kDateFormatNone,
-                                          type != mozISqlResult::TYPE_DATE ? kTimeFormatSeconds : kTimeFormatNone,
-                                          PRTime(cell->mDate),
-                                          value);
-      _retval.Assign(value);
-    }
-    else if (type == mozISqlResult::TYPE_BOOL) {
-      if (cell->mBool)
-        _retval.AssignLiteral("true");
-      else
-        _retval.AssignLiteral("false");
-    }
-  }
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::SetTree(nsITreeBoxObject *tree)
-{
-  mBoxObject = tree;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::ToggleOpenState(PRInt32 index)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::CycleHeader(nsITreeColumn* aCol)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::SelectionChanged()
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::CycleCell(PRInt32 row, nsITreeColumn* aCol)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::IsEditable(PRInt32 row, nsITreeColumn* col, PRBool *_retval)
-{
-  return CanUpdate(_retval);
-}
-
-NS_IMETHODIMP
-mozSqlResult::SetCellValue(PRInt32 row, nsITreeColumn* col, const nsAString& value)
-{
-  PRInt32 columnIndex;
-  col->GetIndex(&columnIndex);
-
-  Row* srcRow = (Row*)mRows[row];
-  Row* buffer = Row::Create(mAllocator, nsnull, mColumnInfo, srcRow);
-
-  Cell* cell = buffer->mCells[columnIndex];
-
-  if (value.EqualsLiteral("true")) {
-    cell->mBool = PR_TRUE;
-  }
-  else if (value.EqualsLiteral("false")) {
-    cell->mBool = PR_FALSE;
-  }
-  
-  PRInt32 count;
-  nsresult rv = UpdateRow(row, buffer, &count);
-  if (NS_FAILED(rv))
-    return rv;
-
-  if (mBoxObject)
-    mBoxObject->InvalidateCell(row, col);
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::SetCellText(PRInt32 row, nsITreeColumn* col, const nsAString& value)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::PerformAction(const PRUnichar *action)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::PerformActionOnRow(const PRUnichar *action, PRInt32 row)
-{
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-mozSqlResult::PerformActionOnCell(const PRUnichar *action, PRInt32 row, nsITreeColumn* aCol)
-{
-  return NS_OK;
-}
-
-
 void
 mozSqlResult::ClearColumnInfo()
 {
@@ -1060,9 +758,9 @@ void
 mozSqlResult::AppendValue(Cell* aCell, nsAutoString& aValues)
 {
   if (aCell->IsNull())
-    aValues.AppendLiteral("NULL");
+    aValues.Append(NS_LITERAL_STRING("NULL"));
   else if (aCell->IsDefault())
-    aValues.AppendLiteral("DEFAULT");
+    aValues.Append(NS_LITERAL_STRING("DEFAULT"));
   else {
     PRInt32 type = aCell->GetType();
     if (type == mozISqlResult::TYPE_STRING) {
@@ -1104,7 +802,7 @@ mozSqlResult::AppendKeys(Row* aRow, nsAutoString& aKeys)
   PRBool hasNext = PR_FALSE;
   do {
     if (hasNext)
-      aKeys.AppendLiteral(" AND ");
+      aKeys.Append(NS_LITERAL_STRING(" AND "));
 
     mPrimaryKeys->Next(&hasNext);
 
@@ -1116,7 +814,7 @@ mozSqlResult::AppendKeys(Row* aRow, nsAutoString& aKeys)
     PRInt32 index;
     GetColumnIndex(value, &index);
     if (index == -1) {
-      mErrorMessage.AssignLiteral("MOZSQL: The result doesn't contain all primary key fields");
+      mErrorMessage = NS_LITERAL_STRING("MOZSQL: The result doesn't contain all primary key fields");
       return NS_ERROR_FAILURE;
     }
 
@@ -1158,7 +856,7 @@ mozSqlResult::GetValues(Row* aRow, mozISqlResult** aResult, PRBool aUseID)
         return rv;
     }
 
-    keys.AppendLiteral(" AND ");
+    keys.Append(NS_LITERAL_STRING(" AND "));
     query.Insert(keys, Distance(start, e));
   }
   else {
@@ -1275,8 +973,8 @@ mozSqlResult::InsertRow(Row* aSrcRow, PRInt32* _retval)
   PRInt32 i;
   for (i = 0; i < mColumnInfo.Count(); i++) {
     if (i) {
-      names.AppendLiteral(", ");
-      values.AppendLiteral(", ");
+      names.Append(NS_LITERAL_STRING(", "));
+      values.Append(NS_LITERAL_STRING(", "));
     }
     names.Append(((ColumnInfo*)mColumnInfo[i])->mName);
 
@@ -1295,27 +993,21 @@ mozSqlResult::InsertRow(Row* aSrcRow, PRInt32* _retval)
     return rv;
   }
 
-  nsAutoString IDName;
-  ((mozSqlConnection*)mConnection.get())->GetIDName(IDName);
+  nsCOMPtr<mozISqlResult> result;
+  rv = GetValues(aSrcRow, getter_AddRefs(result), PR_TRUE);
+  if (NS_FAILED(rv))
+    return rv;
 
-  // assume that if the IDName is empty that we don't need to re-get the last row
-  if (!IDName.IsEmpty()){
-    nsCOMPtr<mozISqlResult> result;
-    rv = GetValues(aSrcRow, getter_AddRefs(result), PR_TRUE);
-    if (NS_FAILED(rv))
-      return rv;
-
-    PRInt32 rowCount;
-    result->GetRowCount(&rowCount);
-    if (rowCount == 0) {
-      *_retval = 0;
-      return NS_OK;
-    }
-
-    rv = CopyValues(result, aSrcRow);
-    if (NS_FAILED(rv))
-      return rv;
+  PRInt32 rowCount;
+  result->GetRowCount(&rowCount);
+  if (rowCount == 0) {
+    *_retval = 0;
+    return NS_OK;
   }
+
+  rv = CopyValues(result, aSrcRow);
+  if (NS_FAILED(rv))
+    return rv;
 
   nsCOMPtr<nsIRDFResource> resource;
   gRDFService->GetAnonymousResource(getter_AddRefs(resource));
@@ -1327,9 +1019,6 @@ mozSqlResult::InsertRow(Row* aSrcRow, PRInt32* _retval)
 
   for (i = 0; i < mObservers.Count(); i++)
     mObservers[i]->OnAssert(this, kSQL_ResultRoot, kNC_Child, resource);
-
-  if (mBoxObject)
-    mBoxObject->RowCountChanged(mRows.Count() - 1, 1);
 
   *_retval = 1;
   return NS_OK;
@@ -1352,7 +1041,7 @@ mozSqlResult::UpdateRow(PRInt32 aRowIndex, Row* aSrcRow, PRInt32* _retval)
   PRInt32 i;
   for (i = 0; i < mColumnInfo.Count(); i++) {
     if (i)
-      values.AppendLiteral(", ");
+      values.Append(NS_LITERAL_STRING(", "));
     values.Append(((ColumnInfo*)mColumnInfo[i])->mName);
     values.Append(PRUnichar('='));
 
@@ -1392,9 +1081,6 @@ mozSqlResult::UpdateRow(PRInt32 aRowIndex, Row* aSrcRow, PRInt32* _retval)
     for (PRInt32 i = 0; i < mObservers.Count(); i++)
       mObservers[i]->OnUnassert(this, kSQL_ResultRoot, kNC_Child, row->mSource);
 
-    if (mBoxObject)
-      mBoxObject->RowCountChanged(aRowIndex, -1);
-
     Row::Destroy(mAllocator, mColumnInfo.Count(), row);
 
     *_retval = 0;
@@ -1411,10 +1097,7 @@ mozSqlResult::UpdateRow(PRInt32 aRowIndex, Row* aSrcRow, PRInt32* _retval)
 
     Cell* cell = row->mCells[i];
     if (cell->IsNull())
-      if (mDisplayNullAsText)
-        newNode = kNullLiteral;
-      else
-        newNode = kEmptyLiteral;
+      newNode = kNullLiteral;
     else {
       PRInt32 type = cell->GetType();
       if (type == mozISqlResult::TYPE_STRING) {
@@ -1455,9 +1138,6 @@ mozSqlResult::UpdateRow(PRInt32 aRowIndex, Row* aSrcRow, PRInt32* _retval)
     }
   }
 
-  if (mBoxObject)
-    mBoxObject->InvalidateRow(aRowIndex);
-
   *_retval = 1;
   return NS_OK;
 }
@@ -1497,9 +1177,6 @@ mozSqlResult::DeleteRow(PRInt32 aRowIndex, PRInt32* _retval)
 
   for (PRInt32 i = 0; i < mObservers.Count(); i++)
     mObservers[i]->OnUnassert(this, kSQL_ResultRoot, kNC_Child, row->mSource);
-
-  if (mBoxObject)
-    mBoxObject->RowCountChanged(aRowIndex, -1);
 
   Row::Destroy(mAllocator, mColumnInfo.Count(), row);
 
@@ -1549,7 +1226,7 @@ mozSqlResultEnumerator::~mozSqlResultEnumerator()
 
 NS_IMPL_ISUPPORTS2(mozSqlResultEnumerator,
                    mozISqlResultEnumerator,
-                   nsISimpleEnumerator)
+                   nsISimpleEnumerator);
 
 NS_IMETHODIMP
 mozSqlResultEnumerator::GetErrorMessage(nsAString& aErrorMessage)
@@ -2130,7 +1807,8 @@ NS_IMETHODIMP mozSqlResultEnumerator::GetNext(nsISupports** _retval)
 
 mozSqlResultStream::mozSqlResultStream(mozSqlResult* aResult)
   : mResult(aResult),
-    mInitialized(PR_FALSE),
+    mBuffer(nsnull),
+    mLength(0),
     mPosition(0)
 {
   NS_ADDREF(mResult);
@@ -2139,13 +1817,15 @@ mozSqlResultStream::mozSqlResultStream(mozSqlResult* aResult)
 
 mozSqlResultStream::~mozSqlResultStream()
 {
+  if (mBuffer)
+    nsMemory::Free(mBuffer);
   NS_RELEASE(mResult);
 }
 
 
 NS_IMPL_ISUPPORTS2(mozSqlResultStream,
                    mozISqlInputStream,
-                   nsIInputStream)
+                   nsIInputStream);
 
 
 NS_IMETHODIMP
@@ -2174,7 +1854,7 @@ mozSqlResultStream::Available(PRUint32* _retval)
   if (NS_FAILED(rv))
     return rv;
 
-  *_retval = mBuffer.Length() - mPosition;
+  *_retval = mLength - mPosition;
 
   return NS_OK;
 }
@@ -2182,20 +1862,17 @@ mozSqlResultStream::Available(PRUint32* _retval)
 NS_IMETHODIMP
 mozSqlResultStream::Read(char* aBuffer, PRUint32 aCount, PRUint32* _retval)
 {
-  if (aCount == 0) {
-    *_retval = 0;
-    return NS_OK;
-  }
-
   nsresult rv = EnsureBuffer();
   if (NS_FAILED(rv))
     return rv;
 
-  if (aCount > mBuffer.Length() - mPosition)
-    aCount = mBuffer.Length() - mPosition;
+  if (aCount > mLength - mPosition)
+    aCount = mLength - mPosition;
 
-  memcpy(aBuffer, mBuffer.get() + mPosition, aCount);
-  mPosition += aCount;
+  if (aCount > 0) {
+    memcpy(aBuffer, &mBuffer[mPosition], aCount);
+    mPosition += aCount;
+  }
 
   *_retval = aCount;
 
@@ -2205,23 +1882,7 @@ mozSqlResultStream::Read(char* aBuffer, PRUint32 aCount, PRUint32* _retval)
 NS_IMETHODIMP
 mozSqlResultStream::ReadSegments(nsWriteSegmentFun aWriter, void* aClosure, PRUint32 aCount, PRUint32* _retval)
 {
-  if (aCount == 0) {
-    *_retval = 0;
-    return NS_OK;
-  }
-
-  nsresult rv = EnsureBuffer();
-  if (NS_FAILED(rv))
-    return rv;
-
-  if (aCount > mBuffer.Length() - mPosition)
-    aCount = mBuffer.Length() - mPosition;
-
-  rv = aWriter(this, aClosure, mBuffer.get() + mPosition, 0, aCount, _retval);
-  if (NS_SUCCEEDED(rv))
-    mPosition += aCount;
-
-  return NS_OK;
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
@@ -2235,28 +1896,28 @@ mozSqlResultStream::IsNonBlocking(PRBool* _retval)
 nsresult
 mozSqlResultStream::EnsureBuffer()
 {
-  if (!mInitialized) {
-    mBuffer.AppendLiteral("<?xml version=\"1.0\"?>\n");
-    mBuffer.AppendLiteral("<document>\n<body>\n");
+  if (!mBuffer) {
+    nsAutoString buffer;
+    buffer.Append(NS_LITERAL_STRING("<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head><body><table border=\"1\" cellspacing=\"0\" width=\"100%\">"));
     PRInt32 rowCount = mResult->mRows.Count();
     PRInt32 columnCount = mResult->mColumnInfo.Count();
     for (PRInt32 i = 0; i < rowCount; i++) {
-      mBuffer.AppendLiteral("<row>\n");
+      buffer.Append(NS_LITERAL_STRING("<tr>"));
       Row* row = (Row*)mResult->mRows[i];
       for (PRInt32 j = 0; j < columnCount; j++) {
-        mBuffer.AppendLiteral("<cell>\n");
+        buffer.Append(NS_LITERAL_STRING("<td>"));
         Cell* cell = row->mCells[j];
         if (cell->IsNull())
-          mBuffer.AppendLiteral("null");
+          buffer.Append(NS_LITERAL_STRING("null"));
         else {
           PRInt32 type = cell->GetType();
           if (type == mozISqlResult::TYPE_STRING)
-            mBuffer.Append(NS_ConvertUCS2toUTF8(cell->mString));
+            buffer.Append(cell->mString);
           else if (type == mozISqlResult::TYPE_INT)
-            mBuffer.AppendInt(cell->mInt);
+            buffer.AppendInt(cell->mInt);
           else if (type == mozISqlResult::TYPE_FLOAT ||
                    type == mozISqlResult::TYPE_DECIMAL)
-            mBuffer.AppendFloat(cell->mFloat);
+            buffer.AppendFloat(cell->mFloat);
           else if (type == mozISqlResult::TYPE_DATE ||
                    type == mozISqlResult::TYPE_TIME ||
                    type == mozISqlResult::TYPE_DATETIME) {
@@ -2266,22 +1927,23 @@ mozSqlResultStream::EnsureBuffer()
                                   type != mozISqlResult::TYPE_DATE ? kTimeFormatSeconds : kTimeFormatNone,
                                   PRTime(cell->mDate),
                                   value);
-            mBuffer.Append(NS_ConvertUCS2toUTF8(value));
+            buffer.Append(value);
           }
           else if (type == mozISqlResult::TYPE_BOOL) {
             if (cell->mBool)
-              mBuffer.AppendLiteral("true");
+              buffer.Append(NS_LITERAL_STRING("true"));
             else
-              mBuffer.AppendLiteral("false");
+              buffer.Append(NS_LITERAL_STRING("false"));
           }
         }
-        mBuffer.AppendLiteral("</cell>\n");
+        buffer.Append(NS_LITERAL_STRING("</td>"));
       }
-      mBuffer.AppendLiteral("</row>\n");
+      buffer.Append(NS_LITERAL_STRING("</tr>"));
     }
-    mBuffer.AppendLiteral("</body>\n</document>\n");
+    buffer.Append(NS_LITERAL_STRING("</table></body></html>"));
 
-    mInitialized = PR_TRUE;
+    mBuffer = ToNewUTF8String(buffer);
+    mLength = nsCRT::strlen(mBuffer);
   }
 
   return NS_OK;

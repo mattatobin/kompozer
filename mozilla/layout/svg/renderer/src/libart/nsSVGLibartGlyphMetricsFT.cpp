@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,28 +14,28 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
+ * The Initial Developer of the Original Code is 
+ * .
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Leon Sha <leon.sha@sun.com>
- *   Alex Fritze <alex@croczilla.com>
+ *    Leon Sha <leon.sha@sun.com>
+ *    Alex Fritze <alex@croczilla.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsCOMPtr.h"
 #include "nsISVGGlyphMetricsSource.h"
@@ -43,7 +43,7 @@
 #include "nsPromiseFlatString.h"
 #include "nsFont.h"
 #include "nsIFontMetrics.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "float.h"
 #include "nsIDOMSVGMatrix.h"
 #include "nsIDOMSVGRect.h"
@@ -112,7 +112,7 @@ private:
   nsCOMPtr<nsISVGGlyphMetricsSource> mSource;
     
 public:
-  static nsDataHashtable<nsStringHashKey,const nsString*> sFontAliases;  
+  static nsDataHashtable<nsStringHashKey,nsDependentString*> sFontAliases;  
 };
 
 /** @} */
@@ -120,7 +120,7 @@ public:
 //----------------------------------------------------------------------
 // nsSVGLibartGlyphMetricsFT implementation:
 
-nsDataHashtable<nsStringHashKey,const nsString*>
+nsDataHashtable<nsStringHashKey,nsDependentString*>
 nsSVGLibartGlyphMetricsFT::sFontAliases;
 
 
@@ -220,11 +220,28 @@ nsSVGLibartGlyphMetricsFT::GetAdvance(float *aAdvance)
   return NS_OK;
 }
 
+/** Implements readonly attribute nsIDOMSVGRect #boundingBox; */
 NS_IMETHODIMP
-nsSVGLibartGlyphMetrics::GetAdvanceOfChar(PRUint32 charnum, float *advance)
+nsSVGLibartGlyphMetricsFT::GetBoundingBox(nsIDOMSVGRect * *aBoundingBox)
 {
-  *advance = 0.0f;
-  return NS_ERROR_NOT_IMPLEMENTED;
+  InitializeGlyphArray();
+
+  *aBoundingBox = nsnull;
+
+  nsCOMPtr<nsIDOMSVGRect> rect = do_CreateInstance(NS_SVGRECT_CONTRACTID);
+
+  NS_ASSERTION(rect, "could not create rect");
+  if (!rect) return NS_ERROR_FAILURE;
+  
+  rect->SetX(mBBox.xMin);
+  rect->SetY(mBBox.yMin);
+  rect->SetWidth(mBBox.xMax-mBBox.xMin);
+  rect->SetHeight(mBBox.yMax-mBBox.yMin);
+
+  *aBoundingBox = rect;
+  NS_ADDREF(*aBoundingBox);
+  
+  return NS_OK;
 }
 
 /** Implements [noscript] nsIDOMSVGRect getExtentOfChar(in unsigned long charnum); */
@@ -270,7 +287,7 @@ nsSVGLibartGlyphMetricsFT::GetFTFace()
 NS_IMETHODIMP_(float)
 nsSVGLibartGlyphMetricsFT::GetPixelScale()
 {
-  nsCOMPtr<nsPresContext> presContext;
+  nsCOMPtr<nsIPresContext> presContext;
   mSource->GetPresContext(getter_AddRefs(presContext));
   if (!presContext) {
     NS_ERROR("null prescontext");
@@ -287,7 +304,7 @@ nsSVGLibartGlyphMetricsFT::GetPixelScale()
 NS_IMETHODIMP_(float)
 nsSVGLibartGlyphMetricsFT::GetTwipsToPixels()
 {
-  nsCOMPtr<nsPresContext> presContext;
+  nsCOMPtr<nsIPresContext> presContext;
   mSource->GetPresContext(getter_AddRefs(presContext));
   if (!presContext) {
     NS_ERROR("null prescontext");
@@ -347,14 +364,14 @@ FindFont(const nsString& aFamily, PRBool aGeneric, void *aData)
     nsFont::GetGenericID(aFamily, &id);
     switch (id) {
       case kGenericFont_serif:
-        family_name.AssignLiteral("times new roman");
+        family_name = NS_LITERAL_CSTRING("times new roman");
         break;
       case kGenericFont_monospace:
-        family_name.AssignLiteral("courier new");
+        family_name = NS_LITERAL_CSTRING("courier new");
         break;
       case kGenericFont_sans_serif:
       default:
-        family_name.AssignLiteral("arial");
+        family_name = NS_LITERAL_CSTRING("arial");
         break;
     }
   }
@@ -389,13 +406,13 @@ FindFont(const nsString& aFamily, PRBool aGeneric, void *aData)
   }
   else {
     // try alias if there is one:
-    const nsString *alias = nsnull;
+    nsDependentString *alias = nsnull;
     nsSVGLibartGlyphMetricsFT::sFontAliases.Get(NS_ConvertUTF8toUCS2(family_name),
                                                 &alias);
     if (alias) {
       // XXX this might cause a stack-overflow if there are cyclic
       // aliases in sFontAliases
-      retval = FindFont(*alias, PR_FALSE, aData);      
+      retval = FindFont(nsString(*alias), PR_FALSE, aData);      
     }
   }
   

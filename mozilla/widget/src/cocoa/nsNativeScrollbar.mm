@@ -20,7 +20,6 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *  Stuart Morgan <stuart.morgan@alumni.case.edu>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or 
@@ -36,11 +35,16 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
+
 #include "nsNativeScrollbar.h"
 #include "nsIDeviceContext.h"
+#if TARGET_CARBON || (UNIVERSAL_INTERFACES_VERSION >= 0x0330)
+#include <ControlDefinitions.h>
+#endif
 
 #include "nsReadableUtils.h"
 #include "nsWidgetAtoms.h"
+#include "nsWatchTask.h"
 #include "nsINameSpaceManager.h"
 #include "nsIDOMElement.h"
 #include "nsIScrollbarMediator.h"
@@ -59,19 +63,19 @@ nsNativeScrollbar::nsNativeScrollbar()
   : nsChildView()
   , mContent(nsnull)
   , mMediator(nsnull)
-  , mScrollbar(nsnull)
   , mValue(0)
   , mMaxValue(0)
   , mVisibleImageSize(0)
   , mLineIncrement(0)
-  , mIsEnabled(PR_TRUE)
 {
+  WIDGET_SET_CLASSNAME("nsNativeScrollbar");
 }
 
 
 nsNativeScrollbar::~nsNativeScrollbar()
 {
 }
+
 
 //
 // CreateCocoaView
@@ -84,9 +88,14 @@ nsNativeScrollbar::~nsNativeScrollbar()
 // we find we're horizontal, we can update then.
 //
 NSView*
-nsNativeScrollbar::CreateCocoaView(NSRect inFrame)
+nsNativeScrollbar::CreateCocoaView ( )
 {
-  return [[[NativeScrollbarView alloc] initWithFrame:inFrame geckoChild:this] autorelease];
+  NSRect orientation;
+  orientation.origin.x = orientation.origin.y = 0;
+  orientation.size.width = 20;
+  orientation.size.height = 100;
+
+  return [[[NativeScrollbarView alloc] initWithFrame:orientation geckoChild:this] autorelease];
 }
 
 
@@ -96,7 +105,7 @@ nsNativeScrollbar::GetQuickDrawPort ( )
   // pray we're always a child of a NSQuickDrawView
   if ( [mParentView isKindOfClass: [ChildView class]] ) {
     NSQuickDrawView* parent = NS_STATIC_CAST(NSQuickDrawView*, mParentView);
-    return (GrafPtr)[parent qdPort];
+    return [parent qdPort];
   }
   
   return nsnull;
@@ -130,21 +139,23 @@ nsNativeScrollbar::DoScroll(NSScrollerPart inPart)
     // to check if one is greater than the other to indicate direction.
     //
 
-    case NSScrollerDecrementLine:           // scroll up/left
+    case NSScrollerDecrementLine: 				// scroll up/left
       newPos = oldPos - (mLineIncrement ? mLineIncrement : 1);
-      UpdateContentPosition(newPos);
       if ( mMediator ) {
         BoundsCheck(0, newPos, mMaxValue);
-        mMediator->ScrollbarButtonPressed(mScrollbar, oldPos, newPos);
+        mMediator->ScrollbarButtonPressed(oldPos, newPos);
+      } else {
+        UpdateContentPosition(newPos);
       }
       break;
     
-    case NSScrollerIncrementLine:           // scroll down/right
+    case NSScrollerIncrementLine:					// scroll down/right
       newPos = oldPos + (mLineIncrement ? mLineIncrement : 1);
-      UpdateContentPosition(newPos); 
       if ( mMediator ) {
         BoundsCheck(0, newPos, mMaxValue);
-        mMediator->ScrollbarButtonPressed(mScrollbar, oldPos, newPos);
+        mMediator->ScrollbarButtonPressed(oldPos, newPos);
+      } else {
+        UpdateContentPosition(newPos); 
       }
       break;
   
@@ -156,25 +167,25 @@ nsNativeScrollbar::DoScroll(NSScrollerPart inPart)
     // signed values first.
     //
 
-    case NSScrollerDecrementPage:           // scroll up a page
+    case NSScrollerDecrementPage:				// scroll up a page
       newPos = oldPos - visibleImageSize;
       UpdateContentPosition(newPos);
       if ( mMediator ) {
         PRInt32 op = oldPos, np = mValue;
         if ( np < 0 )
           np = 0;
-        mMediator->PositionChanged(mScrollbar, op, np);
+        mMediator->PositionChanged(op, np);
       }
       break;
     
-    case NSScrollerIncrementPage:           // scroll down a page
+    case NSScrollerIncrementPage:			// scroll down a page
       newPos = oldPos + visibleImageSize;
       UpdateContentPosition(newPos);
       if ( mMediator ) {
         PRInt32 op = oldPos, np = mValue;
         if ( np < 0 )
           np = 0;
-        mMediator->PositionChanged(mScrollbar, op, np);
+        mMediator->PositionChanged(op, np);
       }
       break;
     
@@ -185,13 +196,13 @@ nsNativeScrollbar::DoScroll(NSScrollerPart inPart)
     //
     case NSScrollerKnob:
     case NSScrollerKnobSlot:
-      newPos = (int) ([ScrollbarView() floatValue] * mMaxValue);
+      newPos = (int) ([mView floatValue] * mMaxValue);
       UpdateContentPosition(newPos);
       if ( mMediator ) {
         PRInt32 op = oldPos, np = mValue;
         if ( np < 0 )
           np = 0;
-        mMediator->PositionChanged(mScrollbar, op, np);
+        mMediator->PositionChanged(op, np);
       }
       break;
     
@@ -248,11 +259,14 @@ nsNativeScrollbar::DispatchMouseEvent(nsMouseEvent &aEvent)
 NS_IMETHODIMP
 nsNativeScrollbar::SetMaxRange(PRUint32 aEndRange)
 {
-  if ((PRInt32)aEndRange < 0)
-    aEndRange = 0;
-
-  mMaxValue = aEndRange;
-  UpdateScroller();
+  mMaxValue = ((int)aEndRange) > 0 ? aEndRange : 10;
+  if ( GetControl() ) {
+    // Update the current value based on the new range. We need to recompute the
+    // float value in case we had to set the value to 0 because gecko cheated
+    // and set the position before it set the max value.
+    PRInt32 fullVisibleArea = mVisibleImageSize + mMaxValue;
+    [mView setFloatValue:(mValue / (float)mMaxValue) knobProportion:(mVisibleImageSize / (float)fullVisibleArea)];
+  }
   return NS_OK;
 }
 
@@ -280,8 +294,6 @@ nsNativeScrollbar::GetMaxRange(PRUint32* aMaxRange)
 NS_IMETHODIMP
 nsNativeScrollbar::SetPosition(PRUint32 aPos)
 {
-  NativeScrollbarView* scrollbarView = ScrollbarView();
-
   if ((PRInt32)aPos < 0)
     aPos = 0;
 
@@ -294,9 +306,9 @@ nsNativeScrollbar::SetPosition(PRUint32 aPos)
   //   mValue = ((PRInt32)aPos) > mMaxValue ? mMaxValue : ((int)aPos);
   mValue = aPos;
   if ( mMaxValue )
-    [scrollbarView setFloatValue:(mValue / (float)mMaxValue)];
+    [mView setFloatValue:(mValue / (float)mMaxValue)];
   else
-    [scrollbarView setFloatValue:0.0];
+    [mView setFloatValue:0.0];
 
   return NS_OK;
 }
@@ -325,12 +337,13 @@ nsNativeScrollbar::GetPosition(PRUint32* aPos)
 NS_IMETHODIMP
 nsNativeScrollbar::SetViewSize(PRUint32 aSize)
 {
-  if ((PRInt32)aSize < 0)
-    aSize = 0;
-
-  mVisibleImageSize = aSize;
+  mVisibleImageSize = ((int)aSize) > 0 ? aSize : 1;
   
-  UpdateScroller();
+  // Update the current value based on the new range. We need to recompute the
+  // float value in case we had to set the value to 0 because gecko cheated
+  // and set the position before it set the max value.
+  PRInt32 fullVisibleArea = mVisibleImageSize + mMaxValue;
+  [mView setFloatValue:(mValue / (float)mMaxValue) knobProportion:(mVisibleImageSize / (float)fullVisibleArea)];
   return NS_OK;
 }
 
@@ -401,12 +414,10 @@ nsNativeScrollbar::GetNarrowSize(PRInt32* outSize)
 // care about the mediator for <outliner> so we can do row-based scrolling.
 //
 NS_IMETHODIMP
-nsNativeScrollbar::SetContent(nsIContent* inContent, nsISupports* inScrollbar, 
-                              nsIScrollbarMediator* inMediator)
+nsNativeScrollbar::SetContent(nsIContent* inContent, nsIScrollbarMediator* inMediator)
 {
   mContent = inContent;
   mMediator = inMediator;
-  mScrollbar = inScrollbar;
   
   if ( mContent ) {
     // we may have to re-create the scrollbar view as horizontal. Check the
@@ -437,16 +448,13 @@ nsNativeScrollbar::RecreateHorizontalScrollbar()
   orientation.size.width = 100;
   orientation.size.height = 16;
   
-  NativeScrollbarView* scrollbarView = ScrollbarView();
-
   // save off the old values and get rid of the previous view. Hiding
   // it removes it from the parent hierarchy.
-  NSRect oldBounds = [scrollbarView bounds];
-  float oldValue = [scrollbarView floatValue];
-  float oldProportion = [scrollbarView knobProportion];
-  mVisible = PR_TRUE;           // ensure that hide does the work
+  NSRect oldBounds = [mView bounds];
+  float oldValue = [mView floatValue];
+  float oldProportion = [mView knobProportion];
+  mVisible = PR_TRUE;														// ensure that hide does the work
   Show(PR_FALSE);
-  scrollbarView = nil;
   [mView release];
   
   // create the new horizontal scroller, init it, hook it up to the
@@ -454,9 +462,7 @@ nsNativeScrollbar::RecreateHorizontalScrollbar()
   mView = [[NativeScrollbarView alloc] initWithFrame:orientation geckoChild:this];
   [mView setNativeWindow: [mParentView getNativeWindow]];
   [mView setFrame:oldBounds];
-  
-  scrollbarView = ScrollbarView();
-  [scrollbarView setFloatValue:oldValue knobProportion:oldProportion];
+  [mView setFloatValue:oldValue knobProportion:oldProportion];
   Show(PR_TRUE);
   Enable(PR_TRUE);
 }
@@ -495,8 +501,7 @@ nsNativeScrollbar::Show(PRBool bState)
 NS_IMETHODIMP
 nsNativeScrollbar::Enable(PRBool bState)
 {
-  mIsEnabled = bState;
-  UpdateScroller();
+  [mView setEnabled:(bState ? YES : NO)];
   return NS_OK;
 }
 
@@ -505,38 +510,13 @@ NS_IMETHODIMP
 nsNativeScrollbar::IsEnabled(PRBool *aState)
 {
   if (aState)
-   *aState = mIsEnabled;
+   *aState = [mView isEnabled] ? PR_TRUE : PR_FALSE;
   return NS_OK;
-}
-
-
-void
-nsNativeScrollbar::UpdateScroller()
-{
-  NativeScrollbarView* scrollbarView = ScrollbarView();
-
-  // Update the current value based on the new range. We need to recompute the
-  // float value in case we had to set the value to 0 because gecko cheated
-  // and set the position before it set the max value.
-  float knobProp = 1.0f;
-  if ((mVisibleImageSize + mMaxValue) > 0)
-    knobProp = (float)mVisibleImageSize / (float)(mVisibleImageSize + mMaxValue);
-  [scrollbarView setFloatValue:(mValue / (float)mMaxValue) knobProportion:knobProp];
-  
-  BOOL enableScrollbar = (mIsEnabled && (mMaxValue > 0));
-  [scrollbarView setEnabled:enableScrollbar];
-  
-  Invalidate(FALSE);
 }
 
 
 #pragma mark -
 
-@interface NativeScrollbarView(Private)
-
-- (void)processPendingRedraws;
-
-@end
 
 @implementation NativeScrollbarView
 
@@ -549,15 +529,15 @@ nsNativeScrollbar::UpdateScroller()
 //
 - (id)initWithFrame:(NSRect)frameRect geckoChild:(nsNativeScrollbar*)inChild
 {
-  if ((self = [super initWithFrame:frameRect]))
-  {
-    NS_ASSERTION(inChild, "Need to provide a tether between this and a nsChildView class");
-    mGeckoChild = inChild;
-    
-    // make ourselves the target of the scroll and set the action message
-    [self setTarget:self];
-    [self setAction:@selector(scroll:)];
-  }
+  [super initWithFrame:frameRect];
+
+  NS_ASSERTION(inChild, "Need to provide a tether between this and a nsChildView class");
+  mGeckoChild = inChild;
+  
+  // make ourselves the target of the scroll and set the action message
+  [self setTarget:self];
+  [self setAction:@selector(scroll:)];
+  
   return self;
 }
 
@@ -570,10 +550,7 @@ nsNativeScrollbar::UpdateScroller()
 - (id)initWithFrame:(NSRect)frameRect
 {
   NS_WARNING("You're calling the wrong initializer. You really want -initWithFrame:geckoChild");
-  if ((self = [self initWithFrame:frameRect geckoChild:nsnull]))
-  {
-  }
-  return self;
+  return [self initWithFrame:frameRect geckoChild:nsnull];
 }
 
 
@@ -608,55 +585,6 @@ nsNativeScrollbar::UpdateScroller()
   return NS_STATIC_CAST(nsIWidget*, mGeckoChild);
 }
 
-- (void)setNeedsPendingDisplay
-{
-  mPendingFullDisplay = YES;
-  [self performSelector:@selector(processPendingRedraws) withObject:nil afterDelay:0];
-}
-
-- (void)setNeedsPendingDisplayInRect:(NSRect)invalidRect
-{
-  if (!mPendingDirtyRects)
-    mPendingDirtyRects = [[NSMutableArray alloc] initWithCapacity:1];
-  [mPendingDirtyRects addObject:[NSValue valueWithRect:invalidRect]];
-  [self performSelector:@selector(processPendingRedraws) withObject:nil afterDelay:0];
-}
-
-//
-// -processPendingRedraws
-//
-// Clears the queue of any pending invalides
-//
-- (void)processPendingRedraws
-{
-  if (mPendingFullDisplay) {
-    [self setNeedsDisplay:YES];
-  }
-  else {
-    unsigned int count = [mPendingDirtyRects count];
-    for (unsigned int i = 0; i < count; ++i) {
-      [self setNeedsDisplayInRect:[[mPendingDirtyRects objectAtIndex:i] rectValue]];
-    }
-  }
-  mPendingFullDisplay = NO;
-  [mPendingDirtyRects release];
-  mPendingDirtyRects = nil;
-}
-
-- (void)scrollRect:(NSRect)aRect by:(NSSize)offset
-{
-  // Update any pending dirty rects to reflect the new scroll position
-  if (mPendingDirtyRects) {
-    unsigned int count = [mPendingDirtyRects count];
-    for (unsigned int i = 0; i < count; ++i) {
-      NSRect oldRect = [[mPendingDirtyRects objectAtIndex:i] rectValue];
-      NSRect newRect = NSOffsetRect(oldRect, offset.width, offset.height);
-      [mPendingDirtyRects replaceObjectAtIndex:i
-                                    withObject:[NSValue valueWithRect:newRect]];
-    }
-  }
-  [super scrollRect:aRect by:offset];
-}
 
 //
 // -mouseMoved
@@ -671,39 +599,6 @@ nsNativeScrollbar::UpdateScroller()
   // do nothing
 }
 
-//
-// -widgetDestroyed
-//
-// the gecko nsNativeScrollbar is being destroyed.
-//
-- (void)widgetDestroyed
-{
-  mGeckoChild = nsnull;
-
-  if (mInTracking)
-  {
-    // To get out of the NSScroller tracking loop, we post a fake mouseup event.
-    // We have to do this here, before we are ripped out of the view hierarchy.
-    [NSApp postEvent:[NSEvent mouseEventWithType:NSLeftMouseUp
-                                        location:[NSEvent mouseLocation]
-                                   modifierFlags:0
-                                       timestamp:[[NSApp currentEvent] timestamp]
-                                    windowNumber:[[self window] windowNumber]
-                                         context:NULL
-                                     eventNumber:0
-                                      clickCount:0
-                                        pressure:1.0]
-             atStart:YES];
-
-    mInTracking = NO;
-  }
-}
-
-// getContextMenu, from mozView protocol
-- (NSMenu*)getContextMenu
-{
-  return nil;
-}
 
 //
 // -scroll
@@ -718,52 +613,6 @@ nsNativeScrollbar::UpdateScroller()
     mGeckoChild->DoScroll([sender hitPart]);
 }
 
-
-//
-// -trackKnob:
-//
-// overridden to toggle mInTracking on and off
-//
-- (void)trackKnob:(NSEvent *)theEvent
-{
-  mInTracking = YES;
-  NS_DURING   // be sure we always turn mInTracking off.
-    [super trackKnob:theEvent];
-  NS_HANDLER
-  NS_ENDHANDLER
-  mInTracking = NO;
-}
-
-//
-// -trackScrollButtons:
-//
-// overridden to toggle mInTracking on and off
-//
-- (void)trackScrollButtons:(NSEvent *)theEvent
-{
-  mInTracking = YES;
-  NS_DURING   // be sure we always turn mInTracking off.
-    [super trackScrollButtons:theEvent];
-  NS_HANDLER
-  NS_ENDHANDLER
-  mInTracking = NO;
-}
-
-//
-// -trackPagingArea:
-//
-// this method is not documented, but was seen in sampling. We have
-// to override it to toggle mInTracking.
-//
-- (void)trackPagingArea:(id)theEvent
-{
-  mInTracking = YES;
-  NS_DURING   // be sure we always turn mInTracking off.
-    [super trackPagingArea:theEvent];
-  NS_HANDLER
-  NS_ENDHANDLER
-  mInTracking = NO;
-}
 
 @end
 

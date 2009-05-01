@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,27 +14,27 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsSVGGraphicElement.h"
 #include "nsSVGAtoms.h"
@@ -43,7 +43,8 @@
 #include "nsSVGAnimatedLengthList.h"
 #include "nsSVGLengthList.h"
 #include "nsISVGSVGElement.h"
-#include "nsSVGCoordCtxProvider.h"
+#include "nsISVGViewportAxis.h"
+#include "nsISVGViewportRect.h"
 #include "nsISVGTextContentMetrics.h"
 #include "nsIPresShell.h"
 #include "nsIFrame.h"
@@ -58,9 +59,9 @@ class nsSVGTextElement : public nsSVGTextElementBase,
 protected:
   friend nsresult NS_NewSVGTextElement(nsIContent **aResult,
                                        nsINodeInfo *aNodeInfo);
-  nsSVGTextElement(nsINodeInfo* aNodeInfo);
+  nsSVGTextElement();
   virtual ~nsSVGTextElement();
-  nsresult Init();
+  nsresult Init(nsINodeInfo* aNodeInfo);
   
 public:
   // interfaces:
@@ -95,8 +96,25 @@ protected:
 };
 
 
-NS_IMPL_NS_NEW_SVG_ELEMENT(Text)
+nsresult NS_NewSVGTextElement(nsIContent **aResult, nsINodeInfo *aNodeInfo)
+{
+  *aResult = nsnull;
+  nsSVGTextElement* it = new nsSVGTextElement();
 
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
+
+  nsresult rv = it->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+  
+  *aResult = it;
+
+  return NS_OK;
+}
 
 //----------------------------------------------------------------------
 // nsISupports methods
@@ -117,8 +135,7 @@ NS_INTERFACE_MAP_END_INHERITING(nsSVGTextElementBase)
 //----------------------------------------------------------------------
 // Implementation
 
-nsSVGTextElement::nsSVGTextElement(nsINodeInfo* aNodeInfo)
-  : nsSVGTextElementBase(aNodeInfo)
+nsSVGTextElement::nsSVGTextElement()
 {
 
 }
@@ -129,9 +146,9 @@ nsSVGTextElement::~nsSVGTextElement()
 
   
 nsresult
-nsSVGTextElement::Init()
+nsSVGTextElement::Init(nsINodeInfo* aNodeInfo)
 {
-  nsresult rv = nsSVGTextElementBase::Init();
+  nsresult rv = nsSVGTextElementBase::Init(aNodeInfo);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Create mapped properties:
@@ -159,40 +176,39 @@ nsSVGTextElement::Init()
     rv = AddMappedSVGValue(nsSVGAtoms::y, mY);
     NS_ENSURE_SUCCESS(rv,rv);
   }
-
-  // DOM property: nsIDOMSVGTextPositioningElement::dx, #IMPLIED attrib: dx
-  {
-    nsCOMPtr<nsISVGLengthList> lengthList;
-    rv = NS_NewSVGLengthList(getter_AddRefs(lengthList));
-    NS_ENSURE_SUCCESS(rv,rv);
-    rv = NS_NewSVGAnimatedLengthList(getter_AddRefs(mdX),
-                                     lengthList);
-    NS_ENSURE_SUCCESS(rv,rv);
-    rv = AddMappedSVGValue(nsSVGAtoms::dx, mdX);
-    NS_ENSURE_SUCCESS(rv,rv);
-  }
-  
-  // DOM property: nsIDOMSVGTextPositioningElement::dy, #IMPLIED attrib: dy
-  {
-    nsCOMPtr<nsISVGLengthList> lengthList;
-    rv = NS_NewSVGLengthList(getter_AddRefs(lengthList));
-    NS_ENSURE_SUCCESS(rv,rv);
-    rv = NS_NewSVGAnimatedLengthList(getter_AddRefs(mdY),
-                                     lengthList);
-    NS_ENSURE_SUCCESS(rv,rv);
-    rv = AddMappedSVGValue(nsSVGAtoms::dy, mdY);
-    NS_ENSURE_SUCCESS(rv,rv);
-  }
-
-  return rv;
+  return NS_OK;
 }
 
 //----------------------------------------------------------------------
 // nsIDOMNode methods
 
+NS_IMETHODIMP
+nsSVGTextElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  *aReturn = nsnull;
+  nsSVGTextElement* it = new nsSVGTextElement();
 
-NS_IMPL_DOM_CLONENODE_WITH_INIT(nsSVGTextElement)
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
 
+  nsresult rv = it->Init(mNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+
+  rv = CopyNode(it, aDeep);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+ 
+  *aReturn = it;
+
+  return NS_OK; 
+}
 
 //----------------------------------------------------------------------
 // nsIDOMSVGTextElement methods
@@ -221,24 +237,22 @@ NS_IMETHODIMP nsSVGTextElement::GetY(nsIDOMSVGAnimatedLengthList * *aY)
 /* readonly attribute nsIDOMSVGAnimatedLengthList dx; */
 NS_IMETHODIMP nsSVGTextElement::GetDx(nsIDOMSVGAnimatedLengthList * *aDx)
 {
-  *aDx = mdX;
-  NS_IF_ADDREF(*aDx);
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* readonly attribute nsIDOMSVGAnimatedLengthList dy; */
 NS_IMETHODIMP nsSVGTextElement::GetDy(nsIDOMSVGAnimatedLengthList * *aDy)
 {
-  *aDy = mdY;
-  NS_IF_ADDREF(*aDy);
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* readonly attribute nsIDOMSVGAnimatedNumberList rotate; */
 NS_IMETHODIMP nsSVGTextElement::GetRotate(nsIDOMSVGAnimatedNumberList * *aRotate)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetRotate");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 //----------------------------------------------------------------------
@@ -247,57 +261,50 @@ NS_IMETHODIMP nsSVGTextElement::GetRotate(nsIDOMSVGAnimatedNumberList * *aRotate
 /* readonly attribute nsIDOMSVGAnimatedLength textLength; */
 NS_IMETHODIMP nsSVGTextElement::GetTextLength(nsIDOMSVGAnimatedLength * *aTextLength)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetTextLength");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* readonly attribute nsIDOMSVGAnimatedEnumeration lengthAdjust; */
 NS_IMETHODIMP nsSVGTextElement::GetLengthAdjust(nsIDOMSVGAnimatedEnumeration * *aLengthAdjust)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetLengthAdjust");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* long getNumberOfChars (); */
 NS_IMETHODIMP nsSVGTextElement::GetNumberOfChars(PRInt32 *_retval)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetNumberOfChars");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* float getComputedTextLength (); */
 NS_IMETHODIMP nsSVGTextElement::GetComputedTextLength(float *_retval)
 {
-  nsCOMPtr<nsIDOMSVGRect> bbox;
-
-  GetBBox(getter_AddRefs(bbox));
-  if (bbox)
-    bbox->GetWidth(_retval);
-  else
-    *_retval = 0;
-  
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* float getSubStringLength (in unsigned long charnum, in unsigned long nchars); */
 NS_IMETHODIMP nsSVGTextElement::GetSubStringLength(PRUint32 charnum, PRUint32 nchars, float *_retval)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetSubStringLength");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* nsIDOMSVGPoint getStartPositionOfChar (in unsigned long charnum); */
 NS_IMETHODIMP nsSVGTextElement::GetStartPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetStartPositionOfChar");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* nsIDOMSVGPoint getEndPositionOfChar (in unsigned long charnum); */
 NS_IMETHODIMP nsSVGTextElement::GetEndPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetEndPositionOfChar");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* nsIDOMSVGRect getExtentOfChar (in unsigned long charnum); */
@@ -314,26 +321,22 @@ NS_IMETHODIMP nsSVGTextElement::GetExtentOfChar(PRUint32 charnum, nsIDOMSVGRect 
 /* float getRotationOfChar (in unsigned long charnum); */
 NS_IMETHODIMP nsSVGTextElement::GetRotationOfChar(PRUint32 charnum, float *_retval)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetRotationOfChar");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* long getCharNumAtPosition (in nsIDOMSVGPoint point); */
 NS_IMETHODIMP nsSVGTextElement::GetCharNumAtPosition(nsIDOMSVGPoint *point, PRInt32 *_retval)
 {
-  // null check when implementing - this method can be used by scripts!
-  // if (!element)
-  //   return NS_ERROR_DOM_SVG_WRONG_TYPE_ERR;
-
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::GetCharNumAtPosition");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 /* void selectSubString (in unsigned long charnum, in unsigned long nchars); */
 NS_IMETHODIMP nsSVGTextElement::SelectSubString(PRUint32 charnum, PRUint32 nchars)
 {
-  NS_NOTYETIMPLEMENTED("nsSVGTextElement::SelectSubString");
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_NOTYETIMPLEMENTED("write me!");
+  return NS_ERROR_UNEXPECTED;
 }
 
 //----------------------------------------------------------------------
@@ -362,47 +365,39 @@ void nsSVGTextElement::ParentChainChanged()
   GetOwnerSVGElement(getter_AddRefs(dom_elem));
   if (!dom_elem) return;
 
-  nsCOMPtr<nsSVGCoordCtxProvider> ctx = do_QueryInterface(dom_elem);
-  NS_ASSERTION(ctx, "<svg> element missing interface");
+  nsCOMPtr<nsISVGSVGElement> svg_elem = do_QueryInterface(dom_elem);
+  NS_ASSERTION(svg_elem, "<svg> element missing interface");
 
   // x:
   {
     nsCOMPtr<nsIDOMSVGLengthList> dom_lengthlist;
-    mX->GetAnimVal(getter_AddRefs(dom_lengthlist));
+    mX->GetBaseVal(getter_AddRefs(dom_lengthlist));
     nsCOMPtr<nsISVGLengthList> lengthlist = do_QueryInterface(dom_lengthlist);
     NS_ASSERTION(lengthlist, "svg lengthlist missing interface");
+
+    nsCOMPtr<nsIDOMSVGRect> vp_dom;
+    svg_elem->GetViewport(getter_AddRefs(vp_dom));
+    nsCOMPtr<nsISVGViewportRect> vp = do_QueryInterface(vp_dom);
+    nsCOMPtr<nsISVGViewportAxis> ctx;
+    vp->GetXAxis(getter_AddRefs(ctx));
     
-    lengthlist->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextX()));
+    lengthlist->SetContext(ctx);
   }
 
   // y:
   {
     nsCOMPtr<nsIDOMSVGLengthList> dom_lengthlist;
-    mY->GetAnimVal(getter_AddRefs(dom_lengthlist));
+    mY->GetBaseVal(getter_AddRefs(dom_lengthlist));
     nsCOMPtr<nsISVGLengthList> lengthlist = do_QueryInterface(dom_lengthlist);
     NS_ASSERTION(lengthlist, "svg lengthlist missing interface");
-    
-    lengthlist->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextY()));
-  }
 
-  // dx:
-  {
-    nsCOMPtr<nsIDOMSVGLengthList> dom_lengthlist;
-    mdX->GetAnimVal(getter_AddRefs(dom_lengthlist));
-    nsCOMPtr<nsISVGLengthList> lengthlist = do_QueryInterface(dom_lengthlist);
-    NS_ASSERTION(lengthlist, "svg lengthlist missing interface");
+    nsCOMPtr<nsIDOMSVGRect> vp_dom;
+    svg_elem->GetViewport(getter_AddRefs(vp_dom));
+    nsCOMPtr<nsISVGViewportRect> vp = do_QueryInterface(vp_dom);
+    nsCOMPtr<nsISVGViewportAxis> ctx;
+    vp->GetYAxis(getter_AddRefs(ctx));
     
-    lengthlist->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextX()));
-  }
-
-  // dy:
-  {
-    nsCOMPtr<nsIDOMSVGLengthList> dom_lengthlist;
-    mdY->GetAnimVal(getter_AddRefs(dom_lengthlist));
-    nsCOMPtr<nsISVGLengthList> lengthlist = do_QueryInterface(dom_lengthlist);
-    NS_ASSERTION(lengthlist, "svg lengthlist missing interface");
-    
-    lengthlist->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextY()));
+    lengthlist->SetContext(ctx);
   }
 
   // recurse into child content:
@@ -415,13 +410,12 @@ void nsSVGTextElement::ParentChainChanged()
 already_AddRefed<nsISVGTextContentMetrics>
 nsSVGTextElement::GetTextContentMetrics()
 {
-  nsIDocument* doc = GetCurrentDoc();
-  if (!doc) {
+  if (!mDocument) {
     NS_ERROR("no document");
     return nsnull;
   }
   
-  nsIPresShell* presShell = doc->GetShellAt(0);
+  nsIPresShell* presShell = mDocument->GetShellAt(0);
   if (!presShell) {
     NS_ERROR("no presshell");
     return nsnull;

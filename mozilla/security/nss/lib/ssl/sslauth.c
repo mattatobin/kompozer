@@ -1,39 +1,37 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: sslauth.c,v 1.15.2.1 2006/04/20 00:22:58 alexei.volkov.bugs%sun.com Exp $ */
+ * $Id: sslauth.c,v 1.9 2002/09/06 00:27:52 wtc%netscape.com Exp $
+ */
 #include "cert.h"
 #include "secitem.h"
 #include "ssl.h"
@@ -53,7 +51,7 @@ SSL_PeerCertificate(PRFileDesc *fd)
 		 SSL_GETPID(), fd));
 	return 0;
     }
-    if (ss->opt.useSecurity && ss->sec.peerCert) {
+    if (ss->useSecurity && ss->sec.peerCert) {
 	return CERT_DupCertificate(ss->sec.peerCert);
     }
     return 0;
@@ -71,7 +69,7 @@ SSL_LocalCertificate(PRFileDesc *fd)
 		 SSL_GETPID(), fd));
 	return NULL;
     }
-    if (ss->opt.useSecurity) {
+    if (ss->useSecurity) {
     	if (ss->sec.localCert) {
 	    return CERT_DupCertificate(ss->sec.localCert);
 	}
@@ -109,21 +107,19 @@ SSL_SecurityStatus(PRFileDesc *fd, int *op, char **cp, int *kp0, int *kp1,
 	*op = SSL_SECURITY_STATUS_OFF;
     }
 
-    if (ss->opt.useSecurity && ss->firstHsDone) {
+    if (ss->useSecurity && ss->firstHsDone) {
 
 	if (ss->version < SSL_LIBRARY_VERSION_3_0) {
 	    cipherName = ssl_cipherName[ss->sec.cipherType];
 	} else {
 	    cipherName = ssl3_cipherName[ss->sec.cipherType];
 	}
-	PORT_Assert(cipherName);
-	if (cipherName) {
-            if (PORT_Strstr(cipherName, "DES")) isDes = PR_TRUE;
-
-            if (cp) {
-                *cp = PORT_Strdup(cipherName);
-            }
-        }
+	if (cipherName && PORT_Strstr(cipherName, "DES")) isDes = PR_TRUE;
+	/* do same key stuff for fortezza */
+    
+	if (cp) {
+	    *cp = PORT_Strdup(cipherName);
+	}
 
 	if (kp0) {
 	    *kp0 = ss->sec.keyBits;

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,22 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -54,16 +52,7 @@ const char *gUnicodeRangeToLangGroupTable[] =
   "zh-CN",
   "zh-TW",
   "x-devanagari",
-  "x-tamil",
-  "x-armn",
-  "x-beng",
-  "x-cans",
-  "x-ethi",
-  "x-geor",
-  "x-gujr",
-  "x-guru",
-  "x-khmr",
-  "x-mlym"
+  "x-tamil"
 };
 
 /**********************************************************************
@@ -206,7 +195,7 @@ const char *gUnicodeRangeToLangGroupTable[] =
 
 
 
-#define NUM_OF_SUBTABLES      9
+#define NUM_OF_SUBTABLES      7
 #define SUBTABLE_SIZE         16
 
 static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] = 
@@ -225,7 +214,7 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
     kRangeTableBase+4,  //uaxxx
     kRangeKorean,       //ubxxx
     kRangeKorean,       //ucxxx
-    kRangeTableBase+5,  //udxxx
+    kRangeTableBase+5,  //udxxx  
     kRangePrivate,      //uexxx
     kRangeTableBase+6   //ufxxx
   },
@@ -235,7 +224,7 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
     kRangeSetLatin,          //u02xx
     kRangeGreek,             //u03xx     XXX 0300-036f is in fact kRangeCombiningDiacriticalMarks
     kRangeCyrillic,          //u04xx
-    kRangeTableBase+7,       //u05xx, includes Cyrillic supplement, Hebrew, and Armenian
+    kRangeHebrew,            //u05xx     XXX 0530-058f is in fact kRangeArmenian
     kRangeArabic,            //u06xx
     kRangeTertiaryTable,     //u07xx
     kRangeUnassigned,        //u08xx
@@ -245,15 +234,15 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
     kRangeTertiaryTable,     //u0cxx
     kRangeTertiaryTable,     //u0dxx
     kRangeTertiaryTable,     //u0exx
-    kRangeTibetan,           //u0fxx
+    kRangeTertiaryTable,     //u0fxx
   },
   { //table for 1x--
     kRangeTertiaryTable,     //u10xx
     kRangeKorean,            //u11xx
     kRangeEthiopic,          //u12xx
     kRangeTertiaryTable,     //u13xx
-    kRangeCanadian,          //u14xx
-    kRangeCanadian,          //u15xx
+    kRangeAboriginal,        //u14xx
+    kRangeAboriginal,        //u15xx
     kRangeTertiaryTable,     //u16xx
     kRangeKhmer,             //u17xx
     kRangeMongolian,         //u18xx
@@ -281,7 +270,7 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
     kRangeUnassigned,        //u2cxx
     kRangeUnassigned,        //u2dxx
     kRangeSetCJK,            //u2exx
-    kRangeSetCJK,            //u2fxx
+    kRangeSetCJK,            //u2fxx                      
   },
   {  //table for ax--
     kRangeYi,                //ua0xx
@@ -329,8 +318,8 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
     kRangePrivate,           //uf6xx 
     kRangePrivate,           //uf7xx 
     kRangePrivate,           //uf8xx 
-    kRangeSetCJK,            //uf9xx 
-    kRangeSetCJK,            //ufaxx 
+    kRangeSetCJK,            //uf9xx                      
+    kRangeSetCJK,            //ufaxx                      
     kRangeArabic,            //ufbxx, includes alphabic presentation form
     kRangeArabic,            //ufcxx
     kRangeArabic,            //ufdxx
@@ -338,44 +327,9 @@ static PRUint8 gUnicodeSubrangeTable[NUM_OF_SUBTABLES][SUBTABLE_SIZE] =
                              //                CJK compatibility forms, 
                              //                CJK compatibility forms, 
                              //                small form variants
-    kRangeTableBase+8,       //uffxx, halfwidth and fullwidth forms, includes Specials
-  },
-  { //table for 0x0500 - 0x05ff
-    kRangeCyrillic,          //u050x
-    kRangeCyrillic,          //u051x
-    kRangeCyrillic,          //u052x
-    kRangeArmenian,          //u053x
-    kRangeArmenian,          //u054x
-    kRangeArmenian,          //u055x
-    kRangeArmenian,          //u056x
-    kRangeArmenian,          //u057x
-    kRangeArmenian,          //u058x
-    kRangeHebrew,            //u059x
-    kRangeHebrew,            //u05ax
-    kRangeHebrew,            //u05bx
-    kRangeHebrew,            //u05cx
-    kRangeHebrew,            //u05dx
-    kRangeHebrew,            //u05ex
-    kRangeHebrew,            //u05fx
-  },
-  { //table for 0xff00 - 0xffff
-    kRangeSetCJK,            //uff0x, fullwidth latin
-    kRangeSetCJK,            //uff1x, fullwidth latin
-    kRangeSetCJK,            //uff2x, fullwidth latin
-    kRangeSetCJK,            //uff3x, fullwidth latin
-    kRangeSetCJK,            //uff4x, fullwidth latin
-    kRangeSetCJK,            //uff5x, fullwidth latin
-    kRangeSetCJK,            //uff6x, halfwidth katakana
-    kRangeSetCJK,            //uff7x, halfwidth katakana
-    kRangeSetCJK,            //uff8x, halfwidth katakana
-    kRangeSetCJK,            //uff9x, halfwidth katakana
-    kRangeSetCJK,            //uffax, halfwidth hangul jamo
-    kRangeSetCJK,            //uffbx, halfwidth hangul jamo
-    kRangeSetCJK,            //uffcx, halfwidth hangul jamo
-    kRangeSetCJK,            //uffdx, halfwidth hangul jamo
-    kRangeSetCJK,            //uffex, fullwidth symbols
-    kRangeSpecials,          //ufffx, Specials
-  },
+    
+    kRangeSetCJK,            //uffxx, halfwidth and fullwidth forms, includes Special
+  }
 };
 
 // Most scripts between U+0700 and U+16FF are assigned a chunk of 128 (0x80) 
@@ -413,17 +367,17 @@ static PRUint8 gUnicodeTertiaryRangeTable[TERTIARY_TABLE_SIZE] =
     kRangeEthiopic,          //u128x  place holder(resolved in the 2ndary tab.)
     kRangeEthiopic,          //u130x  
     kRangeCherokee,          //u138x
-    kRangeCanadian,          //u140x  place holder(resolved in the 2ndary tab.)
-    kRangeCanadian,          //u148x  place holder(resolved in the 2ndary tab.)
-    kRangeCanadian,          //u150x  place holder(resolved in the 2ndary tab.)
-    kRangeCanadian,          //u158x  place holder(resolved in the 2ndary tab.)
-    kRangeCanadian,          //u160x  
+    kRangeAboriginal,        //u140x  place holder(resolved in the 2ndary tab.)
+    kRangeAboriginal,        //u148x  place holder(resolved in the 2ndary tab.)
+    kRangeAboriginal,        //u150x  place holder(resolved in the 2ndary tab.)
+    kRangeAboriginal,        //u158x  place holder(resolved in the 2ndary tab.)
+    kRangeAboriginal,        //u160x  
     kRangeOghamRunic,        //u168x  this contains two scripts, Ogham & Runic
 };
 
 // A two level index is almost enough for locating a range, with the 
 // exception of u03xx and u05xx. Since we don't really care about range for
-// combining diacritical marks in our font application, they are 
+// Armenian and combining diacritical marks in our font application, they are 
 // not discriminated further. But future adoption of this module for other use 
 // should be aware of this limitation. The implementation can be extended if 
 // there is such a need.
@@ -442,11 +396,9 @@ PRUint32 FindCharUnicodeRange(PRUnichar ch)
 
   // otherwise, we have one more table to look at
   range = gUnicodeSubrangeTable[range - kRangeTableBase][(ch & 0x0f00) >> 8];
-  if (range < kRangeTableBase)
-    return range;
   if (range < kRangeTertiaryTable)
-    return gUnicodeSubrangeTable[range - kRangeTableBase][(ch & 0x00f0) >> 4];
+    return range;     
 
   // Yet another table to look at : U+0700 - U+16FF : 128 code point blocks
-  return gUnicodeTertiaryRangeTable[(ch - 0x0700) >> 7];
+  return  gUnicodeTertiaryRangeTable[(ch - 0x0700) >> 7];
 }

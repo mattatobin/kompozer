@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is the TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -118,10 +118,10 @@ void txOutputFormat::setFromDefaults()
         case eXMLOutput:
         {
             if (mVersion.IsEmpty())
-                mVersion.AppendLiteral("1.0");
+                mVersion.Append(NS_LITERAL_STRING("1.0"));
 
             if (mEncoding.IsEmpty())
-                mEncoding.AppendLiteral("UTF-8");
+                mEncoding.Append(NS_LITERAL_STRING("UTF-8"));
 
             if (mOmitXMLDeclaration == eNotSet)
                 mOmitXMLDeclaration = eFalse;
@@ -130,33 +130,33 @@ void txOutputFormat::setFromDefaults()
                 mIndent = eFalse;
 
             if (mMediaType.IsEmpty())
-                mMediaType.AppendLiteral("text/xml");
+                mMediaType.Append(NS_LITERAL_STRING("text/xml"));
 
             break;
         }
         case eHTMLOutput:
         {
             if (mVersion.IsEmpty())
-                mVersion.AppendLiteral("4.0");
+                mVersion.Append(NS_LITERAL_STRING("4.0"));
 
             if (mEncoding.IsEmpty())
-                mEncoding.AppendLiteral("UTF-8");
+                mEncoding.Append(NS_LITERAL_STRING("UTF-8"));
 
             if (mIndent == eNotSet)
                 mIndent = eTrue;
 
             if (mMediaType.IsEmpty())
-                mMediaType.AppendLiteral("text/html");
+                mMediaType.Append(NS_LITERAL_STRING("text/html"));
 
             break;
         }
         case eTextOutput:
         {
             if (mEncoding.IsEmpty())
-                mEncoding.AppendLiteral("UTF-8");
+                mEncoding.Append(NS_LITERAL_STRING("UTF-8"));
 
             if (mMediaType.IsEmpty())
-                mMediaType.AppendLiteral("text/plain");
+                mMediaType.Append(NS_LITERAL_STRING("text/plain"));
 
             break;
         }

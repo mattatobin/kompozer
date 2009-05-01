@@ -20,11 +20,11 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: Aaron Leventhal (aaronl@netscape.com)
+ * Original Author: Aaron Leventhal (aaronl@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
@@ -45,7 +45,6 @@
 
 #include "ISimpleDOMDocument.h"
 #include "nsDocAccessible.h"
-#include "nsIDocShellTreeItem.h"
 
 class nsDocAccessibleWrap: public nsDocAccessible,
                            public ISimpleDOMDocument
@@ -62,7 +61,6 @@ public:
     static PRInt32 GetChildIDFor(nsIAccessible* aAccessible);
 
     void GetXPAccessibleFor(const VARIANT& varChild, nsIAccessible **aXPAccessible);
-
     // ISimpleDOMDocument
     virtual /* [id][propget] */ HRESULT STDMETHODCALLTYPE get_URL( 
         /* [out] */ BSTR __RPC_FAR *url);
@@ -84,21 +82,12 @@ public:
         /* [in] */ BSTR __RPC_FAR *commaSeparatedMediaTypes);
 
     // IAccessible
-    // Override get_accChild so that it can get any child via the unique ID
+    // Overrid get_accChild so that it can get any child via the unique ID
     virtual /* [id][propget] */ HRESULT STDMETHODCALLTYPE get_accChild( 
         /* [in] */ VARIANT varChild,
         /* [retval][out] */ IDispatch __RPC_FAR *__RPC_FAR *ppdispChild);
 
-    NS_IMETHOD Shutdown();
     NS_IMETHOD FireToolkitEvent(PRUint32 aEvent, nsIAccessible* aAccessible, void* aData);
-    NS_IMETHOD FireDocLoadingEvent(PRBool isFinished);
-    NS_IMETHOD FireAnchorJumpEvent();
-
-private:
-    static void DocLoadCallback(nsITimer *aTimer, void *aClosure);
-    already_AddRefed<nsIAccessible> GetFirstLeafAccessible(nsIDOMNode *aStartNode);
-    nsCOMPtr<nsITimer> mDocLoadTimer;
-    PRPackedBool mWasAnchor;
 };
 
 #endif

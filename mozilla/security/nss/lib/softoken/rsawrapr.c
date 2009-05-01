@@ -2,42 +2,39 @@
  * PKCS#1 encoding and decoding functions.
  * This file is believed to contain no code licensed from other parties.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: rsawrapr.c,v 1.8.30.2 2006/07/31 18:17:14 wtchang%redhat.com Exp $ */
+ * $Id: rsawrapr.c,v 1.5 2003/11/07 03:38:59 relyea%netscape.com Exp $
+ */
 
 #include "blapi.h"
 #include "softoken.h"
@@ -193,7 +190,6 @@ rsa_FormatOneBlock(unsigned modulusLen, RSA_BlockType blockType,
     unsigned char *bp;
     int padLen;
     int i;
-    SECStatus rv;
 
     block = (unsigned char *) PORT_Alloc(modulusLen);
     if (block == NULL)
@@ -255,13 +251,8 @@ rsa_FormatOneBlock(unsigned modulusLen, RSA_BlockType blockType,
 	for (i = 0; i < padLen; i++) {
 	    /* Pad with non-zero random data. */
 	    do {
-		rv = RNG_GenerateGlobalRandomBytes(bp + i, 1);
-	    } while (rv == SECSuccess && bp[i] == RSA_BLOCK_AFTER_PAD_OCTET);
-	    if (rv != SECSuccess) {
-		sftk_fatalError = PR_TRUE;
-		PORT_Free (block);
-		return NULL;
-	    }
+		RNG_GenerateGlobalRandomBytes(bp + i, 1);
+	    } while (bp[i] == RSA_BLOCK_AFTER_PAD_OCTET);
 	}
 	bp += padLen;
 	*bp++ = RSA_BLOCK_AFTER_PAD_OCTET;
@@ -298,12 +289,7 @@ rsa_FormatOneBlock(unsigned modulusLen, RSA_BlockType blockType,
 	/*
 	 * Salt
 	 */
-	rv = RNG_GenerateGlobalRandomBytes(bp, OAEP_SALT_LEN);
-	if (rv != SECSuccess) {
-	    sftk_fatalError = PR_TRUE;
-	    PORT_Free (block);
-	    return NULL;
-	}
+	RNG_GenerateGlobalRandomBytes(bp, OAEP_SALT_LEN);
 	bp += OAEP_SALT_LEN;
 
 	/*
@@ -321,14 +307,8 @@ rsa_FormatOneBlock(unsigned modulusLen, RSA_BlockType blockType,
 	/*
 	 * Pad2
 	 */
-	if (bp < (block + modulusLen)) {
-	    rv = RNG_GenerateGlobalRandomBytes(bp, block - bp + modulusLen);
-	    if (rv != SECSuccess) {
-		sftk_fatalError = PR_TRUE;
-		PORT_Free (block);
-		return NULL;
-	    }
-	}
+	if (bp < (block + modulusLen))
+	    RNG_GenerateGlobalRandomBytes(bp, block - bp + modulusLen);
 
 	/*
 	 * Now we have the following:
@@ -433,9 +413,6 @@ rsa_FormatBlock(SECItem *result, unsigned modulusLen,
 	 * Pad is zeros. The application is responsible for recovering
 	 * the actual data.
 	 */
-	if (data->len > modulusLen ) {
-	    return SECFailure;
-	}
 	result->data = (unsigned char*)PORT_ZAlloc(modulusLen);
 	result->len = modulusLen;
 	PORT_Memcpy(result->data+(modulusLen-data->len),data->data,data->len);
@@ -480,9 +457,6 @@ RSA_Sign(NSSLOWKEYPrivateKey *key,
     	goto done;
 
     rv = RSA_PrivateKeyOpDoubleChecked(&key->u.rsa, output, formatted.data);
-    if (rv != SECSuccess && PORT_GetError() == SEC_ERROR_LIBRARY_FAILURE) {
-	sftk_fatalError = PR_TRUE;
-    }
     *output_len = modulus_len;
 
     goto done;
@@ -509,13 +483,7 @@ RSA_CheckSign(NSSLOWKEYPublicKey *key,
     modulus_len = nsslowkey_PublicModulusLen(key);
     if (sign_len != modulus_len) 
     	goto failure;
-    /*
-     * 0x00 || BT || Pad || 0x00 || ActualData
-     *
-     * The "3" below is the first octet + the second octet + the 0x00
-     * octet that always comes just before the ActualData.
-     */
-    if (hash_len > modulus_len - (3 + RSA_BLOCK_MIN_PAD_LEN)) 
+    if (hash_len > modulus_len - 8) 
     	goto failure;
     PORT_Assert(key->keyType == NSSLOWKEYRSAKey);
     if (key->keyType != NSSLOWKEYRSAKey)
@@ -535,11 +503,11 @@ RSA_CheckSign(NSSLOWKEYPublicKey *key,
     if (buffer[0] != 0 || buffer[1] != 1) 
     	goto loser;
     for (i = 2; i < modulus_len - hash_len - 1; i++) {
+	if (buffer[i] == 0) 
+	    break;
 	if (buffer[i] != 0xff) 
 	    goto loser;
     }
-    if (buffer[i] != 0) 
-	goto loser;
 
     /*
      * make sure we get the same results
@@ -685,12 +653,8 @@ RSA_DecryptBlock(NSSLOWKEYPrivateKey *key,
     	goto failure;
 
     rv = RSA_PrivateKeyOp(&key->u.rsa, buffer, input);
-    if (rv != SECSuccess) {
-	if (PORT_GetError() == SEC_ERROR_LIBRARY_FAILURE) {
-	    sftk_fatalError = PR_TRUE;
-	}
+    if (rv != SECSuccess) 
     	goto loser;
-    }
 
     if (buffer[0] != 0 || buffer[1] != 2) 
     	goto loser;
@@ -749,9 +713,6 @@ RSA_SignRaw(NSSLOWKEYPrivateKey *key,
     	goto done;
 
     rv = RSA_PrivateKeyOpDoubleChecked(&key->u.rsa, output, formatted.data);
-    if (rv != SECSuccess && PORT_GetError() == SEC_ERROR_LIBRARY_FAILURE) {
-	sftk_fatalError = PR_TRUE;
-    }
     *output_len = modulus_len;
 
 done:
@@ -901,12 +862,8 @@ RSA_DecryptRaw(NSSLOWKEYPrivateKey *key,
     	goto failure;
 
     rv = RSA_PrivateKeyOp(&key->u.rsa, output, input);
-    if (rv != SECSuccess) {
-	if (PORT_GetError() == SEC_ERROR_LIBRARY_FAILURE) {
-	    sftk_fatalError = PR_TRUE;
-	}
+    if (rv != SECSuccess)
     	goto failure;
-    }
 
     *output_len = modulus_len;
     return SECSuccess;

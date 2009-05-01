@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -25,16 +25,16 @@
  *   Darin Fisher <darin@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -66,7 +66,7 @@ static void PrintTimeString(char *buf, PRUint32 bufsize, PRUint32 t_sec)
     PRExplodedTime et;
     PRTime t_usec = SecondsToPRTime(t_sec);
     PR_ExplodeTime(t_usec, PR_LocalTimeParameters, &et);
-    PR_FormatTime(buf, bufsize, "%Y-%m-%d %H:%M:%S", &et);
+    PR_FormatTime(buf, bufsize, "%c", &et);
 }
 
 
@@ -75,7 +75,6 @@ NS_IMPL_ISUPPORTS2(nsAboutCache, nsIAboutModule, nsICacheVisitor)
 NS_IMETHODIMP
 nsAboutCache::NewChannel(nsIURI *aURI, nsIChannel **result)
 {
-    NS_ENSURE_ARG_POINTER(aURI);
     nsresult rv;
     PRUint32 bytesWritten;
 
@@ -116,8 +115,7 @@ nsAboutCache::NewChannel(nsIURI *aURI, nsIChannel **result)
     rv = storageStream->GetOutputStream(0, getter_AddRefs(outputStream));
     if (NS_FAILED(rv)) return rv;
 
-    mBuffer.AssignLiteral(
-                   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    mBuffer.Assign("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                    "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"\n"
                    "    \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
                    "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n"
@@ -133,13 +131,11 @@ nsAboutCache::NewChannel(nsIURI *aURI, nsIChannel **result)
     rv = cacheService->VisitEntries(this);
     if (NS_FAILED(rv)) return rv;
 
+    mBuffer.Truncate(0);
     if (!mDeviceID.IsEmpty()) {
-        mBuffer.AssignLiteral("</pre>\n");
+        mBuffer.Append("</pre>\n");
     }
-    else {
-        mBuffer.Truncate();
-    }
-    mBuffer.AppendLiteral("</div>\n</body>\n</html>\n");
+    mBuffer.Append("</div>\n</body>\n</html>\n");
     outputStream->Write(mBuffer.get(), mBuffer.Length(), &bytesWritten);
         
     nsCOMPtr<nsIInputStream> inStr;
@@ -150,7 +146,7 @@ nsAboutCache::NewChannel(nsIURI *aURI, nsIChannel **result)
     nsIChannel* channel;
     rv = NS_NewInputStreamChannel(&channel, aURI, inStr,
                                   NS_LITERAL_CSTRING("text/html"),
-                                  NS_LITERAL_CSTRING("utf-8"));
+                                  EmptyCString());
     if (NS_FAILED(rv)) return rv;
 
     *result = channel;
@@ -170,51 +166,50 @@ nsAboutCache::VisitDevice(const char *deviceID,
 
     if (mDeviceID.IsEmpty() || mDeviceID.Equals(deviceID)) {
 
-        // We need mStream for this
-        if (!mStream)
-          return NS_ERROR_FAILURE;
-
         // Write out the Cache Name
         deviceInfo->GetDescription(getter_Copies(str));
 
-        mBuffer.AssignLiteral("<h2>");
+        mBuffer.Assign("<h2>");
         mBuffer.Append(str);
-        mBuffer.AppendLiteral("</h2>\n<br />\n"
-                              "<table>\n");
+        mBuffer.Append("</h2>\n<br />\n");
 
         // Write out cache info
 
-        mBuffer.AppendLiteral("\n<tr>\n<td><b>Number of entries:</b></td>\n");
+        mBuffer.Append("<table>\n");
+
+        mBuffer.Append("\n<tr>\n<td><b>Number of entries:</b></td>\n");
         value = 0;
         deviceInfo->GetEntryCount(&value);
-        mBuffer.AppendLiteral("<td><tt>");
+        mBuffer.Append("<td><tt>");
         mBuffer.AppendInt(value);
-        mBuffer.AppendLiteral("</tt></td>\n</tr>\n"
-                              "\n<tr>\n<td><b>Maximum storage size:</b></td>\n");
+        mBuffer.Append("</tt></td>\n</tr>\n");
+
+        mBuffer.Append("\n<tr>\n<td><b>Maximum storage size:</b></td>\n");
         value = 0;
         deviceInfo->GetMaximumSize(&value);
-        mBuffer.AppendLiteral("<td><tt>");
+        mBuffer.Append("<td><tt>");
         mBuffer.AppendInt(value/1024);
-        mBuffer.AppendLiteral(" KiB</tt></td>\n</tr>\n"
-                              "\n<tr>\n<td><b>Storage in use:</b></td>\n"
-                              "<td><tt>");
+        mBuffer.Append(" KiB</tt></td>\n</tr>\n");
+
+        mBuffer.Append("\n<tr>\n<td><b>Storage in use:</b></td>\n");
+        mBuffer.Append("<td><tt>");
         value = 0;
         deviceInfo->GetTotalSize(&value);
         mBuffer.AppendInt(value/1024);
-        mBuffer.AppendLiteral(" KiB</tt></td>\n</tr>\n");
+        mBuffer.Append(" KiB</tt></td>\n</tr>\n");
 
         deviceInfo->GetUsageReport(getter_Copies(str));
         mBuffer.Append(str);
-        mBuffer.AppendLiteral("</table>\n\n<br />");
+        mBuffer.Append("</table>\n\n<br />");
 
         if (mDeviceID.IsEmpty()) {
-            mBuffer.AppendLiteral("\n<a href=\"about:cache?device=");
+            mBuffer.Append("\n<a href=\"about:cache?device=");
             mBuffer.Append(deviceID);
-            mBuffer.AppendLiteral("\">List Cache Entries</a>\n"
-                                  "<hr />\n");
+            mBuffer.Append("\">List Cache Entries</a>\n");
+            mBuffer.Append("<hr />\n");
         } else {
             *visitEntries = PR_TRUE;
-            mBuffer.AppendLiteral("<hr />\n<pre>\n");
+            mBuffer.Append("<hr />\n<pre>\n");
         }
         
         mStream->Write(mBuffer.get(), mBuffer.Length(), &bytesWritten);
@@ -228,17 +223,13 @@ nsAboutCache::VisitEntry(const char *deviceID,
                          nsICacheEntryInfo *entryInfo,
                          PRBool *visitNext)
 {
-    // We need mStream for this
-    if (!mStream)
-      return NS_ERROR_FAILURE;
-
     nsresult        rv;
     PRUint32        bytesWritten;
-    nsCAutoString   key;
+    nsXPIDLCString  key;
     nsXPIDLCString  clientID;
     PRBool          streamBased;
     
-    rv = entryInfo->GetKey(key);
+    rv = entryInfo->GetKey(getter_Copies(key));
     if (NS_FAILED(rv))  return rv;
 
     rv = entryInfo->GetClientID(getter_Copies(clientID));
@@ -249,37 +240,37 @@ nsAboutCache::VisitEntry(const char *deviceID,
 
     // Generate a about:cache-entry URL for this entry...
     nsCAutoString url;
-    url.AssignLiteral("about:cache-entry?client=");
+    url += NS_LITERAL_CSTRING("about:cache-entry?client=");
     url += clientID;
-    url.AppendLiteral("&amp;sb=");
-    url += streamBased ? '1' : '0';
-    url.AppendLiteral("&amp;key=");
-    char* escapedKey = nsEscapeHTML(key.get());
+    url += NS_LITERAL_CSTRING("&amp;sb=");
+    url += streamBased ? "1" : "0";
+    url += NS_LITERAL_CSTRING("&amp;key=");
+    char* escapedKey = nsEscapeHTML(key);
     url += escapedKey; // key
 
     // Entry start...
 
     // URI
-    mBuffer.AssignLiteral("<b>           Key:</b> <a href=\"");
+    mBuffer.Assign("<b>           Key:</b> <a href=\"");
     mBuffer.Append(url);
-    mBuffer.AppendLiteral("\">");
+    mBuffer.Append("\">");
     mBuffer.Append(escapedKey);
     nsMemory::Free(escapedKey);
-    mBuffer.AppendLiteral("</a>");
+    mBuffer.Append("</a>");
 
     // Content length
     PRUint32 length = 0;
     entryInfo->GetDataSize(&length);
 
-    mBuffer.AppendLiteral("\n<b>     Data size:</b> ");
+    mBuffer.Append("\n<b>     Data size:</b> ");
     mBuffer.AppendInt(length);
-    mBuffer.AppendLiteral(" bytes");
+    mBuffer.Append(" bytes");
 
     // Number of accesses
     PRInt32 fetchCount = 0;
     entryInfo->GetFetchCount(&fetchCount);
 
-    mBuffer.AppendLiteral("\n<b>   Fetch count:</b> ");
+    mBuffer.Append("\n<b>   Fetch count:</b> ");
     mBuffer.AppendInt(fetchCount);
 
     // vars for reporting time
@@ -287,26 +278,26 @@ nsAboutCache::VisitEntry(const char *deviceID,
     PRUint32 t;
 
     // Last modified time
-    mBuffer.AppendLiteral("\n<b> Last modified:</b> ");
+    mBuffer.Append("\n<b> Last modified:</b> ");
     entryInfo->GetLastModified(&t);
     if (t) {
         PrintTimeString(buf, sizeof(buf), t);
         mBuffer.Append(buf);
     } else
-        mBuffer.AppendLiteral("No last modified time");
+        mBuffer.Append("No last modified time");
 
     // Expires time
-    mBuffer.AppendLiteral("\n<b>       Expires:</b> ");
+    mBuffer.Append("\n<b>       Expires:</b> ");
     entryInfo->GetExpirationTime(&t);
     if (t < 0xFFFFFFFF) {
         PrintTimeString(buf, sizeof(buf), t);
         mBuffer.Append(buf);
     } else {
-        mBuffer.AppendLiteral("No expiration time");
+        mBuffer.Append("No expiration time");
     }
 
     // Entry is done...
-    mBuffer.AppendLiteral("\n\n");
+    mBuffer.Append("\n\n");
 
     mStream->Write(mBuffer.get(), mBuffer.Length(), &bytesWritten);
 

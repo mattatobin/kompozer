@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,31 +14,30 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Mark Mentovai <mark@moxienet.com>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsIInterfaceRequestorUtils.h" 
-#include "nsIServiceManager.h"
 #include "nsRenderingContextMac.h"
 #include "nsDeviceContextMac.h"
 #include "nsFontMetricsMac.h"
@@ -52,10 +51,6 @@
 #include "nsGfxCIID.h"
 #include "nsGfxUtils.h"
 #include "nsCOMPtr.h"
-
-#ifdef MOZ_WIDGET_COCOA
-#include "nsIQDFlushManager.h"
-#endif
 
 #include "plhash.h"
 
@@ -152,7 +147,7 @@ NS_IMETHODIMP nsRenderingContextMac::Init(nsIDeviceContext* aContext, nsIWidget*
 //------------------------------------------------------------------------
 
 // should only be called for an offscreen drawing surface, without an offset or clip region
-NS_IMETHODIMP nsRenderingContextMac::Init(nsIDeviceContext* aContext, nsIDrawingSurface* aSurface)
+NS_IMETHODIMP nsRenderingContextMac::Init(nsIDeviceContext* aContext, nsDrawingSurface aSurface)
 {
 	// make sure all allocations in the constructor succeeded.
 	if (nsnull == mFrontSurface)
@@ -196,7 +191,7 @@ void nsRenderingContextMac::SelectDrawingSurface(nsDrawingSurfaceMac* aSurface, 
 		return;
 
   NS_ASSERTION(ValidateDrawingState(), "Bad drawing state");
-
+	
 	// if surface is changing, be extra conservative about graphic state changes.
 	if (mCurrentSurface != aSurface)
 	{
@@ -238,6 +233,7 @@ void nsRenderingContextMac::SelectDrawingSurface(nsDrawingSurfaceMac* aSurface, 
 	if (!mContext) return;
 	
 	// GS and context initializations
+	((nsDeviceContextMac *)mContext)->SetDrawingSurface(mPort);
 #if 0
 	((nsDeviceContextMac *)mContext)->InstallColormap();
 #endif
@@ -319,7 +315,7 @@ NS_IMETHODIMP nsRenderingContextMac::PushState(void)
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::PopState(void)
+NS_IMETHODIMP nsRenderingContextMac::PopState(PRBool &aClipEmpty)
 {
 	NS_ASSERTION(ValidateDrawingState(), "Bad drawing state");
 
@@ -347,6 +343,8 @@ NS_IMETHODIMP nsRenderingContextMac::PopState(void)
 		mTranMatrix = &(mGS->mTMatrix);
 	}
 
+	aClipEmpty = (::EmptyRgn(mGS->mClipRegion));
+
 	return NS_OK;
 }
 
@@ -369,7 +367,8 @@ NS_IMETHODIMP nsRenderingContextMac::LockDrawingSurface(PRInt32 aX, PRInt32 aY,
 
 NS_IMETHODIMP nsRenderingContextMac::UnlockDrawingSurface(void)
 {
-  PopState();
+  PRBool  clipstate;
+  PopState(clipstate);
 
   mCurrentSurface->Unlock();
   
@@ -379,7 +378,7 @@ NS_IMETHODIMP nsRenderingContextMac::UnlockDrawingSurface(void)
 //------------------------------------------------------------------------
 
 
-NS_IMETHODIMP nsRenderingContextMac::SelectOffScreenDrawingSurface(nsIDrawingSurface* aSurface)
+NS_IMETHODIMP nsRenderingContextMac::SelectOffScreenDrawingSurface(nsDrawingSurface aSurface)
 {  
 	nsDrawingSurfaceMac* surface = static_cast<nsDrawingSurfaceMac*>(aSurface);
 
@@ -393,7 +392,7 @@ NS_IMETHODIMP nsRenderingContextMac::SelectOffScreenDrawingSurface(nsIDrawingSur
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::GetDrawingSurface(nsIDrawingSurface* *aSurface)
+NS_IMETHODIMP nsRenderingContextMac::GetDrawingSurface(nsDrawingSurface *aSurface)
 {  
 	*aSurface = mCurrentSurface;
 	// on Mac, select it too, to ensure that the port gets set correct for
@@ -404,7 +403,7 @@ NS_IMETHODIMP nsRenderingContextMac::GetDrawingSurface(nsIDrawingSurface* *aSurf
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::CopyOffScreenBits(nsIDrawingSurface* aSrcSurf,
+NS_IMETHODIMP nsRenderingContextMac::CopyOffScreenBits(nsDrawingSurface aSrcSurf,
                                                          PRInt32 aSrcX, PRInt32 aSrcY,
                                                          const nsRect &aDestBounds,
                                                          PRUint32 aCopyFlags)
@@ -498,7 +497,7 @@ NS_IMETHODIMP nsRenderingContextMac::CopyOffScreenBits(nsIDrawingSurface* aSrcSu
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::CreateDrawingSurface(const nsRect& aBounds, PRUint32 aSurfFlags, nsIDrawingSurface* &aSurface)
+NS_IMETHODIMP nsRenderingContextMac::CreateDrawingSurface(const nsRect& aBounds, PRUint32 aSurfFlags, nsDrawingSurface &aSurface)
 {
 	aSurface = nsnull;
 
@@ -527,7 +526,7 @@ NS_IMETHODIMP nsRenderingContextMac::CreateDrawingSurface(const nsRect& aBounds,
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::DestroyDrawingSurface(nsIDrawingSurface* aSurface)
+NS_IMETHODIMP nsRenderingContextMac::DestroyDrawingSurface(nsDrawingSurface aSurface)
 {
 	if (!aSurface)
 		return NS_ERROR_FAILURE;
@@ -590,7 +589,7 @@ NS_IMETHODIMP nsRenderingContextMac::IsVisibleRect(const nsRect& aRect, PRBool &
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::SetClipRect(const nsRect& aRect, nsClipCombine aCombine)
+NS_IMETHODIMP nsRenderingContextMac::SetClipRect(const nsRect& aRect, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
 	nsRect  trect = aRect;
 
@@ -599,7 +598,7 @@ NS_IMETHODIMP nsRenderingContextMac::SetClipRect(const nsRect& aRect, nsClipComb
 	Rect macRect;
 	::SetRect(&macRect, trect.x, trect.y, trect.x + trect.width, trect.y + trect.height);
 
-	StRegionFromPool rectRgn;
+	RgnHandle rectRgn = sNativeRegionPool.GetNewRegion();
 	RgnHandle clipRgn = mGS->mClipRegion;
 	if (!clipRgn || !rectRgn)
 		return NS_ERROR_OUT_OF_MEMORY;
@@ -624,6 +623,7 @@ NS_IMETHODIMP nsRenderingContextMac::SetClipRect(const nsRect& aRect, nsClipComb
 		::SectRgn(rectRgn, mGS->mMainRegion, clipRgn);
 		break;
 	}
+	sNativeRegionPool.ReleaseRegion(rectRgn);
 
 	{
 		StPortSetter setter(mPort);
@@ -631,6 +631,7 @@ NS_IMETHODIMP nsRenderingContextMac::SetClipRect(const nsRect& aRect, nsClipComb
 	}
 
 	mGS->mClipRegion = clipRgn;
+	aClipEmpty = ::EmptyRgn(clipRgn);
 	
 	// note that the clipping changed.
 	mChanges |= kClippingChanged;
@@ -658,7 +659,7 @@ NS_IMETHODIMP nsRenderingContextMac::GetClipRect(nsRect &aRect, PRBool &aClipVal
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine)
+NS_IMETHODIMP nsRenderingContextMac::SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
 	RgnHandle regionH;
 	aRegion.GetNativeRegion((void*&)regionH);
@@ -692,6 +693,7 @@ NS_IMETHODIMP nsRenderingContextMac::SetClipRegion(const nsIRegion& aRegion, nsC
 	}
 
 	mGS->mClipRegion = clipRgn;
+	aClipEmpty = ::EmptyRgn(clipRgn);
 
 	// note that the clipping changed.
 	mChanges |= kClippingChanged;
@@ -772,16 +774,17 @@ NS_IMETHODIMP nsRenderingContextMac::GetColor(nscolor &aColor) const
 
 NS_IMETHODIMP nsRenderingContextMac::SetLineStyle(nsLineStyle aLineStyle)
 {
-  mGS->mLineStyle = aLineStyle;
-  return NS_OK;
+	// note: the line style must be saved in the nsGraphicState like font, color, etc...
+  mLineStyle = aLineStyle;
+	return NS_OK;
 }
 
 //------------------------------------------------------------------------
 
 NS_IMETHODIMP nsRenderingContextMac::GetLineStyle(nsLineStyle &aLineStyle)
 {
-  aLineStyle = mGS->mLineStyle;
-  return NS_OK;
+  aLineStyle = mLineStyle;
+	return NS_OK;
 }
 
 
@@ -847,56 +850,11 @@ NS_IMETHODIMP nsRenderingContextMac::GetCurrentTransform(nsTransform2D *&aTransf
 
 
 #pragma mark -
-
-
-// 0 1 2 3 4 5 6 7
-// *   *   *   *  
-//   *   *   *   *
-// *   *   *   *  
-//   *   *   *   *
-// *   *   *   *  
-//   *   *   *   *
-// *   *   *   *  
-//   *   *   *   *
-static const Pattern dottedPattern = {0xaa,0x55,0xaa,0x55,0xaa,0x55,0xaa,0x55};
-
-// 0 1 2 3 4 5 6 7
-// * * * *        
-//   * * * *      
-//     * * * *    
-//       * * * *  
-//         * * * *
-// *         * * *
-// * *         * *
-// * * *         *
-static const Pattern dashedPattern = {0xf0,0x78,0x3c,0x1e,0x0f,0x87,0xc3,0xe1};
-
 //------------------------------------------------------------------------
 
 NS_IMETHODIMP nsRenderingContextMac::DrawLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1)
 {
-  if (mGS->mLineStyle == nsLineStyle_kNone)
-    return NS_OK;
-
   SetupPortState();
-
-  PenState savedPenState;
-  RGBColor savedBGColor;
-  if (mGS->mLineStyle == nsLineStyle_kDotted ||
-      mGS->mLineStyle == nsLineStyle_kDashed) {
-    ::GetPenState(&savedPenState);
-    ::GetBackColor(&savedBGColor);
-    
-    ::PenMode(transparent);
-    if (mGS->mLineStyle == nsLineStyle_kDashed)
-      ::PenPat(&dashedPattern);
-    else
-      ::PenPat(&dottedPattern);
-    RGBColor invertedForeColor;
-    ::GetForeColor(&invertedForeColor);
-    ::InvertColor(&invertedForeColor);
-    ::RGBBackColor(&invertedForeColor);
-  }
 
 	mGS->mTMatrix.TransformCoord(&aX0,&aY0);
 	mGS->mTMatrix.TransformCoord(&aX1,&aY1);
@@ -914,12 +872,28 @@ NS_IMETHODIMP nsRenderingContextMac::DrawLine(nscoord aX0, nscoord aY0, nscoord 
 	::MoveTo(aX0, aY0);
 	::Line(diffX, diffY);
 
-  if (mGS->mLineStyle == nsLineStyle_kDotted ||
-      mGS->mLineStyle == nsLineStyle_kDashed) {
-    ::PenMode(savedPenState.pnMode);
-    ::PenPat(&savedPenState.pnPat);
-    ::RGBBackColor(&savedBGColor);
-  }
+	return NS_OK;
+}
+
+
+//------------------------------------------------------------------------
+
+NS_IMETHODIMP nsRenderingContextMac::DrawStdLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1)
+{
+	SetupPortState();
+
+	// make the line one pixel shorter to match other platforms
+	nscoord diffX = aX1 - aX0;
+	if (diffX)
+		diffX -= (diffX > 0 ? 1 : -1);
+
+	nscoord diffY = aY1 - aY0;
+	if (diffY)
+		diffY -= (diffY > 0 ? 1 : -1);
+
+	// draw line
+	::MoveTo(aX0, aY0);
+	::Line(diffX, diffY);
 
 	return NS_OK;
 }
@@ -929,29 +903,9 @@ NS_IMETHODIMP nsRenderingContextMac::DrawLine(nscoord aX0, nscoord aY0, nscoord 
 
 NS_IMETHODIMP nsRenderingContextMac::DrawPolyline(const nsPoint aPoints[], PRInt32 aNumPoints)
 {
-  if (mGS->mLineStyle == nsLineStyle_kNone)
-    return NS_OK;
-
 	SetupPortState();
 
-  PenState savedPenState;
-  RGBColor savedBGColor;
-  if (mGS->mLineStyle == nsLineStyle_kDotted ||
-      mGS->mLineStyle == nsLineStyle_kDashed) {
-    ::GetPenState(&savedPenState);
-    ::GetBackColor(&savedBGColor);
-    
-    ::PenMode(transparent);
-    if (mGS->mLineStyle == nsLineStyle_kDashed)
-      ::PenPat(&dashedPattern);
-    else
-      ::PenPat(&dottedPattern);
-    RGBColor invertedForeColor;
-    ::GetForeColor(&invertedForeColor);
-    ::InvertColor(&invertedForeColor);
-    ::RGBBackColor(&invertedForeColor);
-  }
-
+	PRUint32   i;
 	PRInt32    x,y;
 
 	x = aPoints[0].x;
@@ -959,21 +913,13 @@ NS_IMETHODIMP nsRenderingContextMac::DrawPolyline(const nsPoint aPoints[], PRInt
 	mGS->mTMatrix.TransformCoord((PRInt32*)&x,(PRInt32*)&y);
 	::MoveTo(x,y);
 
-	for (PRInt32 i = 1; i < aNumPoints; i++)
-	{
+	for (i = 1; i < aNumPoints; i++){
 		x = aPoints[i].x;
 		y = aPoints[i].y;
 
 		mGS->mTMatrix.TransformCoord((PRInt32*)&x,(PRInt32*)&y);
 		::LineTo(x,y);
 	}
-
-  if (mGS->mLineStyle == nsLineStyle_kDotted ||
-      mGS->mLineStyle == nsLineStyle_kDashed) {
-    ::PenMode(savedPenState.pnMode);
-    ::PenPat(&savedPenState.pnPat);
-    ::RGBBackColor(&savedBGColor);
-  }
 
 	return NS_OK;
 }
@@ -1059,6 +1005,7 @@ NS_IMETHODIMP nsRenderingContextMac::DrawPolygon(const nsPoint aPoints[], PRInt3
 {
 	SetupPortState();
 
+	PRUint32   i;
 	PolyHandle thepoly;
 	PRInt32    x,y;
 
@@ -1072,7 +1019,7 @@ NS_IMETHODIMP nsRenderingContextMac::DrawPolygon(const nsPoint aPoints[], PRInt3
 	mGS->mTMatrix.TransformCoord((PRInt32*)&x,(PRInt32*)&y);
 	::MoveTo(x,y);
 
-	for (PRInt32 i = 1; i < aNumPoints; i++) {
+	for (i = 1; i < aNumPoints; i++) {
 		x = aPoints[i].x;
 		y = aPoints[i].y;
 		
@@ -1094,6 +1041,7 @@ NS_IMETHODIMP nsRenderingContextMac::FillPolygon(const nsPoint aPoints[], PRInt3
 {
 	SetupPortState();
 
+	PRUint32   i;
 	PolyHandle thepoly;
 	PRInt32    x,y;
 
@@ -1107,7 +1055,7 @@ NS_IMETHODIMP nsRenderingContextMac::FillPolygon(const nsPoint aPoints[], PRInt3
 	mGS->mTMatrix.TransformCoord((PRInt32*)&x,(PRInt32*)&y);
 	::MoveTo(x,y);
 
-	for (PRInt32 i = 1; i < aNumPoints; i++) {
+	for (i = 1; i < aNumPoints; i++) {
 		x = aPoints[i].x;
 		y = aPoints[i].y;
 		mGS->mTMatrix.TransformCoord((PRInt32*)&x,(PRInt32*)&y);
@@ -1202,7 +1150,7 @@ NS_IMETHODIMP nsRenderingContextMac::DrawArc(nscoord aX, nscoord aY, nscoord aWi
 
 	mGS->mTMatrix.TransformCoord(&x,&y,&w,&h);
 	::SetRect(&therect, pinToShort(x), pinToShort(y), pinToShort(x + w), pinToShort(y + h));
-	::FrameArc(&therect, (short)aStartAngle, (short)aEndAngle);
+	::FrameArc(&therect,aStartAngle,aEndAngle);
 
 	return NS_OK;
 }
@@ -1232,20 +1180,12 @@ NS_IMETHODIMP nsRenderingContextMac::FillArc(nscoord aX, nscoord aY, nscoord aWi
 
 	mGS->mTMatrix.TransformCoord(&x,&y,&w,&h);
 	::SetRect(&therect, pinToShort(x), pinToShort(y), pinToShort(x + w), pinToShort(y + h));
-	::PaintArc(&therect, (short)aStartAngle, (short)aEndAngle);
+	::PaintArc(&therect,aStartAngle,aEndAngle);
 
 	return NS_OK;
 }
 
 #pragma mark -
-
-PRInt32 nsRenderingContextMac::GetMaxStringLength()
-{
-  if (!mGS->mFontMetrics)
-    return 1;
-  return NS_STATIC_CAST(nsFontMetricsMac*, mGS->mFontMetrics)->GetMaxStringLength();
-}
-
 //------------------------------------------------------------------------
 
 NS_IMETHODIMP nsRenderingContextMac::GetWidth(char ch, nscoord &aWidth)
@@ -1274,8 +1214,22 @@ NS_IMETHODIMP nsRenderingContextMac::GetWidth(PRUnichar ch, nscoord &aWidth, PRI
 
 //------------------------------------------------------------------------
 
+NS_IMETHODIMP nsRenderingContextMac::GetWidth(const nsString& aString, nscoord &aWidth, PRInt32 *aFontID)
+{
+	return GetWidth(aString.get(), aString.Length(), aWidth, aFontID);
+}
+
+//------------------------------------------------------------------------
+
+NS_IMETHODIMP nsRenderingContextMac::GetWidth(const char *aString, nscoord &aWidth)
+{
+	return GetWidth(aString, strlen(aString), aWidth);
+}
+
+//------------------------------------------------------------------------
+
 NS_IMETHODIMP
-nsRenderingContextMac::GetWidthInternal(const char* aString, PRUint32 aLength, nscoord& aWidth)
+nsRenderingContextMac::GetWidth(const char* aString, PRUint32 aLength, nscoord& aWidth)
 {
 	SetupPortState();
 
@@ -1294,8 +1248,7 @@ nsRenderingContextMac::GetWidthInternal(const char* aString, PRUint32 aLength, n
 
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP
-nsRenderingContextMac::GetWidthInternal(const PRUnichar *aString, PRUint32 aLength, nscoord &aWidth, PRInt32 *aFontID)
+NS_IMETHODIMP nsRenderingContextMac::GetWidth(const PRUnichar *aString, PRUint32 aLength, nscoord &aWidth, PRInt32 *aFontID)
 {
 	SetupPortState();
 	
@@ -1315,8 +1268,8 @@ nsRenderingContextMac::GetWidthInternal(const PRUnichar *aString, PRUint32 aLeng
 //------------------------------------------------------------------------
 
 NS_IMETHODIMP
-nsRenderingContextMac::GetTextDimensionsInternal(const char* aString, PRUint32 aLength,
-                                                 nsTextDimensions& aDimensions)
+nsRenderingContextMac::GetTextDimensions(const char* aString, PRUint32 aLength,
+                                        nsTextDimensions& aDimensions)
 {
   nsresult rv= GetWidth(aString, aLength, aDimensions.width);
   if (NS_SUCCEEDED(rv) && (mGS->mFontMetrics))
@@ -1328,8 +1281,8 @@ nsRenderingContextMac::GetTextDimensionsInternal(const char* aString, PRUint32 a
 }
 
 NS_IMETHODIMP
-nsRenderingContextMac::GetTextDimensionsInternal(const PRUnichar* aString, PRUint32 aLength,
-                                                 nsTextDimensions& aDimensions, PRInt32* aFontID)
+nsRenderingContextMac::GetTextDimensions(const PRUnichar* aString, PRUint32 aLength,
+                                         nsTextDimensions& aDimensions, PRInt32* aFontID)
 {
   SetupPortState();
   
@@ -1349,9 +1302,9 @@ nsRenderingContextMac::GetTextDimensionsInternal(const PRUnichar* aString, PRUin
 #pragma mark -
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::DrawStringInternal(const char *aString, PRUint32 aLength,
-                                                        nscoord aX, nscoord aY,
-                                                        const nscoord* aSpacing)
+NS_IMETHODIMP nsRenderingContextMac::DrawString(const char *aString, PRUint32 aLength,
+                                         nscoord aX, nscoord aY,
+                                         const nscoord* aSpacing)
 {
 	SetupPortState();
 
@@ -1376,7 +1329,7 @@ NS_IMETHODIMP nsRenderingContextMac::DrawStringInternal(const char *aString, PRU
 		{
 			mGS->mTMatrix.ScaleXCoords(aSpacing, aLength, spacing);
 			PRInt32 currentX = x;
-			for (PRUint32 i = 0; i < aLength; i++)
+			for (PRInt32 i = 0; i < aLength; i++)
 			{
 				::DrawChar(aString[i]);
 				currentX += spacing[i];
@@ -1396,9 +1349,9 @@ NS_IMETHODIMP nsRenderingContextMac::DrawStringInternal(const char *aString, PRU
 
 
 //------------------------------------------------------------------------
-NS_IMETHODIMP nsRenderingContextMac::DrawStringInternal(const PRUnichar *aString, PRUint32 aLength,
-                                                        nscoord aX, nscoord aY, PRInt32 aFontID,
-                                                        const nscoord* aSpacing)
+NS_IMETHODIMP nsRenderingContextMac::DrawString(const PRUnichar *aString, PRUint32 aLength,
+                                         nscoord aX, nscoord aY, PRInt32 aFontID,
+                                         const nscoord* aSpacing)
 {
 	SetupPortState();
 
@@ -1420,10 +1373,20 @@ NS_IMETHODIMP nsRenderingContextMac::DrawStringInternal(const PRUnichar *aString
 	return rv;        
 }
 
+//------------------------------------------------------------------------
+
+NS_IMETHODIMP nsRenderingContextMac::DrawString(const nsString& aString,
+                                         nscoord aX, nscoord aY, PRInt32 aFontID,
+                                         const nscoord* aSpacing)
+{
+ 	return DrawString(aString.get(), aString.Length(), aX, aY, aFontID, aSpacing);
+}
+
+
 #pragma mark -
 //------------------------------------------------------------------------
 
-NS_IMETHODIMP nsRenderingContextMac::RetrieveCurrentNativeGraphicData(void** ngd)
+NS_IMETHODIMP nsRenderingContextMac::RetrieveCurrentNativeGraphicData(PRUint32 * ngd)
 {
   return NS_OK;
 }
@@ -1462,47 +1425,42 @@ NS_IMETHODIMP
 nsRenderingContextMac::FlushRect(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight)
 {
 #ifdef MOZ_WIDGET_COCOA
-  if (mPort) {
-    SetupPortState();
+    if (mPort) {
+        SetupPortState();
 
-    nscoord x,y,w,h;
-
-    x = aX;
-    y = aY;
-    w = aWidth;
-    h = aHeight;
-
-    mGS->mTMatrix.TransformCoord(&x, &y, &w, &h);
-
-    StRegionFromPool rgn;
-    if (!rgn) return NS_ERROR_OUT_OF_MEMORY;
-
-    ::SetRectRgn(rgn, pinToShort(x), pinToShort(y), pinToShort(x + w), pinToShort(y + h));
-
-    nsCOMPtr<nsIQDFlushManager> qdFlushManager =
-     do_GetService("@mozilla.org/gfx/qdflushmanager;1");
-    if (qdFlushManager)
-      qdFlushManager->FlushPortBuffer(mPort, rgn);
-  }
+        nscoord x,y,w,h;
+        Rect	therect;
+    
+        x = aX;
+        y = aY;
+        w = aWidth;
+        h = aHeight;
+    
+        mGS->mTMatrix.TransformCoord(&x, &y, &w, &h);
+        RgnHandle rgn = ::NewRgn();
+        ::SetRectRgn(rgn, pinToShort(x), pinToShort(y), pinToShort(x + w), pinToShort(y + h));
+        ::QDFlushPortBuffer(mPort, rgn);
+        ::DisposeRgn(rgn);
+    }
 #endif
-  return NS_OK;
+    return NS_OK;
 }
 
 #ifdef MOZ_MATHML
 
 NS_IMETHODIMP
-nsRenderingContextMac::GetBoundingMetricsInternal(const char*        aString, 
-                                                  PRUint32           aLength,
-                                                  nsBoundingMetrics& aBoundingMetrics)
+nsRenderingContextMac::GetBoundingMetrics(const char*        aString, 
+                                          PRUint32           aLength,
+                                          nsBoundingMetrics& aBoundingMetrics)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsRenderingContextMac::GetBoundingMetricsInternal(const PRUnichar*   aString, 
-                                                  PRUint32           aLength,
-                                                  nsBoundingMetrics& aBoundingMetrics,
-                                                  PRInt32*           aFontID)
+nsRenderingContextMac::GetBoundingMetrics(const PRUnichar*   aString, 
+                                          PRUint32           aLength,
+                                          nsBoundingMetrics& aBoundingMetrics,
+                                          PRInt32*           aFontID)
 {
   SetupPortState();
   
@@ -1530,29 +1488,6 @@ nsRenderingContextMac::SetRightToLeftText(PRBool aIsRTL)
 	return NS_OK;
 }
 
-NS_IMETHODIMP
-nsRenderingContextMac::GetRightToLeftText(PRBool* aIsRTL)
-{
-  *aIsRTL = mRightToLeftText;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsRenderingContextMac::DrawImage(imgIContainer *aImage, const nsRect & aSrcRect, const nsRect & aDestRect)
-{
-  SetupPortState();
-  return nsRenderingContextImpl::DrawImage(aImage, aSrcRect, aDestRect);
-}
-
-NS_IMETHODIMP
-nsRenderingContextMac::DrawTile(imgIContainer *aImage,
-                    nscoord aXImageStart, nscoord aYImageStart,
-                    const nsRect * aTargetRect)
-{
-  SetupPortState();
-  return nsRenderingContextImpl::DrawTile(aImage, aXImageStart, aYImageStart, aTargetRect);
-}
-
 #pragma mark -
 
 // override to set the port back to the window port
@@ -1568,21 +1503,38 @@ nsRenderingContextMac::ReleaseBackbuffer(void)
 NS_IMETHODIMP 
 nsRenderingContextMac::UseBackbuffer(PRBool* aUseBackbuffer)
 {
-  *aUseBackbuffer = PR_FALSE;
+  *aUseBackbuffer = !OnMacOSX();
   return NS_OK;
 }
 
 
+//
+// Return true if we are on Mac OS X, caching the result after the first call
+//
 PRBool
-nsRenderingContextMac::OnTigerOrLater()
+nsRenderingContextMac::OnMacOSX()
+{
+  static PRBool gInitVer = PR_FALSE;
+  static PRBool gOnMacOSX = PR_FALSE;
+  if(! gInitVer) {
+    long version;
+    OSErr err = ::Gestalt(gestaltSystemVersion, &version);
+    gOnMacOSX = (err == noErr && version >= 0x00001000);
+    gInitVer = PR_TRUE;
+  }
+  return gOnMacOSX;
+}
+
+PRBool
+nsRenderingContextMac::OnJaguar()
 {
   static PRBool sInitVer = PR_FALSE;
-  static PRBool sOnTigerOrLater = PR_FALSE;
+  static PRBool sOnJaguar = PR_FALSE;
   if (!sInitVer) {
     long version;
     OSErr err = ::Gestalt(gestaltSystemVersion, &version);
-    sOnTigerOrLater = ((err == noErr) && (version >= 0x00001040));
+    sOnJaguar = (err == noErr && version >= 0x00001020);
     sInitVer = PR_TRUE;
   }
-  return sOnTigerOrLater;
+  return sOnJaguar;
 }

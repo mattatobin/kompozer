@@ -269,11 +269,16 @@ jsj_WrapJSObject(JSContext *cx, JNIEnv *jEnv, JSObject *js_obj)
     /* Create a new Java object that wraps the JavaScript object by storing its
        address in a private integer field. */
 #ifndef OJI
+#if JS_BYTES_PER_LONG == 8
     java_wrapper_obj =
-        (*jEnv)->NewObject(jEnv, njJSObject, njJSObject_JSObject, (lcjsobject)handle);
+        (*jEnv)->NewObject(jEnv, njJSObject, njJSObject_JSObject, (jlong)handle);
+#else
+    java_wrapper_obj =
+        (*jEnv)->NewObject(jEnv, njJSObject, njJSObject_JSObject, (jint)handle);
+#endif
 #else
     if (JSJ_callbacks && JSJ_callbacks->get_java_wrapper != NULL) {
-        java_wrapper_obj = JSJ_callbacks->get_java_wrapper(jEnv, (lcjsobject)handle);
+        java_wrapper_obj = JSJ_callbacks->get_java_wrapper(jEnv, (jint)handle);
     } else  {
         java_wrapper_obj = NULL;
     }
@@ -316,13 +321,8 @@ jsj_UnwrapJSObjectWrapper(JNIEnv *jEnv, jobject java_wrapper_obj)
     }
     else {
         jclass   cid = (*jEnv)->GetObjectClass(jEnv, java_wrapper_obj);
-#if JS_BYTES_PER_LONG == 8
-        jfieldID fid = (*jEnv)->GetFieldID(jEnv, cid, "nativeJSObject", "J");
-        handle = (JSObjectHandle*)((*jEnv)->GetLongField(jEnv, java_wrapper_obj, fid));
-#else
         jfieldID fid = (*jEnv)->GetFieldID(jEnv, cid, "nativeJSObject", "I");
         handle = (JSObjectHandle*)((*jEnv)->GetIntField(jEnv, java_wrapper_obj, fid));
-#endif
     }
 #endif
     
@@ -849,6 +849,10 @@ jsj_get_jlObject_descriptor(JSContext *cx, JNIEnv *jEnv)
 }
 
 /****************** Implementation of methods of JSObject *******************/
+
+#ifdef XP_MAC
+#pragma export on
+#endif
 
 /*
  * Class:     netscape_javascript_JSObject

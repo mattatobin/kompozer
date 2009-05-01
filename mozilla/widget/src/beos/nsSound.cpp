@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,42 +23,33 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 
 #include "nscore.h"
+#include "nsIMemory.h"
 #include "plstr.h"
 #include <stdio.h>
-#include "nsIURL.h"
-#include "nsString.h"
-#include "nsIFileURL.h"
+
 #include "nsSound.h"
-#include "nsNetUtil.h"
-#include "nsIPref.h"
-
-#include "nsDirectoryServiceDefs.h"
-
-#include "nsNativeCharsetUtils.h"
 
 #include <OS.h>
 #include <SimpleGameSound.h>
+#include <Entry.h>
 #include <Beep.h>
-#include <unistd.h>
 
-
-
-NS_IMPL_ISUPPORTS2(nsSound, nsISound, nsIStreamLoaderObserver)
+NS_IMPL_ISUPPORTS1(nsSound, nsISound)
 
 ////////////////////////////////////////////////////////////////////////
 nsSound::nsSound()
@@ -68,99 +59,55 @@ nsSound::nsSound()
 
 nsSound::~nsSound()
 {
-	Init();
+	delete mSound;
 }
 
-NS_IMETHODIMP nsSound::OnStreamComplete(nsIStreamLoader *aLoader,
-                                        nsISupports *context,
-                                        nsresult aStatus,
-                                        PRUint32 dataLen,
-                                        const PRUint8 *data)
+nsresult NS_NewSound(nsISound** aSound)
 {
-	nsresult rv = NS_ERROR_FAILURE;
-	// print a load error on bad status
-	if (NS_FAILED(aStatus))
-	{
-#ifdef DEBUG
-		printf("Filed load sound file");
-#endif
-		return aStatus;
-	}
-	// In theory, BeOS can play any sound format supported by MediaKit,
-	// also we can play it from data, but it needs parsing format and 
-	// providing it to sound player, so let MediaKit to do it by self
-	static const char *kSoundTmpFileName = "mozsound";
-	nsCOMPtr<nsIFile> soundTmp;
-	rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(soundTmp));
-	NS_ENSURE_SUCCESS(rv,rv);
-	rv = soundTmp->AppendNative(nsDependentCString(kSoundTmpFileName));
-	NS_ENSURE_SUCCESS(rv,rv);
-	nsCAutoString soundFilename;
-	(void) soundTmp->GetNativePath(soundFilename);
-	FILE *fp = fopen(soundFilename.get(), "wb+");
-	//printf("Playing sound file%s\n",soundFilename.get());
-	if (fp) 
-	{
-		fwrite(data, dataLen, 1, fp);
-		fflush(fp);
-		fclose(fp);
-		Init();
-		mSound = new BSimpleGameSound(soundFilename.get());
-		if (mSound != NULL && mSound->InitCheck() == B_OK)
-		{
-			mSound->SetIsLooping(false);
-			mSound->StartPlaying();
-			return NS_OK;
-		}
-		unlink(soundFilename.get());
-	}
-	else
-	{
-		return Beep();
-	}
-	return rv;
+  NS_PRECONDITION(aSound != nsnull, "null ptr");
+  if (! aSound)
+    return NS_ERROR_NULL_POINTER;
+  
+  *aSound = new nsSound();
+  if (! *aSound)
+    return NS_ERROR_OUT_OF_MEMORY;
+  
+  NS_ADDREF(*aSound);
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsSound::Init(void)
 {
-	if (mSound)
-	{
-		mSound->StopPlaying();
-		delete mSound;
-		mSound = NULL;
-	}
-	return NS_OK;
+  return NS_OK;
 }
 
 NS_METHOD nsSound::Beep()
 {
-	::beep();
-	return NS_OK;
+  ::beep();
+
+  return NS_OK;
 }
 
 NS_METHOD nsSound::Play(nsIURL *aURL)
 {
-	nsresult rv;
-	nsCOMPtr<nsIStreamLoader> loader;
-	rv = NS_NewStreamLoader(getter_AddRefs(loader), aURL, this);
-	return rv;
+/*
+	char *filename;
+	filespec->GetNativePath(&filename);
+
+	delete mSound;
+	entry_ref	ref;
+	BEntry e(filename);
+	e.GetRef(&ref);
+	mSound = new BSimpleGameSound(&ref);
+	if(mSound->InitCheck() == B_OK)
+		mSound->StartPlaying();
+
+	nsCRT::free(filename);
+*/
+	return NS_OK;
 }
 
 NS_IMETHODIMP nsSound::PlaySystemSound(const char *aSoundAlias)
 {
-	nsresult rv = NS_ERROR_FAILURE;
-	if (nsDependentCString(aSoundAlias).EqualsLiteral("_moz_mailbeep")) 
-		return Beep();
-	nsCOMPtr <nsIURI> fileURI;
-	// create a nsILocalFile and then a nsIFileURL from that
-	nsCOMPtr <nsILocalFile> soundFile;
-	rv = NS_NewLocalFile(NS_ConvertASCIItoUTF16(aSoundAlias), PR_TRUE, 
-    					getter_AddRefs(soundFile));
-	NS_ENSURE_SUCCESS(rv,rv);
-	rv = NS_NewFileURI(getter_AddRefs(fileURI), soundFile);
-	NS_ENSURE_SUCCESS(rv,rv);
-	nsCOMPtr<nsIFileURL> fileURL = do_QueryInterface(fileURI,&rv);
-	NS_ENSURE_SUCCESS(rv,rv);
-	rv = Play(fileURL);
-	return rv;
+  return Beep();
 }

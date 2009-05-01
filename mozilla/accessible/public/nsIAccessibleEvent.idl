@@ -39,7 +39,6 @@
 
 interface nsIAccessible;
 interface nsIAccessibleDocument;
-interface nsIDOMNode;
 
 %{C++
 #define NS_ACCESSIBLE_EVENT_TOPIC "accessible-event"
@@ -70,7 +69,7 @@ interface nsIAccessibleEvent : nsISupports
   
   /**
    * The nsIAccessible associated with the event.
-   * May return null if no accessible is available
+   * Accessible events must have an nsIAccessible.
    */
   readonly attribute nsIAccessible accessible;
   
@@ -80,13 +79,7 @@ interface nsIAccessibleEvent : nsISupports
    * the DOM document and the window handler, among other things.
    */
   readonly attribute nsIAccessibleDocument accessibleDocument;
-
-  /**
-   * The nsIDOMNode associated with the event
-   * May return null if accessible for event has been shut down
-   */
-  readonly attribute nsIDOMNode DOMNode;
-
+  
   // these are set to the values given by MSAA
   const unsigned long EVENT_CREATE             = 0x8000;
   const unsigned long EVENT_DESTROY            = 0x8001;

@@ -39,16 +39,14 @@
 #ifndef nsNativeScrollbar_h__
 #define nsNativeScrollbar_h__
 
-#include "nsChildView.h"
-
 #include "nsINativeScrollbar.h"
+#include "nsChildView.h"
+#include <Controls.h>
 #include "nsIContent.h"
-
 #import "mozView.h"
 
 class nsIScrollbarMediator;
 
-@class NativeScrollbarView;
 
 //
 // nsNativeScrollbar
@@ -81,31 +79,25 @@ protected:
   NS_IMETHOD Enable(PRBool bState);
   NS_IMETHOD IsEnabled(PRBool* outState);
   
-  NSScroller* GetControl() { return (NSScroller*)mView; }
+  NSScroller* GetControl() { return mView; }
 
   void UpdateContentPosition(PRUint32 inNewPos);
   
   void RecreateHorizontalScrollbar();
 
-  virtual NSView*   CreateCocoaView(NSRect inFrame);
-  virtual GrafPtr   GetQuickDrawPort();
+  virtual NSView*   CreateCocoaView() ;
+  virtual GrafPtr   GetQuickDrawPort() ;
 
-  void              UpdateScroller();
-  
-  NativeScrollbarView*    ScrollbarView() const { return (NativeScrollbarView*)mView; }
-  
 // DATA
 private:
 
   nsIContent*       mContent;          // the content node that affects the scrollbar's value
   nsIScrollbarMediator* mMediator;     // for scrolling with outliners
-  nsISupports*      mScrollbar;        // for calling into the mediator
-
+  
   PRUint32          mValue;
   PRUint32          mMaxValue;
   PRUint32          mVisibleImageSize;
-  PRUint32          mLineIncrement;
-  PRBool            mIsEnabled;
+  PRUint32          mLineIncrement;  
 };
 
 
@@ -117,13 +109,6 @@ private:
     // the nsNativeScrollbar that created this view. It retains this NSView, so
     // the link back to it must be weak. [WEAK]
   nsNativeScrollbar* mGeckoChild;
-
-    // YES when we're in a tracking loop
-  BOOL      mInTracking;
-
-  // rects that were invalidated during a draw, so have pending drawing
-  NSMutableArray* mPendingDirtyRects;
-  BOOL mPendingFullDisplay;
 }
 
   // default initializer

@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set ts=4 sw=4 sts=4 et cin: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Darin Fisher <darin@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef nsHttp_h__
 #define nsHttp_h__
@@ -134,42 +118,11 @@ struct nsHttpAtom
 
 struct nsHttp
 {
-    static nsresult CreateAtomTable();
     static void DestroyAtomTable();
 
     // will dynamically add atoms to the table if they don't already exist
     static nsHttpAtom ResolveAtom(const char *);
-    static nsHttpAtom ResolveAtom(const nsACString &s)
-    {
-        return ResolveAtom(PromiseFlatCString(s).get());
-    }
-
-    // returns true if the specified token [start,end) is valid per RFC 2616
-    // section 2.2
-    static PRBool IsValidToken(const char *start, const char *end);
-
-    static inline PRBool IsValidToken(const nsCString &s) {
-        const char *start = s.get();
-        return IsValidToken(start, start + s.Length());
-    }
-
-    // This function parses a string containing a decimal-valued, non-negative
-    // 64-bit integer.  If the value would exceed LL_MAXINT, then PR_FALSE is
-    // returned.  Otherwise, this function returns PR_TRUE and stores the
-    // parsed value in |result|.  The next unparsed character in |input| is
-    // optionally returned via |next| if |next| is non-null.
-    //
-    // TODO(darin): Replace this with something generic.
-    //
-    static PRBool ParseInt64(const char *input, const char **next,
-                             PRInt64 *result);
-
-    // Variant on ParseInt64 that expects the input string to contain nothing
-    // more than the value being parsed.
-    static inline PRBool ParseInt64(const char *input, PRInt64 *result) {
-        const char *next;
-        return ParseInt64(input, &next, result) && *next == '\0';
-    }
+    static nsHttpAtom ResolveAtom(const nsACString &s) { return ResolveAtom(PromiseFlatCString(s).get()); }
 
     /* Declare all atoms
      *

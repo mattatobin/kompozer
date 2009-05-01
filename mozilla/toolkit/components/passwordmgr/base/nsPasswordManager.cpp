@@ -42,11 +42,11 @@
 #include "nsILineInputStream.h"
 #include "plbase64.h"
 #include "nsISecretDecoderRing.h"
-#include "nsIPasswordInternal.h"
+#include "nsIPassword.h"
 #include "nsIPrompt.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "prmem.h"
 #include "nsIStringBundle.h"
 #include "nsArray.h"
@@ -75,7 +75,6 @@
 static const char kPMPropertiesURL[] = "chrome://passwordmgr/locale/passwordmgr.properties";
 static PRBool sRememberPasswords = PR_FALSE;
 static PRBool sPrefsInitialized = PR_FALSE;
-static PRBool sPasswordsLoaded = PR_FALSE;
 
 static nsIStringBundle* sPMBundle;
 static nsISecretDecoderRing* sDecoderRing;
@@ -88,7 +87,6 @@ public:
   nsString userValue;
   nsString passField;
   nsString passValue;
-  nsCString actionOrigin;
   SignonDataEntry* next;
 
   SignonDataEntry() : next(nsnull) { }
@@ -108,7 +106,7 @@ public:
   ~SignonHashEntry() { delete head; }
 };
 
-class nsPasswordManager::PasswordEntry : public nsIPasswordInternal
+class nsPasswordManager::PasswordEntry : public nsIPassword
 {
 public:
   PasswordEntry(const nsACString& aKey, SignonDataEntry* aData);
@@ -116,21 +114,16 @@ public:
 
   NS_DECL_ISUPPORTS
   NS_DECL_NSIPASSWORD
-  NS_DECL_NSIPASSWORDINTERNAL
 
 protected:
 
   nsCString mHost;
   nsString  mUser;
-  nsString  mUserField;
   nsString  mPassword;
-  nsString  mPasswordField;
-  nsCString mActionOrigin;
   PRBool    mDecrypted[2];
 };
 
-NS_IMPL_ISUPPORTS2(nsPasswordManager::PasswordEntry, nsIPassword,
-                   nsIPasswordInternal)
+NS_IMPL_ISUPPORTS1(nsPasswordManager::PasswordEntry, nsIPassword)
 
 nsPasswordManager::PasswordEntry::PasswordEntry(const nsACString& aKey,
                                                 SignonDataEntry* aData)
@@ -140,10 +133,7 @@ nsPasswordManager::PasswordEntry::PasswordEntry(const nsACString& aKey,
 
   if (aData) {
     mUser.Assign(aData->userValue);
-    mUserField.Assign(aData->userField);
     mPassword.Assign(aData->passValue);
-    mPasswordField.Assign(aData->passField);
-    mActionOrigin.Assign(aData->actionOrigin);
   }
 }
 
@@ -182,19 +172,7 @@ nsPasswordManager::PasswordEntry::GetPassword(nsAString& aPassword)
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPasswordManager::PasswordEntry::GetUserFieldName(nsAString& aField)
-{
-  aField.Assign(mUserField);
-  return NS_OK;
-}
 
-NS_IMETHODIMP
-nsPasswordManager::PasswordEntry::GetPasswordFieldName(nsAString& aField)
-{
-  aField.Assign(mPasswordField);
-  return NS_OK;
-}
 
 
 
@@ -208,6 +186,7 @@ NS_INTERFACE_MAP_BEGIN(nsPasswordManager)
   NS_INTERFACE_MAP_ENTRY(nsIFormSubmitObserver)
   NS_INTERFACE_MAP_ENTRY(nsIWebProgressListener)
   NS_INTERFACE_MAP_ENTRY(nsIDOMFocusListener)
+  NS_INTERFACE_MAP_ENTRY(nsIDOMLoadListener)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsIDOMEventListener, nsIDOMFocusListener)
   NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIPasswordManager)
@@ -239,11 +218,6 @@ nsPasswordManager::GetInstance()
     }
   }
 
-  // We fail to load passwords during early initialization
-  // This wrapper function allows us to handle that error and defer
-  // password loading until later
-  sPasswordManager->LoadPasswords();
-
   NS_ADDREF(sPasswordManager);   // addref the return result
   return sPasswordManager;
 }
@@ -265,7 +239,7 @@ nsPasswordManager::Init()
 
   mPrefBranch->GetBoolPref("rememberSignons", &sRememberPasswords);
 
-  nsCOMPtr<nsIPrefBranch2> branchInternal = do_QueryInterface(mPrefBranch);
+  nsCOMPtr<nsIPrefBranchInternal> branchInternal = do_QueryInterface(mPrefBranch);
 
   // Have the pref service hold a weak reference; the service manager
   // will be holding a strong reference.
@@ -279,7 +253,7 @@ nsPasswordManager::Init()
   nsCOMPtr<nsIObserverService> obsService = do_GetService("@mozilla.org/observer-service;1");
   NS_ASSERTION(obsService, "No observer service");
 
-  obsService->AddObserver(this, NS_EARLYFORMSUBMIT_SUBJECT, PR_TRUE);
+  obsService->AddObserver(this, NS_FORMSUBMIT_SUBJECT, PR_TRUE);
 
   nsCOMPtr<nsIDocumentLoader> docLoaderService = do_GetService(NS_DOCUMENTLOADER_SERVICE_CONTRACTID);
   NS_ASSERTION(docLoaderService, "No document loader service");
@@ -288,6 +262,19 @@ nsPasswordManager::Init()
   NS_ASSERTION(progress, "docloader service does not implement nsIWebProgress");
 
   progress->AddProgressListener(this, nsIWebProgress::NOTIFY_STATE_DOCUMENT);
+
+  // Now read in the signon file
+  nsXPIDLCString signonFile;
+  mPrefBranch->GetCharPref("SignonFileName", getter_Copies(signonFile));
+  NS_ASSERTION(!signonFile.IsEmpty(), "Fallback for signon filename not present");
+
+  NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR, getter_AddRefs(mSignonFile));
+  mSignonFile->AppendNative(signonFile);
+
+  nsCAutoString path;
+  mSignonFile->GetNativePath(path);
+
+  ReadPasswords(mSignonFile);
 
   return NS_OK;
 }
@@ -312,7 +299,7 @@ nsPasswordManager::Register(nsIComponentManager* aCompMgr,
 {
   // By registering in NS_PASSWORDMANAGER_CATEGORY, an instance of the password
   // manager will be created when a password input is added to a form.  We
-  // can then register that singleton instance as a form submission 			.
+  // can then register that singleton instance as a form submission observer.
 
   nsresult rv;
   nsCOMPtr<nsICategoryManager> catman = do_GetService(NS_CATEGORYMANAGER_CONTRACTID, &rv);
@@ -320,13 +307,6 @@ nsPasswordManager::Register(nsIComponentManager* aCompMgr,
 
   nsXPIDLCString prevEntry;
   catman->AddCategoryEntry(NS_PASSWORDMANAGER_CATEGORY,
-                           "Password Manager",
-                           NS_PASSWORDMANAGER_CONTRACTID,
-                           PR_TRUE,
-                           PR_TRUE,
-                           getter_Copies(prevEntry));
-
-  catman->AddCategoryEntry("app-startup",
                            "Password Manager",
                            NS_PASSWORDMANAGER_CONTRACTID,
                            PR_TRUE,
@@ -372,11 +352,6 @@ nsPasswordManager::AddUser(const nsACString& aHost,
   // There's no point in taking up space in the signon file with this.
   if (aUser.IsEmpty() && aPassword.IsEmpty())
     return NS_OK;
-
-  // Reject values that would cause problems when parsing the storage file
-  nsresult rv = CheckLoginValues(aHost,
-                                 EmptyString(), EmptyString(), EmptyCString());
-  NS_ENSURE_SUCCESS(rv, rv);
 
   // Check for an existing entry for this host + user
   if (!aHost.IsEmpty()) {
@@ -445,11 +420,6 @@ nsPasswordManager::RemoveUser(const nsACString& aHost, const nsAString& aUser)
 NS_IMETHODIMP
 nsPasswordManager::AddReject(const nsACString& aHost)
 {
-  // Reject values that would cause problems when parsing the storage file
-  nsresult rv = CheckLoginValues(aHost,
-                                 EmptyString(), EmptyString(), EmptyCString());
-  NS_ENSURE_SUCCESS(rv, rv);
-
   mRejectTable.Put(aHost, 1);
   WritePasswords(mSignonFile);
   return NS_OK;
@@ -621,11 +591,6 @@ nsPasswordManager::AddUserFull(const nsACString& aKey,
   if (aUser.IsEmpty() && aPassword.IsEmpty())
     return NS_OK;
 
-  // Reject values that would cause problems when parsing the storage file
-  nsresult rv = CheckLoginValues(aKey, aUserFieldName,
-                                 aPassFieldName, EmptyCString());
-  NS_ENSURE_SUCCESS(rv, rv);
-
   // Check for an existing entry for this host + user
   if (!aKey.IsEmpty()) {
     SignonHashEntry *hashEnt;
@@ -674,26 +639,17 @@ nsPasswordManager::ReadPasswords(nsIFile* aPasswordFile)
   if (NS_FAILED(rv))
     return NS_OK;
 
-  PRBool updateEntries = PR_FALSE;
-  PRBool writeOnFinish = PR_FALSE;
-
-  if (utf8Buffer.Equals("#2c")) {
-    // we've hit an older version of the file, but we can import it
-    updateEntries = PR_TRUE;
-
-    // make sure we write the new file out so we only do this once
-    writeOnFinish = PR_TRUE;
-  } else if (!utf8Buffer.Equals("#2d")) {
+  if (!utf8Buffer.Equals("#2c")) {
     NS_ERROR("Unexpected version header in signon file");
     return NS_OK;
   }
 
-  enum { STATE_REJECT, STATE_REALM, STATE_USERFIELD,
-         STATE_USERVALUE, STATE_PASSFIELD, STATE_PASSVALUE,
-         STATE_ACTION_ORIGIN } state = STATE_REJECT;
+  enum { STATE_REJECT, STATE_REALM, STATE_USERFIELD, STATE_USERVALUE,
+         STATE_PASSFIELD, STATE_PASSVALUE } state = STATE_REJECT;
 
   nsCAutoString realm;
   SignonDataEntry* entry = nsnull;
+  PRBool writeOnFinish = PR_FALSE;
 
   do {
     rv = lineStream->ReadLine(utf8Buffer, &moreData);
@@ -763,20 +719,7 @@ nsPasswordManager::ReadPasswords(nsIFile* aPasswordFile)
 
       CopyUTF8toUTF16(utf8Buffer, entry->passValue);
 
-      // if we're updating entries from an older file skip the action url
-      if (updateEntries)
-        state = STATE_USERFIELD;
-      else
-        state = STATE_ACTION_ORIGIN;
-      break;
-
-    case STATE_ACTION_ORIGIN:
-      NS_ASSERTION(entry, "bad state");
-
-      entry->actionOrigin.Assign(utf8Buffer);
-
       state = STATE_USERFIELD;
-
       break;
     }
   } while (moreData);
@@ -804,13 +747,7 @@ nsPasswordManager::Observe(nsISupports* aSubject,
     NS_ASSERTION(branch == mPrefBranch, "unexpected pref change notification");
 
     branch->GetBoolPref("rememberSignons", &sRememberPasswords);
-  } else if (!strcmp(aTopic, "app-startup")) {
-    nsCOMPtr<nsIObserverService> obsService = do_GetService("@mozilla.org/observer-service;1");
-    NS_ASSERTION(obsService, "No observer service");
-
-    obsService->AddObserver(this, "profile-after-change", PR_TRUE);
-  } else if (!strcmp(aTopic, "profile-after-change"))
-    LoadPasswords();
+  }
 
   return NS_OK;
 }
@@ -822,9 +759,10 @@ nsPasswordManager::OnStateChange(nsIWebProgress* aWebProgress,
                                  PRUint32 aStateFlags,
                                  nsresult aStatus)
 {
-  if (!(aStateFlags & nsIWebProgressListener::STATE_IS_DOCUMENT) ||
-      !(aStateFlags & nsIWebProgressListener::STATE_TRANSFERRING) ||
-      NS_FAILED(aStatus))
+  // We're only interested in successful document loads.
+  if (NS_FAILED(aStatus) ||
+      !(aStateFlags & nsIWebProgressListener::STATE_IS_DOCUMENT) ||
+      !(aStateFlags & nsIWebProgressListener::STATE_STOP))
     return NS_OK;
 
   // Don't do anything if the global signon pref is disabled
@@ -839,19 +777,170 @@ nsPasswordManager::OnStateChange(nsIWebProgress* aWebProgress,
   domWin->GetDocument(getter_AddRefs(domDoc));
   NS_ASSERTION(domDoc, "DOM window should always have a document!");
 
-  // For now, only prepare to prefill forms in HTML documents.
+  // For now, only prefill forms in HTML documents.
   nsCOMPtr<nsIDOMHTMLDocument> htmlDoc = do_QueryInterface(domDoc);
   if (!htmlDoc)
     return NS_OK;
 
-  if (aStateFlags & nsIWebProgressListener::STATE_RESTORING)
-      return FillDocument(domDoc);
+  nsCOMPtr<nsIDOMHTMLCollection> forms;
+  htmlDoc->GetForms(getter_AddRefs(forms));
+  
+  nsCOMPtr<nsIDocument> doc = do_QueryInterface(domDoc);
 
-  nsCOMPtr<nsIDOMEventTarget> targDoc = do_QueryInterface(domDoc);
-  nsCOMPtr<nsIDOMEventTarget> targWin = do_QueryInterface(domWin);
-  nsIDOMEventListener* listener = NS_STATIC_CAST(nsIDOMFocusListener*, this);
-  targDoc->AddEventListener(NS_LITERAL_STRING("DOMContentLoaded"), listener, PR_FALSE);
-  targWin->AddEventListener(NS_LITERAL_STRING("pagehide"), listener, PR_FALSE);
+  nsCAutoString realm;
+  if (!GetPasswordRealm(doc->GetDocumentURI(), realm))
+    return NS_OK;
+
+  SignonHashEntry* hashEnt;
+  if (!mSignonTable.Get(realm, &hashEnt))
+    return NS_OK;
+
+  PRUint32 formCount;
+  forms->GetLength(&formCount);
+
+  // We can auto-prefill the username and password if there is only
+  // one stored login that matches the username and password field names
+  // on the form in question.  Note that we only need to worry about a
+  // single login per form.
+
+  for (PRUint32 i = 0; i < formCount; ++i) {
+    nsCOMPtr<nsIDOMNode> formNode;
+    forms->Item(i, getter_AddRefs(formNode));
+
+    nsCOMPtr<nsIForm> form = do_QueryInterface(formNode);
+    SignonDataEntry* firstMatch = nsnull;
+    PRBool attachedToInput = PR_FALSE;
+    nsCOMPtr<nsIDOMHTMLInputElement> userField, passField;
+    nsCOMPtr<nsIDOMHTMLInputElement> temp;
+    nsAutoString fieldType;
+
+    for (SignonDataEntry* e = hashEnt->head; e; e = e->next) {
+      
+      nsCOMPtr<nsISupports> foundNode;
+      form->ResolveName(e->userField, getter_AddRefs(foundNode));
+      temp = do_QueryInterface(foundNode);
+
+      nsAutoString oldUserValue;
+
+      if (temp) {
+        temp->GetType(fieldType);
+        if (!fieldType.Equals(NS_LITERAL_STRING("text")))
+          continue;
+
+        temp->GetValue(oldUserValue);
+        userField = temp;
+      } else {
+        continue;
+      }
+
+      if (!(e->passField).IsEmpty()) {
+        form->ResolveName(e->passField, getter_AddRefs(foundNode));
+        temp = do_QueryInterface(foundNode);
+      }
+      else {
+        // No password field name was supplied, try to locate one in the form.
+        nsCOMPtr<nsIFormControl> fc(do_QueryInterface(foundNode));
+        PRInt32 index = -1;
+        form->IndexOfControl(fc, &index);
+        if (index >= 0) {
+          PRUint32 count;
+          form->GetElementCount(&count);
+
+          PRUint32 i;
+          temp = nsnull;
+
+          // Search forwards
+          nsCOMPtr<nsIFormControl> passField;
+          for (i = index + 1; i < count; ++i) {
+            form->GetElementAt(i, getter_AddRefs(passField));
+
+            if (passField && passField->GetType() == NS_FORM_INPUT_PASSWORD) {
+              foundNode = passField;
+              temp = do_QueryInterface(foundNode);
+            }
+          }
+
+          if (!temp && index != 0) {
+            // Search backwards
+            i = index;
+            do {
+              form->GetElementAt(i, getter_AddRefs(passField));
+
+              if (passField && passField->GetType() == NS_FORM_INPUT_PASSWORD) {
+                foundNode = passField;
+                temp = do_QueryInterface(foundNode);
+              }
+            } while (i-- != 0);
+          }
+        }
+      }
+
+      nsAutoString oldPassValue;
+
+      if (temp) {
+        temp->GetType(fieldType);
+        if (!fieldType.Equals(NS_LITERAL_STRING("password")))
+          continue;
+
+        temp->GetValue(oldPassValue);
+        passField = temp;
+      } else {
+        continue;
+      }
+
+      if (!oldUserValue.IsEmpty()) {
+        // The page has prefilled a username.
+        // If it matches any of our saved usernames, prefill the password
+        // for that username.  If there are multiple saved usernames,
+        // we will also attach the autocomplete listener.
+
+        nsAutoString userValue;
+        if (NS_FAILED(DecryptData(e->userValue, userValue)))
+          goto done;
+
+        if (userValue.Equals(oldUserValue)) {
+          nsAutoString passValue;
+          if (NS_FAILED(DecryptData(e->passValue, passValue)))
+            goto done;
+
+          passField->SetValue(passValue);
+        }
+      }
+
+      if (firstMatch && !attachedToInput) {
+        // We've found more than one possible signon for this form.
+
+        // Listen for blur and autocomplete events on the username field so
+        // that we can attempt to prefill the password after the user has
+        // entered the username.
+
+        AttachToInput(userField);
+        attachedToInput = PR_TRUE;
+      } else {
+        firstMatch = e;
+      }
+    }
+
+    if (firstMatch && !attachedToInput) {
+      nsAutoString buffer;
+
+      if (NS_FAILED(DecryptData(firstMatch->userValue, buffer)))
+        goto done;
+
+      userField->SetValue(buffer);
+
+      if (NS_FAILED(DecryptData(firstMatch->passValue, buffer)))
+        goto done;
+
+      passField->SetValue(buffer);
+      AttachToInput(userField);
+    }
+  }
+
+ done:
+  nsCOMPtr<nsIDOMEventTarget> targ = do_QueryInterface(domDoc);
+  targ->AddEventListener(NS_LITERAL_STRING("unload"),
+                         NS_STATIC_CAST(nsIDOMLoadListener*, this), PR_FALSE);
 
   return NS_OK;
 }
@@ -903,17 +992,13 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
   // This function must never return a failure code or the form submit
   // will be cancelled.
 
-  NS_ENSURE_TRUE(aWindow, NS_OK);
-
   // Don't do anything if the global signon pref is disabled
   if (!SingleSignonEnabled())
     return NS_OK;
 
   // Check the reject list
   nsCAutoString realm;
-  // XXX bug 281125: GetDocument() could sometimes be null here, hinting
-  // XXX at a problem with document teardown while a modal dialog is posted.
-  if (!GetPasswordRealm(aFormNode->GetOwnerDoc()->GetDocumentURI(), realm))
+  if (!GetPasswordRealm(aFormNode->GetDocument()->GetDocumentURI(), realm))
     return NS_OK;
 
   PRInt32 rejectValue;
@@ -993,7 +1078,7 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
       // Note that we don't prompt the user if only the password doesn't match;
       // we instead just silently change the stored password.
 
-      nsAutoString userValue, passValue, userFieldName, passFieldName, actionOrigin;
+      nsAutoString userValue, passValue, userFieldName, passFieldName;
 
       if (userField) {
         userField->GetValue(userValue);
@@ -1003,12 +1088,13 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
       passFields.ObjectAt(0)->GetValue(passValue);
       passFields.ObjectAt(0)->GetName(passFieldName);
 
-      // If the password is empty, there is no reason to store this login.
-      if (passValue.IsEmpty())
+      // If username and password are both empty, there is no reason
+      // to store this login.
+
+      if (userValue.IsEmpty() && passValue.IsEmpty())
         return NS_OK;
 
       SignonHashEntry* hashEnt;
-      nsCAutoString formActionOrigin;
 
       if (mSignonTable.Get(realm, &hashEnt)) {
 
@@ -1027,29 +1113,12 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
               if (NS_FAILED(DecryptData(entry->passValue, buffer)))
                 return NS_OK;
 
-              PRBool writePasswords = PR_FALSE;
-              
               if (!buffer.Equals(passValue)) {
                 if (NS_FAILED(EncryptDataUCS2(passValue, entry->passValue)))
                   return NS_OK;
 
-                writePasswords = PR_TRUE;
-              }
-
-              if (NS_SUCCEEDED(GetActionRealm(formElement, formActionOrigin)) &&
-                  !entry->actionOrigin.Equals(formActionOrigin)) {
-
-                // Reject values that would cause problems when parsing the storage file
-                if (NS_SUCCEEDED(CheckLoginValues(EmptyCString(), EmptyString(),
-                                                  EmptyString(), formActionOrigin))) {
-                  // update the action URL
-                  entry->actionOrigin.Assign(formActionOrigin);
-                  writePasswords = PR_TRUE;
-                }
-              }
-
-              if (writePasswords)
                 WritePasswords(mSignonFile);
+              }
 
               return NS_OK;
             }
@@ -1057,47 +1126,21 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
         }
       }
 
-      nsresult rv;
-      nsCOMPtr<nsIStringBundleService> bundleService =
-        do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-      nsCOMPtr<nsIStringBundle> brandBundle;
-      rv = bundleService->CreateBundle("chrome://branding/locale/brand.properties",
-                                       getter_AddRefs(brandBundle));
-      NS_ENSURE_SUCCESS(rv, rv);
-      nsXPIDLString brandShortName;
-      rv = brandBundle->GetStringFromName(NS_LITERAL_STRING("brandShortName").get(),
-                                          getter_Copies(brandShortName));
-      NS_ENSURE_SUCCESS(rv, rv);
-      const PRUnichar* formatArgs[1] = { brandShortName.get() };
-
-      nsAutoString dialogText;
+      nsAutoString dialogTitle, dialogText, neverText;
+      GetLocalizedString(NS_LITERAL_STRING("savePasswordTitle"), dialogTitle);
       GetLocalizedString(NS_LITERAL_STRING("savePasswordText"),
                          dialogText,
-                         PR_TRUE,
-                         formatArgs,
-                         1);
-
-      nsAutoString dialogTitle, neverButtonText, rememberButtonText,
-                   notNowButtonText;
-      GetLocalizedString(NS_LITERAL_STRING("savePasswordTitle"), dialogTitle);
-
-      GetLocalizedString(NS_LITERAL_STRING("neverForSiteButtonText"),
-                         neverButtonText);
-      GetLocalizedString(NS_LITERAL_STRING("rememberButtonText"),
-                         rememberButtonText);
-      GetLocalizedString(NS_LITERAL_STRING("notNowButtonText"),
-                         notNowButtonText);
+                         PR_TRUE);
+      GetLocalizedString(NS_LITERAL_STRING("neverForSite"), neverText);
 
       PRInt32 selection;
       prompt->ConfirmEx(dialogTitle.get(),
                         dialogText.get(),
-                        nsIPrompt::BUTTON_POS_1_DEFAULT +
-                        (nsIPrompt::BUTTON_TITLE_IS_STRING * nsIPrompt::BUTTON_POS_0) +
-                        (nsIPrompt::BUTTON_TITLE_IS_STRING * nsIPrompt::BUTTON_POS_1) +
+                        (nsIPrompt::BUTTON_TITLE_YES * nsIPrompt::BUTTON_POS_0) +
+                        (nsIPrompt::BUTTON_TITLE_NO * nsIPrompt::BUTTON_POS_1) +
                         (nsIPrompt::BUTTON_TITLE_IS_STRING * nsIPrompt::BUTTON_POS_2),
-                        rememberButtonText.get(),
-                        notNowButtonText.get(),
-                        neverButtonText.get(),
+                        nsnull, nsnull,
+                        neverText.get(),
                         nsnull, nsnull,
                         &selection);
 
@@ -1105,38 +1148,15 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
         SignonDataEntry* entry = new SignonDataEntry();
         entry->userField.Assign(userFieldName);
         entry->passField.Assign(passFieldName);
-
-        // save the hostname of the action URL
-        if (NS_FAILED(GetActionRealm(formElement, formActionOrigin))) {
-          delete entry;
-          return NS_OK;
-        }
-
-        entry->actionOrigin.Assign(formActionOrigin);
-
         if (NS_FAILED(EncryptDataUCS2(userValue, entry->userValue)) ||
             NS_FAILED(EncryptDataUCS2(passValue, entry->passValue))) {
           delete entry;
           return NS_OK;
         }
 
-        // Reject values that would cause problems when parsing the storage file
-        // We do this after prompting, lest any code somehow change the values
-        // during the prompting.
-        nsresult rv = CheckLoginValues(realm,
-                                       entry->userField, entry->passField,
-                                       entry->actionOrigin);
-        NS_ENSURE_SUCCESS(rv, NS_OK);
-
         AddSignonData(realm, entry);
         WritePasswords(mSignonFile);
       } else if (selection == 2) {
-        // Reject values that would cause problems when parsing the storage file
-        // We do this after prompting, lest any code run from prompt context.
-        nsresult rv = CheckLoginValues(realm, EmptyString(),
-                                       EmptyString(), EmptyCString());
-        NS_ENSURE_SUCCESS(rv, NS_OK);
-
         AddReject(realm);
       }
     }
@@ -1185,11 +1205,8 @@ nsPasswordManager::Notify(nsIContent* aFormNode,
               temp = entry;
 
               for (PRUint32 arg = 0; arg < entryCount; ++arg) {
-                if (NS_FAILED(DecryptData(temp->userValue, ptUsernames[arg]))) {
-                  delete [] formatArgs;
-                  delete [] ptUsernames;
+                if (NS_FAILED(DecryptData(temp->userValue, ptUsernames[arg])))
                   return NS_OK;
-                }
 
                 formatArgs[arg] = ptUsernames[arg].get();
                 temp = temp->next;
@@ -1287,25 +1304,7 @@ nsPasswordManager::Blur(nsIDOMEvent* aEvent)
 NS_IMETHODIMP
 nsPasswordManager::HandleEvent(nsIDOMEvent* aEvent)
 {
-  nsAutoString type;
-  aEvent->GetType(type);
-
-  if (type.EqualsLiteral("DOMAutoComplete"))
-    return FillPassword(aEvent);
-
-  nsCOMPtr<nsIDOMEventTarget> target;
-  aEvent->GetTarget(getter_AddRefs(target));
-
-  nsCOMPtr<nsIDOMDocument> domDoc = do_QueryInterface(target);
-  if (!domDoc)
-    return NS_OK;
-
-  if (type.EqualsLiteral("pagehide"))
-    mAutoCompleteInputs.Enumerate(RemoveForDOMDocumentEnumerator, domDoc);
-  else if (type.EqualsLiteral("DOMContentLoaded"))
-    return FillDocument(domDoc);
-
-  return NS_OK;
+  return FillPassword(aEvent);
 }
 
 // Autocomplete implementation
@@ -1325,7 +1324,7 @@ public:
   PRInt32     mDefaultIndex;
   PRUint16    mResult;
 };
-
+  
 UserAutoComplete::UserAutoComplete(const nsACString& aHost,
                                    const nsAString& aSearchString)
   : mHost(aHost),
@@ -1477,33 +1476,15 @@ nsPasswordManager::AutoCompleteSearch(const nsAString& aSearchString,
 
       mAutoCompletingField = aElement;
 
-      nsCOMPtr<nsIDOMHTMLFormElement> formEl;
-      aElement->GetForm(getter_AddRefs(formEl));
-      if (!formEl)
-        return NS_OK;
-
-      nsCOMPtr<nsIForm> form = do_QueryInterface(formEl);
-      nsCAutoString formActionOrigin;
-
-      if (NS_FAILED(GetActionRealm(form, formActionOrigin)))
-        return NS_OK;
-
       for (SignonDataEntry* e = hashEnt->head; e; e = e->next) {
 
         nsAutoString userValue;
         if (NS_FAILED(DecryptData(e->userValue, userValue)))
           return NS_ERROR_FAILURE;
 
-        // if we don't match actionOrigin, don't count this as a match
-        if (!e->actionOrigin.IsEmpty() &&
-            !e->actionOrigin.Equals(formActionOrigin))
-          continue;
-
         if (aSearchString.Length() <= userValue.Length() &&
             StringBeginsWith(userValue, aSearchString)) {
-          PRUnichar* data = ToNewUnicode(userValue);
-          if (data)
-            result->mArray.AppendElement(data);
+          result->mArray.AppendElement(ToNewUnicode(userValue));
         }
       }
 
@@ -1526,6 +1507,20 @@ nsPasswordManager::AutoCompleteSearch(const nsAString& aSearchString,
   return PR_TRUE;
 }
 
+// nsIDOMLoadListener implementation
+
+NS_IMETHODIMP
+nsPasswordManager::Load(nsIDOMEvent* aEvent)
+{
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsPasswordManager::BeforeUnload(nsIDOMEvent* aEvent)
+{
+  return NS_OK;
+}
+
  /* static */ PLDHashOperator PR_CALLBACK
 nsPasswordManager::RemoveForDOMDocumentEnumerator(nsISupports* aKey,
                                                   PRInt32& aEntry,
@@ -1540,6 +1535,32 @@ nsPasswordManager::RemoveForDOMDocumentEnumerator(nsISupports* aKey,
 
   return PL_DHASH_NEXT;
 }
+
+NS_IMETHODIMP
+nsPasswordManager::Unload(nsIDOMEvent* aEvent)
+{
+  nsCOMPtr<nsIDOMEventTarget> target;
+  aEvent->GetTarget(getter_AddRefs(target));
+
+  nsCOMPtr<nsIDOMDocument> domDoc = do_QueryInterface(target);
+  if (domDoc)
+    mAutoCompleteInputs.Enumerate(RemoveForDOMDocumentEnumerator, domDoc);
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsPasswordManager::Abort(nsIDOMEvent* aEvent)
+{
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsPasswordManager::Error(nsIDOMEvent* aEvent)
+{
+  return NS_OK;
+}
+
 
 // internal methods
 
@@ -1611,60 +1632,12 @@ nsPasswordManager::WriteSignonEntryEnumerator(const nsACString& aKey,
     buffer.Assign(NS_ConvertUCS2toUTF8(e->passValue));
     buffer.Append(NS_LINEBREAK);
     stream->Write(buffer.get(), buffer.Length(), &bytesWritten);
-
-    buffer.Assign(e->actionOrigin);
-    buffer.Append(NS_LINEBREAK);
-    stream->Write(buffer.get(), buffer.Length(), &bytesWritten);
   }
 
   buffer.Assign("." NS_LINEBREAK);
   stream->Write(buffer.get(), buffer.Length(), &bytesWritten);
 
   return PL_DHASH_NEXT;
-}
-
-// Wrapper function for ReadPasswords
-void
-nsPasswordManager::LoadPasswords()
-{
-  if (sPasswordsLoaded)
-    return;
-
-  nsXPIDLCString signonFile;
-  nsresult rv;
-  rv = mPrefBranch->GetCharPref("SignonFileName2", getter_Copies(signonFile));
-  if (NS_FAILED(rv))
-    signonFile.Assign(NS_LITERAL_CSTRING("signons2.txt"));
-
-  NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR, getter_AddRefs(mSignonFile));
-  if (!mSignonFile)
-    return;
-
-  mSignonFile->AppendNative(signonFile);
-
-  nsCAutoString path;
-  mSignonFile->GetNativePath(path);
-
-  PRBool signonExists = PR_FALSE;
-  mSignonFile->Exists(&signonExists);
-  if (signonExists) {
-    if (NS_SUCCEEDED(ReadPasswords(mSignonFile)))
-      sPasswordsLoaded = PR_TRUE;
-  } else {
-    // no current signons file, look for an older version
-    rv = mPrefBranch->GetCharPref("SignonFileName", getter_Copies(signonFile));
-    if (NS_FAILED(rv))
-      signonFile.Assign(NS_LITERAL_CSTRING("signons.txt"));
-
-    nsCOMPtr<nsIFile> oldSignonFile;
-    mSignonFile->GetParent(getter_AddRefs(oldSignonFile));
-    oldSignonFile->AppendNative(signonFile);
-
-    if (NS_SUCCEEDED(ReadPasswords(oldSignonFile))) {
-      sPasswordsLoaded = PR_TRUE;
-      oldSignonFile->Remove(PR_FALSE);
-    }
-  }
 }
 
 void
@@ -1680,7 +1653,7 @@ nsPasswordManager::WritePasswords(nsIFile* aPasswordFile)
   PRUint32 bytesWritten;
 
   // File header
-  nsCAutoString buffer("#2d" NS_LINEBREAK);
+  nsCAutoString buffer("#2c" NS_LINEBREAK);
   fileStream->Write(buffer.get(), buffer.Length(), &bytesWritten);
 
   // Write out the reject list.
@@ -1861,234 +1834,6 @@ nsPasswordManager::FindPasswordEntryInternal(const SignonDataEntry* aEntry,
 }
 
 nsresult
-nsPasswordManager::FillDocument(nsIDOMDocument* aDomDoc)
-{
-  nsCOMPtr<nsIDOMHTMLDocument> htmlDoc = do_QueryInterface(aDomDoc);
-  if (!htmlDoc)
-    return NS_OK;
-  nsCOMPtr<nsIDOMHTMLCollection> forms;
-  htmlDoc->GetForms(getter_AddRefs(forms));
-
-  nsCOMPtr<nsIDocument> doc = do_QueryInterface(aDomDoc);
-
-  nsCAutoString realm;
-  if (!GetPasswordRealm(doc->GetDocumentURI(), realm))
-    return NS_OK;
-
-  SignonHashEntry* hashEnt;
-  if (!mSignonTable.Get(realm, &hashEnt))
-    return NS_OK;
-
-  PRUint32 formCount;
-  forms->GetLength(&formCount);
-
-  // check to see if we should formfill.  failure is non-fatal
-  PRBool prefillForm = PR_TRUE;
-  mPrefBranch->GetBoolPref("prefillForms", &prefillForm);
-
-  nsCAutoString formActionOrigin;
-
-  // We can auto-prefill the username and password if there is only
-  // one stored login that matches the username and password field names
-  // on the form in question.  Note that we only need to worry about a
-  // single login per form.
-
-  for (PRUint32 i = 0; i < formCount; ++i) {
-    nsCOMPtr<nsIDOMNode> formNode;
-    forms->Item(i, getter_AddRefs(formNode));
-
-    nsCOMPtr<nsIForm> form = do_QueryInterface(formNode);
-    SignonDataEntry* firstMatch = nsnull;
-    PRBool attachedToInput = PR_FALSE;
-    PRBool prefilledUser = PR_FALSE;
-    nsCOMPtr<nsIDOMHTMLInputElement> userField, passField;
-    nsCOMPtr<nsIDOMHTMLInputElement> temp;
-    nsAutoString fieldType;
-
-    // before we start iterating, make sure we have the action host
-    if (NS_FAILED(GetActionRealm(form, formActionOrigin)))
-      return NS_OK;
-
-    for (SignonDataEntry* e = hashEnt->head; e; e = e->next) {
-
-      nsCOMPtr<nsISupports> foundNode;
-      if (!(e->userField).IsEmpty()) {
-        form->ResolveName(e->userField, getter_AddRefs(foundNode));
-        temp = do_QueryInterface(foundNode);
-      }
-
-      nsAutoString oldUserValue;
-
-      if (temp) {
-        temp->GetType(fieldType);
-        if (!fieldType.Equals(NS_LITERAL_STRING("text")))
-          continue;
-
-        temp->GetValue(oldUserValue);
-        userField = temp;
-      } else if ((e->passField).IsEmpty()) {
-        // Happens sometimes when we import passwords from IE since
-        // their form name match is case insensitive. In this case,
-        // we'll just have to do a case insensitive search for the
-        // userField and hope we get something.
-        PRUint32 count;
-        form->GetElementCount(&count);
-        PRUint32 i;
-        nsCOMPtr<nsIFormControl> formControl;
-        for (i = 0; i < count; i++) {
-          form->GetElementAt(i, getter_AddRefs(formControl));
-
-          if (formControl &&
-              formControl->GetType() == NS_FORM_INPUT_TEXT) {
-            nsCOMPtr<nsIDOMHTMLInputElement> inputField = do_QueryInterface(formControl);
-            nsAutoString name;
-            inputField->GetName(name);
-            if (name.EqualsIgnoreCase(NS_ConvertUTF16toUTF8(e->userField).get())) {
-              inputField->GetValue(oldUserValue);
-              userField = inputField;
-              foundNode = inputField;
-              // Only the case differs, so CheckLoginValues() unneeded.
-              e->userField.Assign(name);
-              break;
-            }
-          }
-        }
-      }
-
-      if (!(e->passField).IsEmpty()) {
-        form->ResolveName(e->passField, getter_AddRefs(foundNode));
-        temp = do_QueryInterface(foundNode);
-      }
-      else if (userField) {
-        // No password field name was supplied, try to locate one in the form,
-        // but only if we have a username field.
-        nsCOMPtr<nsIFormControl> fc(do_QueryInterface(foundNode));
-        PRInt32 index = -1;
-        form->IndexOfControl(fc, &index);
-        if (index >= 0) {
-          PRUint32 count;
-          form->GetElementCount(&count);
-
-          PRUint32 i;
-          temp = nsnull;
-
-          // Search forwards
-          nsCOMPtr<nsIFormControl> passField;
-          for (i = index + 1; i < count; ++i) {
-            form->GetElementAt(i, getter_AddRefs(passField));
-
-            if (passField && passField->GetType() == NS_FORM_INPUT_PASSWORD) {
-              foundNode = passField;
-              temp = do_QueryInterface(foundNode);
-            }
-          }
-
-          if (!temp && index != 0) {
-            // Search backwards
-            i = index;
-            do {
-              form->GetElementAt(i, getter_AddRefs(passField));
-
-              if (passField && passField->GetType() == NS_FORM_INPUT_PASSWORD) {
-                foundNode = passField;
-                temp = do_QueryInterface(foundNode);
-              }
-            } while (i-- != 0);
-          }
-        }
-      }
-
-      nsAutoString oldPassValue;
-
-      if (temp) {
-        temp->GetType(fieldType);
-        if (!fieldType.Equals(NS_LITERAL_STRING("password")))
-          continue;
-
-        temp->GetValue(oldPassValue);
-        passField = temp;
-        if ((e->passField).IsEmpty()) {
-          nsAutoString passName;
-          passField->GetName(passName);
-
-          // Reject values that would cause problems when parsing the storage file
-          if (NS_SUCCEEDED(CheckLoginValues(EmptyCString(), EmptyString(),
-                                            passName, EmptyCString())))
-            e->passField.Assign(passName);
-        }
-      } else {
-        continue;
-      }
-
-      // if we don't match actionOrigin, don't count this as a match
-      if (!e->actionOrigin.IsEmpty() &&
-          !e->actionOrigin.Equals(formActionOrigin))
-        continue;
-
-      if (!oldUserValue.IsEmpty() && prefillForm) {
-        // The page has prefilled a username.
-        // If it matches any of our saved usernames, prefill the password
-        // for that username.  If there are multiple saved usernames,
-        // we will also attach the autocomplete listener.
-
-        prefilledUser = PR_TRUE;
-        nsAutoString userValue;
-        if (NS_FAILED(DecryptData(e->userValue, userValue)))
-          return NS_OK;
-
-        if (userValue.Equals(oldUserValue)) {
-          nsAutoString passValue;
-          if (NS_FAILED(DecryptData(e->passValue, passValue)))
-            return NS_OK;
-
-          passField->SetValue(passValue);
-        }
-      }
-
-      if (firstMatch && userField && !attachedToInput) {
-        // We've found more than one possible signon for this form.
-
-        // Listen for blur and autocomplete events on the username field so
-        // that we can attempt to prefill the password after the user has
-        // entered the username.
-
-        AttachToInput(userField);
-        attachedToInput = PR_TRUE;
-      } else {
-        firstMatch = e;
-      }
-    }
-
-    // If we found more than one match, attachedToInput will be true,
-    // but if we found just one, we need to attach the autocomplete listener,
-    // and fill in the username and password  only if the HTML didn't prefill
-    // the username.
-    if (firstMatch && !attachedToInput) {
-      if (!prefilledUser && prefillForm) {
-        nsAutoString buffer;
-
-        if (userField) {
-          if (NS_FAILED(DecryptData(firstMatch->userValue, buffer)))
-            return NS_OK;
-
-          userField->SetValue(buffer);
-        }
-
-        if (NS_FAILED(DecryptData(firstMatch->passValue, buffer)))
-          return NS_OK;
-
-        passField->SetValue(buffer);
-      }
-
-      if (userField)
-        AttachToInput(userField);
-    }
-  }
-
-  return NS_OK;
-}
-
-nsresult
 nsPasswordManager::FillPassword(nsIDOMEvent* aEvent)
 {
   // Try to prefill the password for the just-changed username.
@@ -2137,13 +1882,6 @@ nsPasswordManager::FillPassword(nsIDOMEvent* aEvent)
     return NS_OK;
 
   nsCOMPtr<nsIForm> form = do_QueryInterface(formEl);
-  nsCAutoString formActionOrigin;
-  GetActionRealm(form, formActionOrigin);
-  if (NS_FAILED(GetActionRealm(form, formActionOrigin)))
-    return NS_OK;
-  if (!foundEntry->actionOrigin.IsEmpty() && !foundEntry->actionOrigin.Equals(formActionOrigin))
-    return NS_OK;
-  
   nsCOMPtr<nsISupports> foundNode;
   form->ResolveName(foundEntry->passField, getter_AddRefs(foundNode));
   nsCOMPtr<nsIDOMHTMLInputElement> passField = do_QueryInterface(foundNode);
@@ -2221,86 +1959,4 @@ nsPasswordManager::GetLocalizedString(const nsAString& key,
     sPMBundle->GetStringFromName(PromiseFlatString(key).get(),
                                  getter_Copies(str));
   aResult.Assign(str);
-}
-
-/* static */ nsresult
-nsPasswordManager::GetActionRealm(nsIForm* aForm, nsCString& aURL)
-{
-  nsCOMPtr<nsIURI> actionURI;
-  nsCAutoString formActionOrigin;
-
-  if (NS_FAILED(aForm->GetActionURL(getter_AddRefs(actionURI))) ||
-      !actionURI)
-    return NS_ERROR_FAILURE;
-
-  if (!GetPasswordRealm(actionURI, formActionOrigin))
-    return NS_ERROR_FAILURE;
-
-  aURL.Assign(formActionOrigin);
-  return NS_OK;
-}
-
-/* static */ PRBool
-nsPasswordManager::BadCharacterPresent(const nsAString &aString)
-{
-  if (aString.FindChar('\r') >= 0)
-    return PR_TRUE;
-  if (aString.FindChar('\n') >= 0)
-    return PR_TRUE;
-  if (aString.FindChar('\0') >= 0)
-    return PR_TRUE;
-
-  return PR_FALSE;
-}
-
-/* static */ nsresult
-nsPasswordManager::CheckLoginValues(const nsACString &aHost,
-                                    const nsAString  &aUserField,
-                                    const nsAString  &aPassField,
-                                    const nsACString &aActionOrigin)
-{
-  // aHost
-  if (BadCharacterPresent(NS_ConvertUTF8toUTF16(aHost))) {
-    NS_WARNING("Login rejected, bad character in aHost");
-    return NS_ERROR_FAILURE;
-  }
-  // The aHost arg is used for both login entry hostnames and reject entry
-  // hostnames ("never for this site"). A value of "." is not allowed for
-  // reject entries. It's technically ok for login entries, but to keep the
-  // code simple we'll disallow it anyway.
-  if (aHost.EqualsLiteral(".")) {
-    NS_WARNING("Login rejected, aHost can not be just a period");
-    return NS_ERROR_FAILURE;
-  }
-
-
-  // aUserField
-  if (BadCharacterPresent(aUserField)) {
-    NS_WARNING("Login rejected, bad character in aUserField");
-    return NS_ERROR_FAILURE;
-  }
-  if (aUserField.EqualsLiteral(".")) {
-    NS_WARNING("Login rejected, aUserField can not be just a period");
-    return NS_ERROR_FAILURE;
-  }
-
-
-  // aPassField
-  if (BadCharacterPresent(aPassField)) {
-    NS_WARNING("Login rejected, bad character in aPassField");
-    return NS_ERROR_FAILURE;
-  }
-
-
-  // aActionOrigin
-  if (BadCharacterPresent(NS_ConvertUTF8toUTF16(aActionOrigin))) {
-    NS_WARNING("Login rejected, bad character in aActionOrigin");
-    return NS_ERROR_FAILURE;
-  }
-  if (aActionOrigin.EqualsLiteral(".")) {
-    NS_WARNING("Login rejected, aActionOrigin can not be just a period");
-    return NS_ERROR_FAILURE;
-  }
-
-  return NS_OK;
 }

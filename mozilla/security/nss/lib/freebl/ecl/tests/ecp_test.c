@@ -1,5 +1,4 @@
 /* 
- * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -12,15 +11,15 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is the elliptic curve math library for prime field curves.
+ * The Original Code is the elliptic curve math library for prime 
+ * field curves.
  *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Sun Microsystems, Inc.
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Douglas Stebila <douglas@stebila.ca>, Sun Microsystems Laboratories
+ *      Douglas Stebila <douglas@stebila.ca>, Sun Microsystems Laboratories
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -34,7 +33,7 @@
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "mpi.h"
 #include "mplogic.h"
@@ -310,19 +309,6 @@ ectest_curve_GFp(ECGroup *group, int ectestPrint, int ectestTime,
 		goto CLEANUP;
 	}
 
-	/* test validate_point function */
-	if (ECPoint_validate(group, &gx, &gy) != MP_YES) {
-		printf("  Error: validate point on base point failed.\n");
-		res = MP_NO;
-		goto CLEANUP;
-	}
-	MP_CHECKOK(mp_add_d(&gy, 1, &ry));
-	if (ECPoint_validate(group, &gx, &ry) != MP_NO) {
-		printf("  Error: validate point on invalid point passed.\n");
-		res = MP_NO;
-		goto CLEANUP;
-	}
-
 	if (ectestTime) {
 		/* compute random scalar */
 		size = mpl_significant_bits(&group->meth->irr);
@@ -417,22 +403,6 @@ main(int argv, char **argc)
 	ECTEST_GENERIC_GFP("SECP-160R1", ECCurve_SECG_PRIME_160R1);
 
 	/* specific arithmetic tests */
-	ECTEST_NAMED_GFP("NIST-P192", ECCurve_NIST_P192);
-	ECTEST_NAMED_GFP("NIST-P224", ECCurve_NIST_P224);
-	ECTEST_NAMED_GFP("NIST-P256", ECCurve_NIST_P256);
-	ECTEST_NAMED_GFP("NIST-P384", ECCurve_NIST_P384);
-	ECTEST_NAMED_GFP("NIST-P521", ECCurve_NIST_P521);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME192v1", ECCurve_X9_62_PRIME_192V1);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME192v2", ECCurve_X9_62_PRIME_192V2);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME192v3", ECCurve_X9_62_PRIME_192V3);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME239v1", ECCurve_X9_62_PRIME_239V1);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME239v2", ECCurve_X9_62_PRIME_239V2);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME239v3", ECCurve_X9_62_PRIME_239V3);
-	ECTEST_NAMED_GFP("ANSI X9.62 PRIME256v1", ECCurve_X9_62_PRIME_256V1);
-	ECTEST_NAMED_GFP("SECP-112R1", ECCurve_SECG_PRIME_112R1);
-	ECTEST_NAMED_GFP("SECP-112R2", ECCurve_SECG_PRIME_112R2);
-	ECTEST_NAMED_GFP("SECP-128R1", ECCurve_SECG_PRIME_128R1);
-	ECTEST_NAMED_GFP("SECP-128R2", ECCurve_SECG_PRIME_128R2);
 	ECTEST_NAMED_GFP("SECP-160K1", ECCurve_SECG_PRIME_160K1);
 	ECTEST_NAMED_GFP("SECP-160R1", ECCurve_SECG_PRIME_160R1);
 	ECTEST_NAMED_GFP("SECP-160R2", ECCurve_SECG_PRIME_160R2);
@@ -440,15 +410,6 @@ main(int argv, char **argc)
 	ECTEST_NAMED_GFP("SECP-192R1", ECCurve_SECG_PRIME_192R1);
 	ECTEST_NAMED_GFP("SECP-224K1", ECCurve_SECG_PRIME_224K1);
 	ECTEST_NAMED_GFP("SECP-224R1", ECCurve_SECG_PRIME_224R1);
-	ECTEST_NAMED_GFP("SECP-256K1", ECCurve_SECG_PRIME_256K1);
-	ECTEST_NAMED_GFP("SECP-256R1", ECCurve_SECG_PRIME_256R1);
-	ECTEST_NAMED_GFP("SECP-384R1", ECCurve_SECG_PRIME_384R1);
-	ECTEST_NAMED_GFP("SECP-521R1", ECCurve_SECG_PRIME_521R1);
-	ECTEST_NAMED_GFP("WTLS-6 (112)", ECCurve_WTLS_6);
-	ECTEST_NAMED_GFP("WTLS-7 (160)", ECCurve_WTLS_7);
-	ECTEST_NAMED_GFP("WTLS-8 (112)", ECCurve_WTLS_8);
-	ECTEST_NAMED_GFP("WTLS-9 (160)", ECCurve_WTLS_9);
-	ECTEST_NAMED_GFP("WTLS-12 (224)", ECCurve_WTLS_12);
 
   CLEANUP:
 	EC_FreeCurveParams(params);

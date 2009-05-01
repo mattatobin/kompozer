@@ -1,10 +1,10 @@
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -13,7 +13,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -27,45 +27,48 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsISupports.idl"
-interface nsIFile;
 
-/**
- * The nsIFormHistory object is a service which holds a set of name/value
- * pairs.  The names correspond to form field names, and the values correspond
- * to values the user has submitted.  So, several values may exist for a single
- * name.
- *
- * Note: this interface provides no means to access stored values.
- * Stored values are used by the FormFillController to generate
- * autocomplete matches.
- */
-
-[scriptable, uuid(a61f0a62-ae0a-4382-b474-d259442ca80c)]
-interface nsIFormHistory2 : nsISupports
+[scriptable, uuid(fa5a871d-29f5-489e-aaa4-c266def52b79)]
+interface nsIFormHistory : nsISupports
 {
   /**
-   * Returns true if the form history has any entries.
+   * The total number of rows in the form history.
    */
-  readonly attribute boolean hasEntries;
+  readonly attribute unsigned long rowCount;
   
   /**
-   * Adds a name and value pair to the form history.
+   * Gets the name and value at a position in the form history.
+   */
+  void getEntryAt(in unsigned long index, out AString name, out AString value);
+  
+  /**
+   * Gets just the name at a position in the form history.
+   */
+  void getNameAt(in unsigned long index, out AString name);
+
+  /**
+   * Gets just the value at a position in the form history.
+   */
+  void getValueAt(in unsigned long index, out AString value);
+  
+  /**
+   * Appends a name and value pair to the end of the form history.
    */
   void addEntry(in AString name, in AString value);
 
   /**
-   * Removes a name and value pair from the form history.
+   * Removes the entry at a position.
    */
-  void removeEntry(in AString name, in AString value);
+  void removeEntryAt(in unsigned long index);
 
   /**
    * Removes all entries that are paired with a name.
@@ -86,22 +89,4 @@ interface nsIFormHistory2 : nsISupports
    * Gets whether a name and value pair exists in the form history.
    */
   boolean entryExists(in AString name, in AString value);
-};
-
-/**
- * nsIFormHistoryImporter is an interface for importing a Mork formhistory.dat
- * file into the new form history storage.
- */
-
-[scriptable, uuid(9e811188-6a5b-4d96-a92d-1bac66a41898)]
-interface nsIFormHistoryImporter : nsISupports
-{
-  /**
-   * Import the given Mork form history file.
-   *  @param file     The Mork form history file to import
-   *  @param history  A reference to the nsIFormHistory.  This is
-   *                  supplied since the importer is invoked during
-   *                  form history initialization.
-   */
-  void importFormHistory(in nsIFile file, in nsIFormHistory2 formHistory);
 };

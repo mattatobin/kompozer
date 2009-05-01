@@ -72,7 +72,9 @@ nsHTMLEditor::ShowInlineTableEditingUI(nsIDOMElement * aCell)
     return NS_OK;
 
   // the resizers and the shadow will be anonymous children of the body
-  nsIDOMElement *bodyElement = GetRoot();
+  nsCOMPtr<nsIDOMElement> bodyElement;
+  nsresult res = nsEditor::GetRootElement(getter_AddRefs(bodyElement));
+  if (NS_FAILED(res)) return res;
   if (!bodyElement)   return NS_ERROR_NULL_POINTER;
 
   CreateAnonymousElement(NS_LITERAL_STRING("a"), bodyElement,
@@ -122,24 +124,29 @@ nsHTMLEditor::HideInlineTableEditingUI()
   nsCOMPtr<nsIPresShell> ps = do_QueryReferent(mPresShellWeak);
   if (!ps) return NS_ERROR_NOT_INITIALIZED;
 
+  nsCOMPtr<nsIDocumentObserver> docObserver(do_QueryInterface(ps));
+  if (!docObserver) return NS_ERROR_FAILURE;
+
   // get the root content node.
 
-  nsIDOMElement *bodyElement = GetRoot();
+  nsCOMPtr<nsIDOMElement> bodyElement;
+  nsresult res = nsEditor::GetRootElement(getter_AddRefs(bodyElement));
+  if (NS_FAILED(res)) return res;
 
   nsCOMPtr<nsIContent> bodyContent( do_QueryInterface(bodyElement) );
   if (!bodyContent) return NS_ERROR_FAILURE;
 
-  DeleteRefToAnonymousNode(mAddColumnBeforeButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mAddColumnBeforeButton, bodyContent, docObserver);
   mAddColumnBeforeButton = nsnull;
-  DeleteRefToAnonymousNode(mRemoveColumnButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mRemoveColumnButton, bodyContent, docObserver);
   mRemoveColumnButton = nsnull;
-  DeleteRefToAnonymousNode(mAddColumnAfterButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mAddColumnAfterButton, bodyContent, docObserver);
   mAddColumnAfterButton = nsnull;
-  DeleteRefToAnonymousNode(mAddRowBeforeButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mAddRowBeforeButton, bodyContent, docObserver);
   mAddRowBeforeButton = nsnull;
-  DeleteRefToAnonymousNode(mRemoveRowButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mRemoveRowButton, bodyContent, docObserver);
   mRemoveRowButton = nsnull;
-  DeleteRefToAnonymousNode(mAddRowAfterButton, bodyContent, ps);
+  DeleteRefToAnonymousNode(mAddRowAfterButton, bodyContent, docObserver);
   mAddRowAfterButton = nsnull;
 
   return NS_OK;
@@ -169,21 +176,21 @@ nsHTMLEditor::DoInlineTableEditingAction(nsIDOMElement * aElement)
     PRBool hideUI = PR_FALSE;
     PRBool hideResizersWithInlineTableUI = (mResizedObject == tableElement);
 
-    if (anonclass.EqualsLiteral("mozTableAddColumnBefore"))
+    if (anonclass.Equals(NS_LITERAL_STRING("mozTableAddColumnBefore")))
       InsertTableColumn(1, PR_FALSE);
-    else if (anonclass.EqualsLiteral("mozTableAddColumnAfter"))
+    else if (anonclass.Equals(NS_LITERAL_STRING("mozTableAddColumnAfter")))
       InsertTableColumn(1, PR_TRUE);
-    else if (anonclass.EqualsLiteral("mozTableAddRowBefore"))
+    else if (anonclass.Equals(NS_LITERAL_STRING("mozTableAddRowBefore")))
       InsertTableRow(1, PR_FALSE);
-    else if (anonclass.EqualsLiteral("mozTableAddRowAfter"))
+    else if (anonclass.Equals(NS_LITERAL_STRING("mozTableAddRowAfter")))
       InsertTableRow(1, PR_TRUE);
-    else if (anonclass.EqualsLiteral("mozTableRemoveColumn")) {
+    else if (anonclass.Equals(NS_LITERAL_STRING("mozTableRemoveColumn"))) {
       DeleteTableColumn(1);
 #ifndef DISABLE_TABLE_DELETION
       hideUI = (colCount == 1);
 #endif
     }
-    else if (anonclass.EqualsLiteral("mozTableRemoveRow")) {
+    else if (anonclass.Equals(NS_LITERAL_STRING("mozTableRemoveRow"))) {
       DeleteTableRow(1);
 #ifndef DISABLE_TABLE_DELETION
       hideUI = (rowCount == 1);

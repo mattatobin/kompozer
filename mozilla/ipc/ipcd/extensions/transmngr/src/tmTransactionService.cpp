@@ -112,16 +112,17 @@ NS_IMPL_ISUPPORTS2(tmTransactionService,
 NS_IMETHODIMP
 tmTransactionService::Init(const nsACString & aNamespace) {
 
-  nsresult rv;
-  
-  rv = IPC_DefineTarget(kTransModuleID, this, PR_TRUE);
-  if (NS_FAILED(rv))
-    return rv;
+  // register with the IPC service
+  ipcService = do_GetService("@mozilla.org/ipc/service;1");
+  if (!ipcService)
+    return NS_ERROR_FAILURE;
+  if(NS_FAILED(ipcService->SetMessageObserver(kTransModuleID, this)))
+    return NS_ERROR_FAILURE;
 
   // get the lock service
-  lockService = do_GetService("@mozilla.org/ipc/lock-service;1", &rv);
-  if (NS_FAILED(rv))
-    return rv;
+  lockService = do_GetService("@mozilla.org/ipc/lock-service;1");
+  if (!lockService)
+    return NS_ERROR_FAILURE;
 
   // create some internal storage
   mObservers = PL_NewHashTable(20, 
@@ -129,7 +130,7 @@ tmTransactionService::Init(const nsACString & aNamespace) {
                                PL_CompareStrings, 
                                PL_CompareValues, 0, 0);
   if (!mObservers)
-    return NS_ERROR_OUT_OF_MEMORY;
+    return NS_ERROR_FAILURE;
 
   // init some internal storage
   mQueueMaps.Init();
@@ -149,8 +150,6 @@ tmTransactionService::Attach(const nsACString & aDomainName,
   //   return an error here. Only one module attached to a queue per app.
   if (GetQueueID(aDomainName) != TM_NO_ID)
     return TM_ERROR_QUEUE_EXISTS;
-  if (!mObservers)
-    return NS_ERROR_NOT_INITIALIZED;
 
   // create the full queue name: namespace + queue
   nsCString jQName;
@@ -183,10 +182,9 @@ tmTransactionService::Attach(const nsACString & aDomainName,
   nsresult rv = NS_ERROR_FAILURE;
   tmTransaction trans;
 
-  // acquire a lock if necessary
+  // acquire a lock if neccessary
   if (aLockingCall)
-    lockService->AcquireLock(joinedQueueName, PR_TRUE);
-  // XXX need to handle lock failures
+    lockService->AcquireLock(joinedQueueName, nsnull, PR_TRUE);
 
   if (NS_SUCCEEDED(trans.Init(0,                             // no IPC client
                               TM_NO_ID,                      // qID gets returned to us
@@ -199,7 +197,7 @@ tmTransactionService::Attach(const nsACString & aDomainName,
     rv = NS_OK;
   }
 
-  // drop the lock if necessary
+  // drop the lock if neccessary
   if (aLockingCall)
     lockService->ReleaseLock(joinedQueueName);
 
@@ -218,14 +216,14 @@ tmTransactionService::Detach(const nsACString & aDomainName) {
 NS_IMETHODIMP
 tmTransactionService::Flush(const nsACString & aDomainName,
                             PRBool aLockingCall) {
-  // acquire a lock if necessary
+  // acquire a lock if neccessary
   if (aLockingCall)
-    lockService->AcquireLock(GetJoinedQueueName(aDomainName), PR_TRUE);
+    lockService->AcquireLock(GetJoinedQueueName(aDomainName), nsnull, PR_TRUE);
 
   // synchronous flush
   nsresult rv = SendDetachOrFlush(GetQueueID(aDomainName), TM_FLUSH, PR_TRUE);
 
-  // drop the lock if necessary
+  // drop the lock if neccessary
   if (aLockingCall)
     lockService->ReleaseLock(GetJoinedQueueName(aDomainName));
 
@@ -271,8 +269,7 @@ tmTransactionService::PostTransaction(const nsACString & aDomainName,
 // ipcIMessageObserver
 
 NS_IMETHODIMP
-tmTransactionService::OnMessageAvailable(const PRUint32 aSenderID,
-                                         const nsID & aTarget, 
+tmTransactionService::OnMessageAvailable(const nsID & aTarget, 
                                          const PRUint8 *aData, 
                                          PRUint32 aDataLength) {
 
@@ -294,7 +291,7 @@ tmTransactionService::OnMessageAvailable(const PRUint32 aSenderID,
         break;
       case TM_POST_REPLY:
         // OnPostReply() would be called here
-        //   isn't necessary at the current time 2/19/03
+        //   isn't neccessary at the current time 2/19/03
         break;
       case TM_DETACH_REPLY:
         OnDetachReply(trans);
@@ -322,12 +319,13 @@ void
 tmTransactionService::SendMessage(tmTransaction *aTrans, PRBool aSync) {
 
   NS_ASSERTION(aTrans, "tmTransactionService::SendMessage called with null transaction");
+  NS_ASSERTION(ipcService, "Failed to get the ipcService");
 
-  IPC_SendMessage(0, kTransModuleID, 
-                  aTrans->GetRawMessage(), 
-                  aTrans->GetRawMessageLength());
-  if (aSync)
-    IPC_WaitMessage(0, kTransModuleID, nsnull, PR_INTERVAL_NO_TIMEOUT);
+  ipcService->SendMessage(0, 
+                          kTransModuleID, 
+                          aTrans->GetRawMessage(), 
+                          aTrans->GetRawMessageLength(),
+                          aSync);
 }
 
 void

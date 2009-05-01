@@ -74,18 +74,9 @@ NS_NewNativeScrollbarFrame ( nsIPresShell* aPresShell, nsIFrame** aNewFrame )
 //
 // QueryInterface
 //
-NS_IMETHODIMP
-nsNativeScrollbarFrame::QueryInterface(const nsIID& aIID, void** aInstancePtr)
-{
-  if (!aInstancePtr) {
-    return NS_ERROR_NULL_POINTER;
-  }
-  if (aIID.Equals(NS_GET_IID(nsIScrollbarMediator))) {
-    *aInstancePtr = (void*) ((nsIScrollbarMediator*) this);
-    return NS_OK;
-  }
-  return nsBoxFrame::QueryInterface(aIID, aInstancePtr);
-} 
+NS_INTERFACE_MAP_BEGIN(nsNativeScrollbarFrame)
+NS_INTERFACE_MAP_END_INHERITING(nsBoxFrame)
+
 
 nsNativeScrollbarFrame::nsNativeScrollbarFrame(nsIPresShell* aShell)
   : nsBoxFrame(aShell), mScrollbarNeedsContent(PR_TRUE)
@@ -93,17 +84,26 @@ nsNativeScrollbarFrame::nsNativeScrollbarFrame(nsIPresShell* aShell)
 
 }
 
+nsNativeScrollbarFrame::~nsNativeScrollbarFrame ( )
+{
+  // frame is going away, unhook the native scrollbar from
+  // the content node just to be safe about lifetime issues
+  nsCOMPtr<nsINativeScrollbar> scrollbar ( do_QueryInterface(mScrollbar) );
+  if ( scrollbar )
+    scrollbar->SetContent(nsnull, nsnull);
+}
+
+
 //
 // Init
 //
 // Pass along to our parent, but also create the native widget that we wrap. 
 //
 NS_IMETHODIMP
-nsNativeScrollbarFrame::Init(nsPresContext* aPresContext, nsIContent* aContent,
+nsNativeScrollbarFrame::Init(nsIPresContext* aPresContext, nsIContent* aContent,
                                nsIFrame* aParent, nsStyleContext* aContext, nsIFrame* aPrevInFlow)
 {
   nsresult  rv = nsBoxFrame::Init(aPresContext, aContent, aParent, aContext, aPrevInFlow);
-  NS_ENSURE_SUCCESS(rv, rv);
 
   // create a view for this frame and then associate the view with the native
   // scrollbar widget. The net result of this is that the view will automatically
@@ -112,7 +112,7 @@ nsNativeScrollbarFrame::Init(nsPresContext* aPresContext, nsIContent* aContent,
   static NS_DEFINE_IID(kScrollbarCID,  NS_NATIVESCROLLBAR_CID);
   if ( NS_SUCCEEDED(CreateViewForFrame(aPresContext, this, aContext, PR_TRUE)) ) {
     nsIView* myView = GetView();
-    if (myView && !myView->HasWidget()) {
+    if ( myView ) {
       nsWidgetInitData widgetData;
       if ( NS_SUCCEEDED(myView->CreateWidget(kScrollbarCID, &widgetData, nsnull)) ) {
         mScrollbar = myView->GetWidget();
@@ -135,49 +135,41 @@ nsNativeScrollbarFrame::Init(nsPresContext* aPresContext, nsIContent* aContent,
   return rv;
 }
 
-NS_IMETHODIMP
-nsNativeScrollbarFrame::Destroy(nsPresContext* aPresContext)
-{
-  nsCOMPtr<nsINativeScrollbar> scrollbar(do_QueryInterface(mScrollbar));
-  if (scrollbar) {
-    // frame is going away, unhook the native scrollbar from
-    // the content node just to be safe about lifetime issues
-    scrollbar->SetContent(nsnull, nsnull, nsnull);
-  }
-  return nsBoxFrame::Destroy(aPresContext);
-}
 
 //
-// FindParts
+// FindScrollbar
 //
 // Walk up the parent frame tree and find the content node of the frame
 // with the tag "scrollbar". This is the content node that the GFX Scroll Frame
-// is watching for attribute changes. We return the associated frame and
-// any mediator.
+// is watching for attribute changes.
 //
-nsNativeScrollbarFrame::Parts
-nsNativeScrollbarFrame::FindParts()
+nsresult
+nsNativeScrollbarFrame::FindScrollbar(nsIFrame* start, nsIFrame** outFrame,
+                                      nsIContent** outContent)
 {
-  nsIFrame* f;
-  for (f = GetParent(); f; f = f->GetParent()) {
-    nsIContent* currContent = f->GetContent();
+  *outContent = nsnull;
+  *outFrame = nsnull;
+  
+  while ( start ) {
+    start = start->GetParent();
+    if ( start ) {
+      // get the content node
+      nsIContent* currContent = start->GetContent();
 
-    if (currContent && currContent->Tag() == nsXULAtoms::scrollbar) {
-      nsIScrollbarFrame* sb;
-      CallQueryInterface(f, &sb);
-      if (sb) {
-        nsIScrollbarMediator* sbm;
-        sb->GetScrollbarMediator(&sbm);
-        return Parts(f, sb, sbm);
+      if (currContent && currContent->Tag() == nsXULAtoms::scrollbar) {
+        *outContent = currContent;
+        *outFrame = start;
+        NS_ADDREF(*outContent);
+        return NS_OK;
       }
     }
   }
 
-  return Parts(nsnull, nsnull, nsnull);
+  return NS_OK;
 }
 
 NS_IMETHODIMP
-nsNativeScrollbarFrame::Reflow(nsPresContext*          aPresContext,
+nsNativeScrollbarFrame::Reflow(nsIPresContext*          aPresContext,
                                nsHTMLReflowMetrics&     aDesiredSize,
                                const nsHTMLReflowState& aReflowState,
                                nsReflowStatus&          aStatus)
@@ -206,13 +198,15 @@ nsNativeScrollbarFrame::Reflow(nsPresContext*          aPresContext,
 // our native scrollbar with the correct values.
 //
 NS_IMETHODIMP
-nsNativeScrollbarFrame::AttributeChanged(nsIContent* aChild,
+nsNativeScrollbarFrame::AttributeChanged(nsIPresContext* aPresContext,
+                                         nsIContent* aChild,
                                          PRInt32 aNameSpaceID,
                                          nsIAtom* aAttribute,
                                          PRInt32 aModType)
 {
-  nsresult rv = nsBoxFrame::AttributeChanged(aChild, aNameSpaceID,
-                                             aAttribute, aModType);
+  nsresult rv = nsBoxFrame::AttributeChanged(aPresContext, aChild,
+                                             aNameSpaceID, aAttribute,
+                                             aModType);
   
   if (  aAttribute == nsXULAtoms::curpos ||
         aAttribute == nsXULAtoms::maxpos || 
@@ -238,15 +232,20 @@ nsNativeScrollbarFrame::AttributeChanged(nsIContent* aChild,
           PRInt32 oldPosition = (PRInt32)current;
           PRInt32 curPosition = maxValue;
         
-          Parts parts = FindParts();
-          if (parts.mMediator) {
-            parts.mMediator->PositionChanged(parts.mIScrollbarFrame, oldPosition, /* inout */ curPosition);
+          nsCOMPtr<nsIContent> scrollbarContent;
+          nsIFrame* sbFrame = nsnull;
+          FindScrollbar(this, &sbFrame, getter_AddRefs(scrollbarContent));
+          nsCOMPtr<nsIScrollbarFrame> scrollbarFrame(do_QueryInterface(sbFrame));
+          if (scrollbarFrame) {
+            nsCOMPtr<nsIScrollbarMediator> mediator;
+            scrollbarFrame->GetScrollbarMediator(getter_AddRefs(mediator));
+            if (mediator)
+              mediator->PositionChanged(oldPosition, /* inout */ curPosition);
           }
 
           nsAutoString currentStr;
           currentStr.AppendInt(curPosition);
-          parts.mScrollbarFrame->GetContent()->
-            SetAttr(kNameSpaceID_None, nsXULAtoms::curpos, currentStr, PR_TRUE);
+          scrollbarContent->SetAttr(kNameSpaceID_None, nsXULAtoms::curpos, currentStr, PR_TRUE);
         }
       }
       
@@ -275,7 +274,7 @@ NS_IMETHODIMP
 nsNativeScrollbarFrame::GetPrefSize(nsBoxLayoutState& aState, nsSize& aSize)
 {
   float p2t = 0.0;
-  p2t = aState.PresContext()->PixelsToTwips();
+  p2t = aState.GetPresContext()->PixelsToTwips();
   
   PRInt32 narrowDimension = 0;
   nsCOMPtr<nsINativeScrollbar> native ( do_QueryInterface(mScrollbar) );
@@ -310,25 +309,25 @@ nsNativeScrollbarFrame::Hookup()
   if (!mScrollbarNeedsContent)
     return;
 
+  nsCOMPtr<nsIContent> scrollbarContent;
+  nsIFrame* scrollbarFrame = nsnull;
+  FindScrollbar(this, &scrollbarFrame, getter_AddRefs(scrollbarContent));
+
+  nsCOMPtr<nsIScrollbarMediator> mediator;
+  nsCOMPtr<nsIScrollbarFrame> sb(do_QueryInterface(scrollbarFrame));
+  if (!sb) {
+    NS_WARNING("ScrollbarFrame doesn't implement nsIScrollbarFrame");
+    return;
+  }
+
+  sb->GetScrollbarMediator(getter_AddRefs(mediator));
   nsCOMPtr<nsINativeScrollbar> scrollbar(do_QueryInterface(mScrollbar));
-  if (!scrollbar) {
+  if (!mScrollbar) {
     NS_WARNING("Native scrollbar widget doesn't implement nsINativeScrollbar");
     return;
   }
 
-  Parts parts = FindParts();
-  if (!parts.mScrollbarFrame) {
-    // Nothing to do here
-    return;
-  }
-  
-  // We can't just pass 'mediator' to the widget, because 'mediator' might go away.
-  // So pass a pointer to us. When we go away, we can tell the widget.
-  nsIContent* scrollbarContent = parts.mScrollbarFrame->GetContent();
-  // Always configure ourselves as the mediator even if parts.mMediator is null;
-  // the mediator might be changed.
-  scrollbar->SetContent(scrollbarContent,
-                        parts.mIScrollbarFrame, this);
+  scrollbar->SetContent(scrollbarContent, mediator);
   mScrollbarNeedsContent = PR_FALSE;
 
   if (!scrollbarContent)
@@ -348,29 +347,3 @@ nsNativeScrollbarFrame::Hookup()
   scrollbar->SetPosition(curpos);
 }
 
-NS_IMETHODIMP
-nsNativeScrollbarFrame::PositionChanged(nsISupports* aScrollbar, PRInt32 aOldIndex, PRInt32& aNewIndex)
-{
-  Parts parts = FindParts();
-  if (!parts.mMediator)
-    return NS_OK;
-  return parts.mMediator->PositionChanged(aScrollbar, aOldIndex, aNewIndex);
-}
-
-NS_IMETHODIMP
-nsNativeScrollbarFrame::ScrollbarButtonPressed(nsISupports* aScrollbar, PRInt32 aOldIndex, PRInt32 aNewIndex)
-{
-  Parts parts = FindParts();
-  if (!parts.mMediator)
-    return NS_OK;
-  return parts.mMediator->ScrollbarButtonPressed(aScrollbar, aOldIndex, aNewIndex);
-}
-
-NS_IMETHODIMP
-nsNativeScrollbarFrame::VisibilityChanged(nsISupports* aScrollbar, PRBool aVisible)
-{
-  Parts parts = FindParts();
-  if (!parts.mMediator)
-    return NS_OK;
-  return parts.mMediator->VisibilityChanged(aScrollbar, aVisible);
-}

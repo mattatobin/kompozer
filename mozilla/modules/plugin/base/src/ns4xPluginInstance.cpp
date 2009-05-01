@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,12 +48,6 @@
 #include "nsPluginHostImpl.h"
 #include "nsPluginSafety.h"
 #include "nsPluginLogging.h"
-
-#include "nsPIPluginInstancePeer.h"
-#include "nsIDOMWindow.h"
-#include "nsPIDOMWindow.h"
-#include "nsIDocument.h"
-#include "nsIScriptGlobalObject.h"
 
 #include "nsJSNPRuntime.h"
 
@@ -78,9 +72,6 @@
 #include "xlibrgb.h"
 #endif
 
-#if defined(MOZ_WIDGET_PHOTON) && defined (OJI)
-#include "nsPluginInstancePeer.h"
-#endif
 
 ////////////////////////////////////////////////////////////////////////
 // CID's && IID's
@@ -90,9 +81,8 @@ static NS_DEFINE_IID(kIPluginStreamListenerIID, NS_IPLUGINSTREAMLISTENER_IID);
 ///////////////////////////////////////////////////////////////////////////////
 // ns4xPluginStreamListener Methods
 
-NS_IMPL_ISUPPORTS4(ns4xPluginStreamListener, nsIPluginStreamListener,
-                   nsITimerCallback, nsIHTTPHeaderListener,
-                   nsIHTTPHeaderListener_MOZILLA_1_8_BRANCH)
+NS_IMPL_ISUPPORTS2(ns4xPluginStreamListener, nsIPluginStreamListener,
+                   nsITimerCallback)
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -109,8 +99,7 @@ ns4xPluginStreamListener::ns4xPluginStreamListener(nsIPluginInstance* inst,
     mStreamStarted(PR_FALSE),
     mStreamCleanedUp(PR_FALSE),
     mCallNotify(PR_FALSE),
-    mIsSuspended(PR_FALSE),
-    mResponseHeaderBuf(nsnull)
+    mIsSuspended(PR_FALSE)
 {
   // Initialize the 4.x interface structure
   memset(&mNPStream, 0, sizeof(mNPStream));
@@ -157,9 +146,6 @@ ns4xPluginStreamListener::~ns4xPluginStreamListener(void)
 
   if (mNotifyURL)
     PL_strfree(mNotifyURL);
-
-  if (mResponseHeaderBuf)
-    PL_strfree(mResponseHeaderBuf);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -172,8 +158,6 @@ nsresult ns4xPluginStreamListener::CleanUpStream(NPReason reason)
 
   if(!mInst || !mInst->IsStarted())
     return rv;
-
-  PluginDestructionGuard guard(mInst);
 
   const NPPluginFuncs *callbacks = nsnull;
   mInst->GetCallbacks(&callbacks);
@@ -219,8 +203,6 @@ void ns4xPluginStreamListener::CallURLNotify(NPReason reason)
   if(!mCallNotify || !mInst || !mInst->IsStarted())
     return;
 
-  PluginDestructionGuard guard(mInst);
-
   mCallNotify = PR_FALSE; // only do this ONCE and prevent recursion
 
   const NPPluginFuncs *callbacks = nsnull;
@@ -258,8 +240,6 @@ ns4xPluginStreamListener::OnStartBinding(nsIPluginStreamInfo* pluginInfo)
   if(!mInst)
     return NS_ERROR_FAILURE;
 
-  PluginDestructionGuard guard(mInst);
-
   NPP npp;
   const NPPluginFuncs *callbacks = nsnull;
 
@@ -282,11 +262,6 @@ ns4xPluginStreamListener::OnStartBinding(nsIPluginStreamInfo* pluginInfo)
   pluginInfo->GetLastModified((PRUint32*)&(mNPStream.lastmodified));
   pluginInfo->IsSeekable(&seekable);
   pluginInfo->GetContentType(&contentType);
-  
-  if (!mResponseHeaders.IsEmpty()) {
-    mResponseHeaderBuf = PL_strdup(mResponseHeaders.get());
-    mNPStream.headers = mResponseHeaderBuf;
-  }
 
   mStreamInfo = pluginInfo;
 
@@ -406,8 +381,6 @@ ns4xPluginStreamListener::OnDataAvailable(nsIPluginStreamInfo* pluginInfo,
 {
   if (!mInst || !mInst->IsStarted())
     return NS_ERROR_FAILURE;
-
-  PluginDestructionGuard guard(mInst);
 
   // Just in case the caller switches plugin info on us.
   mStreamInfo = pluginInfo;
@@ -669,8 +642,6 @@ ns4xPluginStreamListener::OnFileAvailable(nsIPluginStreamInfo* pluginInfo,
   if(!mInst || !mInst->IsStarted())
     return NS_ERROR_FAILURE;
 
-  PluginDestructionGuard guard(mInst);
-
   const NPPluginFuncs *callbacks = nsnull;
   mInst->GetCallbacks(&callbacks);
   if(!callbacks && !callbacks->asfile)
@@ -777,27 +748,6 @@ ns4xPluginStreamListener::Notify(nsITimer *aTimer)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-NS_IMETHODIMP
-ns4xPluginStreamListener::StatusLine(const char* line)
-{
-  mResponseHeaders.Append(line);
-  mResponseHeaders.Append('\n');
-  return NS_OK;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-NS_IMETHODIMP
-ns4xPluginStreamListener::NewResponseHeader(const char* headerName,
-                                            const char* headerValue)
-{
-  mResponseHeaders.Append(headerName);
-  mResponseHeaders.Append(": ");
-  mResponseHeaders.Append(headerValue);
-  mResponseHeaders.Append('\n');
-  return NS_OK;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 nsInstanceStream::nsInstanceStream()
 {
   mNext = nsnull;
@@ -814,7 +764,7 @@ nsInstanceStream::~nsInstanceStream()
 ///////////////////////////////////////////////////////////////////////////////
 
 NS_IMPL_ISUPPORTS3(ns4xPluginInstance, nsIPluginInstance, nsIScriptablePlugin,
-                   nsIPluginInstanceInternal)
+                   nsINPRuntimePlugin)
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -927,16 +877,6 @@ NS_IMETHODIMP ns4xPluginInstance::Stop(void)
 
   NPError error;
 
-  // Make sure the plugin didn't leave popups enabled.
-  if (mPopupStates.Count() > 0) {
-    nsCOMPtr<nsIDOMWindow> window = GetDOMWindow();
-    nsCOMPtr<nsPIDOMWindow> piwindow = do_QueryInterface(window);
-
-    if (piwindow) {
-      piwindow->PopPopupControlState(openAbused);
-    }
-  }
-
 #if defined(MOZ_WIDGET_GTK) || defined (MOZ_WIDGET_GTK2)
   if (mXtBin) {
     gtk_widget_destroy(mXtBin);
@@ -951,12 +891,6 @@ NS_IMETHODIMP ns4xPluginInstance::Stop(void)
 
   if(!mStarted)
     return NS_OK;
-
-  // If there's code from this plugin instance on the stack, delay the
-  // destroy.
-  if (PluginDestructionGuard::DelayDestroy(this)) {
-    return NS_OK;
-  }
 
   if (fCallbacks->destroy == NULL)
     return NS_ERROR_FAILURE; // XXX right error?
@@ -993,39 +927,6 @@ NS_IMETHODIMP ns4xPluginInstance::Stop(void)
     return NS_OK;
 }
 
-already_AddRefed<nsIDOMWindow>
-ns4xPluginInstance::GetDOMWindow()
-{
-  nsCOMPtr<nsPIPluginInstancePeer> pp (do_QueryInterface(mPeer));
-  if (!pp) {
-    return nsnull;
-  }
-
-  nsCOMPtr<nsIPluginInstanceOwner> owner;
-  pp->GetOwner(getter_AddRefs(owner));
-
-  if (!owner) {
-    return nsnull;
-  }
-
-  nsCOMPtr<nsIDocument> doc;
-  owner->GetDocument(getter_AddRefs(doc));
-
-  if (!doc) {
-    return nsnull;
-  }
-
-  nsIScriptGlobalObject *sgo = doc->GetScriptGlobalObject();
-
-  if (!sgo) {
-    return nsnull;
-  }
-
-  nsIDOMWindow *window;
-  CallQueryInterface(sgo, &window);
-
-  return window;
-}
 
 ////////////////////////////////////////////////////////////////////////
 nsresult ns4xPluginInstance::InitializePlugin(nsIPluginInstancePeer* peer)
@@ -1035,8 +936,6 @@ nsresult ns4xPluginInstance::InitializePlugin(nsIPluginInstancePeer* peer)
   nsCOMPtr<nsIPluginTagInfo2> taginfo = do_QueryInterface(peer);
   NS_ENSURE_TRUE(taginfo, NS_ERROR_NO_INTERFACE);
   
-  PluginDestructionGuard guard(this);
-
   PRUint16 count = 0;
   const char* const* names = nsnull;
   const char* const* values = nsnull;
@@ -1063,64 +962,6 @@ nsresult ns4xPluginInstance::InitializePlugin(nsIPluginInstancePeer* peer)
       }
     }
   }
-
-#if defined(MOZ_WIDGET_PHOTON) && defined (OJI)
-  /* our plugins require that "voyager.documentBase"/docbase is present in the array */
-  /* and also the java_code, java_codebase are present */
-  const char **qnames = nsnull, **qvalues = nsnull;
-  if (tagtype == nsPluginTagType_Object || tagtype == nsPluginTagType_Applet ) {
-
-    nsCOMPtr<nsIJVMPluginTagInfo> javataginfo = do_QueryInterface(peer, &rv);
-    if ( NS_SUCCEEDED(rv)) {
-
-      taginfo->GetParameters(count, names, values);
-      const char * tmpvalue;
-      PRUint32 tmpivalue;
-      char widthb[10], heightb[10];
-      int i, c = 0;
-      qnames = (const char **)PR_Calloc(count + 7, sizeof(char *));
-      qvalues = (const char **)PR_Calloc(count + 7, sizeof(char *));
-      if (qnames != nsnull && qvalues != nsnull) {
-
-        if ( javataginfo->GetArchive(&tmpvalue) == NS_OK ) {
-          qnames[c] = "java_archive";
-          qvalues[c++] = tmpvalue;
-        }
-        if ( javataginfo->GetCode(&tmpvalue) == NS_OK ) {
-          qnames[c] = "java_code";
-          qvalues[c++] = tmpvalue;
-        }
-        if ( javataginfo->GetCodeBase(&tmpvalue) == NS_OK ) {
-          qnames[c] = "java_codebase";
-          qvalues[c++] = tmpvalue;
-        }
-        if ( taginfo->GetDocumentBase(&tmpvalue) == NS_OK ) {
-          qnames[c] = "voyager.documentBase";
-          qvalues[c++] = tmpvalue;
-        }
-        if ( taginfo->GetWidth(&tmpivalue) == NS_OK ) {
-          qnames[c] = "width";
-          qvalues[c++] = ltoa(tmpivalue, widthb, 10);
-        }
-        if ( taginfo->GetHeight(&tmpivalue) == NS_OK ) {
-          qnames[c] = "height";
-          qvalues[c++] = ltoa(tmpivalue, heightb, 10);
-        }
-
-        for( i = c; i < count + c; i++) {
-          qnames[i] = names[i-c];
-          qvalues[i] = values[i-c];
-        }
-
-        qnames[i] = nsnull;
-        qvalues[i] = nsnull;
-        names = qnames;
-        values = qvalues;
-        count = i;
-        }
-    }
-  }
-#endif
 
   NS_ENSURE_TRUE(fCallbacks->newp, NS_ERROR_FAILURE);
   
@@ -1204,12 +1045,6 @@ nsresult ns4xPluginInstance::InitializePlugin(nsIPluginInstancePeer* peer)
   ("NPP New called: this=%p, npp=%p, mime=%s, mode=%d, argc=%d, return=%d\n",
   this, &fNPP, mimetype, mode, count, error));
 
-#if defined(MOZ_WIDGET_PHOTON) && defined (OJI)
-  /* free the names[], values[] arrays, since we overriden them */
-  if( qnames ) PR_Free( (void*)qnames );
-  if( qvalues ) PR_Free( (void*)qvalues );
-#endif
-
   if(error != NPERR_NO_ERROR) {
     // since the plugin returned failure, these should not be set
     mPeer = nsnull;
@@ -1260,7 +1095,7 @@ NS_IMETHODIMP ns4xPluginInstance::SetWindow(nsPluginWindow* window)
 
   gpointer user_data = nsnull;
   gdk_window_get_user_data(win, &user_data);
-  if (user_data && GTK_IS_WIDGET(user_data)) {
+  if (user_data) {
     GtkWidget* widget = GTK_WIDGET(user_data);
 
     if (GTK_IS_SOCKET(widget))
@@ -1418,8 +1253,6 @@ NS_IMETHODIMP ns4xPluginInstance::SetWindow(nsPluginWindow* window)
 #endif // MOZ_WIDGET
 
   if (fCallbacks->setwindow) {
-    PluginDestructionGuard guard(this);
-
     // XXX Turns out that NPPluginWindow and NPWindow are structurally
     // identical (on purpose!), so there's no need to make a copy.
 
@@ -1486,8 +1319,6 @@ NS_IMETHODIMP ns4xPluginInstance::Print(nsPluginPrint* platformPrint)
 {
   NS_ENSURE_TRUE(platformPrint, NS_ERROR_NULL_POINTER);
 
-  PluginDestructionGuard guard(this);
-
   NPPrint* thePrint = (NPPrint *)platformPrint;
 
   // to be compatible with the older SDK versions and to match what
@@ -1538,8 +1369,6 @@ NS_IMETHODIMP ns4xPluginInstance::HandleEvent(nsPluginEvent* event, PRBool* hand
   if (event == nsnull)
     return NS_ERROR_FAILURE;
 
-  PluginDestructionGuard guard(this);
-
   PRInt16 result = 0;
   
   if (fCallbacks->event) {
@@ -1574,7 +1403,6 @@ nsresult ns4xPluginInstance::GetValueInternal(NPPVariable variable, void* value)
 {
   nsresult  res = NS_OK;
   if(fCallbacks->getvalue && mStarted) {
-    PluginDestructionGuard guard(this);
 
     NS_TRY_SAFE_CALL_RETURN(res, 
                             CallNPP_GetValueProc(fCallbacks->getvalue, 
@@ -1716,74 +1544,4 @@ ns4xPluginInstance::GetJSObject(JSContext *cx)
   }
 
   return obj;
-}
-
-nsresult
-ns4xPluginInstance::GetFormValue(nsAString& aValue)
-{
-  aValue.Truncate();
-
-  char *value = nsnull;
-  nsresult rv = GetValueInternal(NPPVformValue, &value);
-
-  if (NS_SUCCEEDED(rv) && value) {
-    CopyUTF8toUTF16(value, aValue);
-
-    // NPPVformValue allocates with NPN_MemAlloc(), which uses
-    // nsMemory.
-    nsMemory::Free(value);
-  }
-
-  return NS_OK;
-}
-
-void
-ns4xPluginInstance::PushPopupsEnabledState(PRBool aEnabled)
-{
-  nsCOMPtr<nsIDOMWindow> window = GetDOMWindow();
-  nsCOMPtr<nsPIDOMWindow> piwindow = do_QueryInterface(window);
-
-  if (!piwindow)
-    return;
-
-  PopupControlState oldState =
-    piwindow->PushPopupControlState(aEnabled ? openAllowed : openAbused,
-                                    PR_TRUE);
-
-  if (!mPopupStates.AppendElement(NS_INT32_TO_PTR(oldState))) {
-    // Appending to our state stack failed, push what we just popped.
-
-    piwindow->PopPopupControlState(oldState);
-  }
-}
-
-void
-ns4xPluginInstance::PopPopupsEnabledState()
-{
-  PRInt32 last = mPopupStates.Count() - 1;
-
-  if (last < 0) {
-    // Nothing to pop.
-
-    return;
-  }
-
-  nsCOMPtr<nsIDOMWindow> window = GetDOMWindow();
-  nsCOMPtr<nsPIDOMWindow> piwindow = do_QueryInterface(window);
-
-  if (!piwindow)
-    return;
-
-  PopupControlState oldState =
-    (PopupControlState)NS_PTR_TO_INT32(mPopupStates[last]);
-
-  piwindow->PopPopupControlState(oldState);
-
-  mPopupStates.RemoveElementAt(last);
-}
-
-PRUint16
-ns4xPluginInstance::GetPluginAPIVersion()
-{
-  return fCallbacks->version;
 }

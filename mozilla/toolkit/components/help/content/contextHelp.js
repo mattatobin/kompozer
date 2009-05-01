@@ -1,4 +1,3 @@
-# ***** BEGIN LICENSE BLOCK *****
 # Version: MPL 1.1/GPL 2.0/LGPL 2.1
 #
 # The contents of this file are subject to the Mozilla Public License Version
@@ -19,8 +18,8 @@
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
-#   Brant Gurganus <brantgurganus2001@cherokeescouting.org>
-#   Jeff Walden <jwalden+code@mit.edu>
+#      brantgurganus2001@cherokeescouting.org
+#      Jswalden86@netzero.net
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -34,11 +33,16 @@
 # the provisions above, a recipient may use your version of this file under
 # the terms of any one of the MPL, the GPL or the LGPL.
 #
-# ***** END LICENSE BLOCK *****
+
+#ifndef MOZ_THUNDERBIRD
+const MOZILLA_CONTENT_PACK = "chrome://help/locale/firebirdhelp.rdf";
+#else
+const MOZILLA_CONTENT_PACK = "chrome://help/locale/thunderbirdhelp.rdf";
+#endif
 
 # Set the default content pack to the Mozilla content pack. Use the
 # setHelpFileURI function to set this value.
-var helpFileURI;
+var helpFileURI = MOZILLA_CONTENT_PACK;
 
 # openHelp - Opens up the Mozilla Help Viewer with the specified
 #    topic and content pack.

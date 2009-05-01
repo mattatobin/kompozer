@@ -1,41 +1,37 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/ 
+ * 
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
  * for the specific language governing rights and limitations under the
- * License.
+ * License. 
  *
- * The Original Code is The JavaScript Debugger.
- *
+ * The Original Code is The JavaScript Debugger
+ * 
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * Netscape Communications Corporation
+ * Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation.
+ *
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU Public License (the "GPL"), in which case the
+ * provisions of the GPL are applicable instead of those above.
+ * If you wish to allow use of your version of this file only
+ * under the terms of the GPL and not to allow others to use your
+ * version of this file under the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice
+ * and other provisions required by the GPL.  If you do not delete
+ * the provisions above, a recipient may use your version of this
+ * file under either the MPL or the GPL.
  *
  * Contributor(s):
- *   Robert Ginda, <rginda@netscape.com>, original author
+ *  Robert Ginda, <rginda@netscape.com>, original author
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 function initRecords()
 {
@@ -214,10 +210,13 @@ function WindowRecord (win, baseURL)
     
     this.reserveChildren(true);
     this.shortName = getFileFromPath (this.url);
-    if (console.prefs["enableChromeFilter"] && 
-        (this.shortName == "navigator.xul" || this.shortName == "browser.xul"))
+    if (console.prefs["enableChromeFilter"] && this.shortName == "navigator.xul")
     {
         this.displayName = MSG_NAVIGATOR_XUL;
+    }
+    else if (console.prefs["enableChromeFilter"] && this.shortName == "browser.xul")
+    {
+        this.displayName = MSG_BROWSER_XUL;
     }
     else
     {
@@ -565,7 +564,7 @@ function cmdShowConstants (e)
         dispatch("pref valueRecord.showConstants", { isInteractive: true });
 }
 
-function ValueRecord (value, name, flags, jsdFrame)
+function ValueRecord (value, name, flags)
 {
     if (!(value instanceof jsdIValue))
         throw new BadMojo (ERR_INVALID_PARAM, "value", String(value));
@@ -579,7 +578,6 @@ function ValueRecord (value, name, flags, jsdFrame)
     this.name = name;
     this.flags = flags;
     this.value = value;
-    this.jsdFrame = jsdFrame;
     this.jsType = null;
     this.onPreRefresh = false;
     this.refresh();
@@ -599,49 +597,6 @@ function vr_getshare()
  
     ASSERT (0, "ValueRecord cannot be the root of a visible tree.");
     return null;
-}
-
-ValueRecord.prototype.__defineGetter__("expression", vr_getexpressionl);
-function vr_getexpressionl()
-{
-    return this.getExpression();
-}
-
-ValueRecord.prototype.getExpression =
-function vr_getexpression(extra)
-{
-    var items = [this.displayName];
-
-    if ("value" in this.parentRecord)
-    {
-        var cur = this.parentRecord;
-        while (cur != console.views["locals"].childData &&
-               cur != console.views["locals"].scopeRecord)
-        {
-            if ("isECMAProto" in cur)
-                items.unshift("__proto__");
-            else if ("isECMAParent" in cur)
-                items.unshift("__parent__");
-            else
-                items.unshift(cur.displayName);
-            cur = cur.parentRecord;
-        }
-    }
-
-    if (typeof extra == "string")
-        items.push(extra);
-
-    return makeExpression(items);
-}
-
-ValueRecord.prototype.evalString =
-function vr_evalstring(string)
-{
-    //dd("ValueRecord(" + this.displayName + ").evalString(" + string + ")");
-    var rval = new Object();
-    if (this.jsdFrame.eval(string, JSD_URL_SCHEME + "value-record", 1, rval))
-        return rval.value;
-    return undefined;
 }
 
 ValueRecord.prototype.showFunctions = false;
@@ -694,10 +649,8 @@ function vr_prerefresh ()
         }
         else
         {
-            ASSERT(this.jsdFrame, "ValueRecord(" + this.displayName +
-                   ").onPreRefresh: no jsdIStackFrame to safely eval on!");
-
-            this.value = this.evalString(this.expression);
+            var jsval = value.getWrappedValue();
+            this.value = console.jsds.wrapValue(jsval[this.name]);
             this.flags = PROP_ENUMERATE | PROP_HINTED;
         }
     }
@@ -868,97 +821,41 @@ function vr_refresh ()
 ValueRecord.prototype.countProperties =
 function vr_countprops ()
 {
-    ASSERT(this.jsdFrame, "ValueRecord(" + this.displayName +
-           ").countProperties: no jsdIStackFrame to safely eval on!");
-
-    // Note: uses an inline function to avoid polluting the frame's scope.
-    var code = "(function(obj){" +
-               "    var count = 0;" +
-               "    for (var prop in obj)" +
-               "        ++count;" +
-               "    return count;" +
-               "})(" + this.expression + ")";
-
-    // rv is undefined if an exception occured.
-    var rv = this.evalString(code);
-    if (typeof rv == "undefined")
-        return 0;
-
-    return rv.intValue;
+    var c = 0;
+    var jsval = this.value.getWrappedValue();
+    try
+    {
+        for (var p in jsval)
+            ++c;
+    }
+    catch (ex)
+    {
+        dd ("caught exception counting properties\n" + ex);
+    }
+    
+    return c;
 }
 
 ValueRecord.prototype.listProperties =
 function vr_listprops ()
 {
-    function charEscapeReplace(s, c)
-    {
-        return String.fromCharCode(parseInt(c, 16));
-    };
-
     // the ":" prefix for keys in the propMap avoid collisions with "real"
     // pseudo-properties, such as __proto__.  If we were to actually assign
     // to those we would introduce bad side affects.
 
     //dd ("listProperties {");
-    var i, jsval;
+    var i;
+    var jsval = this.value.getWrappedValue();
     var propMap = new Object();
 
     /* get the enumerable properties */
-
-    ASSERT(this.jsdFrame, "ValueRecord(" + this.displayName +
-           ").listProperties: no jsdIStackFrame to safely eval on!");
-
-    var propList = new Array();
-
-    // quote() puts double-quotes at either end of the string,
-    // backspash-escapes double-quotes in the string, and (quite
-    // importantly) uses \xXX and \uXXXX escapes for non-ASCII
-    // characters.
-
-    // Note: uses an inline function to avoid polluting the frame's scope.
-    var code = "(function(obj){" +
-               "    var string = '';" +
-               "    for (var prop in obj) {" +
-               "        if (string)" +
-               "            string += ',';" +
-               "        string += prop.quote();" +
-               "    }" +
-               "    return string;" +
-               "})(" + this.expression + ")";
-
-    // list is undefined if an exception occured.
-    var list = this.evalString(code);
-    if (typeof list != "undefined") {
-        list = list.stringValue;
-        //dd("ValueRecord(" + this.displayName +
-        //   ").listProperties: list: " + list);
-        if (list) {
-            list = ('",' + list + ',"').split('","');
-
-            for (i = 0; i < list.length; i++)
-            {
-                if (!list[i])
-                    continue;
-
-                var prop = list[i];
-                prop = prop.replace(/\\x([0-9a-f]{2})/i, charEscapeReplace);
-                prop = prop.replace(/\\u([0-9a-f]{4})/i, charEscapeReplace);
-                prop = prop.replace(/\\(.)/, "$1");
-                propList.push(prop);
-                //dd("ValueRecord(" + this.displayName +
-                //   ").listProperties: prop: " + prop);
-            }
-        }
-    }
-
-    for (i = 0; i < propList.length; i++)
+    
+    for (var p in jsval)
     {
-        var p = propList[i];
         var value;
         try
         {
-            value = this.evalString(this.getExpression(p));
-
+            value = console.jsds.wrapValue(jsval[p]);
             if (this.showFunctions || value.jsType != TYPE_FUNCTION)
             {
                 propMap[":" + p] = { name: p, value: value,
@@ -1094,7 +991,7 @@ function vr_preopen()
             if (this.value.jsPrototype)
             {
                 rec = new ValueRecord(this.value.jsPrototype,
-                                      MSG_VAL_PROTO, "", this.jsdFrame);
+                                      MSG_VAL_PROTO);
                 rec.isECMAProto = true;
                 this.appendChild (rec);
             }
@@ -1102,7 +999,7 @@ function vr_preopen()
             if (this.value.jsParent)
             {
                 rec = new ValueRecord(this.value.jsParent,
-                                      MSG_VAL_PARENT, "", this.jsdFrame);
+                                      MSG_VAL_PARENT);
                 rec.isECMAParent = true;
                 this.appendChild (rec);
             }
@@ -1121,8 +1018,7 @@ function vr_preopen()
             var prop = this.propertyList[i];
             this.appendChild(new ValueRecord(prop.value,
                                              prop.name,
-                                             prop.flags,
-                                             this.jsdFrame));
+                                             prop.flags));
         }
     }
     catch (ex)

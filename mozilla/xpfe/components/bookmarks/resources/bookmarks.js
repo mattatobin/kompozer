@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Pierre Chanial <chanial@noos.fr>.
+ * The Initial Developer of the Original Code is 
+ *   Pierre Chanial <chanial@noos.fr>
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -71,8 +71,6 @@ var WINDOWSVC;
 var kDSContractID;
 var kDSIID;
 var DS;
-
-var gLoadInBackground = false;
 
 // should be moved in a separate file
 function initServices()
@@ -188,7 +186,7 @@ var BookmarksCommand = {
     while (popup.hasChildNodes()) 
       popup.removeChild(popup.firstChild);
         
-    var commonCommands = this.flattenEnumerator(this.getValidCommands(popup.id));
+    var commonCommands = [];
     for (var i = 0; i < aSelection.length; ++i) {
       var commands = this.getCommands(aSelection.item[i]);
       if (!commands) {
@@ -196,6 +194,7 @@ var BookmarksCommand = {
         return;
       }
       commands = this.flattenEnumerator(commands);
+      if (!commonCommands.length) commonCommands = commands;
       commonCommands = this.findCommonNodes(commands, commonCommands);
     }
 
@@ -331,21 +330,6 @@ var BookmarksCommand = {
     }
 
     return new CommandArrayEnumerator(commands);
-  },
-
-  /////////////////////////////////////////////////////////////////////////////
-  // For a given target ID, return an enumeration that contains the possible
-  // commands.
-  getValidCommands: function (aTargetID)
-  {
-    var valid = ["bm_open", "bm_openinnewwindow", "bm_openinnewtab", "bm_managefolder",
-                 "bm_separator", "bm_newfolder", "bm_sortfolder", "bm_sortfolderbyname",
-                 "bm_cut", "bm_copy", "bm_paste", "bm_movebookmark", "bm_rename",
-                 "bm_delete", "bm_properties"];
-    if (aTargetID != "bookmarks-context-menu")
-      valid.push("bm_expandfolder");
-
-    return new CommandArrayEnumerator(valid);
   },
   
   /////////////////////////////////////////////////////////////////////////////
@@ -575,12 +559,12 @@ var BookmarksCommand = {
     switch (aTargetBrowser) {
     case "current":
       browser.loadURI(url);
-      w.content.focus();
+      w._content.focus();
       break;
     case "tab":
       var tab = browser.addTab(url);
-      if (!gLoadInBackground)
-        browser.selectedTab = tab;
+      browser.selectedTab = tab;
+      browser.focus();
       break;
     }
   },
@@ -612,7 +596,7 @@ var BookmarksCommand = {
     } else {
       var browser = w.getBrowser();
       var tab = browser.loadGroup(URIs);
-      if (!gLoadInBackground)
+      if (!PREF.getBoolPref("browser.tabs.loadInBackground"))
         browser.selectedTab = tab;
     }
   },
@@ -717,15 +701,6 @@ var BookmarksCommand = {
         if (!fileName) return;
       }
       else return;
-
-      var file = Components.classes["@mozilla.org/file/local;1"]
-                           .createInstance(Components.interfaces.nsILocalFile);
-      if (!file)
-        return;
-      file.initWithPath(fileName);
-      if (!file.exists()) {
-        file.create(Components.interfaces.nsIFile.NORMAL_FILE_TYPE, 0644);
-      }
     }
     catch (e) {
       return;
@@ -1033,9 +1008,9 @@ CommandArrayEnumerator.prototype = {
 
 var BookmarksUtils = {
 
-  DROP_BEFORE: Components.interfaces.nsITreeView.DROP_BEFORE,
-  DROP_ON    : Components.interfaces.nsITreeView.DROP_ON,
-  DROP_AFTER : Components.interfaces.nsITreeView.DROP_AFTER,
+  DROP_BEFORE: Components.interfaces.nsITreeView.inDropBefore,
+  DROP_ON    : Components.interfaces.nsITreeView.inDropOn,
+  DROP_AFTER : Components.interfaces.nsITreeView.inDropAfter,
 
   any: function (aArray)
   {
@@ -1067,7 +1042,7 @@ var BookmarksUtils = {
                                 .getService(Components.interfaces.nsIStringBundleService);
       var bookmarksBundle  = "chrome://communicator/locale/bookmarks/bookmarks.properties";
       this._bundle         = BUNDLESVC.createBundle(bookmarksBundle, LOCALESVC.getApplicationLocale());
-      var brandBundle      = "chrome://branding/locale/brand.properties";
+      var brandBundle      = "chrome://global/locale/brand.properties";
       this._brandShortName = BUNDLESVC.createBundle(brandBundle,     LOCALESVC.getApplicationLocale())
                                       .GetStringFromName("brandShortName");
     }
@@ -1535,8 +1510,9 @@ var BookmarksUtils = {
       var name = "";
       var charset;
       try {
-        name = webNav.document.title || url;
-        charset = webNav.document.characterSet;
+        var doc = new XPCNativeWrapper(webNav.document, "title", "characterSet");
+        name = doc.title || url;
+        charset = doc.characterSet;
       } catch (e) {
         name = url;
       }
@@ -1560,14 +1536,12 @@ var BookmarksUtils = {
     //            This is because when a full page plugin is loaded, there is
     //            no DOMWindow (?) but information about the loaded document
     //            may still be obtained from the webNavigation. 
-    var uri = aDocShell.currentURI;
-    if (uri.schemeIs("javascript") || uri.schemeIs("data"))
-      aShowDialog = true;
-    var url = uri.spec;
+    var url = aDocShell.currentURI.spec;
     var title, docCharset = null;
     try {
-      title = aDocShell.document.title || url;
-      docCharset = aDocShell.document.characterSet;
+      var doc = new XPCNativeWrapper(aDocShell.document, "title", "characterSet");
+      title = doc.title || url;
+      docCharset = doc.characterSet;
     }
     catch (e) {
       title = url;
@@ -1595,62 +1569,11 @@ var BookmarksUtils = {
     }
   },
 
-  shouldLoadTabInBackground: function(aEvent)
+  loadBookmarkBrowser: function (aEvent, aTarget, aDS)
   {
-    var loadInBackground = PREF.getBoolPref("browser.tabs.loadInBackground");
-    if (aEvent.shiftKey)
-      loadInBackground = !loadInBackground;
-    return loadInBackground;
-  },
-
-  getBrowserTargetFromEvent: function (aEvent)
-  {
-    if (!aEvent)
-      return null;
-
-    gLoadInBackground = this.shouldLoadTabInBackground(aEvent);
-
-    switch (aEvent.type) {
-    case "click":
-    case "dblclick":
-      if (aEvent.button > 1)
-        return null;
-
-      // Prevent default click handling (e.g. middlemouse.contentLoadURL==true)
-      aEvent.preventDefault();
-
-      if (aEvent.button != 1 && !aEvent.metaKey && !aEvent.ctrlKey)
-        return "current";
-
-      break;
-    case "keypress":
-    case "command":
-      if (!aEvent.metaKey && !aEvent.ctrlKey)
-        return "current";
-
-      break;
-    default:
-      return null;
-    }
-
-    if (PREF && PREF.getBoolPref("browser.tabs.opentabfor.middleclick"))
-      return "tab";
-
-    if (PREF && PREF.getBoolPref("middlemouse.openNewWindow"))
-      return "window";
-
-    return null;
-  },
-
-  loadBookmarkBrowser: function (aEvent, aDS)
-  {
-    var target = BookmarksUtils.getBrowserTargetFromEvent(aEvent);
-    if (!target)
-      return;
-
-    var rSource   = RDF.GetResource(aEvent.target.id);
+    var rSource   = RDF.GetResource(aTarget.id);
     var selection = BookmarksUtils.getSelectionFromResource(rSource);
-    BookmarksCommand.openBookmark(selection, target, aDS)
+    BookmarksCommand.openBookmark(selection, "current", aDS)
   }
 }
 

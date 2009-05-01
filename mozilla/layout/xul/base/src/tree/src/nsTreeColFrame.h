@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,80 +14,76 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Dave Hyatt <hyatt@mozilla.org> (Original Author)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsBoxFrame.h"
+#include "nsITreeBoxObject.h"
 
-class nsITreeBoxObject;
+class nsSupportsHashtable;
 
 nsresult NS_NewTreeColFrame(nsIPresShell* aPresShell, 
-                            nsIFrame** aNewFrame, 
-                            PRBool aIsRoot = PR_FALSE,
-                            nsIBoxLayout* aLayoutManager = nsnull);
+                                nsIFrame** aNewFrame, 
+                                PRBool aIsRoot = PR_FALSE,
+                                nsIBoxLayout* aLayoutManager = nsnull);
 
+// The actual frame that paints the cells and rows.
 class nsTreeColFrame : public nsBoxFrame
 {
 public:
   NS_DECL_ISUPPORTS
 
-  NS_IMETHOD Init(nsPresContext*  aPresContext,
-                  nsIContent*      aContent,
-                  nsIFrame*        aParent,
-                  nsStyleContext*  aContext,
-                  nsIFrame*        aPrevInFlow);
+  friend nsresult NS_NewTreeColFrame(nsIPresShell* aPresShell, 
+                                         nsIFrame** aNewFrame, 
+                                         PRBool aIsRoot,
+                                         nsIBoxLayout* aLayoutManager);
 
-  NS_IMETHOD Destroy(nsPresContext* aPresContext);
+  NS_IMETHODIMP Init(nsIPresContext*  aPresContext,
+                     nsIContent*      aContent,
+                     nsIFrame*        aParent,
+                     nsStyleContext*  aContext,
+                     nsIFrame*        aPrevInFlow);
 
-  // Overridden to capture events.
-  NS_IMETHOD GetFrameForPoint(const nsPoint& aPoint,
+  NS_IMETHOD GetFrameForPoint(nsIPresContext* aPresContext,
+                              const nsPoint& aPoint, // Overridden to capture events
                               nsFramePaintLayer aWhichLayer,
                               nsIFrame**     aFrame);
 
-  NS_IMETHOD AttributeChanged(nsIContent* aChild,
+  NS_IMETHOD AttributeChanged(nsIPresContext* aPresContext,
+                              nsIContent* aChild,
                               PRInt32 aNameSpaceID,
                               nsIAtom* aAttribute,
                               PRInt32 aModType);
 
-  NS_IMETHOD SetBounds(nsBoxLayoutState& aBoxLayoutState, const nsRect& aRect,
-                       PRBool aRemoveOverflowArea = PR_FALSE);
-
-  friend nsresult NS_NewTreeColFrame(nsIPresShell* aPresShell, 
-                                     nsIFrame** aNewFrame, 
-                                     PRBool aIsRoot,
-                                     nsIBoxLayout* aLayoutManager);
 
 protected:
   nsTreeColFrame(nsIPresShell* aPresShell, PRBool aIsRoot = nsnull, nsIBoxLayout* aLayoutManager = nsnull);
   virtual ~nsTreeColFrame();
 
-  /**
-   * @return the tree box object of the tree this column belongs to, or nsnull.
-   */
-  nsITreeBoxObject* GetTreeBoxObject();
-
-  /**
-   * Helper method that gets the nsITreeColumns object this column belongs to
-   * and calls InvalidateColumns() on it.
-   */
-  void InvalidateColumns(PRBool aCanWalkFrameTree = PR_TRUE);
-};
+protected:
+  // Members.
+  
+  void EnsureTree();
+  void InvalidateColumnCache(nsIPresContext* aPresContext);
+  
+  nsCOMPtr<nsITreeBoxObject> mTree;
+}; // class nsTreeColFrame

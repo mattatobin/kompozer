@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -14,27 +14,27 @@
  *
  * The Original Code is the Mozilla SVG project.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Crocodile Clips Ltd..
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
+ *    Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
 
 #include "nsSVGGraphicElement.h"
 #include "nsSVGAtoms.h"
@@ -43,7 +43,8 @@
 #include "nsIDOMSVGCircleElement.h"
 #include "nsCOMPtr.h"
 #include "nsISVGSVGElement.h"
-#include "nsSVGCoordCtxProvider.h"
+#include "nsISVGViewportAxis.h"
+#include "nsISVGViewportRect.h"
 
 typedef nsSVGGraphicElement nsSVGCircleElementBase;
 
@@ -53,10 +54,10 @@ class nsSVGCircleElement : public nsSVGCircleElementBase,
 protected:
   friend nsresult NS_NewSVGCircleElement(nsIContent **aResult,
                                          nsINodeInfo *aNodeInfo);
-  nsSVGCircleElement(nsINodeInfo *aNodeInfo);
+  nsSVGCircleElement();
   virtual ~nsSVGCircleElement();
-  nsresult Init();
-
+  nsresult Init(nsINodeInfo* aNodeInfo);
+  
 public:
   NS_DECL_ISUPPORTS_INHERITED
   NS_DECL_NSIDOMSVGCIRCLEELEMENT
@@ -78,7 +79,25 @@ protected:
 };
 
 
-NS_IMPL_NS_NEW_SVG_ELEMENT(Circle)
+nsresult NS_NewSVGCircleElement(nsIContent **aResult, nsINodeInfo *aNodeInfo)
+{
+  *aResult = nsnull;
+  nsSVGCircleElement* it = new nsSVGCircleElement();
+
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
+
+  nsresult rv = it->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+  
+  *aResult = it;
+
+  return NS_OK;
+}
 
 
 //----------------------------------------------------------------------
@@ -98,8 +117,7 @@ NS_INTERFACE_MAP_END_INHERITING(nsSVGCircleElementBase)
 //----------------------------------------------------------------------
 // Implementation
 
-nsSVGCircleElement::nsSVGCircleElement(nsINodeInfo *aNodeInfo)
-  : nsSVGCircleElementBase(aNodeInfo)
+nsSVGCircleElement::nsSVGCircleElement()
 {
 
 }
@@ -110,9 +128,9 @@ nsSVGCircleElement::~nsSVGCircleElement()
 
   
 nsresult
-nsSVGCircleElement::Init()
+nsSVGCircleElement::Init(nsINodeInfo* aNodeInfo)
 {
-  nsresult rv = nsSVGCircleElementBase::Init();
+  nsresult rv = nsSVGCircleElementBase::Init(aNodeInfo);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Create mapped properties:
@@ -151,14 +169,40 @@ nsSVGCircleElement::Init()
     NS_ENSURE_SUCCESS(rv,rv);
   }
 
-  return rv;
+    
+  return NS_OK;
 }
 
 //----------------------------------------------------------------------
 // nsIDOMNode methods
 
+NS_IMETHODIMP
+nsSVGCircleElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  *aReturn = nsnull;
+  nsSVGCircleElement* it = new nsSVGCircleElement();
 
-NS_IMPL_DOM_CLONENODE_WITH_INIT(nsSVGCircleElement)
+  if (!it) return NS_ERROR_OUT_OF_MEMORY;
+  NS_ADDREF(it);
+
+  nsresult rv = it->Init(mNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+
+  rv = CopyNode(it, aDeep);
+
+  if (NS_FAILED(rv)) {
+    it->Release();
+    return rv;
+  }
+  
+  *aReturn = it;
+
+  return NS_OK; 
+}
 
 
 //----------------------------------------------------------------------
@@ -199,37 +243,55 @@ void nsSVGCircleElement::ParentChainChanged()
   GetOwnerSVGElement(getter_AddRefs(dom_elem));
   if (!dom_elem) return;
 
-  nsCOMPtr<nsSVGCoordCtxProvider> ctx = do_QueryInterface(dom_elem);
-  NS_ASSERTION(ctx, "<svg> element missing interface");
+  nsCOMPtr<nsISVGSVGElement> svg_elem = do_QueryInterface(dom_elem);
+  NS_ASSERTION(svg_elem, "<svg> element missing interface");
 
   // cx:
   {
     nsCOMPtr<nsIDOMSVGLength> dom_length;
-    mCx->GetAnimVal(getter_AddRefs(dom_length));
+    mCx->GetBaseVal(getter_AddRefs(dom_length));
     nsCOMPtr<nsISVGLength> length = do_QueryInterface(dom_length);
     NS_ASSERTION(length, "svg length missing interface");
 
-    length->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextX()));
+    nsCOMPtr<nsIDOMSVGRect> vp_dom;
+    svg_elem->GetViewport(getter_AddRefs(vp_dom));
+    nsCOMPtr<nsISVGViewportRect> vp = do_QueryInterface(vp_dom);
+    nsCOMPtr<nsISVGViewportAxis> ctx;
+    vp->GetXAxis(getter_AddRefs(ctx));
+    
+    length->SetContext(ctx);
   }
 
   // cy:
   {
     nsCOMPtr<nsIDOMSVGLength> dom_length;
-    mCy->GetAnimVal(getter_AddRefs(dom_length));
+    mCy->GetBaseVal(getter_AddRefs(dom_length));
     nsCOMPtr<nsISVGLength> length = do_QueryInterface(dom_length);
     NS_ASSERTION(length, "svg length missing interface");
 
-    length->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextY()));
+    nsCOMPtr<nsIDOMSVGRect> vp_dom;
+    svg_elem->GetViewport(getter_AddRefs(vp_dom));
+    nsCOMPtr<nsISVGViewportRect> vp = do_QueryInterface(vp_dom);
+    nsCOMPtr<nsISVGViewportAxis> ctx;
+    vp->GetYAxis(getter_AddRefs(ctx));
+    
+    length->SetContext(ctx);
   }
 
   // r:
   {
     nsCOMPtr<nsIDOMSVGLength> dom_length;
-    mR->GetAnimVal(getter_AddRefs(dom_length));
+    mR->GetBaseVal(getter_AddRefs(dom_length));
     nsCOMPtr<nsISVGLength> length = do_QueryInterface(dom_length);
     NS_ASSERTION(length, "svg length missing interface");
 
-    length->SetContext(nsRefPtr<nsSVGCoordCtx>(ctx->GetContextUnspecified()));
+    nsCOMPtr<nsIDOMSVGRect> vp_dom;
+    svg_elem->GetViewport(getter_AddRefs(vp_dom));
+    nsCOMPtr<nsISVGViewportRect> vp = do_QueryInterface(vp_dom);
+    nsCOMPtr<nsISVGViewportAxis> ctx;
+    vp->GetUnspecifiedAxis(getter_AddRefs(ctx));
+    
+    length->SetContext(ctx);
   }
 
   // XXX call baseclass version to recurse into children?

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,30 +14,30 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Bill Law       <law@netscape.com>
- *   Syd Logan      <syd@netscape.com> added turbo mode stuff
- *   Joe Elwell     <jelwell@netscape.com>
- *   Håkan Waara    <hwaara@chello.se>
- *   Aaron Kaluszka <ask@swva.net>
- *   Jeremy Morton  <jez9999@runbox.com>
+ *  Bill Law       <law@netscape.com>
+ *  Syd Logan      <syd@netscape.com> added turbo mode stuff
+ *  Joe Elwell     <jelwell@netscape.com>
+ *  Håkan Waara    <hwaara@chello.se>
+ *  Aaron Kaluszka <ask@swva.net>
+ *  Jeremy Morton  <jez9999@runbox.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -51,6 +51,7 @@
 #include "nsIPromptService.h"
 #include "nsIStringBundle.h"
 #include "nsIAllocator.h"
+#include "nsICmdLineService.h"
 #include "nsXPIDLString.h"
 #include "nsString.h"
 #include "nsMemory.h"
@@ -72,15 +73,6 @@
 #include "imgIRequest.h"
 #include "imgIContainer.h"
 #include "gfxIImageFrame.h"
-#include "nsDirectoryServiceUtils.h"
-#include "nsAppDirectoryServiceDefs.h"
-
-#ifndef MOZ_XUL_APP
-#include "nsICmdLineService.h"
-#endif
-
-#include "nsXPFEComponentsCID.h"
-#include "nsEmbedCID.h"
 
 #define RUNKEY "Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 
@@ -179,7 +171,7 @@ DEFINE_GETTER_AND_SETTER( HaveBeenSet,      mHaveBeenSet  )
 
 // Implementation of the nsIWindowsHooks interface.
 // Use standard implementation of nsISupports stuff.
-NS_IMPL_ISUPPORTS1( nsWindowsHooks, nsIWindowsHooks )
+NS_IMPL_ISUPPORTS2( nsWindowsHooks, nsIWindowsHooks, nsIWindowsRegistry )
 
 nsWindowsHooks::nsWindowsHooks() {
 }
@@ -376,27 +368,26 @@ nsWindowsHooks::CheckSettings( nsIDOMWindowInternal *aParent,
             settings->mHandleCHROME = PR_TRUE;
             settings->mHandleGOPHER = PR_TRUE;
             settings->mHandleHTML   = PR_TRUE;
-            settings->mHandleJPEG   = PR_FALSE;
-            settings->mHandleGIF    = PR_FALSE;
-            settings->mHandlePNG    = PR_FALSE;
-            settings->mHandleMNG    = PR_FALSE;
-            settings->mHandleXBM    = PR_FALSE;
+            settings->mHandleJPEG   = PR_TRUE;
+            settings->mHandleGIF    = PR_TRUE;
+            settings->mHandlePNG    = PR_TRUE;
+            settings->mHandleMNG    = PR_TRUE;
+            settings->mHandleXBM    = PR_TRUE;
             settings->mHandleBMP    = PR_FALSE;
             settings->mHandleICO    = PR_FALSE;
             settings->mHandleXML    = PR_TRUE;
             settings->mHandleXHTML  = PR_TRUE;
             settings->mHandleXUL    = PR_TRUE;
 
-            settings->mShowDialog   = PR_TRUE;
+            settings->mShowDialog       = PR_TRUE;
         }
 
         // If launched with "-installer" then override mShowDialog.
         PRBool installing = PR_FALSE;
-#ifndef MOZ_XUL_APP
         if ( !settings->mShowDialog ) {
             // Get command line service.
-            nsCOMPtr<nsICmdLineService> cmdLineArgs
-              (do_GetService(NS_COMMANDLINESERVICE_CONTRACTID, &rv));
+            nsCID cmdLineCID = NS_COMMANDLINE_SERVICE_CID;
+            nsCOMPtr<nsICmdLineService> cmdLineArgs( do_GetService( cmdLineCID, &rv ) );
             if ( NS_SUCCEEDED( rv ) && cmdLineArgs ) {
                 // See if "-installer" was specified.
                 nsXPIDLCString installer;
@@ -406,7 +397,6 @@ nsWindowsHooks::CheckSettings( nsIDOMWindowInternal *aParent,
                 }
             }
         }
-#endif
 
         // First, make sure the user cares.
         if ( settings->mShowDialog || installing ) {
@@ -419,8 +409,9 @@ nsWindowsHooks::CheckSettings( nsIDOMWindowInternal *aParent,
                 //   o We need the common dialog service to show the dialog.
                 //   o We need the string bundle service to fetch the appropriate
                 //     dialog text.
-                nsCOMPtr<nsIPromptService> promptService( do_GetService(NS_PROMPTSERVICE_CONTRACTID));
-                nsCOMPtr<nsIStringBundleService> bundleService( do_GetService( NS_STRINGBUNDLE_CONTRACTID, &rv ) );
+                nsCID bundleCID = NS_STRINGBUNDLESERVICE_CID;
+                nsCOMPtr<nsIPromptService> promptService( do_GetService("@mozilla.org/embedcomp/prompt-service;1"));
+                nsCOMPtr<nsIStringBundleService> bundleService( do_GetService( bundleCID, &rv ) );
 
                 if ( promptService && bundleService ) {
                     // Next, get bundle that provides text for dialog.
@@ -428,7 +419,7 @@ nsWindowsHooks::CheckSettings( nsIDOMWindowInternal *aParent,
                     nsCOMPtr<nsIStringBundle> brandBundle;
                     rv = bundleService->CreateBundle( "chrome://global-platform/locale/nsWindowsHooks.properties",
                                                       getter_AddRefs( bundle ) );
-                    rv = bundleService->CreateBundle( "chrome://branding/locale/brand.properties",
+                    rv = bundleService->CreateBundle( "chrome://global/locale/brand.properties",
                                                       getter_AddRefs( brandBundle ) );
                     if ( NS_SUCCEEDED( rv ) && bundle && brandBundle ) {
                         nsXPIDLString text, label, shortName;
@@ -684,6 +675,40 @@ nsWindowsHooks::SetRegistry() {
     return NS_OK;
 }
 
+NS_IMETHODIMP nsWindowsHooks::GetRegistryEntry( PRInt32 aHKEYConstant, const char *aSubKeyName, const char *aValueName, char **aResult ) {
+    NS_ENSURE_ARG( aResult );
+    *aResult = 0;
+    // Calculate HKEY_* starting point based on input nsIWindowsHooks constant.
+    HKEY hKey;
+    switch ( aHKEYConstant ) {
+        case HKCR:
+            hKey = HKEY_CLASSES_ROOT;
+            break;
+        case HKCC:
+            hKey = HKEY_CURRENT_CONFIG;
+            break;
+        case HKCU:
+            hKey = HKEY_CURRENT_USER;
+            break;
+        case HKLM:
+            hKey = HKEY_LOCAL_MACHINE;
+            break;
+        case HKU:
+            hKey = HKEY_USERS;
+            break;
+        default:
+            return NS_ERROR_INVALID_ARG;
+    }
+
+    // Get requested registry entry.
+    nsCAutoString entry( RegistryEntry( hKey, aSubKeyName, aValueName, 0 ).currentSetting() );
+
+    // Copy to result.
+    *aResult = PL_strdup( entry.get() );
+
+    return *aResult ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
+}
+
 // nsIWindowsHooks.idl for documentation
 
 /*
@@ -839,7 +864,7 @@ NS_IMETHODIMP nsWindowsHooks::StartupRemoveOption(const char* option) {
 }
 
 nsresult
-WriteBitmap(nsIFile* aFile, gfxIImageFrame* aImage)
+WriteBitmap(nsString& aPath, gfxIImageFrame* aImage)
 {
   PRInt32 width, height;
   aImage->GetWidth(&width);
@@ -878,9 +903,14 @@ WriteBitmap(nsIFile* aFile, gfxIImageFrame* aImage)
 
   // get a file output stream
   nsresult rv;
+  nsCOMPtr<nsILocalFile> path;
+  rv = NS_NewLocalFile(aPath, PR_TRUE, getter_AddRefs(path));
+  
+  if (NS_FAILED(rv))
+    return rv;
+
   nsCOMPtr<nsIOutputStream> stream;
-  rv = NS_NewLocalFileOutputStream(getter_AddRefs(stream), aFile);
-  NS_ENSURE_SUCCESS(rv, rv);
+  NS_NewLocalFileOutputStream(getter_AddRefs(stream), path);
 
   // write the bitmap headers and rgb pixel data to the file
   rv = NS_ERROR_FAILURE;
@@ -921,8 +951,7 @@ nsWindowsHooks::SetImageAsWallpaper(nsIDOMElement* aElement, PRBool aUseBackgrou
     if (!request) return rv;
     nsCOMPtr<imgIContainer> container;
     rv = request->GetImage(getter_AddRefs(container));
-    if (!container)
-      return NS_ERROR_FAILURE;
+    if (!request) return rv;
     
     // get the current frame, which holds the image data
     container->GetCurrentFrame(getter_AddRefs(gfxFrame));
@@ -931,56 +960,38 @@ nsWindowsHooks::SetImageAsWallpaper(nsIDOMElement* aElement, PRBool aUseBackgrou
   if (!gfxFrame)
     return NS_ERROR_FAILURE;
 
-  // get the profile root directory
-  nsCOMPtr<nsIFile> file;
-  rv = NS_GetSpecialDirectory(NS_APP_APPLICATION_REGISTRY_DIR,
-                              getter_AddRefs(file));
-  NS_ENSURE_SUCCESS(rv, rv);
+  // get the windows directory ('c:\windows' usually)
+  char winDir[256];
+  ::GetWindowsDirectory(winDir, sizeof(winDir));
+  nsAutoString winPath;
+  winPath.AssignWithConversion(winDir);
   
   // get the product brand name from localized strings
-  nsXPIDLString brandName, fileLeafName;
-  nsCOMPtr<nsIStringBundleService> bundleService =
-           do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_TRUE(bundleService, rv);
-
-  // get the product brand name from localized strings
-  nsCOMPtr<nsIStringBundle> bundle;
-  rv = bundleService->CreateBundle("chrome://branding/locale/brand.properties",
-                                   getter_AddRefs(bundle));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = bundle->GetStringFromName(NS_LITERAL_STRING("brandShortName").get(),
-                                 getter_Copies(brandName));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // get the file leaf name from localized strings (e.g. "%S Wallpaper.bmp")
-  rv = bundleService->CreateBundle("chrome://global-platform/locale/nsWindowsHooks.properties",
-                                   getter_AddRefs(bundle));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  const PRUnichar* stringArray[] = { brandName.get() };
-
-  rv = bundle->FormatStringFromName(NS_LITERAL_STRING("wallpaperFile").get(),
-                                    stringArray, NS_ARRAY_LENGTH(stringArray),
-                                    getter_Copies(fileLeafName));
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsXPIDLString brandName;
+  nsCID bundleCID = NS_STRINGBUNDLESERVICE_CID;
+  nsCOMPtr<nsIStringBundleService> bundleService(do_GetService(bundleCID));
+  if (bundleService) {
+    nsCOMPtr<nsIStringBundle> brandBundle;
+    rv = bundleService->CreateBundle("chrome://global/locale/brand.properties",
+                                     getter_AddRefs(brandBundle));
+    if (NS_SUCCEEDED(rv) && brandBundle) {
+      if (NS_FAILED(rv = brandBundle->GetStringFromName(NS_LITERAL_STRING("brandShortName").get(),
+                            getter_Copies(brandName))))
+        return rv;                              
+    }
+  }
   
-  // eventually, the path is %APPDATA%\Mozilla\Mozilla Wallpaper.bmp
-  fileLeafName.AppendLiteral(".bmp");
-  rv = file->Append(fileLeafName);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // write the bitmap to the target file
-  rv = WriteBitmap(file, gfxFrame);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // set it as the system wallpaper
-  nsCAutoString nativePath;
-  rv = file->GetNativePath(nativePath);
-  NS_ENSURE_SUCCESS(rv, rv);
+  // build the file name
+  winPath.Append(NS_LITERAL_STRING("\\").get());
+  winPath.Append(brandName);
+  winPath.Append(NS_LITERAL_STRING(" Wallpaper.bmp").get());
   
-  ::SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID) nativePath.get(),
-                         SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
+  // write the bitmap to a file in the windows dir
+  rv = WriteBitmap(winPath, gfxFrame);
+
+  // if the file was written successfully, set it as the system wallpaper
+  if (NS_SUCCEEDED(rv))
+    ::SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, ToNewCString(winPath), SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
 
   return rv;
 }

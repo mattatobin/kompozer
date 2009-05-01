@@ -21,11 +21,11 @@ This will open a series of browser windows, either "one at a
 <grid>
 <columns><column/><column/></columns>
 <rows>
-<row align="center">
+<row autostretch="never" valign="middle">
 <text value="Index:"/>
 <textbox id="formIndex" size="6" value=""/>
 </row>
-<row align="center">
+<row autostretch="never" valign="middle">
 <text value="Time:"/>
 <textbox id="formTime" size="6" value=""/>
 <text value="msec"/>
@@ -43,11 +43,11 @@ This will open a series of browser windows, either "one at a
             <column/>
         </columns>
         <rows>
-            <row align="center">
+            <row autostretch="never" valign="middle">
                 <text value="Times (ignoring the first):"/>
                 <textbox id="formTimes" size="45" value=""/>
             </row>
-            <row align="center">
+            <row autostretch="never" valign="middle">
                 <text value="Txul (median):"/>
                 <hbox>
                     <textbox id="formMed" size="6" value=""/>
@@ -55,15 +55,15 @@ This will open a series of browser windows, either "one at a
                     <button id="formAgain" onclick="tryAgain();" label="Try again" disabled="true"/>
                 </hbox>
             </row>
-            <row align="center">
+            <row autostretch="never" valign="middle">
                 <text value="Avg:"/>
                 <hbox><textbox id="formAvg" size="6" value=""/></hbox>
             </row>
-            <row align="center">
+            <row autostretch="never" valign="middle">
                 <text value="Min:"/>
                 <hbox><textbox id="formMin" size="6" value=""/></hbox>
             </row>
-            <row align="center">
+            <row autostretch="never" valign="middle">
                 <text value="Max:"/>
                 <hbox><textbox id="formMax" size="6" value=""/></hbox>
             </row>

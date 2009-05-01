@@ -25,7 +25,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Contributor(s):
- *   Chak Nanga <chak@netscape.com>
+ *   Chak Nanga <chak@netscape.com> 
  *   Rod Spears <rods@netscape.com>
  *
  * ***** END LICENSE BLOCK ***** */
@@ -97,14 +97,14 @@ public:
     void UpdateBusyState(PRBool aBusy);
     PRBool mbDocumentLoading;
 
-    void SetCtxMenuLinkUrl(nsEmbedString& strLinkUrl);
-    nsEmbedString mCtxMenuLinkUrl;
+    void SetCtxMenuLinkUrl(nsAutoString& strLinkUrl);
+    nsAutoString mCtxMenuLinkUrl;
 
-    void SetCtxMenuImageSrc(nsEmbedString& strImgSrc);
-    nsEmbedString mCtxMenuImgSrc;
+    void SetCtxMenuImageSrc(nsAutoString& strImgSrc);
+    nsAutoString mCtxMenuImgSrc;
 
-    void SetCurrentFrameURL(nsEmbedString& strCurrentFrameURL);
-    nsEmbedString mCtxMenuCurrentFrameURL;
+    void SetCurrentFrameURL(nsAutoString& strCurrentFrameURL);
+    nsString mCtxMenuCurrentFrameURL;
 
     inline void ClearFindDialog() { m_pFindDlg = NULL; }
     CFindDialog* m_pFindDlg;

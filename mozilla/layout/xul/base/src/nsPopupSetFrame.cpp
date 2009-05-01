@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,27 +14,27 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *   Dean Tessman <dean_tessman@hotmail.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -47,7 +47,7 @@
 #include "nsIContent.h"
 #include "prtypes.h"
 #include "nsIAtom.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsStyleContext.h"
 #include "nsCSSRendering.h"
 #include "nsINameSpaceManager.h"
@@ -68,12 +68,6 @@
 #include "nsCSSFrameConstructor.h"
 #include "nsGUIEvent.h"
 #include "nsIRootBox.h"
-#include "nsIFocusController.h"
-#include "nsIDocShellTreeItem.h"
-#include "nsIDocShell.h"
-#include "nsPIDOMWindow.h"
-#include "nsIInterfaceRequestorUtils.h"
-#include "nsIBaseWindow.h"
 
 #define NS_MENU_POPUP_LIST_INDEX   0
 
@@ -83,7 +77,6 @@ nsPopupFrameList::nsPopupFrameList(nsIContent* aPopupContent, nsPopupFrameList* 
  mPopupContent(aPopupContent),
  mElementContent(nsnull), 
  mCreateHandlerSucceeded(PR_FALSE),
- mIsOpen(PR_FALSE),
  mLastPref(-1,-1)
 {
 }
@@ -151,13 +144,14 @@ NS_INTERFACE_MAP_END_INHERITING(nsBoxFrame)
 // nsPopupSetFrame cntr
 //
 nsPopupSetFrame::nsPopupSetFrame(nsIPresShell* aShell):nsBoxFrame(aShell),
-mPresContext(nsnull)
+mPresContext(nsnull), 
+mFrameConstructor(nsnull)
 {
 
 } // cntr
 
 NS_IMETHODIMP
-nsPopupSetFrame::Init(nsPresContext*  aPresContext,
+nsPopupSetFrame::Init(nsIPresContext*  aPresContext,
                      nsIContent*      aContent,
                      nsIFrame*        aParent,
                      nsStyleContext*  aContext,
@@ -177,31 +171,18 @@ nsPopupSetFrame::Init(nsPresContext*  aPresContext,
 }
 
 NS_IMETHODIMP
-nsPopupSetFrame::Destroy(nsPresContext* aPresContext)
+nsPopupSetFrame::Destroy(nsIPresContext* aPresContext)
 {
   // Remove our frame list.
-  if (mPopupList) {
-    // Try to hide any active popups
-    if (nsMenuFrame::sDismissalListener) {
-      nsIMenuParent *menuParent = nsMenuFrame::sDismissalListener->GetCurrentMenuParent();
-      nsIFrame* frame;
-      CallQueryInterface(menuParent, &frame);
-      // Rollup popups, but only if they're ours
-      if (frame && mPopupList->GetEntryByFrame(frame)) {
-        nsMenuFrame::sDismissalListener->Rollup();
-      }
-    }
-
-    // Actually remove each popup from the list as we go. This
-    // keeps things consistent so reentering won't crash us
-    while (mPopupList) {
-      if (mPopupList->mPopupFrame) {
-        mPopupList->mPopupFrame->Destroy(aPresContext);
-      }
-
-      nsPopupFrameList* temp = mPopupList;
-      mPopupList = mPopupList->mNextPopup;
-      delete temp;
+  if (mFrameConstructor) {
+    nsPopupFrameList* curFrame = mPopupList;
+    while (curFrame) {
+      nsPopupFrameList* temp = curFrame;
+      if (curFrame->mPopupFrame)
+        curFrame->mPopupFrame->Destroy(aPresContext);
+      curFrame = curFrame->mNextPopup;
+      temp->mNextPopup = nsnull;
+      delete temp; 
     }
   }
 
@@ -226,53 +207,61 @@ nsPopupSetFrame::DoLayout(nsBoxLayoutState& aState)
   while (currEntry) {
     nsIFrame* popupChild = currEntry->mPopupFrame;
     if (popupChild) {
-      NS_ASSERTION(popupChild->IsBoxFrame(), "popupChild is not box!!");
+      nsIBox* ibox = nsnull;
+      nsresult rv2 = popupChild->QueryInterface(NS_GET_IID(nsIBox), (void**)&ibox);
+      NS_ASSERTION(NS_SUCCEEDED(rv2) && ibox,"popupChild is not box!!");
 
       // then get its preferred size
       nsSize prefSize(0,0);
       nsSize minSize(0,0);
       nsSize maxSize(0,0);
 
-      popupChild->GetPrefSize(aState, prefSize);
-      popupChild->GetMinSize(aState, minSize);
-      popupChild->GetMaxSize(aState, maxSize);
+      ibox->GetPrefSize(aState, prefSize);
+      ibox->GetMinSize(aState, minSize);
+      ibox->GetMaxSize(aState, maxSize);
 
       BoundsCheck(minSize, prefSize, maxSize);
 
       // if the pref size changed then set bounds to be the pref size
       // and sync the view. Also set new pref size.
      // if (currEntry->mLastPref != prefSize) {
-        popupChild->SetBounds(aState, nsRect(0,0,prefSize.width, prefSize.height));
+        ibox->SetBounds(aState, nsRect(0,0,prefSize.width, prefSize.height));
         RepositionPopup(currEntry, aState);
         currEntry->mLastPref = prefSize;
      // }
 
       // is the new size too small? Make sure we handle scrollbars correctly
       nsIBox* child;
-      popupChild->GetChildBox(&child);
+      ibox->GetChildBox(&child);
 
-      nsRect bounds(popupChild->GetRect());
+      nsRect bounds(0,0,0,0);
+      ibox->GetBounds(bounds);
 
       nsCOMPtr<nsIScrollableFrame> scrollframe = do_QueryInterface(child);
-      if (scrollframe &&
-          scrollframe->GetScrollbarStyles().mVertical == NS_STYLE_OVERFLOW_AUTO) {
-        // if our pref height
-        if (bounds.height < prefSize.height) {
-          // layout the child
-          popupChild->Layout(aState);
+      if (scrollframe) {
+        nsIScrollableFrame::nsScrollPref pref;
+        scrollframe->GetScrollPreference(aState.GetPresContext(), &pref);
 
-          nsMargin scrollbars = scrollframe->GetActualScrollbarSizes();
-          if (bounds.width < prefSize.width + scrollbars.left + scrollbars.right)
-          {
-            bounds.width += scrollbars.left + scrollbars.right;
-            //printf("Width=%d\n",width);
-            popupChild->SetBounds(aState, bounds);
+        if (pref == nsIScrollableFrame::Auto)  
+        {
+          // if our pref height
+          if (bounds.height < prefSize.height) {
+             // layout the child
+             ibox->Layout(aState);
+
+             nsMargin scrollbars = scrollframe->GetActualScrollbarSizes();
+             if (bounds.width < prefSize.width + scrollbars.left + scrollbars.right)
+             {
+               bounds.width += scrollbars.left + scrollbars.right;
+               //printf("Width=%d\n",width);
+               ibox->SetBounds(aState, bounds);
+             }
           }
         }
       }
     
       // layout the child
-      popupChild->Layout(aState);
+      ibox->Layout(aState);
 
       // only size popup if open
       if (currEntry->mCreateHandlerSucceeded) {
@@ -293,7 +282,6 @@ nsPopupSetFrame::DoLayout(nsBoxLayoutState& aState)
 }
 
 
-#ifdef DEBUG_LAYOUT
 NS_IMETHODIMP
 nsPopupSetFrame::SetDebug(nsBoxLayoutState& aState, PRBool aDebug)
 {
@@ -317,15 +305,17 @@ nsPopupSetFrame::SetDebug(nsBoxLayoutState& aState, nsIFrame* aList, PRBool aDeb
           return NS_OK;
 
       while (aList) {
-        if (aList->IsBoxFrame())
-          aList->SetDebug(aState, aDebug);
+          nsIBox* ibox = nsnull;
+          if (NS_SUCCEEDED(aList->QueryInterface(NS_GET_IID(nsIBox), (void**)&ibox)) && ibox) {
+              ibox->SetDebug(aState, aDebug);
+          }
 
-        aList = aList->GetNextSibling();
+          aList = aList->GetNextSibling();
       }
 
       return NS_OK;
 }
-#endif
+
 
 
 void
@@ -334,7 +324,7 @@ nsPopupSetFrame::RepositionPopup(nsPopupFrameList* aEntry, nsBoxLayoutState& aSt
   // Sync up the view.
   if (aEntry && aEntry->mElementContent) {
     nsIFrame* frameToSyncTo = nsnull;
-    nsPresContext* presContext = aState.PresContext();
+    nsIPresContext* presContext = aState.GetPresContext();
     presContext->PresShell()->GetPrimaryFrameFor(aEntry->mElementContent,
                                                  &frameToSyncTo );
     ((nsMenuPopupFrame*)(aEntry->mPopupFrame))->SyncViewWithFrame(presContext, 
@@ -348,14 +338,8 @@ nsPopupSetFrame::ShowPopup(nsIContent* aElementContent, nsIContent* aPopupConten
                            const nsString& aPopupType, const nsString& anAnchorAlignment,
                            const nsString& aPopupAlignment)
 {
-  NS_ASSERTION(aElementContent != aPopupContent, "self referential popup");
-
-  if (!MayOpenPopup(this))
-    return NS_OK;
-
-  nsWeakFrame weakFrame(this);
   // First fire the popupshowing event.
-  if (!OnCreate(aXPos, aYPos, aPopupContent) || !weakFrame.IsAlive())
+  if (!OnCreate(aXPos, aYPos, aPopupContent))
     return NS_OK;
         
   // See if we already have an entry in our list.  We must create a new one on a miss.
@@ -388,35 +372,18 @@ nsPopupSetFrame::ShowPopup(nsIContent* aElementContent, nsIContent* aPopupConten
 
   // Generate the popup.
   entry->mCreateHandlerSucceeded = PR_TRUE;
-  entry->mIsOpen = PR_TRUE;
-  // This may destroy or change entry->mPopupFrame or remove the entry from
-  // mPopupList. |this| may also get deleted.
   MarkAsGenerated(aPopupContent);
 
-  if (!weakFrame.IsAlive()) {
-    return NS_OK;
-  }
-
-  nsPopupFrameList* newEntry =
-    mPopupList ? mPopupList->GetEntry(aPopupContent) : nsnull;
-  if (!newEntry || newEntry != entry) {
-    NS_WARNING("The popup entry for aPopupContent has changed!");
-    return NS_OK;
-  }
-
   // determine if this menu is a context menu and flag it
+  nsIFrame* activeChild = entry->mPopupFrame;
   nsIMenuParent* childPopup = nsnull;
-  if (entry->mPopupFrame)
-    CallQueryInterface(entry->mPopupFrame, &childPopup);
-  if ( childPopup && aPopupType.EqualsLiteral("context") )
+  if (activeChild)
+    CallQueryInterface(activeChild, &childPopup);
+  if ( childPopup && aPopupType == NS_LITERAL_STRING("context") )
     childPopup->SetIsContextMenu(PR_TRUE);
 
   // Now open the popup.
   OpenPopup(entry, PR_TRUE);
-
-  if (!weakFrame.IsAlive()) {
-    return NS_OK;
-  }
 
   // Now fire the popupshown event.
   OnCreated(aXPos, aYPos, aPopupContent);
@@ -437,7 +404,7 @@ nsPopupSetFrame::HidePopup(nsIFrame* aPopup)
   if (entry->mCreateHandlerSucceeded)
     ActivatePopup(entry, PR_FALSE);
 
-  if (entry->mElementContent && entry->mPopupType.EqualsLiteral("context")) {
+  if (entry->mElementContent && entry->mPopupType == NS_LITERAL_STRING("context")) {
     // If we are a context menu, and if we are attached to a
     // menupopup, then hiding us should also hide the parent menu
     // popup.
@@ -446,10 +413,9 @@ nsPopupSetFrame::HidePopup(nsIFrame* aPopup)
       mPresContext->PresShell()->GetPrimaryFrameFor(entry->mElementContent,
                                                     &popupFrame);
       if (popupFrame) {
-        nsIMenuParent *menuParent;
-        if (NS_SUCCEEDED(CallQueryInterface(popupFrame, &menuParent))) {
+        nsCOMPtr<nsIMenuParent> menuParent(do_QueryInterface(popupFrame));
+        if (menuParent)
           menuParent->HideChain();
-        }
       }
     }
   }
@@ -466,38 +432,34 @@ nsPopupSetFrame::DestroyPopup(nsIFrame* aPopup, PRBool aDestroyEntireChain)
   nsPopupFrameList* entry = mPopupList->GetEntryByFrame(aPopup);
 
   if (entry && entry->mCreateHandlerSucceeded) {    // ensure the popup was created before we try to destroy it
-    nsWeakFrame weakFrame(this);
     OpenPopup(entry, PR_FALSE);
-    nsCOMPtr<nsIContent> popupContent = entry->mPopupContent;
-    if (weakFrame.IsAlive()) {
-      if (aDestroyEntireChain && entry->mElementContent && entry->mPopupType.EqualsLiteral("context")) {
-        // If we are a context menu, and if we are attached to a
-        // menupopup, then destroying us should also dismiss the parent
-        // menu popup.
-        if (entry->mElementContent->Tag() == nsXULAtoms::menupopup) {
-          nsIFrame* popupFrame = nsnull;
-          mPresContext->PresShell()->GetPrimaryFrameFor(entry->mElementContent,
-                                                        &popupFrame);
-          if (popupFrame) {
-            nsIMenuParent *menuParent;
-            if (NS_SUCCEEDED(CallQueryInterface(popupFrame, &menuParent))) {
-              menuParent->DismissChain();
-            }
-          }
+    entry->mPopupType.SetLength(0);
+  
+    if (aDestroyEntireChain && entry->mElementContent && entry->mPopupType == NS_LITERAL_STRING("context")) {
+      // If we are a context menu, and if we are attached to a
+      // menupopup, then destroying us should also dismiss the parent
+      // menu popup.
+      if (entry->mElementContent->Tag() == nsXULAtoms::menupopup) {
+        nsIFrame* popupFrame = nsnull;
+        mPresContext->PresShell()->GetPrimaryFrameFor(entry->mElementContent,
+                                                      &popupFrame);
+        if (popupFrame) {
+          nsCOMPtr<nsIMenuParent> menuParent(do_QueryInterface(popupFrame));
+          if (menuParent)
+            menuParent->DismissChain();
         }
       }
-  
-      // clear things out for next time
-      entry->mPopupType.Truncate();
-      entry->mCreateHandlerSucceeded = PR_FALSE;
-      entry->mElementContent = nsnull;
-      entry->mXPos = entry->mYPos = 0;
-      entry->mLastPref.width = -1;
-      entry->mLastPref.height = -1;
     }
 
+    // clear things out for next time
+    entry->mCreateHandlerSucceeded = PR_FALSE;
+    entry->mElementContent = nsnull;
+    entry->mXPos = entry->mYPos = 0;
+    entry->mLastPref.width = -1;
+    entry->mLastPref.height = -1;
+
     // ungenerate the popup.
-    popupContent->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menugenerated, PR_TRUE);
+    entry->mPopupContent->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menugenerated, PR_TRUE);
   }
 
   return NS_OK;
@@ -511,7 +473,7 @@ nsPopupSetFrame::MarkAsGenerated(nsIContent* aPopupContent)
   nsAutoString value;
   aPopupContent->GetAttr(kNameSpaceID_None, nsXULAtoms::menugenerated, 
                          value);
-  if (!value.EqualsLiteral("true")) {
+  if (value != NS_LITERAL_STRING("true")) {
     // Generate this element.
     aPopupContent->SetAttr(kNameSpaceID_None, nsXULAtoms::menugenerated, NS_LITERAL_STRING("true"),
                            PR_TRUE);
@@ -521,62 +483,50 @@ nsPopupSetFrame::MarkAsGenerated(nsIContent* aPopupContent)
 void
 nsPopupSetFrame::OpenPopup(nsPopupFrameList* aEntry, PRBool aActivateFlag)
 {
-  nsWeakFrame weakFrame(this);
-  nsIFrame* activeChild = aEntry->mPopupFrame;
-  nsWeakFrame weakPopupFrame(activeChild);
-  nsRefPtr<nsPresContext> presContext = GetPresContext();
-  nsCOMPtr<nsIContent> popupContent = aEntry->mPopupContent;
-  PRBool createHandlerSucceeded = aEntry->mCreateHandlerSucceeded;
-  nsAutoString popupType = aEntry->mPopupType;
   if (aActivateFlag) {
     ActivatePopup(aEntry, PR_TRUE);
 
     // register the rollup listeners, etc, but not if we're a tooltip
-    if (!popupType.EqualsLiteral("tooltip")) {
-      nsIFrame* activeChild = aEntry->mPopupFrame;
-      nsIMenuParent* childPopup = nsnull;
-      if (weakPopupFrame.IsAlive())
-        CallQueryInterface(activeChild, &childPopup);
-
-      // Tooltips don't get keyboard navigation
-      if (childPopup && !nsMenuFrame::sDismissalListener) {
-        // First check and make sure this popup wants keyboard navigation
-        nsAutoString property;    
-        popupContent->GetAttr(kNameSpaceID_None, nsXULAtoms::ignorekeys, property);
-        if (!property.EqualsLiteral("true"))
-          childPopup->InstallKeyboardNavigator();
-      }
-
+    nsIFrame* activeChild = aEntry->mPopupFrame;
+    nsIMenuParent* childPopup = nsnull;
+    if (activeChild)
+      CallQueryInterface(activeChild, &childPopup);
+    if (aEntry->mPopupType != NS_LITERAL_STRING("tooltip"))
       UpdateDismissalListener(childPopup);
-    }
+    
+    // First check and make sure this popup wants keyboard navigation
+    nsAutoString property;    
+    // Tooltips don't get keyboard navigation
+    aEntry->mPopupContent->GetAttr(kNameSpaceID_None, nsXULAtoms::ignorekeys, property);
+    if (property != NS_LITERAL_STRING("true") && 
+        childPopup &&
+        aEntry->mPopupType != NS_LITERAL_STRING("tooltip"))
+      childPopup->InstallKeyboardNavigator();
   }
   else {
-    if (createHandlerSucceeded && !OnDestroy(popupContent))
+    if (aEntry->mCreateHandlerSucceeded && !OnDestroy(aEntry->mPopupContent))
       return;
 
     // Unregister, but not if we're a tooltip
-    if (!popupType.EqualsLiteral("tooltip")) {
+    if (aEntry->mPopupType != NS_LITERAL_STRING("tooltip") ) {
       if (nsMenuFrame::sDismissalListener)
         nsMenuFrame::sDismissalListener->Unregister();
     }
     
     // Remove any keyboard navigators
     nsIMenuParent* childPopup = nsnull;
-    if (weakPopupFrame.IsAlive())
-      CallQueryInterface(activeChild, &childPopup);
+    if (aEntry->mPopupFrame)
+      CallQueryInterface(aEntry->mPopupFrame, &childPopup);
     if (childPopup)
       childPopup->RemoveKeyboardNavigator();
 
-    if (weakPopupFrame.IsAlive())
-      ActivatePopup(aEntry, PR_FALSE);
+    ActivatePopup(aEntry, PR_FALSE);
 
-    OnDestroyed(presContext, popupContent);
+    OnDestroyed(aEntry->mPopupContent);
   }
 
-  if (weakFrame.IsAlive()) {
-    nsBoxLayoutState state(mPresContext);
-    MarkDirtyChildren(state); // Mark ourselves dirty.
-  }
+  nsBoxLayoutState state(mPresContext);
+  MarkDirtyChildren(state); // Mark ourselves dirty.
 }
 
 void
@@ -590,36 +540,29 @@ nsPopupSetFrame::ActivatePopup(nsPopupFrameList* aEntry, PRBool aActivateFlag)
       // XXXben hook in |width| and |height| usage here? 
       aEntry->mPopupContent->SetAttr(kNameSpaceID_None, nsXULAtoms::menutobedisplayed, NS_LITERAL_STRING("true"), PR_TRUE);
     else {
-      nsWeakFrame weakFrame(this);
-      nsWeakFrame weakActiveChild(aEntry->mPopupFrame);
-      nsCOMPtr<nsIContent> content = aEntry->mPopupContent;
-      content->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menuactive, PR_TRUE);
-      content->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menutobedisplayed, PR_TRUE);
+      aEntry->mPopupContent->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menuactive, PR_TRUE);
+      aEntry->mPopupContent->UnsetAttr(kNameSpaceID_None, nsXULAtoms::menutobedisplayed, PR_TRUE);
 
       // get rid of the reflows we just created. If we leave them hanging around, we
       // can get into trouble if a dialog with a modal event loop comes along and
       // processes the reflows before we get to call DestroyChain(). Processing the
       // reflow will cause the popup to show itself again. (bug 71219)
-      nsIDocument* doc = content->GetDocument();
+      nsIDocument* doc = aEntry->mPopupContent->GetDocument();
       if (doc)
-        doc->FlushPendingNotifications(Flush_OnlyReflow);
+        doc->FlushPendingNotifications();
          
       // make sure we hide the popup. We can't assume that we'll have a view
       // since we could be cleaning up after someone that didn't correctly 
       // destroy the popup.
       nsIFrame* activeChild = aEntry->mPopupFrame;
-      if (weakFrame.IsAlive() && weakActiveChild.IsAlive()) {
-        nsIView* view = weakActiveChild.GetFrame()->GetView();
+      if (activeChild) {
+        nsIView* view = activeChild->GetView();
         NS_ASSERTION(view, "View is gone, looks like someone forgot to roll up the popup!");
         if (view) {
           nsIViewManager* viewManager = view->GetViewManager();
           viewManager->SetViewVisibility(view, nsViewVisibility_kHide);
           nsRect r(0, 0, 0, 0);
           viewManager->ResizeView(view, r);
-          if (aEntry->mIsOpen) {
-            aEntry->mIsOpen = PR_FALSE;
-            FireDOMEventSynch(NS_LITERAL_STRING("DOMMenuInactive"), content);
-          }
         }
       }
     }
@@ -630,17 +573,16 @@ PRBool
 nsPopupSetFrame::OnCreate(PRInt32 aX, PRInt32 aY, nsIContent* aPopupContent)
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_SHOWING, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_SHOWING);
   event.point.x = aX;
   event.point.y = aY;
 
   if (aPopupContent) {
-    nsCOMPtr<nsIContent> kungFuDeathGrip(aPopupContent);
-    nsCOMPtr<nsIPresShell> shell = mPresContext->GetPresShell();
+    nsIPresShell *shell = mPresContext->GetPresShell();
     if (shell) {
       nsresult rv = shell->HandleDOMEventWithTarget(aPopupContent, &event,
                                                     &status);
+      // shell may no longer be alive, don't use it here unless you keep a ref
       if ( NS_FAILED(rv) || status == nsEventStatus_eConsumeNoDefault )
         return PR_FALSE;
     }
@@ -654,7 +596,7 @@ nsPopupSetFrame::OnCreate(PRInt32 aX, PRInt32 aY, nsIContent* aPopupContent)
 
     PRUint32 count = aPopupContent->GetChildCount();
     for (PRUint32 i = 0; i < count; i++) {
-      nsCOMPtr<nsIContent> grandChild = aPopupContent->GetChildAt(i);
+      nsIContent *grandChild = aPopupContent->GetChildAt(i);
 
       if (grandChild->Tag() == nsXULAtoms::menuitem) {
         // See if we have a command attribute.
@@ -708,16 +650,16 @@ PRBool
 nsPopupSetFrame::OnCreated(PRInt32 aX, PRInt32 aY, nsIContent* aPopupContent)
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_SHOWN, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_SHOWN);
   event.point.x = aX;
   event.point.y = aY;
 
   if (aPopupContent) {
-    nsCOMPtr<nsIPresShell> shell = mPresContext->GetPresShell();
+    nsIPresShell *shell = mPresContext->GetPresShell();
     if (shell) {
       nsresult rv = shell->HandleDOMEventWithTarget(aPopupContent, &event,
                                                     &status);
+      // shell may no longer be alive, don't use it here unless you keep a ref
       if ( NS_FAILED(rv) || status == nsEventStatus_eConsumeNoDefault )
         return PR_FALSE;
     }
@@ -730,14 +672,14 @@ PRBool
 nsPopupSetFrame::OnDestroy(nsIContent* aPopupContent)
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_HIDING, nsnull,
-                     nsMouseEvent::eReal);
-
+  nsMouseEvent event(NS_XUL_POPUP_HIDING);
+ 
   if (aPopupContent) {
-    nsCOMPtr<nsIPresShell> shell = mPresContext->GetPresShell();
+    nsIPresShell *shell = mPresContext->GetPresShell();
     if (shell) {
       nsresult rv = shell->HandleDOMEventWithTarget(aPopupContent, &event,
                                                     &status);
+      // shell may no longer be alive, don't use it here unless you keep a ref
       if ( NS_FAILED(rv) || status == nsEventStatus_eConsumeNoDefault )
         return PR_FALSE;
     }
@@ -746,18 +688,17 @@ nsPopupSetFrame::OnDestroy(nsIContent* aPopupContent)
 }
 
 PRBool
-nsPopupSetFrame::OnDestroyed(nsPresContext* aPresContext,
-                             nsIContent* aPopupContent)
+nsPopupSetFrame::OnDestroyed(nsIContent* aPopupContent)
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_HIDDEN, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_HIDDEN);
 
-  if (aPopupContent && aPresContext) {
-    nsCOMPtr<nsIPresShell> shell = aPresContext->GetPresShell();
+  if (aPopupContent) {
+    nsIPresShell *shell = mPresContext->GetPresShell();
     if (shell) {
       nsresult rv = shell->HandleDOMEventWithTarget(aPopupContent, &event,
                                                     &status);
+      // shell may no longer be alive, don't use it here unless you keep a ref
       if ( NS_FAILED(rv) || status == nsEventStatus_eConsumeNoDefault )
         return PR_FALSE;
     }
@@ -837,44 +778,5 @@ nsPopupSetFrame::AddPopupFrame(nsIFrame* aPopup)
   // Now return.  The remaining entry values will be filled in if/when showPopup is
   // called for this popup.
   return NS_OK;
-}
-
-//static
-PRBool
-nsPopupSetFrame::MayOpenPopup(nsIFrame* aFrame)
-{
-  nsCOMPtr<nsISupports> cont = aFrame->GetPresContext()->GetContainer();
-  nsCOMPtr<nsIDocShellTreeItem> dsti = do_QueryInterface(cont);
-  if (!dsti)
-    return PR_FALSE;
-
-  // chrome shells can always open popups
-  PRInt32 type = -1;
-  if (NS_SUCCEEDED(dsti->GetItemType(&type)) && type == nsIDocShellTreeItem::typeChrome)
-    return PR_TRUE;
-
-  nsCOMPtr<nsIDocShell> shell = do_QueryInterface(dsti);
-  if (!shell)
-    return PR_FALSE;
-
-  nsCOMPtr<nsPIDOMWindow> win = do_GetInterface(shell);
-  if (!win)
-    return PR_FALSE;
-
-  // only allow popups in active windows
-  PRBool active;
-  nsIFocusController* focusController = win->GetRootFocusController();
-  focusController->GetActive(&active);
-  if (!active)
-    return PR_FALSE;
-
-  nsCOMPtr<nsIBaseWindow> baseWin = do_QueryInterface(shell);
-  if (!baseWin)
-    return PR_FALSE;
-
-  // only allow popups in visible frames
-  PRBool visible;
-  baseWin->GetVisibility(&visible);
-  return visible;
 }
 

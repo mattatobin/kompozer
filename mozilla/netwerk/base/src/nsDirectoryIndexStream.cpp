@@ -1,12 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set sw=4 sts=4 et cin: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,25 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *   Bradley Baetz <bbaetz@cs.mcgill.ca>
+ * Contributor(s): Bradley Baetz <bbaetz@cs.mcgill.ca>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +41,7 @@
   The converts a filesystem directory into an "HTTP index" stream per
   Lou Montulli's original spec:
 
-  http://www.mozilla.org/projects/netlib/dirindexformat.html
+    http://www.area.com/~roeber/file_format.html
 
  */
 
@@ -67,14 +65,14 @@ static PRLogModuleInfo* gLog;
 #include "nsURLHelper.h"
 #include "nsNetUtil.h"
 #include "nsCRT.h"
-#include "nsNativeCharsetUtils.h"
 
 static NS_DEFINE_CID(kCollationFactoryCID, NS_COLLATIONFACTORY_CID);
 
 // NOTE: This runs on the _file transport_ thread.
 // The problem is that now that we're actually doing something with the data,
 // we want to do stuff like i18n sorting. However, none of the collation stuff
-// is threadsafe.
+// is threadsafe, and stuff like GetUnicodeLeafName spews warnings on a debug
+// build, because the singletons were initialised on the UI thread.
 // So THIS CODE IS ASCII ONLY!!!!!!!! This is no worse than the current
 // behaviour, though. See bug 99382.
 // When this is fixed, #define THREADSAFE_I18N to get this code working
@@ -100,32 +98,43 @@ static int PR_CALLBACK compare(const void* aElement1,
     nsIFile* a = (nsIFile*)aElement1;
     nsIFile* b = (nsIFile*)aElement2;
 
-    if (!NS_IsNativeUTF8()) {
-        // don't check for errors, because we can't report them anyway
-        nsAutoString name1, name2;
-        a->GetLeafName(name1);
-        b->GetLeafName(name2);
+    // Not that this #ifdef makes much of a difference... We need it
+    // to work out which version of GetLeafName to use, though
+#ifdef THREADSAFE_I18N
+    // don't check for errors, because we can't report them anyway
+    nsXPIDLString name1, name2;
+    a->GetUnicodeLeafName(getter_Copies(name1));
+    b->GetUnicodeLeafName(getter_Copies(name2));
 
-        // Note - we should do the collation to do sorting. Why don't we?
-        // Because that is _slow_. Using TestProtocols to list file:///dev/
-        // goes from 3 seconds to 22. (This may be why nsXULSortService is
-        // so slow as well).
-        // Does this have bad effects? Probably, but since nsXULTree appears
-        // to use the raw RDF literal value as the sort key (which ammounts to an
-        // strcmp), it won't be any worse, I think.
-        // This could be made faster, by creating the keys once,
-        // but CompareString could still be smarter - see bug 99383 - bbaetz
-        // NB - 99393 has been WONTFIXed. So if the I18N code is ever made
-        // threadsafe so that this matters, we'd have to pass through a
-        // struct { nsIFile*, PRUint8* } with the pre-calculated key.
-        return Compare(name1, name2);
-    }
+    // Note - we should be the collation to do sorting. Why don't we?
+    // Because that is _slow_. Using TestProtocols to list file:///dev/
+    // goes from 3 seconds to 22. (This may be why nsXULSortService is
+    // so slow as well).
+    // Does this have bad effects? Probably, but since nsXULTree appears
+    // to use the raw RDF literal value as the sort key (which ammounts to an
+    // strcmp), it won't be any worse, I think.
+    // This could be made faster, by creating the keys once,
+    // but CompareString could still be smarter - see bug 99383 - bbaetz
+    // NB - 99393 has been WONTFIXed. So if the I18N code is ever made
+    // threadsafe so that this matters, we'd have to pass through a
+    // struct { nsIFile*, PRUint8* } with the pre-calculated key.
+    return Compare(name1, name2);
 
+    /*PRInt32 res;
+    // CompareString takes an nsString...
+    nsString str1(name1);
+    nsString str2(name2);
+
+    nsICollation* coll = (nsICollation*)aData;
+    coll->CompareString(nsICollation::kCollationStrengthDefault, str1, str2, &res);
+    return res;*/
+#else
     nsCAutoString name1, name2;
     a->GetNativeLeafName(name1);
     b->GetNativeLeafName(name2);
-
+    
     return Compare(name1, name2);
+#endif
 }
 
 nsresult
@@ -146,6 +155,13 @@ nsDirectoryIndexStream::Init(nsIFile* aDir)
         PR_LOG(gLog, PR_LOG_DEBUG,
                ("nsDirectoryIndexStream[%p]: initialized on %s",
                 this, path.get()));
+    }
+#endif
+
+#ifdef THREADSAFE_I18N
+    if (!mTextToSubURI) {
+        mTextToSubURI = do_GetService(NS_ITEXTTOSUBURI_CONTRACTID, &rv);
+        if (NS_FAILED(rv)) return rv;
     }
 #endif
 
@@ -195,15 +211,33 @@ nsDirectoryIndexStream::Init(nsIFile* aDir)
     mArray.Sort(compare, nsnull);
 #endif
 
-    mBuf.AppendLiteral("300: ");
+    mBuf.Append("300: ");
     nsCAutoString url;
     rv = net_GetURLSpecFromFile(aDir, url);
     if (NS_FAILED(rv)) return rv;
     mBuf.Append(url);
     mBuf.Append('\n');
 
-    mBuf.AppendLiteral("200: filename content-length last-modified file-type\n");
+    mBuf.Append("200: filename content-length last-modified file-type\n");
 
+    if (mFSCharset.IsEmpty()) {
+        // OK, set up the charset
+#ifdef THREADSAFE_I18N
+        nsCOMPtr<nsIPlatformCharset> pc = do_GetService(NS_PLATFORMCHARSET_CONTRACTID, &rv);
+        if (NS_FAILED(rv)) return rv;
+        nsString tmp;
+        rv = pc->GetCharset(kPlatformCharsetSel_FileName, tmp);
+        if (NS_FAILED(rv)) return rv;
+        mFSCharset.Adopt(ToNewCString(tmp));
+#endif   
+    }
+    
+    if (!mFSCharset.IsEmpty()) {
+        mBuf.Append("301: ");
+        mBuf.Append(mFSCharset);
+        mBuf.Append('\n');
+    }
+    
     return NS_OK;
 }
 
@@ -250,15 +284,17 @@ nsDirectoryIndexStream::Close()
 NS_IMETHODIMP
 nsDirectoryIndexStream::Available(PRUint32* aLength)
 {
-    // If there's data in our buffer, use that
-    if (mOffset < (PRInt32)mBuf.Length()) {
-        *aLength = mBuf.Length() - mOffset;
+    // Lie, and tell the caller that the stream is endless (until we
+    // actually don't have anything left).
+    PRBool more = mPos < mArray.Count();
+    if (more) {
+        *aLength = PRUint32(-1);
         return NS_OK;
     }
-
-    // Returning one byte is not ideal, but good enough
-    *aLength = (mPos < mArray.Count()) ? 1 : 0;
-    return NS_OK;
+    else {
+        *aLength = 0;
+        return NS_OK;
+    }
 }
 
 NS_IMETHODIMP
@@ -297,49 +333,62 @@ nsDirectoryIndexStream::Read(char* aBuf, PRUint32 aCount, PRUint32* aReadCount)
             }
 #endif
 
-            // rjc: don't return hidden files/directories!
-            // bbaetz: why not?
-            nsresult rv;
+        // rjc: don't return hidden files/directories!
+        // bbaetz: why not?
+        nsresult rv;
 #ifndef XP_UNIX
-            PRBool hidden = PR_FALSE;
-            current->IsHidden(&hidden);
-            if (hidden) {
-                PR_LOG(gLog, PR_LOG_DEBUG,
-                       ("nsDirectoryIndexStream[%p]: skipping hidden file/directory",
-                        this));
-                continue;
+        PRBool hidden = PR_FALSE;
+        current->IsHidden(&hidden);
+        if (hidden) {
+            PR_LOG(gLog, PR_LOG_DEBUG,
+                   ("nsDirectoryIndexStream[%p]: skipping hidden file/directory",
+                    this));
+            continue;
+        }
+#endif        
+
+        PRInt64 fileSize = LL_Zero();
+        current->GetFileSize( &fileSize );
+
+        PRInt64 tmpTime = LL_Zero();
+        PRInt64 fileInfoModifyTime = LL_Zero();
+        current->GetLastModifiedTime( &tmpTime );
+        // Why does nsIFile give this back in milliseconds?
+        LL_MUL(fileInfoModifyTime, tmpTime, PR_USEC_PER_MSEC);
+
+        mBuf += "201: ";
+
+        // The "filename" field
+        {
+#ifdef THREADSAFE_I18N
+            nsXPIDLString leafname;
+            rv = current->GetUnicodeLeafName(getter_Copies(leafname));
+            if (NS_FAILED(rv)) return rv;
+            if (!leafname.IsEmpty()) {
+                // XXX - this won't work with directories with spaces
+                // see bug 99478 - bbaetz
+                nsXPIDLCString escaped;
+                rv = mTextToSubURI->ConvertAndEscape(mFSCharset.get(),
+                                                     leafname.get(),
+                                                     getter_Copies(escaped));
+                if (NS_FAILED(rv)) return rv;
+                mBuf.Append(escaped);
+                mBuf.Append(' ');
+            }
+#else
+            nsCAutoString leafname;
+            rv = current->GetNativeLeafName(leafname);
+            if (NS_FAILED(rv)) return rv;
+            if (!leafname.IsEmpty()) {
+                char* escaped = nsEscape(leafname.get(), url_Path);
+                if (escaped) {
+                    mBuf += escaped;
+                    mBuf.Append(' ');
+                    nsCRT::free(escaped);
+                }
             }
 #endif
-
-            PRInt64 fileSize = 0;
-            current->GetFileSize( &fileSize );
-
-            PRInt64 fileInfoModifyTime = 0;
-            current->GetLastModifiedTime( &fileInfoModifyTime );
-            fileInfoModifyTime *= PR_USEC_PER_MSEC;
-
-            mBuf.AppendLiteral("201: ");
-
-            // The "filename" field
-            char* escaped = nsnull;
-            if (!NS_IsNativeUTF8()) {
-                nsAutoString leafname;
-                rv = current->GetLeafName(leafname);
-                if (NS_FAILED(rv)) return rv;
-                if (!leafname.IsEmpty())
-                    escaped = nsEscape(NS_ConvertUTF16toUTF8(leafname).get(), url_Path);
-            } else {
-                nsCAutoString leafname;
-                rv = current->GetNativeLeafName(leafname);
-                if (NS_FAILED(rv)) return rv;
-                if (!leafname.IsEmpty())
-                    escaped = nsEscape(leafname.get(), url_Path);
-            }
-            if (escaped) {
-                mBuf += escaped;
-                mBuf.Append(' ');
-                nsMemory::Free(escaped);
-            }
+        }
 
             // The "content-length" field
             mBuf.AppendInt(fileSize, 10);
@@ -358,21 +407,21 @@ nsDirectoryIndexStream::Read(char* aBuf, PRUint32 aCount, PRUint32* aReadCount)
             PRBool isFile = PR_TRUE;
             current->IsFile(&isFile);
             if (isFile) {
-                mBuf.AppendLiteral("FILE ");
+                mBuf += "FILE ";
             }
             else {
                 PRBool isDir;
                 rv = current->IsDirectory(&isDir);
                 if (NS_FAILED(rv)) return rv; 
                 if (isDir) {
-                    mBuf.AppendLiteral("DIRECTORY ");
+                    mBuf += "DIRECTORY ";
                 }
                 else {
                     PRBool isLink;
                     rv = current->IsSymlink(&isLink);
                     if (NS_FAILED(rv)) return rv; 
                     if (isLink) {
-                        mBuf.AppendLiteral("SYMBOLIC-LINK ");
+                        mBuf += "SYMBOLIC-LINK ";
                     }
                 }
             }
@@ -396,6 +445,7 @@ nsDirectoryIndexStream::Read(char* aBuf, PRUint32 aCount, PRUint32* aReadCount)
 NS_IMETHODIMP
 nsDirectoryIndexStream::ReadSegments(nsWriteSegmentFun writer, void * closure, PRUint32 count, PRUint32 *_retval)
 {
+    NS_NOTREACHED("ReadSegments");
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 

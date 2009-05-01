@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -51,29 +51,21 @@ txNamespaceMap::txNamespaceMap(const txNamespaceMap& aOther)
 }
 
 nsresult
-txNamespaceMap::mapNamespace(nsIAtom* aPrefix, const nsAString& aNamespaceURI)
+txNamespaceMap::addNamespace(nsIAtom* aPrefix, const nsAString& aNamespaceURI)
 {
-    nsIAtom* prefix = aPrefix == txXMLAtoms::_empty ? nsnull : aPrefix;
+    nsIAtom* prefix = aPrefix == txXMLAtoms::_empty ? 0 : aPrefix;
 
     PRInt32 nsId;
-    if (prefix && aNamespaceURI.IsEmpty()) {
-        // Remove the mapping
-        PRInt32 index = mPrefixes.IndexOf(prefix);
-        if (index >= 0) {
-            mPrefixes.RemoveObjectAt(index);
-            mNamespaces.RemoveElementAt(index);
-        }
-
-        return NS_OK;
-    }
-
-    if (aNamespaceURI.IsEmpty()) {
-        // Set default to empty namespace
+    if (!prefix && aNamespaceURI.IsEmpty()) {
         nsId = kNameSpaceID_None;
     }
     else {
+#ifdef TX_EXE
         nsId = txNamespaceManager::getNamespaceID(aNamespaceURI);
-        NS_ENSURE_FALSE(nsId == kNameSpaceID_Unknown, NS_ERROR_FAILURE);
+#else
+        NS_ASSERTION(gTxNameSpaceManager, "No namespace manager");
+        gTxNameSpaceManager->RegisterNameSpace(aNamespaceURI, nsId);
+#endif
     }
 
     // Check if the mapping already exists

@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is the TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -59,28 +59,18 @@ void txUnknownHandler::attribute(const nsAString& aName,
     // XXX ErrorReport: Signal this?
 }
 
-void txUnknownHandler::endDocument(nsresult aResult)
+void txUnknownHandler::endDocument()
 {
-    if (NS_FAILED(aResult)) {
-        return;
-    }
-
     // This is an unusual case, no output method has been set and we
     // didn't create a document element. Switching to XML output mode
     // anyway.
 
-    // Make sure that mEs->mResultHandler == this is true, otherwise we'll
-    // leak mEs->mResultHandler in createHandlerAndFlush and we'll crash on
-    // the last line (delete this).
-    NS_ASSERTION(mEs->mResultHandler == this,
-                 "We're leaking mEs->mResultHandler and are going to crash.");
-
-    nsresult rv = createHandlerAndFlush(eXMLOutput, EmptyString(),
+    nsresult rv = createHandlerAndFlush(eXMLOutput, nsString(),
                                         kNameSpaceID_None);
     if (NS_FAILED(rv))
         return;
 
-    mEs->mResultHandler->endDocument(aResult);
+    mEs->mResultHandler->endDocument();
 
     delete this;
 }
@@ -88,12 +78,6 @@ void txUnknownHandler::endDocument(nsresult aResult)
 void txUnknownHandler::startElement(const nsAString& aName,
                                     const PRInt32 aNsID)
 {
-    // Make sure that mEs->mResultHandler == this is true, otherwise we'll
-    // leak mEs->mResultHandler in createHandlerAndFlush and we may crash
-    // later on trying to delete this handler again.
-    NS_ASSERTION(mEs->mResultHandler == this,
-                 "We're leaking mEs->mResultHandler.");
-
     nsresult rv = NS_OK;
     txOutputFormat* format = mEs->mStylesheet->getOutputFormat();
     if (format->mMethod != eMethodNotSet) {
@@ -125,7 +109,7 @@ nsresult txUnknownHandler::createHandlerAndFlush(txOutputMethod aMethod,
     format.merge(*mEs->mStylesheet->getOutputFormat());
     format.mMethod = aMethod;
 
-    txAXMLEventHandler *handler = nsnull;
+    txAXMLEventHandler* handler = 0;
     nsresult rv = mEs->mOutputHandlerFactory->createHandlerWith(&format, aName,
                                                                 aNsID,
                                                                 &handler);
@@ -134,5 +118,5 @@ nsresult txUnknownHandler::createHandlerAndFlush(txOutputMethod aMethod,
     mEs->mOutputHandler = handler;
     mEs->mResultHandler = handler;
 
-    return mBuffer->flushToHandler(&handler);
+    return mBuffer->flushToHandler(handler);
 }

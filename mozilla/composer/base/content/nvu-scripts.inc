@@ -24,19 +24,15 @@
   <script type="application/x-javascript" src="chrome://editor/content/processors.js"/>
   <script type="application/x-javascript" src="chrome://editor/content/phpAndComments.js"/>
 
-  <!-- Kaze: view source -->
-  <script type="application/x-javascript" src="chrome://editor/content/viewSource.js"/>
-  <script type="application/x-javascript" src="chrome://global/content/viewPartialSource.js"/>
-
   <script type="application/x-javascript">
-// Kaze: the tabeditor's "oncommand" event doesn't update the window title
-//       on Ctrl + Tab / PgUpDn, let's use a Timeout for that
-window.addEventListener("keypress", onTabSwitching, true);
-function onTabSwitching(event) {
-  if (event.ctrlKey) // XXX does this work on MacOSX?
-    if (event.keyCode == KeyEvent.DOM_VK_TAB || event.keyCode == KeyEvent.DOM_VK_PAGE_UP || event.keyCode == KeyEvent.DOM_VK_PAGE_DOWN)
-      setTimeout("UpdateWindowTitle()", 10);
+// Kaze: prevents to switch tabs with keypresses
+// cause the tabeditor's "oncommand" event doesn't update the window title in such case
+window.addEventListener("keypress", noTabSwitching, true);
+
+function noTabSwitching(event) {
+  if (event.ctrlKey)
+    if (event.keyCode == KeyEvent.DOM_VK_TAB || 
+	    event.keyCode == KeyEvent.DOM_VK_PAGE_UP || event.keyCode == KeyEvent.DOM_VK_PAGE_DOWN)
+	  event.stopPropagation();
 }
   </script>
-  <script type="application/x-javascript" src="chrome://editor/content/helpers.js"/>
-

@@ -1,5 +1,4 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=2 sw=4 et tw=80:
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
@@ -61,11 +60,6 @@
 #include "nsCOMPtr.h"
 #include "nsIXPCSecurityManager.h"
 
-#ifndef XPCONNECT_STANDALONE
-#include "nsIScriptSecurityManager.h"
-#include "nsIPrincipal.h"
-#endif
-
 // all this crap is needed to do the interactive shell stuff
 #include <stdlib.h>
 #include <errno.h>
@@ -73,6 +67,9 @@
 #include <io.h>     /* for isatty() */
 #elif defined(XP_UNIX) || defined(XP_BEOS)
 #include <unistd.h>     /* for isatty() */
+#elif defined(XP_MAC)
+#include <unistd.h>
+#include <unix.h>
 #endif
 
 #include "nsIJSContextStack.h"
@@ -98,9 +95,6 @@ FILE *gErrFile = NULL;
 int gExitCode = 0;
 JSBool gQuitting = JS_FALSE;
 static JSBool reportWarnings = JS_TRUE;
-static JSBool compileOnly = JS_FALSE;
-
-JSPrincipals *gJSPrincipals = nsnull;
 
 JS_STATIC_DLL_CALLBACK(void)
 my_ErrorReporter(JSContext *cx, const char *message, JSErrorReport *report)
@@ -201,8 +195,13 @@ Dump(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
     char *bytes = JS_GetStringBytes(str);
     bytes = strdup(bytes);
 
+#ifdef XP_MAC
+    for (char *c = bytes; *c; c++)
+        if (*c == '\r')
+            *c = '\n';
+#endif
     fputs(bytes, gOutFile);
-    free(bytes);
+    nsMemory::Free(bytes);
     return JS_TRUE;
 }
 
@@ -215,7 +214,6 @@ Load(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
     JSScript *script;
     JSBool ok;
     jsval result;
-    FILE *file;
 
     for (i = 0; i < argc; i++) {
         str = JS_ValueToString(cx, argv[i]);
@@ -223,15 +221,11 @@ Load(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
             return JS_FALSE;
         argv[i] = STRING_TO_JSVAL(str);
         filename = JS_GetStringBytes(str);
-        file = fopen(filename, "r");
-        script = JS_CompileFileHandleForPrincipals(cx, obj, filename, file,
-                                                   gJSPrincipals);
+        script = JS_CompileFile(cx, obj, filename);
         if (!script)
             ok = JS_FALSE;
         else {
-            ok = !compileOnly
-                 ? JS_ExecuteScript(cx, obj, script, &result)
-                 : JS_TRUE;
+            ok = JS_ExecuteScript(cx, obj, script, &result);
             JS_DestroyScript(cx, script);
         }
         if (!ok)
@@ -579,13 +573,9 @@ ProcessFile(JSContext *cx, JSObject *obj, const char *filename, FILE *file)
         }
         ungetc(ch, file);
         DoBeginRequest(cx);
-
-        script = JS_CompileFileHandleForPrincipals(cx, obj, filename, file,
-                                                   gJSPrincipals);
-
+        script = JS_CompileFileHandle(cx, obj, filename, file);
         if (script) {
-            if (!compileOnly)
-                (void)JS_ExecuteScript(cx, obj, script, &result);
+            (void)JS_ExecuteScript(cx, obj, script, &result);
             JS_DestroyScript(cx, script);
         }
         DoEndRequest(cx);
@@ -618,40 +608,38 @@ ProcessFile(JSContext *cx, JSObject *obj, const char *filename, FILE *file)
         DoBeginRequest(cx);
         /* Clear any pending exception from previous failed compiles.  */
         JS_ClearPendingException(cx);
-        script = JS_CompileScriptForPrincipals(cx, obj, gJSPrincipals, buffer,
-                                               strlen(buffer), "typein", startline);
+        script = JS_CompileScript(cx, obj, buffer, strlen(buffer),
+                                  "typein", startline);
         if (script) {
             JSErrorReporter older;
 
-            if (!compileOnly) {
-                ok = JS_ExecuteScript(cx, obj, script, &result);
-                if (ok && result != JSVAL_VOID) {
-                    /* Suppress error reports from JS_ValueToString(). */
-                    older = JS_SetErrorReporter(cx, NULL);
-                    str = JS_ValueToString(cx, result);
-                    JS_SetErrorReporter(cx, older);
-    
-                    if (str)
-                        fprintf(gOutFile, "%s\n", JS_GetStringBytes(str));
-                    else
-                        ok = JS_FALSE;
-                }
+            ok = JS_ExecuteScript(cx, obj, script, &result);
+            if (ok && result != JSVAL_VOID) {
+                /* Suppress error reports from JS_ValueToString(). */
+                older = JS_SetErrorReporter(cx, NULL);
+                str = JS_ValueToString(cx, result);
+                JS_SetErrorReporter(cx, older);
+
+                if (str)
+                    fprintf(gOutFile, "%s\n", JS_GetStringBytes(str));
+                else
+                    ok = JS_FALSE;
+            }
 #if 0
 #if JS_HAS_ERROR_EXCEPTIONS
-                /*
-                 * Require that any time we return failure, an exception has
-                 * been set.
-                 */
-                JS_ASSERT(ok || JS_IsExceptionPending(cx));
-    
-                /*
-                 * Also that any time an exception has been set, we've
-                 * returned failure.
-                 */
-                JS_ASSERT(!JS_IsExceptionPending(cx) || !ok);
+            /*
+             * Require that any time we return failure, an exception has
+             * been set.
+             */
+            JS_ASSERT(ok || JS_IsExceptionPending(cx));
+
+            /*
+             * Also that any time an exception has been set, we've
+             * returned failure.
+             */
+            JS_ASSERT(!JS_IsExceptionPending(cx) || !ok);
 #endif /* JS_HAS_ERROR_EXCEPTIONS */
 #endif
-            }
             JS_DestroyScript(cx, script);
         }
         DoEndRequest(cx);
@@ -685,7 +673,7 @@ static int
 usage(void)
 {
     fprintf(gErrFile, "%s\n", JS_GetImplementationVersion());
-    fprintf(gErrFile, "usage: xpcshell [-PswWxC] [-v version] [-f scriptfile] [-e script] [scriptfile] [scriptarg...]\n");
+    fprintf(gErrFile, "usage: xpcshell [-PswW] [-v version] [-f scriptfile] [scriptfile] [scriptarg...]\n");
     return 2;
 }
 
@@ -721,10 +709,8 @@ ProcessArgs(JSContext *cx, JSObject *obj, char **argv, int argc)
         switch (argv[i][1]) {
           case 'v':
           case 'f':
-          case 'e':
             ++i;
             break;
-          default:;
         }
     }
 
@@ -773,9 +759,6 @@ ProcessArgs(JSContext *cx, JSObject *obj, char **argv, int argc)
         case 's':
             JS_ToggleOptions(cx, JSOPTION_STRICT);
             break;
-        case 'x':
-            JS_ToggleOptions(cx, JSOPTION_XML);
-            break;
         case 'P':
             if (JS_GET_CLASS(cx, JS_GetPrototype(cx, obj)) != &global_class) {
                 JSObject *gobj;
@@ -804,26 +787,6 @@ ProcessArgs(JSContext *cx, JSObject *obj, char **argv, int argc)
              */
             isInteractive = JS_FALSE;
             break;
-
-        case 'e':
-        {
-            jsval rval;
-
-            if (++i == argc) {
-                return usage();
-            }
-
-            JS_EvaluateScript(cx, obj, argv[i], strlen(argv[i]), 
-                              "-e", 1, &rval);
-
-            isInteractive = JS_FALSE;
-            break;
-        }
-        case 'C':
-            compileOnly = JS_TRUE;
-            isInteractive = JS_FALSE;
-            break;
-
         default:
             return usage();
         }
@@ -876,6 +839,34 @@ FullTrustSecMan::CanAccess(PRUint32 aAction, nsIXPCNativeCallContext *aCallConte
 }
 
 /***************************************************************************/
+
+#if defined(XP_MAC)
+#include <SIOUX.h>
+#include <MacTypes.h>
+
+static void initConsole(StringPtr consoleName, const char* startupMessage, int *argc, char** *argv)
+{
+    SIOUXSettings.autocloseonquit = true;
+    SIOUXSettings.asktosaveonclose = false;
+    SIOUXSettings.userwindowtitle = consoleName;
+    SIOUXSettings.standalone = true;
+    SIOUXSettings.setupmenus = true;
+    SIOUXSettings.toppixel = 42;
+    SIOUXSettings.leftpixel = 6;
+    SIOUXSettings.rows = 40;
+    SIOUXSettings.columns = 100;
+    // SIOUXSettings.initializeTB = false;
+    // SIOUXSettings.showstatusline = true;
+    puts(startupMessage);
+
+    /* set up a buffer for stderr (otherwise it's a pig). */
+    setvbuf(stderr, (char *) malloc(BUFSIZ), _IOLBF, BUFSIZ);
+
+    static char* mac_argv[] = { "xpcshell", NULL };
+    *argc = 1;
+    *argv = mac_argv;
+}
+#endif
 
 // #define TEST_InitClassesWithNewWrappedGlobal
 
@@ -968,6 +959,10 @@ main(int argc, char **argv, char **envp)
     int result;
     nsresult rv;
 
+#if defined(XP_MAC)
+    initConsole("\pXPConnect Shell", "Welcome to the XPConnect Shell.\n", &argc, &argv);
+#endif
+
     gErrFile = stderr;
     gOutFile = stdout;
     {
@@ -1022,32 +1017,6 @@ main(int argc, char **argv, char **envp)
         //    xpc->SetCollectGarbageOnMainThreadOnly(PR_TRUE);
         //    xpc->SetDeferReleasesUntilAfterGarbageCollection(PR_TRUE);
 
-#ifndef XPCONNECT_STANDALONE
-        // Fetch the system principal and store it away in a global, to use for
-        // script compilation in Load() and ProcessFile() (including interactive
-        // eval loop)
-        {
-            nsCOMPtr<nsIPrincipal> princ;
-
-            nsCOMPtr<nsIScriptSecurityManager> securityManager =
-                do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID, &rv);
-            if (NS_SUCCEEDED(rv) && securityManager) {
-                rv = securityManager->GetSystemPrincipal(getter_AddRefs(princ));
-                if (NS_FAILED(rv)) {
-                    fprintf(gErrFile, "+++ Failed to obtain SystemPrincipal from ScriptSecurityManager service.\n");
-                } else {
-                    // fetch the JS principals and stick in a global
-                    rv = princ->GetJSPrincipals(cx, &gJSPrincipals);
-                    if (NS_FAILED(rv)) {
-                        fprintf(gErrFile, "+++ Failed to obtain JS principals from SystemPrincipal.\n");
-                    }
-                }
-            } else {
-                fprintf(gErrFile, "+++ Failed to get ScriptSecurityManager service, running without principals");
-            }
-        }
-#endif
-
 #ifdef TEST_TranslateThis
         nsCOMPtr<nsIXPCFunctionThisTranslator>
             translator(new nsXPCFunctionThisTranslator);
@@ -1065,29 +1034,14 @@ main(int argc, char **argv, char **envp)
             return 1;
         }
 
-        nsCOMPtr<nsIXPCScriptable> backstagePass;
-        nsresult rv = rtsvc->GetBackstagePass(getter_AddRefs(backstagePass));
-        if (NS_FAILED(rv)) {
-            fprintf(gErrFile, "+++ Failed to get backstage pass from rtsvc: %8x\n",
-                    rv);
+        glob = JS_NewObject(cx, &global_class, NULL, NULL);
+        if (!glob)
             return 1;
-        }
-
-        nsCOMPtr<nsIXPConnectJSObjectHolder> holder;
-        rv = xpc->InitClassesWithNewWrappedGlobal(cx, backstagePass,
-                                                  NS_GET_IID(nsISupports),
-                                                  nsIXPConnect::
-                                                      FLAG_SYSTEM_GLOBAL_OBJECT,
-                                                  getter_AddRefs(holder));
-        if (NS_FAILED(rv))
+        if (!JS_InitStandardClasses(cx, glob))
             return 1;
-        
-        rv = holder->GetJSObject(&glob);
-        if (NS_FAILED(rv)) {
-            NS_ASSERTION(glob == nsnull, "bad GetJSObject?");
-            return 1;
-        }
         if (!JS_DefineFunctions(cx, glob, glob_functions))
+            return 1;
+        if (NS_FAILED(xpc->InitClasses(cx, glob)))
             return 1;
 
         envobj = JS_DefineObject(cx, glob, "environment", &env_class, NULL, 0);
@@ -1099,6 +1053,20 @@ main(int argc, char **argv, char **envp)
 
         result = ProcessArgs(cx, glob, argv, argc);
 
+
+#ifdef TEST_InitClassesWithNewWrappedGlobal
+        // quick hacky test...
+
+        JSContext* foo = JS_NewContext(rt, 8192);
+        nsCOMPtr<nsIXPCTestNoisy> bar(new TestGlobal());
+        nsCOMPtr<nsIXPConnectJSObjectHolder> baz;
+        xpc->InitClassesWithNewWrappedGlobal(foo, bar, NS_GET_IID(nsIXPCTestNoisy),
+                                             PR_TRUE, getter_AddRefs(baz));
+        bar = nsnull;
+        baz = nsnull;
+        JS_GC(foo);
+        JS_DestroyContext(foo);
+#endif
 
 //#define TEST_CALL_ON_WRAPPED_JS_AFTER_SHUTDOWN 1
 

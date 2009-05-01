@@ -44,13 +44,12 @@
 #include "nsCOMPtr.h"
 #include "nsCRT.h"
 #include "prlog.h"
-#include "nsInt64.h"
 
 #if defined(PR_LOGGING)
 //
 // set NSPR_LOG_MODULES=nsPipe:5
 //
-static PRLogModuleInfo *gPipeLog = PR_NewLogModule("nsPipe");
+static PRLogModuleInfo *gPipeLog = nsnull;
 #define LOG(args) PR_LOG(gPipeLog, PR_LOG_DEBUG, args)
 #else
 #define LOG(args)
@@ -147,7 +146,7 @@ private:
 
     // separate refcnt so that we know when to close the consumer
     nsrefcnt                       mReaderRefCnt;
-    nsInt64                        mLogicalOffset;
+    PRUint32                       mLogicalOffset;
     PRPackedBool                   mBlocking;
 
     // these variables can only be accessed while inside the pipe's monitor
@@ -201,7 +200,7 @@ private:
 
     // separate refcnt so that we know when to close the producer
     nsrefcnt                        mWriterRefCnt;
-    nsInt64                         mLogicalOffset;
+    PRUint32                        mLogicalOffset;
     PRPackedBool                    mBlocking;
 
     // these variables can only be accessed while inside the pipe's monitor
@@ -662,15 +661,14 @@ nsPipeInputStream::OnInputException(nsresult reason, nsPipeEvents &events)
 NS_IMETHODIMP_(nsrefcnt)
 nsPipeInputStream::AddRef(void)
 {
-    PR_AtomicIncrement((PRInt32*)&mReaderRefCnt);
+    ++mReaderRefCnt;
     return mPipe->AddRef();
 }
 
 NS_IMETHODIMP_(nsrefcnt)
 nsPipeInputStream::Release(void)
 {
-    nsrefcnt count = PR_AtomicDecrement((PRInt32 *)&mReaderRefCnt);
-    if (count == 0)
+    if (--mReaderRefCnt == 0)
         Close();
     return mPipe->Release();
 }
@@ -851,14 +849,14 @@ nsPipeInputStream::AsyncWait(nsIInputStreamCallback *callback,
 }
 
 NS_IMETHODIMP
-nsPipeInputStream::Seek(PRInt32 whence, PRInt64 offset)
+nsPipeInputStream::Seek(PRInt32 whence, PRInt32 offset)
 {
     NS_NOTREACHED("nsPipeInputStream::Seek");
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsPipeInputStream::Tell(PRInt64 *offset)
+nsPipeInputStream::Tell(PRUint32 *offset)
 {
     *offset = mLogicalOffset;
     return NS_OK;
@@ -1019,15 +1017,14 @@ nsPipeOutputStream::OnOutputException(nsresult reason, nsPipeEvents &events)
 NS_IMETHODIMP_(nsrefcnt)
 nsPipeOutputStream::AddRef()
 {
-    PR_AtomicIncrement((PRInt32*)&mWriterRefCnt);
+    mWriterRefCnt++;
     return mPipe->AddRef();
 }
 
 NS_IMETHODIMP_(nsrefcnt)
 nsPipeOutputStream::Release()
 {
-    nsrefcnt count = PR_AtomicDecrement((PRInt32 *)&mWriterRefCnt);
-    if (count == 0)
+    if (--mWriterRefCnt == 0)
         Close();
     return mPipe->Release();
 }
@@ -1217,14 +1214,14 @@ nsPipeOutputStream::AsyncWait(nsIOutputStreamCallback *callback,
 }
 
 NS_IMETHODIMP
-nsPipeOutputStream::Seek(PRInt32 whence, PRInt64 offset)
+nsPipeOutputStream::Seek(PRInt32 whence, PRInt32 offset)
 {
     NS_NOTREACHED("nsPipeOutputStream::Seek");
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsPipeOutputStream::Tell(PRInt64 *offset)
+nsPipeOutputStream::Tell(PRUint32 *offset)
 {
     *offset = mLogicalOffset;
     return NS_OK;
@@ -1250,6 +1247,11 @@ NS_NewPipe2(nsIAsyncInputStream **pipeIn,
 {
     nsresult rv;
 
+#if defined(PR_LOGGING)
+    if (!gPipeLog)
+        gPipeLog = PR_NewLogModule("nsPipe");
+#endif
+
     nsPipe *pipe = new nsPipe();
     if (!pipe)
         return NS_ERROR_OUT_OF_MEMORY;
@@ -1268,20 +1270,6 @@ NS_NewPipe2(nsIAsyncInputStream **pipeIn,
     pipe->GetInputStream(pipeIn);
     pipe->GetOutputStream(pipeOut);
     return NS_OK;
-}
-
-NS_METHOD
-nsPipeConstructor(nsISupports *outer, REFNSIID iid, void **result)
-{
-    if (outer)
-        return NS_ERROR_NO_AGGREGATION;
-    nsPipe *pipe = new nsPipe();
-    if (!pipe)
-        return NS_ERROR_OUT_OF_MEMORY;
-    NS_ADDREF(pipe);
-    nsresult rv = pipe->QueryInterface(iid, result);
-    NS_RELEASE(pipe);
-    return rv;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

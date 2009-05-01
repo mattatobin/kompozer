@@ -1,42 +1,27 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
  *   Charles Manske (cmanske@netscape.com)
  *   Neil Rashbrook (neil@parkwaycc.co.uk)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 var gMisspelledWord;
 var gSpellChecker = null;
@@ -44,14 +29,12 @@ var gAllowSelectWord = true;
 var gPreviousReplaceWord = "";
 var gFirstTime = true;
 var gLastSelectedLang = null;
-var gDictCount = 0;
 
 function Startup()
 {
   var sendMailMessageMode = false;
 
-  var editor = GetCurrentEditor();
-  if (!editor)
+  if (!GetCurrentEditor())
   {
     window.close();
     return;
@@ -80,11 +63,14 @@ function Startup()
       filterContractId = "@mozilla.org/editor/txtsrvfilter;1";
 
     gSpellChecker.setFilter(Components.classes[filterContractId].createInstance(Components.interfaces.nsITextServicesFilter));
-    gSpellChecker.InitSpellChecker(editor, enableSelectionChecking);
+    gSpellChecker.InitSpellChecker(GetCurrentEditor(), enableSelectionChecking);
 
+   // XXX: We need to read in a pref here so we can set the
+   //      default language for the spellchecker!
+   // gSpellChecker.SetCurrentDictionary();
   }
   catch(ex) {
-    alert("*** Exception error: InitSpellChecker\n" + ex);
+   dump("*** Exception error: InitSpellChecker\n");
     window.close();
     return;
   }
@@ -145,7 +131,7 @@ function Startup()
   gFirstTime = false;
 }
 
-function InitLanguageMenu(aCurLang)
+function InitLanguageMenu(curLang)
 {
 
   var o1 = {};
@@ -154,12 +140,9 @@ function InitLanguageMenu(aCurLang)
   // Get the list of dictionaries from
   // the spellchecker.
 
-  try
-  {
+  try {
     gSpellChecker.GetDictionaryList(o1, o2);
-  }
-  catch(ex)
-  {
+  } catch(ex) {
     dump("Failed to get DictionaryList!\n");
     return;
   }
@@ -167,87 +150,65 @@ function InitLanguageMenu(aCurLang)
   var dictList = o1.value;
   var count    = o2.value;
 
-  // If we're not just starting up and dictionary count
-  // hasn't changed then no need to update the menu.
-  if (gDictCount == count)
-    return;
-
-  // Store current dictionary count.
-  gDictCount = count;
-
   // Load the string bundles that will help us map
   // RFC 1766 strings to UI strings.
 
   // Load the language string bundle.
   var languageBundle = document.getElementById("languageBundle");
-  var regionBundle = null;
+  var regionBundle;
   // If we have a language string bundle, load the region string bundle.
   if (languageBundle)
     regionBundle = document.getElementById("regionBundle");
   
   var menuStr2;
   var isoStrArray;
+  var defaultItem = null;
   var langId;
-  var langLabel;
   var i;
-
-  for (i = 0; i < count; i++)
+  for (i = 0; i < dictList.length; i++)
   {
-    try
-    {
+    try {
       langId = dictList[i];
       isoStrArray = dictList[i].split("-");
 
-      if (languageBundle && isoStrArray[0])
-        langLabel = languageBundle.getString(isoStrArray[0].toLowerCase());
+      dictList[i] = new Array(2); // first subarray element - pretty name
+      dictList[i][1] = langId;    // second subarray element - language ID
 
-      if (regionBundle && langLabel && isoStrArray.length > 1 && isoStrArray[1])
+      if (languageBundle && isoStrArray[0])
+        dictList[i][0] = languageBundle.getString(isoStrArray[0].toLowerCase());
+
+      if (regionBundle && dictList[i][0] && isoStrArray.length > 1 && isoStrArray[1])
       {
         menuStr2 = regionBundle.getString(isoStrArray[1].toLowerCase());
         if (menuStr2)
-          langLabel += "/" + menuStr2;
+          dictList[i][0] = dictList[i][0] + "/" + menuStr2;
       }
 
-      if (langLabel && isoStrArray.length > 2 && isoStrArray[2])
-        langLabel += " (" + isoStrArray[2] + ")";
+      if (!dictList[i][0])
+        dictList[i][0] = dictList[i][1];
+    } catch (ex) {
+      // GetString throws an exception when
+      // a key is not found in the bundle. In that
+      // case, just use the original dictList string.
 
-      if (!langLabel)
-        langLabel = langId;
+      dictList[i][0] = dictList[i][1];
     }
-    catch (ex)
-    {
-      // getString throws an exception when a key is not found in the
-      // bundle. In that case, just use the original dictList string.
-      langLabel = langId;
-    }
-    dictList[i] = [langLabel, langId];
   }
   
-  // sort by locale-aware collation
-  dictList.sort(
-    function compareFn(a, b)
-    {
-      return a[0].localeCompare(b[0]);
-    }
-  );
+  // note this is not locale-aware collation, just simple ASCII-based sorting
+  // we really need to add loacel-aware JS collation, see bug XXXXX
+  dictList.sort();
 
-  // Remove any languages from the list.
-  var languageMenuPopup = gDialog.LanguageMenulist.firstChild;
-  while (languageMenuPopup.firstChild.localName != "menuseparator")
-    languageMenuPopup.removeChild(languageMenuPopup.firstChild);
-
-  var defaultItem = null;
-
-  for (i = 0; i < count; i++)
+  for (i = 0; i < dictList.length; i++)
   {
-    var item = gDialog.LanguageMenulist.insertItemAt(i, dictList[i][0], dictList[i][1]);
-    if (aCurLang && dictList[i][1] == aCurLang)
+    var item = gDialog.LanguageMenulist.appendItem(dictList[i][0], dictList[i][1]);
+    if (curLang && dictList[i][1] == curLang)
       defaultItem = item;
   }
 
   // Now make sure the correct item in the menu list is selected.
-  if (defaultItem)
-  {
+
+  if (defaultItem) {
     gDialog.LanguageMenulist.selectedItem = defaultItem;
     gLastSelectedLang = defaultItem;
   }
@@ -458,8 +419,7 @@ function SelectLanguage()
       gLastSelectedLang = item;
     }
     else {
-      opener.open(GetPrefs().getComplexValue("editor.spellcheckers.url",
-                  Components.interfaces.nsIPrefLocalizedString).data);
+      window.opener.openDialog( getBrowserURL(), "_blank", "chrome,all,dialog=no", xlateURL('urn:clienturl:composer:spellcheckers'));
       if (gLastSelectedLang)
         gDialog.LanguageMenulist.selectedItem = gLastSelectedLang;
     }
@@ -473,6 +433,7 @@ function Recheck()
   //TODO: Should we bother to add a "Recheck" method to interface?
   try {
     var curLang = gSpellChecker.GetCurrentDictionary();
+
     gSpellChecker.UninitSpellChecker();
     gSpellChecker.InitSpellChecker(GetCurrentEditor(), false);
     gSpellChecker.SetCurrentDictionary(curLang);
@@ -550,7 +511,7 @@ function SetReplaceEnable()
 function doDefault()
 {
   if (gDialog.ReplaceButton.getAttribute("default") == "true")
-    Replace(gDialog.ReplaceWordInput.value);
+    Replace();
   else if (gDialog.IgnoreButton.getAttribute("default") == "true")
     Ignore();
   else if (gDialog.CloseButton.getAttribute("default") == "true")
@@ -559,35 +520,14 @@ function doDefault()
   return false;
 }
 
-function ExitSpellChecker()
+function CancelSpellCheck()
 {
   if (gSpellChecker)
   {
-    try
-    {
-      var curLang = gSpellChecker.GetCurrentDictionary();
+    try {
       gSpellChecker.UninitSpellChecker();
-      if ("@mozilla.org/spellchecker;1" in Components.classes) {
-        var spellChecker = Components.classes["@mozilla.org/spellchecker/myspell;1"]
-                                     .getService(Components.interfaces.mozISpellCheckingEngine);
-        spellChecker.dictionary = curLang;
-      }
-      // now check the document over again with the new dictionary
-      // if we have an inline spellchecker
-      if (("InlineSpellCheckerUI" in window.opener) &&
-          window.opener.InlineSpellCheckerUI.enabled)
-        window.opener.InlineSpellCheckerUI.mInlineSpellChecker.spellCheckRange(null);
-    }
-    finally
-    {
-      gSpellChecker = null;
-    }
+    } finally { gSpellChecker = null; }
   }
-}
-
-function CancelSpellCheck()
-{
-  ExitSpellChecker();
 
   // Signal to calling window that we canceled
   window.opener.cancelSendMessage = true;
@@ -596,8 +536,12 @@ function CancelSpellCheck()
 
 function onClose()
 {
-  ExitSpellChecker();
-
+  if (gSpellChecker)
+  {
+    try {
+      gSpellChecker.UninitSpellChecker();
+    } finally { gSpellChecker = null; }
+  }
   window.opener.cancelSendMessage = false;
   window.close();
 }

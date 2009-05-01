@@ -45,9 +45,9 @@
 
 class nsIContent;
 class nsMappedAttributes;
-class nsHTMLStyleSheet;
+class nsIHTMLStyleSheet;
 class nsRuleWalker;
-class nsGenericHTMLElement;
+class nsIHTMLContent;
 
 #define ATTRCHILD_ARRAY_GROWSIZE 8
 #define ATTRCHILD_ARRAY_LINEAR_THRESHOLD 32
@@ -88,6 +88,7 @@ public:
   }
   nsresult InsertChildAt(nsIContent* aChild, PRUint32 aPos);
   void RemoveChildAt(PRUint32 aPos);
+  void ReplaceChildAt(nsIContent* aChild, PRUint32 aPos);
   PRInt32 IndexOfChild(nsIContent* aPossibleChild) const;
 
   PRUint32 AttrCount() const;
@@ -96,19 +97,15 @@ public:
   nsresult SetAttr(nsIAtom* aLocalName, const nsAString& aValue);
   nsresult SetAndTakeAttr(nsIAtom* aLocalName, nsAttrValue& aValue);
   nsresult SetAndTakeAttr(nsINodeInfo* aName, nsAttrValue& aValue);
-
-  // Remove the attr at position aPos.  The value of the attr is placed in
-  // aValue; any value that was already in aValue is destroyed.
-  nsresult RemoveAttrAt(PRUint32 aPos, nsAttrValue& aValue);
+  nsresult RemoveAttrAt(PRUint32 aPos);
   const nsAttrName* GetSafeAttrNameAt(PRUint32 aPos) const;
   // aName is UTF-8 encoded
   const nsAttrName* GetExistingAttrNameFromQName(const nsACString& aName) const;
   PRInt32 IndexOfAttr(nsIAtom* aLocalName, PRInt32 aNamespaceID = kNameSpaceID_None) const;
 
   nsresult SetAndTakeMappedAttr(nsIAtom* aLocalName, nsAttrValue& aValue,
-                                nsGenericHTMLElement* aContent,
-                                nsHTMLStyleSheet* aSheet);
-  nsresult SetMappedAttrStyleSheet(nsHTMLStyleSheet* aSheet);
+                                nsIHTMLContent* aContent, nsIHTMLStyleSheet* aSheet);
+  nsresult SetMappedAttrStyleSheet(nsIHTMLStyleSheet* aSheet);
   void WalkMappedAttributeStyleRules(nsRuleWalker* aRuleWalker);
 
   void Compact();
@@ -122,8 +119,8 @@ private:
   PRUint32 NonMappedAttrCount() const;
   PRUint32 MappedAttrCount() const;
 
-  nsresult GetModifiableMapped(nsGenericHTMLElement* aContent,
-                               nsHTMLStyleSheet* aSheet,
+  nsresult GetModifiableMapped(nsIHTMLContent* aContent,
+                               nsIHTMLStyleSheet* aSheet,
                                PRBool aWillAddAttr,
                                nsMappedAttributes** aModifiable);
   nsresult MakeMappedUnique(nsMappedAttributes* aAttributes);

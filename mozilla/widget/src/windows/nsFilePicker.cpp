@@ -1,42 +1,26 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 2000 Netscape Communications Corporation. All
+ * Rights Reserved.
+ * 
  * Contributor(s):
  *   Stuart Parmenter <pavlov@netscape.com>
  *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsCOMPtr.h"
 #include "nsGUIEvent.h"
@@ -59,9 +43,7 @@
 
 // commdlg.h and cderr.h are needed to build with WIN32_LEAN_AND_MEAN
 #include <commdlg.h>
-#ifndef WINCE
 #include <cderr.h>
-#endif
 
 #include "nsString.h"
 #include "nsToolkit.h"
@@ -89,6 +71,7 @@ char nsFilePicker::mLastUsedDirectory[MAX_PATH+1] = { 0 };
 nsFilePicker::nsFilePicker()
 {
   mSelectedType   = 1;
+  mDisplayDirectory = do_CreateInstance("@mozilla.org/file/local;1");
 }
 
 //-------------------------------------------------------------------------
@@ -106,7 +89,6 @@ nsFilePicker::~nsFilePicker()
 //
 //-------------------------------------------------------------------------
 
-#ifndef WINCE
 int CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData)
 {
   if (uMsg == BFFM_INITIALIZED)
@@ -118,9 +100,9 @@ int CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpDa
       nsCRT::free(filePath);
     }
   }
+
   return 0;
 }
-#endif
 
 NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
 {
@@ -136,12 +118,10 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
   PRBool result = PR_FALSE;
   PRUnichar fileBuffer[FILE_BUFFER_SIZE+1];
   wcsncpy(fileBuffer,  mDefault.get(), FILE_BUFFER_SIZE);
-  fileBuffer[FILE_BUFFER_SIZE] = '\0'; // null terminate in case copy truncated
 
   NS_NAMED_LITERAL_STRING(htmExt, "html");
   nsAutoString initialDir;
-  if (mDisplayDirectory)
-    mDisplayDirectory->GetPath(initialDir);
+  mDisplayDirectory->GetPath(initialDir);
 
   // If no display directory, re-use the last one.
   if(initialDir.IsEmpty()) {
@@ -150,8 +130,6 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
   }
 
   mUnicodeFile.Truncate();
-
-#ifndef WINCE
 
   if (mMode == modeGetFolder) {
     PRUnichar dirBuffer[MAX_PATH+1];
@@ -187,12 +165,15 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
       }
   
       // free PIDL
-      CoTaskMemFree(list);
+      LPMALLOC pMalloc = NULL;
+      ::SHGetMalloc(&pMalloc);
+      if(pMalloc) {
+         pMalloc->Free(list);
+         pMalloc->Release();
+      }
     }
   }
-  else 
-#endif // WINCE
-  {
+  else {
 
     OPENFILENAMEW ofn;
     memset(&ofn, 0, sizeof(ofn));
@@ -229,9 +210,9 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
         // Should we test for ".cgi", ".asp", ".jsp" and other
         // "generated" html pages?
 
-        if ( ext.LowerCaseEqualsLiteral(".htm")  ||
-             ext.LowerCaseEqualsLiteral(".html") ||
-             ext.LowerCaseEqualsLiteral(".shtml") ) {
+        if ( ext.EqualsIgnoreCase(".htm")  ||
+             ext.EqualsIgnoreCase(".html") ||
+             ext.EqualsIgnoreCase(".shtml") ) {
           // This is supposed to append ".htm" if user doesn't supply an extension
           //XXX Actually, behavior is sort of weird:
           //    often appends ".html" even if you have an extension
@@ -241,62 +222,38 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
       }
     }
 
-#ifndef WINCE
-    try {
-#endif
-      if (mMode == modeOpen) {
-        // FILE MUST EXIST!
-        ofn.Flags |= OFN_FILEMUSTEXIST;
-        result = nsToolkit::mGetOpenFileName(&ofn);
-      }
-      else if (mMode == modeOpenMultiple) {
-        ofn.Flags |= OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
-        result = nsToolkit::mGetOpenFileName(&ofn);
-      }
-      else if (mMode == modeSave) {
-        ofn.Flags |= OFN_NOREADONLYRETURN;
-
-        // Don't follow shortcuts when saving a shortcut, this can be used
-        // to trick users (bug 271732)
-        NS_ConvertUTF16toUTF8 ext(mDefault);
-        ext.Trim(" .", PR_FALSE, PR_TRUE); // watch out for trailing space and dots
-        ToLowerCase(ext);
-        if (StringEndsWith(ext, NS_LITERAL_CSTRING(".lnk")) ||
-            StringEndsWith(ext, NS_LITERAL_CSTRING(".pif")) ||
-            StringEndsWith(ext, NS_LITERAL_CSTRING(".url")))
-          ofn.Flags |= OFN_NODEREFERENCELINKS;
-
-        result = nsToolkit::mGetSaveFileName(&ofn);
-        if (!result) {
-          // Error, find out what kind.
-          if (::GetLastError() == ERROR_INVALID_PARAMETER ||
-              ::CommDlgExtendedError() == FNERR_INVALIDFILENAME) {
-            // probably the default file name is too long or contains illegal characters!
-            // Try again, without a starting file name.
-            ofn.lpstrFile[0] = 0;
-            result = nsToolkit::mGetSaveFileName(&ofn);
-          }
+    if (mMode == modeOpen) {
+      // FILE MUST EXIST!
+      ofn.Flags |= OFN_FILEMUSTEXIST;
+      result = nsToolkit::mGetOpenFileName(&ofn);
+    }
+    else if (mMode == modeOpenMultiple) {
+      ofn.Flags |= OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+      result = nsToolkit::mGetOpenFileName(&ofn);
+    }
+    else if (mMode == modeSave) {
+      ofn.Flags |= OFN_NOREADONLYRETURN;
+      result = nsToolkit::mGetSaveFileName(&ofn);
+      if (!result) {
+        // Error, find out what kind.
+        if (::GetLastError() == ERROR_INVALID_PARAMETER ||
+            ::CommDlgExtendedError() == FNERR_INVALIDFILENAME) {
+          // probably the default file name is too long or contains illegal characters!
+          // Try again, without a starting file name.
+          ofn.lpstrFile[0] = 0;
+          result = nsToolkit::mGetSaveFileName(&ofn);
         }
       }
-      else {
-        NS_ASSERTION(0, "unsupported mode"); 
-      }
-#ifndef WINCE
     }
-    catch(...) {
-      MessageBox(ofn.hwndOwner,
-                 0,
-                 "The filepicker was unexpectedly closed by Windows.",
-                 MB_ICONERROR);
-      result = PR_FALSE;
+    else {
+      NS_ASSERTION(0, "unsupported mode"); 
     }
-#endif
   
-    if (result == PR_TRUE) {
-      // Remember what filter type the user selected
-      mSelectedType = (PRInt16)ofn.nFilterIndex;
+    // Remember what filter type the user selected
+    mSelectedType = (PRInt16)ofn.nFilterIndex;
 
-      // Set user-selected location of file or directory
+    // Set user-selected location of file or directory
+    if (result == PR_TRUE) {
       if (mMode == modeOpenMultiple) {
         nsresult rv = NS_NewISupportsArray(getter_AddRefs(mFiles));
         NS_ENSURE_SUCCESS(rv,rv);
@@ -360,16 +317,19 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
     nsCOMPtr<nsILocalFile> file(do_CreateInstance("@mozilla.org/file/local;1"));
     NS_ENSURE_TRUE(file, NS_ERROR_FAILURE);
 
-    // XXX  InitWithPath() will convert UCS2 to FS path !!!  corrupts unicode 
+    // work around.  InitWithPath() will convert UCS2 to FS path !!!  corrupts unicode 
     file->InitWithPath(mUnicodeFile);
     nsCOMPtr<nsIFile> dir;
     if (NS_SUCCEEDED(file->GetParent(getter_AddRefs(dir)))) {
-      mDisplayDirectory = do_QueryInterface(dir);
-      if (mDisplayDirectory) {
+      nsCOMPtr<nsILocalFile> localDir(do_QueryInterface(dir));
+      if (localDir) {
         nsAutoString newDir;
-        mDisplayDirectory->GetPath(newDir);
+        localDir->GetPath(newDir);
         if(!newDir.IsEmpty())
           mLastUsedUnicodeDirectory.Assign(newDir);
+        // Update mDisplayDirectory with this directory, also.
+        // Some callers rely on this.
+        mDisplayDirectory->InitWithPath(mLastUsedUnicodeDirectory);
       }
     }
 
@@ -378,7 +338,6 @@ NS_IMETHODIMP nsFilePicker::ShowW(PRInt16 *aReturnVal)
       //   we must check if file already exists
       PRBool exists = PR_FALSE;
       file->Exists(&exists);
-
       if (exists)
         returnOKorReplace = returnReplace;
     }
@@ -521,6 +480,31 @@ NS_IMETHODIMP nsFilePicker::SetFilterIndex(PRInt32 aFilterIndex)
 }
 
 //-------------------------------------------------------------------------
+//
+// Set the display directory
+//
+//-------------------------------------------------------------------------
+NS_IMETHODIMP nsFilePicker::SetDisplayDirectory(nsILocalFile *aDirectory)
+{
+  mDisplayDirectory = aDirectory;
+  return NS_OK;
+}
+
+//-------------------------------------------------------------------------
+//
+// Get the display directory
+//
+//-------------------------------------------------------------------------
+NS_IMETHODIMP nsFilePicker::GetDisplayDirectory(nsILocalFile **aDirectory)
+{
+  *aDirectory = mDisplayDirectory;
+  NS_IF_ADDREF(*aDirectory);
+  return NS_OK;
+}
+
+
+
+//-------------------------------------------------------------------------
 void nsFilePicker::InitNative(nsIWidget *aParent,
                               const nsAString& aTitle,
                               PRInt16 aMode)
@@ -537,14 +521,14 @@ nsFilePicker::AppendFilter(const nsAString& aTitle, const nsAString& aFilter)
   mFilterList.Append(aTitle);
   mFilterList.Append(PRUnichar('\0'));
 
-  if (aFilter.EqualsLiteral("..apps"))
-    mFilterList.AppendLiteral("*.exe;*.com");
+  if (aFilter.Equals(NS_LITERAL_STRING("..apps")))
+    mFilterList.Append(NS_LITERAL_STRING("*.exe;*.com"));
   else
   {
     nsAutoString filter(aFilter);
     filter.StripWhitespace();
-    if (filter.EqualsLiteral("*"))
-      filter.AppendLiteral(".*");
+    if (filter.Equals(NS_LITERAL_STRING("*")))
+      filter.Append(NS_LITERAL_STRING(".*"));
     mFilterList.Append(filter);
   }
 

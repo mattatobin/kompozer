@@ -97,15 +97,10 @@ PRBool ipcMessageWriter::GrowCapacity(PRInt32 sizeNeeded)
   if (sizeNeeded < 0)
     return PR_FALSE;
   PRInt32 newCapacity = (mBufPtr - mBuf) + sizeNeeded;
-  if (mCapacity == 0)
-    mCapacity = newCapacity;
-  else
-  {
-    while (newCapacity > mCapacity && (mCapacity << 1) > 0)
-      mCapacity <<= 1;
-    if (newCapacity > mCapacity) // if we broke out because of rollover
-      return PR_FALSE;
-  }
+  while (newCapacity > mCapacity && (mCapacity << 1) > 0)
+    mCapacity <<= 1;
+  if (newCapacity > mCapacity) // if we broke out because of rollover
+    return PR_FALSE;
     
   PRInt32 curPos = mBufPtr - mBuf;
   mBuf = (PRUint8*)realloc(mBuf, mCapacity);
@@ -114,6 +109,6 @@ PRBool ipcMessageWriter::GrowCapacity(PRInt32 sizeNeeded)
     return PR_FALSE;
   }
   mBufPtr = mBuf + curPos;
-  mBufEnd = mBuf + mCapacity;
+  mBufEnd = mBufPtr + mCapacity;
   return PR_TRUE;
 }

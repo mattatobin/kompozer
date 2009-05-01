@@ -1,43 +1,27 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is Mozilla MathML Project.
  *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is The University Of
+ * Queensland.  Portions created by The University Of Queensland are
+ * Copyright (C) 1999 The University Of Queensland.  All Rights Reserved.
  *
  * Contributor(s):
  *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsCOMPtr.h"
 #include "nsFrame.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsUnitConversion.h"
 #include "nsStyleContext.h"
 #include "nsStyleConsts.h"
@@ -48,6 +32,7 @@
 #include "nsCSSRendering.h"
 #include "prprf.h"         // For PR_snprintf()
 
+#include "nsIWebShell.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIDocShellTreeOwner.h"
 #include "nsIWebBrowserChrome.h"
@@ -104,7 +89,7 @@ nsMathMLmactionFrame::~nsMathMLmactionFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmactionFrame::Init(nsPresContext*  aPresContext,
+nsMathMLmactionFrame::Init(nsIPresContext*  aPresContext,
                            nsIContent*      aContent,
                            nsIFrame*        aParent,
                            nsStyleContext*  aContext,
@@ -125,7 +110,7 @@ nsMathMLmactionFrame::Init(nsPresContext*  aPresContext,
   mActionType = NS_MATHML_ACTION_TYPE_NONE;
   if (NS_CONTENT_ATTR_HAS_VALUE == aContent->GetAttr(kNameSpaceID_None, 
                    nsMathMLAtoms::actiontype_, value)) {
-    if (value.EqualsLiteral("toggle"))
+    if (value.Equals(NS_LITERAL_STRING("toggle")))
       mActionType = NS_MATHML_ACTION_TYPE_TOGGLE;
 
     // XXX use goto to jump out of these if?
@@ -222,14 +207,16 @@ nsMathMLmactionFrame::GetSelectedFrame()
 
   // if the selected child is an embellished operator,
   // we become embellished as well
-  mPresentationData.baseFrame = mSelectedFrame;
   GetEmbellishDataFrom(mSelectedFrame, mEmbellishData);
+  if (NS_MATHML_IS_EMBELLISH_OPERATOR(mEmbellishData.flags)) {
+    mEmbellishData.nextFrame = mSelectedFrame; // yes!
+  }
 
   return mSelectedFrame;
 }
 
 NS_IMETHODIMP
-nsMathMLmactionFrame::SetInitialChildList(nsPresContext* aPresContext,
+nsMathMLmactionFrame::SetInitialChildList(nsIPresContext* aPresContext,
                                           nsIAtom*        aListName,
                                           nsIFrame*       aChildList)
 {
@@ -251,21 +238,22 @@ nsMathMLmactionFrame::SetInitialChildList(nsPresContext* aPresContext,
 
 // Return the selected frame ...
 NS_IMETHODIMP
-nsMathMLmactionFrame::GetFrameForPoint(const nsPoint&    aPoint,
+nsMathMLmactionFrame::GetFrameForPoint(nsIPresContext*   aPresContext,
+                                       const nsPoint&    aPoint,
                                        nsFramePaintLayer aWhichLayer,
                                        nsIFrame**        aFrame)
 {
   nsIFrame* childFrame = GetSelectedFrame();
   if (childFrame) {
     nsPoint pt(aPoint.x - mRect.x, aPoint.y - mRect.y);
-    return childFrame->GetFrameForPoint(pt, aWhichLayer, aFrame);
+    return childFrame->GetFrameForPoint(aPresContext, pt, aWhichLayer, aFrame);
   }
-  return nsFrame::GetFrameForPoint(aPoint, aWhichLayer, aFrame);
+  return nsFrame::GetFrameForPoint(aPresContext, aPoint, aWhichLayer, aFrame);
 }
 
 //  Only paint the selected child...
 NS_IMETHODIMP
-nsMathMLmactionFrame::Paint(nsPresContext*      aPresContext,
+nsMathMLmactionFrame::Paint(nsIPresContext*      aPresContext,
                             nsIRenderingContext& aRenderingContext,
                             const nsRect&        aDirtyRect,
                             nsFramePaintLayer    aWhichLayer,
@@ -298,7 +286,7 @@ nsMathMLmactionFrame::Paint(nsPresContext*      aPresContext,
 
 // Only reflow the selected child ...
 NS_IMETHODIMP
-nsMathMLmactionFrame::Reflow(nsPresContext*          aPresContext,
+nsMathMLmactionFrame::Reflow(nsIPresContext*          aPresContext,
                              nsHTMLReflowMetrics&     aDesiredSize,
                              const nsHTMLReflowState& aReflowState,
                              nsReflowStatus&          aStatus)
@@ -310,9 +298,7 @@ nsMathMLmactionFrame::Reflow(nsPresContext*          aPresContext,
   nsIFrame* childFrame = GetSelectedFrame();
   if (childFrame) {
     nsReflowReason reason = aReflowState.reason;
-    if (childFrame->GetStateBits() & NS_FRAME_FIRST_REFLOW)
-      reason = eReflowReason_Initial;
-    else if (mWasRestyled) {
+    if (mWasRestyled) {
       mWasRestyled = PR_FALSE;
       // If we have just been restyled, make sure to reflow our
       // selected child with a StyleChange reflow reason so that
@@ -332,7 +318,7 @@ nsMathMLmactionFrame::Reflow(nsPresContext*          aPresContext,
     childFrame->SetRect(nsRect(aDesiredSize.descent,aDesiredSize.ascent,
                         aDesiredSize.width,aDesiredSize.height));
     mBoundingMetrics = aDesiredSize.mBoundingMetrics;
-    FinalizeReflow(*aReflowState.rendContext, aDesiredSize);
+    FinalizeReflow(aPresContext, *aReflowState.rendContext, aDesiredSize);
   }
   NS_FRAME_SET_TRUNCATION(aStatus, aReflowState, aDesiredSize);
   return rv;
@@ -340,7 +326,8 @@ nsMathMLmactionFrame::Reflow(nsPresContext*          aPresContext,
 
 // Only place the selected child ...
 NS_IMETHODIMP
-nsMathMLmactionFrame::Place(nsIRenderingContext& aRenderingContext,
+nsMathMLmactionFrame::Place(nsIPresContext*      aPresContext,
+                            nsIRenderingContext& aRenderingContext,
                             PRBool               aPlaceOrigin,
                             nsHTMLReflowMetrics& aDesiredSize)
 {
@@ -351,7 +338,7 @@ nsMathMLmactionFrame::Place(nsIRenderingContext& aRenderingContext,
   if (childFrame) {
     GetReflowAndBoundingMetricsFor(childFrame, aDesiredSize, mBoundingMetrics);
     if (aPlaceOrigin) {
-      FinishReflowChild(childFrame, GetPresContext(), nsnull, aDesiredSize, 0, 0, 0);
+      FinishReflowChild(childFrame, aPresContext, nsnull, aDesiredSize, 0, 0, 0);
     }
     mReference.x = 0;
     mReference.y = aDesiredSize.ascent;
@@ -367,7 +354,7 @@ nsMathMLmactionFrame::Place(nsIRenderingContext& aRenderingContext,
 // helper to show a msg on the status bar
 // curled from nsObjectFrame.cpp ...
 nsresult
-nsMathMLmactionFrame::ShowStatus(nsPresContext* aPresContext,
+nsMathMLmactionFrame::ShowStatus(nsIPresContext* aPresContext,
                                  nsString&       aStatusMsg)
 {
   nsCOMPtr<nsISupports> cont = aPresContext->GetContainer();
@@ -426,7 +413,7 @@ nsMathMLmactionFrame::MouseClick(nsIDOMEvent* aMouseEvent)
       PRInt32 selection = (mSelection == mChildCount)? 1 : mSelection + 1;
       char cbuf[10];
       PR_snprintf(cbuf, sizeof(cbuf), "%d", selection);
-      value.AssignASCII(cbuf);
+      value.AssignWithConversion(cbuf);
       PRBool notify = PR_FALSE; // don't yet notify the document
       mContent->SetAttr(kNameSpaceID_None, nsMathMLAtoms::selection_, value, notify);
 
@@ -452,9 +439,8 @@ nsMathMLmactionFrame::MouseClick(nsIDOMEvent* aMouseEvent)
         // targeted at our selected frame
         nsIPresShell *presShell = mPresContext->PresShell();
         presShell->CancelReflowCommand(this, nsnull);
-        presShell->AppendReflowCommand(mSelectedFrame,
-				       eReflowType_StyleChanged,
-				       nsnull);
+        nsFrame::CreateAndPostReflowCommand(presShell, mSelectedFrame, 
+          eReflowType_StyleChanged, nsnull, nsnull, nsnull);
       }
     }
   }

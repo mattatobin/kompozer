@@ -20,11 +20,11 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: Aaron Leventhal (aaronl@netscape.com)
+ * Original Author: Aaron Leventhal (aaronl@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
@@ -44,25 +44,24 @@
 #define _nsAccessNode_H_
 
 #include "nsCOMPtr.h"
-#include "nsAccessibilityAtoms.h"
 #include "nsIAccessNode.h"
-#include "nsIContent.h"
 #include "nsPIAccessNode.h"
-#include "nsIDocShellTreeItem.h"
 #include "nsIDOMNode.h"
-#include "nsINameSpaceManager.h"
 #include "nsIStringBundle.h"
 #include "nsWeakReference.h"
+
 #include "nsInterfaceHashtable.h"
 
 class nsIPresShell;
-class nsPresContext;
+class nsIPresContext;
 class nsIAccessibleDocument;
 class nsIFrame;
 class nsIDOMNodeList;
-class nsITimer;
 
-#define ACCESSIBLE_BUNDLE_URL "chrome://global-platform/locale/accessible.properties"
+enum { eChildCountUninitialized = 0xffff };
+enum { eSiblingsUninitialized = -1, eSiblingsWalkNormalDOM = -2 };
+
+#define ACCESSIBLE_BUNDLE_URL "chrome://global/locale/accessible.properties"
 #define PLATFORM_KEYS_BUNDLE_URL "chrome://global-platform/locale/platformKeys.properties"
 
 /* hashkey wrapper using void* KeyType
@@ -116,42 +115,21 @@ class nsAccessNode: public nsIAccessNode, public nsPIAccessNode
     static PLDHashOperator PR_CALLBACK ClearCacheEntry(const void* aKey, nsCOMPtr<nsIAccessNode>& aAccessNode, void* aUserArg);
 
     // Static cache methods for global document cache
-    static already_AddRefed<nsIAccessibleDocument> GetDocAccessibleFor(nsIWeakReference *aPresShell);
-    static already_AddRefed<nsIAccessibleDocument> GetDocAccessibleFor(nsISupports *aContainer);
-    static already_AddRefed<nsIAccessibleDocument> GetDocAccessibleFor(nsIDOMNode *aNode);
+    static void GetDocAccessibleFor(nsIWeakReference *aPresShell,
+                                    nsIAccessibleDocument **aDocAccessible);
 
-    static already_AddRefed<nsIDocShellTreeItem> GetDocShellTreeItemFor(nsIDOMNode *aStartNode);
-    static already_AddRefed<nsIPresShell> GetPresShellFor(nsIDOMNode *aStartNode);
-    
-    // Return PR_TRUE if there is a role attribute
-    static PRBool HasRoleAttribute(nsIContent *aContent)
-    {
-      return (aContent->IsContentOfType(nsIContent::eHTML) && aContent->HasAttr(kNameSpaceID_None, nsAccessibilityAtoms::role)) ||
-              aContent->HasAttr(kNameSpaceID_XHTML, nsAccessibilityAtoms::role) ||
-              aContent->HasAttr(kNameSpaceID_XHTML2_Unofficial, nsAccessibilityAtoms::role);
-    }
-
-    // Return PR_TRUE if there is a role attribute, and fill it into aRole
-    static PRBool GetRoleAttribute(nsIContent *aContent, nsAString& aRole)
-    {
-      aRole.Truncate();
-      return (aContent->IsContentOfType(nsIContent::eHTML) && aContent->GetAttr(kNameSpaceID_None, nsAccessibilityAtoms::role, aRole) != NS_CONTENT_ATTR_NOT_THERE) ||
-              aContent->GetAttr(kNameSpaceID_XHTML, nsAccessibilityAtoms::role, aRole) != NS_CONTENT_ATTR_NOT_THERE ||
-              aContent->GetAttr(kNameSpaceID_XHTML2_Unofficial, nsAccessibilityAtoms::role, aRole) != NS_CONTENT_ATTR_NOT_THERE;
-    }
-
-    static nsIDOMNode *gLastFocusedNode;
-
-protected:
+  protected:
     nsresult MakeAccessNode(nsIDOMNode *aNode, nsIAccessNode **aAccessNode);
     already_AddRefed<nsIPresShell> GetPresShell();
-    nsPresContext* GetPresContext();
+    already_AddRefed<nsIPresContext> GetPresContext();
     already_AddRefed<nsIAccessibleDocument> GetDocAccessible();
+    nsIFrame* GetFrame();
 
     nsCOMPtr<nsIDOMNode> mDOMNode;
     nsCOMPtr<nsIWeakReference> mWeakShell;
 
-    PRInt32 mRefCnt;
+    PRInt16 mRefCnt;
+    PRUint16 mAccChildCount;
     NS_DECL_OWNINGTHREAD
 
 #ifdef DEBUG
@@ -161,7 +139,7 @@ protected:
     // Static data, we do our own refcounting for our static data
     static nsIStringBundle *gStringBundle;
     static nsIStringBundle *gKeyStringBundle;
-    static nsITimer *gDoCommandTimer;
+    static nsIDOMNode *gLastFocusedNode;
     static PRBool gIsAccessibilityActive;
     static PRBool gIsCacheDisabled;
 

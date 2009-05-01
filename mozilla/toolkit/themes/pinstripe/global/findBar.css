@@ -13,10 +13,6 @@
   background-image: none !important;
 }
 
-#find-closebutton:hover {
-  list-style-image: url("chrome://global/skin/icons/closetab-hover.png") !important;
-}
-
 #find-closebutton:hover:active {
 	list-style-image: url("chrome://global/skin/icons/closetab-active.png") !important;
 }
@@ -95,7 +91,7 @@
 
 #find-previous[disabled="true"]
 {
-  opacity: 0.5;
+  -moz-opacity: 0.5;
 }
 	
 #find-previous:hover
@@ -111,7 +107,7 @@
 
 #find-next[disabled="true"]
 {
-  opacity: 0.5;
+  -moz-opacity: 0.5;
 }
 
 #find-next:hover
@@ -128,7 +124,7 @@
 }
 
 #highlight[disabled="true"] {
-  opacity: 0.5;
+  -moz-opacity: 0.5;
 }
 
 #highlight:active, #highlight[checked="true"] {

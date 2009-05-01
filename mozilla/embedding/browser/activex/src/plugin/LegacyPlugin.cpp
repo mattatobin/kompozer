@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,13 +14,15 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *
  *   Adam Lock <adamlock@netscape.com>
+ *   Paul Oswald <paul.oswald@isinet.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -28,11 +30,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "stdafx.h"
@@ -358,20 +360,23 @@ MozAxAutoPushJSContext::MozAxAutoPushJSContext(JSContext *cx,
                                                nsIURI * aURI)
                                      : mContext(cx), mPushResult(NS_OK)
 {
-    nsCOMPtr<nsIJSContextStack> contextStack =
-        do_GetService("@mozilla.org/js/xpc/ContextStack;1");
+    mContextStack = do_GetService("@mozilla.org/js/xpc/ContextStack;1");
 
-    JSContext* currentCX;
-    if(contextStack &&
-       // Don't push if the current context is already on the stack.
-       (NS_FAILED(contextStack->Peek(&currentCX)) ||
-        cx != currentCX) )
+    if(mContextStack)
     {
-        if (NS_SUCCEEDED(contextStack->Push(cx)))
+        JSContext* currentCX;
+        if(NS_SUCCEEDED(mContextStack->Peek(&currentCX)))
         {
-            // Leave the reference in mContextStack to
-            // indicate that we need to pop it in our dtor.
-            mContextStack.swap(contextStack);
+            // Is the current context already on the stack?
+            if(cx == currentCX)
+                mContextStack = nsnull;
+            else
+            {
+                mContextStack->Push(cx);
+                // Leave the reference to the mContextStack to
+                // indicate that we need to pop it in our dtor.                                               
+            }
+
         }
     }
 
@@ -456,17 +461,18 @@ WillHandleCLSID(const CLSID &clsid, PluginInstanceData *pData)
     nsCOMPtr<nsIDispatchSupport> dispSupport = do_GetService(NS_IDISPATCH_SUPPORT_CONTRACTID);
     if (!dispSupport)
         return FALSE;
-    JSContext * cx = GetPluginsContext(pData);
-    if (!cx)
-        return FALSE;
     nsCID cid;
     memcpy(&cid, &clsid, sizeof(nsCID));
     PRBool isSafe = PR_FALSE;
     PRBool classExists = PR_FALSE;
-    nsCOMPtr<nsIURI> uri;
-    MozAxPlugin::GetCurrentLocation(pData->pPluginInstance, getter_AddRefs(uri));
-    MozAxAutoPushJSContext autoContext(cx, uri);
-    dispSupport->IsClassSafeToHost(cx, cid, PR_TRUE, &classExists, &isSafe);
+    JSContext * cx = GetPluginsContext(pData);
+    if (cx)
+    {
+        nsCOMPtr<nsIURI> uri;
+        MozAxPlugin::GetCurrentLocation(pData->pPluginInstance, getter_AddRefs(uri));
+        MozAxAutoPushJSContext autoContext(cx, uri);
+        dispSupport->IsClassSafeToHost(cx, cid, PR_TRUE, &classExists, &isSafe);
+    }
     if (classExists && !isSafe)
         return FALSE;
     return TRUE;
@@ -804,7 +810,7 @@ NewControl(const char *pluginType,
             //
             // The first example is the proper way
 
-            const int kCLSIDLen = 256;
+            const kCLSIDLen = 256;
             char szCLSID[kCLSIDLen];
             if (strlen(argv[i]) < sizeof(szCLSID))
             {
@@ -1118,7 +1124,7 @@ NPP_SetWindow(NPP instance, NPWindow* window)
 //  that the plugin doesn't handle streaming and can only deal with the object as
 //  a complete disk file.  It will still call the write functions but it will also
 //  pass the filename of the cached file in a later NPE_StreamAsFile call when it
-//  is done transferring the file.
+//  is done transfering the file.
 //
 //  If a plugin handles the data in a streaming manner, it should set streamtype to
 //  NPNormal  (e.g. *streamtype = NPNormal)...the NPE_StreamAsFile function will

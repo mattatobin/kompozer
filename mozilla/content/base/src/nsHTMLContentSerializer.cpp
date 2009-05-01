@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,30 +14,32 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsHTMLContentSerializer.h"
 
 #include "nsIDOMElement.h"
+#include "nsIDOMDocumentType.h"
 #include "nsIDOMText.h"
 #include "nsIContent.h"
 #include "nsIDocument.h"
@@ -60,16 +62,25 @@
 #include "nsILineBreakerFactory.h"
 #include "nsLWBrkCIID.h"
 
+#include "nsIPrefBranch.h"
+#include "nsIPrefService.h"
+#include "nsIServiceManager.h"
+
+#define PREF_NOESCAPING "editor.encode.noEscaping"
+
 #define kIndentStr NS_LITERAL_STRING("  ")
 #define kLessThan NS_LITERAL_STRING("<")
 #define kGreaterThan NS_LITERAL_STRING(">")
 #define kEndTag NS_LITERAL_STRING("</")
 
-#ifdef MOZ_STANDALONE_COMPOSER
-#include "nsIDOMDocumentType.h"
+#define kTagSpanStart    NS_LITERAL_STRING("<span class='start-tag'>")
+#define kTagSpanEnd      NS_LITERAL_STRING("<span class='end-tag'>")
+#define kSpanEnd         NS_LITERAL_STRING("</span>")
+#define kSelectionStart  NS_LITERAL_STRING("<span id='start-selection'></span>")
+#define kSelectionEnd    NS_LITERAL_STRING("<span id='end-selection'></span>")
+
 #define kEscapedLessThan NS_LITERAL_STRING("&lt;")
 #define kEscapedGreaterThan NS_LITERAL_STRING("&gt;")
-#endif
 
 static const char kMozStr[] = "moz";
 static NS_DEFINE_CID(kLWBrkCID, NS_LWBRK_CID);
@@ -93,7 +104,8 @@ nsHTMLContentSerializer::nsHTMLContentSerializer()
   mAddSpace(PR_FALSE),
   mMayIgnoreLineBreakSequence(PR_FALSE),
   mInCDATA(PR_FALSE),
-  mNeedLineBreaker(PR_TRUE)
+  mNeedLineBreaker(PR_TRUE),
+  mDisableEscaping(PR_FALSE)
 {
 }
 
@@ -125,21 +137,27 @@ nsHTMLContentSerializer::Init(PRUint32 aFlags, PRUint32 aWrapColumn,
   mIsFirstChildOfOL = PR_FALSE;
   mDoFormat = (mFlags & nsIDocumentEncoder::OutputFormatted) ? PR_TRUE
                                                              : PR_FALSE;
+  mDoWrap   = (mFlags & nsIDocumentEncoder::OutputWrap) ? PR_TRUE
+                                                        : PR_FALSE;
   mBodyOnly = (mFlags & nsIDocumentEncoder::OutputBodyOnly) ? PR_TRUE
                                                             : PR_FALSE;
   // Set the line break character:
-  if ((mFlags & nsIDocumentEncoder::OutputCRLineBreak)
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView) {
+    // override in the case of a colored source view
+    mLineBreak.Assign(NS_LITERAL_STRING("<br>"));
+  }
+  else if ((mFlags & nsIDocumentEncoder::OutputCRLineBreak)
       && (mFlags & nsIDocumentEncoder::OutputLFLineBreak)) { // Windows
-    mLineBreak.AssignLiteral("\r\n");
+    mLineBreak.Assign(NS_LITERAL_STRING("\r\n"));
   }
   else if (mFlags & nsIDocumentEncoder::OutputCRLineBreak) { // Mac
-    mLineBreak.AssignLiteral("\r");
+    mLineBreak.Assign(NS_LITERAL_STRING("\r"));
   }
   else if (mFlags & nsIDocumentEncoder::OutputLFLineBreak) { // Unix/DOM
-    mLineBreak.AssignLiteral("\n");
+    mLineBreak.Assign(NS_LITERAL_STRING("\n"));
   }
   else {
-    mLineBreak.AssignLiteral(NS_LINEBREAK);         // Platform/default
+    mLineBreak.AssignWithConversion(NS_LINEBREAK);         // Platform/default
   }
 
   mPreLevel = 0;
@@ -149,6 +167,13 @@ nsHTMLContentSerializer::Init(PRUint32 aFlags, PRUint32 aWrapColumn,
   // set up entity converter if we are going to need it
   if (mFlags & nsIDocumentEncoder::OutputEncodeW3CEntities) {
     mEntityConverter = do_CreateInstance(NS_ENTITYCONVERTER_CONTRACTID);
+  }
+
+  nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID));
+  if (prefBranch) {
+    PRBool isEscapingDisabled;
+    if (NS_SUCCEEDED(prefBranch->GetBoolPref(PREF_NOESCAPING, &isEscapingDisabled)))
+      mDisableEscaping = isEscapingDisabled;
   }
 
   return NS_OK;
@@ -176,7 +201,7 @@ nsHTMLContentSerializer::AppendText(nsIDOMText* aText,
       nsresult rv;
       nsCOMPtr<nsILineBreakerFactory> lf(do_GetService(kLWBrkCID, &rv));
       if (NS_SUCCEEDED(rv)) {
-        rv = lf->GetBreaker(EmptyString(), getter_AddRefs(mLineBreaker));
+        rv = lf->GetBreaker(nsString(), getter_AddRefs(mLineBreaker));
         // Ignore result value.
         // If we are unable to obtain a line breaker,
         // we will use our simple fallback logic.
@@ -185,40 +210,78 @@ nsHTMLContentSerializer::AppendText(nsIDOMText* aText,
   }
 
   nsAutoString data;
-
   nsresult rv;
-  rv = AppendTextData((nsIDOMNode*)aText, aStartOffset, 
-                      aEndOffset, data, PR_TRUE, PR_FALSE);
-  if (NS_FAILED(rv))
-    return NS_ERROR_FAILURE;
 
+  if ((mFlags & nsIDocumentEncoder::OutputForColoredSourceView) &&
+      aText == mStartSelectionContainer &&
+      aStartOffset < mStartSelectionOffset)
+  {
+    rv = AppendTextData((nsIDOMNode*)aText, aStartOffset, 
+                        mStartSelectionOffset, data, PR_TRUE, PR_FALSE);
+    if (NS_FAILED(rv))
+      return NS_ERROR_FAILURE;
+
+    AppendTextInternal(data, aStr);
+    data.Truncate();
+
+    AppendToString(kSelectionStart, aStr, PR_FALSE, PR_FALSE);
+    aStartOffset = mStartSelectionOffset;
+  }
+
+  if ((mFlags & nsIDocumentEncoder::OutputForColoredSourceView) &&
+      aText == mEndSelectionContainer &&
+      (aEndOffset == -1 || aEndOffset > mEndSelectionOffset))
+  {
+    rv = AppendTextData((nsIDOMNode*)aText, aStartOffset, 
+                        mEndSelectionOffset, data, PR_TRUE, PR_FALSE);
+    if (NS_FAILED(rv))
+      return NS_ERROR_FAILURE;
+    AppendTextInternal(data, aStr);
+    data.Truncate();
+
+    AppendToString(kSelectionEnd, aStr, PR_FALSE, PR_FALSE);
+    rv = AppendTextData((nsIDOMNode*)aText, mEndSelectionOffset, 
+                        aEndOffset, data, PR_TRUE, PR_FALSE);
+  }
+  else
+  {
+    rv = AppendTextData((nsIDOMNode*)aText, aStartOffset, 
+                        aEndOffset, data, PR_TRUE, PR_FALSE);
+    if (NS_FAILED(rv))
+      return NS_ERROR_FAILURE;
+  }
+
+  AppendTextInternal(data, aStr);
+  return NS_OK;
+}
+
+void nsHTMLContentSerializer::AppendTextInternal(const nsString& aData, nsAString& aStr)
+{
   if (mPreLevel > 0) {
-    AppendToStringConvertLF(data, aStr);
+    AppendToStringConvertLF(aData, aStr);
   }
-  else if (mFlags & nsIDocumentEncoder::OutputRaw) {
-    PRInt32 lastNewlineOffset = data.RFindChar('\n');
-    AppendToString(data, aStr);
-    if (lastNewlineOffset != kNotFound)
-      mColPos = data.Length() - lastNewlineOffset;
-  }
-  else if (!mDoFormat) {
+  else if (!mDoWrap) {
     PRInt32 lastNewlineOffset = kNotFound;
-    PRBool hasLongLines = HasLongLines(data, lastNewlineOffset);
+    PRBool hasLongLines = HasLongLines(aData, lastNewlineOffset);
     if (hasLongLines) {
       // We have long lines, rewrap
-      AppendToStringWrapped(data, aStr, PR_FALSE);
+      AppendToStringWrapped(aData, aStr, PR_FALSE);
       if (lastNewlineOffset != kNotFound)
-        mColPos = data.Length() - lastNewlineOffset;
+        mColPos = aData.Length() - lastNewlineOffset;
     }
     else {
-      AppendToStringConvertLF(data, aStr);
+      AppendToStringConvertLF(aData, aStr);
     }
   }
-  else {
-    AppendToStringWrapped(data, aStr, PR_FALSE);
+  else if (mFlags & nsIDocumentEncoder::OutputRaw) {
+    PRInt32 lastNewlineOffset = aData.RFindChar('\n');
+    AppendToString(aData, aStr);
+    if (lastNewlineOffset != kNotFound)
+      mColPos = aData.Length() - lastNewlineOffset;
   }
-
-  return NS_OK;
+  else {
+    AppendToStringWrapped(aData, aStr, PR_FALSE);
+  }
 }
 
 void nsHTMLContentSerializer::AppendWrapped_WhitespaceSequence(
@@ -459,6 +522,19 @@ nsHTMLContentSerializer::AppendDocumentStart(nsIDOMDocument *aDocument,
 }
 
 PRBool
+nsHTMLContentSerializer::ContainsPHPChunk(const nsAString& aValueString)
+{
+  nsAString::const_iterator start, end;
+
+  aValueString.BeginReading(start);
+  aValueString.EndReading(end);
+
+  NS_NAMED_LITERAL_STRING(phpDelim, "<?php");
+
+  return FindInReadable(phpDelim, start, end);
+}
+
+PRBool
 nsHTMLContentSerializer::IsJavaScript(nsIAtom* aAttrNameAtom, const nsAString& aValueString)
 {
   if (aAttrNameAtom == nsHTMLAtoms::href ||
@@ -482,7 +558,6 @@ nsHTMLContentSerializer::IsJavaScript(nsIAtom* aAttrNameAtom, const nsAString& a
               || (aAttrNameAtom == nsLayoutAtoms::onfocus)     || (aAttrNameAtom == nsLayoutAtoms::onkeydown)
               || (aAttrNameAtom == nsLayoutAtoms::onkeypress)  || (aAttrNameAtom == nsLayoutAtoms::onkeyup)
               || (aAttrNameAtom == nsLayoutAtoms::onload)      || (aAttrNameAtom == nsLayoutAtoms::onmousedown)
-              || (aAttrNameAtom == nsLayoutAtoms::onpageshow)  || (aAttrNameAtom == nsLayoutAtoms::onpagehide)
               || (aAttrNameAtom == nsLayoutAtoms::onmousemove) || (aAttrNameAtom == nsLayoutAtoms::onmouseout)
               || (aAttrNameAtom == nsLayoutAtoms::onmouseover) || (aAttrNameAtom == nsLayoutAtoms::onmouseup)
               || (aAttrNameAtom == nsLayoutAtoms::onreset)     || (aAttrNameAtom == nsLayoutAtoms::onselect)
@@ -513,11 +588,11 @@ nsHTMLContentSerializer::EscapeURI(const nsAString& aURI, nsAString& aEscapedURI
   // But we eventually want to use UTF-8 instead of a document charset, then the code would be much simpler.
   // See HTML 4.01 spec, "Appendix B.2.1 Non-ASCII characters in URI attribute values"
   nsCOMPtr<nsITextToSubURI> textToSubURI;
-  nsAutoString uri(aURI); // in order to use FindCharInSet()
+  nsAutoString uri(aURI); // in order to use FindCharInSet(), IsASCII()
   nsresult rv = NS_OK;
 
 
-  if (!mCharSet.IsEmpty() && !IsASCII(uri)) {
+  if (!mCharSet.IsEmpty() && !uri.IsASCII()) {
     textToSubURI = do_GetService(NS_ITEXTTOSUBURI_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
   }
@@ -531,7 +606,7 @@ nsHTMLContentSerializer::EscapeURI(const nsAString& aURI, nsAString& aEscapedURI
   // Loop and escape parts by avoiding escaping reserved characters (and '%', '#' ).
   while ((end = uri.FindCharInSet("%#;/?:@&=+$,", start)) != -1) {
     part = Substring(aURI, start, (end-start));
-    if (textToSubURI && !IsASCII(part)) {
+    if (textToSubURI && !part.IsASCII()) {
       rv = textToSubURI->ConvertAndEscape(mCharSet.get(), part.get(), getter_Copies(escapedURI));
       NS_ENSURE_SUCCESS(rv, rv);
     }
@@ -604,6 +679,14 @@ nsHTMLContentSerializer::SerializeAttributes(nsIContent* aContent,
         StringBeginsWith(valueStr, _mozStr)) {
       continue;
     }
+    
+    // XXX: This special cased textarea code should be
+    //      removed when bug #17003 is fixed.  
+    if ((aTagName == nsHTMLAtoms::textarea) &&
+        ((attrName == nsHTMLAtoms::value) || 
+         (attrName == nsHTMLAtoms::defaultvalue))){
+        continue;
+    }
 
     if (mIsCopying && mIsFirstChildOfOL && (aTagName == nsHTMLAtoms::li) && 
         (attrName == nsHTMLAtoms::value)){
@@ -611,7 +694,8 @@ nsHTMLContentSerializer::SerializeAttributes(nsIContent* aContent,
       continue;
     }
     PRBool isJS = IsJavaScript(attrName, valueStr);
-    
+    PRBool disableEscaping = mDisableEscaping || ContainsPHPChunk(valueStr);
+
     if (((attrName == nsHTMLAtoms::href) || 
          (attrName == nsHTMLAtoms::src))) {
       // Make all links absolute when converting only the selection:
@@ -622,16 +706,23 @@ nsHTMLContentSerializer::SerializeAttributes(nsIContent* aContent,
         // For now, just leave them relative.
         nsCOMPtr<nsIURI> uri = aContent->GetBaseURI();
         if (uri) {
-          nsAutoString absURI;
-          rv = NS_MakeAbsoluteURI(absURI, valueStr, uri);
-          if (NS_SUCCEEDED(rv)) {
-            valueStr = absURI;
+          // don't do that if there's login/password information provided
+          // in the base URI
+          nsCAutoString username, password;
+          uri->GetUsername(username);
+          uri->GetPassword(password);
+          if (username.IsEmpty() && password.IsEmpty()) {
+            nsAutoString absURI;
+            rv = NS_MakeAbsoluteURI(absURI, valueStr, uri);
+            if (NS_SUCCEEDED(rv)) {
+              valueStr = absURI;
+            }
           }
         }
       }
       // Need to escape URI.
       nsAutoString tempURI(valueStr);
-      if (!isJS && NS_FAILED(EscapeURI(tempURI, valueStr)))
+      if (!isJS && !disableEscaping && NS_FAILED(EscapeURI(tempURI, valueStr)))
         valueStr = tempURI;
     }
 
@@ -641,8 +732,9 @@ nsHTMLContentSerializer::SerializeAttributes(nsIContent* aContent,
     * if this attr name-value pair(including a space,=,opening and closing quotes) is greater than MaxColumn limit
     * then start the attribute from a new line.
     */
-
-    if (mDoFormat
+    PRInt32 foo1 = nameStr.Length();
+    PRInt32 foo2 = valueStr.Length();
+    if (mDoWrap
         && (mColPos >= mMaxColumn
             || ((PRInt32)(mColPos + nameStr.Length() +
                           valueStr.Length() + 4) > mMaxColumn))) {
@@ -654,8 +746,26 @@ nsHTMLContentSerializer::SerializeAttributes(nsIContent* aContent,
     if (IsShorthandAttr(attrName, aTagName) && valueStr.IsEmpty()) {
       valueStr = nameStr;
     }
-    SerializeAttr(EmptyString(), nameStr, valueStr, aStr, !isJS);
+    SerializeAttr(nsAutoString(), nameStr, valueStr, aStr, !isJS && !disableEscaping);
   }
+}
+
+PRBool
+nsHTMLContentSerializer::IsNotMinimizable(nsIAtom * aName)
+{
+  // because MSIE chokes on minimizing other empty elements
+  return (aName != nsHTMLAtoms::area       &&  
+          aName != nsHTMLAtoms::base       &&
+          aName != nsHTMLAtoms::br         &&
+          aName != nsHTMLAtoms::col        &&
+          aName != nsHTMLAtoms::frame      &&
+          aName != nsHTMLAtoms::hr         &&
+          aName != nsHTMLAtoms::img        &&
+          aName != nsHTMLAtoms::input      &&
+          aName != nsHTMLAtoms::isindex    &&
+          aName != nsHTMLAtoms::link       &&
+          aName != nsHTMLAtoms::meta       &&
+          aName != nsHTMLAtoms::param);
 }
 
 NS_IMETHODIMP
@@ -664,17 +774,31 @@ nsHTMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
                                             nsAString& aStr)
 {
   NS_ENSURE_ARG(aElement);
-  
+
   nsCOMPtr<nsIContent> content = do_QueryInterface(aElement);
   if (!content) return NS_ERROR_FAILURE;
   
   // The _moz_dirty attribute is emitted by the editor to
   // indicate that this element should be pretty printed
   // even if we're not in pretty printing mode
-  PRBool hasDirtyAttr = content->HasAttr(kNameSpaceID_None,
-                                         nsLayoutAtoms::mozdirty);
+  PRBool hasDirtyAttr = HasDirtyAttr(content);
 
   nsIAtom *name = content->Tag();
+
+  if (name == nsHTMLAtoms::br) {
+    // hey, could we finally get rid of painful extra <br>s ???-)
+    nsAutoString typeValue;
+    aElement->GetAttribute(NS_LITERAL_STRING("type"), typeValue);
+    if (typeValue.Equals(NS_LITERAL_STRING("_moz"))) {
+      if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView) {
+        if (aElement == mStartSelectionContainer)
+          AppendToString(kSelectionStart, aStr, PR_FALSE, PR_FALSE);
+        if (aElement == mStartSelectionContainer)
+          AppendToString(kSelectionStart, aStr, PR_FALSE, PR_FALSE);
+      }
+      return NS_OK;
+    }
+  }
 
   if (name == nsHTMLAtoms::br && mPreLevel > 0
       && (mFlags & nsIDocumentEncoder::OutputNoFormattingInPre)) {
@@ -712,8 +836,18 @@ nsHTMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
       name == nsHTMLAtoms::style) {
     mPreLevel++;
   }
-  
-  AppendToString(kLessThan, aStr);
+
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    if (aElement == mStartSelectionContainer)
+    {
+      AppendToString(kSelectionStart, aStr, PR_FALSE, PR_FALSE);
+    }
+    AppendToString(kTagSpanStart, aStr, PR_FALSE, PR_FALSE);
+    AppendToString(kEscapedLessThan, aStr);
+  }
+  else
+    AppendToString(kLessThan, aStr);
 
   nsAutoString nameStr;
   name->ToString(nameStr);
@@ -755,7 +889,6 @@ nsHTMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
   // for serializing attributes other than "value".
   SerializeAttributes(content, name, aStr);
 
-#ifdef MOZ_STANDALONE_COMPOSER
   PRBool isXhtml = PR_FALSE;
   nsCOMPtr<nsIDOMDocument> domDoc;
   aElement->GetOwnerDocument(getter_AddRefs(domDoc));
@@ -763,43 +896,45 @@ nsHTMLContentSerializer::AppendElementStart(nsIDOMElement *aElement,
   nsresult rv = domDoc->GetDoctype(getter_AddRefs(docType));
   if (NS_SUCCEEDED(rv) && docType)
   {
-    
     nsAutoString publicId;
     rv = docType->GetPublicId(publicId);
-		if (NS_SUCCEEDED(rv) &&
-		   (publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Transitional//EN")) ||
-		    publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Strict//EN"))))
-		  isXhtml = PR_TRUE;
+    if (NS_SUCCEEDED(rv) &&
+       (publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Transitional//EN")) ||
+        publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Strict//EN"))))
+      isXhtml = PR_TRUE;
   }
 
-  //PRBool notMinimizable = IsNotMinimizable(name);
-  /*
-   *if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
-   *{
-	 *  if (isXhtml && !aHasChildren && !notMinimizable)
-   *  if (isXhtml && !aHasChildren)
-   *    AppendToString(NS_LITERAL_STRING(" /&gt;"), aStr);
-   *  else
-   *    AppendToString(kEscapedGreaterThan, aStr);
-   *  AppendToString(kSpanEnd, aStr, PR_FALSE, PR_FALSE);
-   *}
-   *else
-   *{
-   */
-    //if (isXhtml && !aHasChildren && !notMinimizable)
-    if (isXhtml && !aHasChildren)
+  PRBool notMinimizable = IsNotMinimizable(name);
+
+  if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+  {
+    if (isXhtml && !aHasChildren && !notMinimizable)
+      AppendToString(NS_LITERAL_STRING(" /&gt;"), aStr);
+    else
+      AppendToString(kEscapedGreaterThan, aStr);
+    AppendToString(kSpanEnd, aStr, PR_FALSE, PR_FALSE);
+  }
+  else
+  {
+    if (isXhtml && !aHasChildren && !notMinimizable)
       AppendToString(NS_LITERAL_STRING(" />"), aStr);
     else
       AppendToString(kGreaterThan, aStr);
-  //}
-#else
-  AppendToString(kGreaterThan, aStr);
-#endif
+  }
 
   if (LineBreakAfterOpen(name, hasDirtyAttr)) {
     AppendToString(mLineBreak, aStr);
     mMayIgnoreLineBreakSequence = PR_TRUE;
     mColPos = 0;
+  }
+
+  // XXX: This special cased textarea code should be
+  //      removed when bug #17003 is fixed.  
+  if (name == nsHTMLAtoms::textarea)
+  {
+    nsAutoString valueStr;
+    content->GetAttr(kNameSpaceID_None, nsHTMLAtoms::value, valueStr);
+    AppendToString(valueStr, aStr);
   }
 
   if (name == nsHTMLAtoms::script ||
@@ -821,8 +956,7 @@ nsHTMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
   nsCOMPtr<nsIContent> content = do_QueryInterface(aElement);
   if (!content) return NS_ERROR_FAILURE;
 
-  PRBool hasDirtyAttr = content->HasAttr(kNameSpaceID_None,
-                                         nsLayoutAtoms::mozdirty);
+  PRBool hasDirtyAttr = HasDirtyAttr(content);
 
   nsIAtom *name = content->Tag();
 
@@ -847,13 +981,13 @@ nsHTMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
 
   if (parserService && (name != nsHTMLAtoms::style)) {
     PRBool isContainer;
+    PRInt32 id;
 
-    parserService->IsContainer(parserService->HTMLAtomTagToId(name),
-                               isContainer);
+    parserService->HTMLAtomTagToId(name, &id);
+    parserService->IsContainer(id, isContainer);
     if (!isContainer) return NS_OK;
   }
 
-#ifdef MOZ_STANDALONE_COMPOSER
   nsCOMPtr<nsIDOMNode> node(do_QueryInterface(aElement));
   PRBool hasChildren;
   nsresult rv = node->HasChildNodes(&hasChildren);
@@ -868,21 +1002,16 @@ nsHTMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
   if (NS_SUCCEEDED(rv) && docType)
   {
     nsAutoString publicId;
-		rv = docType->GetPublicId(publicId);
-		if (NS_SUCCEEDED(rv) &&
-			 (publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Transitional//EN")) ||
-				publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Strict//EN"))))
-			isXhtml = PR_TRUE;
-    //nsReadingIterator<PRUnichar> beginPublicId;
-    //nsReadingIterator<PRUnichar> endPublicId;
-    //publicId.BeginReading(beginPublicId);
-    //publicId.EndReading(endPublicId);
-    //isXhtml = FindInReadable(NS_LITERAL_STRING("XHTML"), beginPublicId, endPublicId);
+    rv = docType->GetPublicId(publicId);
+    if (NS_SUCCEEDED(rv) &&
+       (publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Transitional//EN")) ||
+        publicId.Equals(NS_LITERAL_STRING("-//W3C//DTD XHTML 1.0 Strict//EN"))))
+      isXhtml = PR_TRUE;
   }
 
-  //PRBool notMinimizable = IsNotMinimizable(name);
-  //if (hasChildren || !isXhtml || notMinimizable ) {
-  if (hasChildren || !isXhtml) {
+  PRBool notMinimizable = IsNotMinimizable(name);
+
+  if (hasChildren || !isXhtml || notMinimizable ) {
     if (LineBreakBeforeClose(name, hasDirtyAttr)) {
       AppendToString(mLineBreak, aStr);
       mMayIgnoreLineBreakSequence = PR_TRUE;
@@ -899,55 +1028,29 @@ nsHTMLContentSerializer::AppendElementEnd(nsIDOMElement *aElement,
     nsAutoString nameStr;
     name->ToString(nameStr);
 
-    /*
-     *if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
-     *{
-     *  AppendToString(kTagSpanEnd, aStr, PR_FALSE, PR_FALSE);
-     *  AppendToString(NS_LITERAL_STRING("&lt;/"), aStr);
-     *}
-     *else
-     */
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+    {
+      AppendToString(kTagSpanEnd, aStr, PR_FALSE, PR_FALSE);
+      AppendToString(NS_LITERAL_STRING("&lt;/"), aStr);
+    }
+    else
       AppendToString(kEndTag, aStr);
 
     AppendToString(nameStr.get(), -1, aStr);
 
-    /*
-     *if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
-     *{
-     *  AppendToString(kEscapedGreaterThan, aStr);
-     *  AppendToString(kSpanEnd, aStr, PR_FALSE, PR_FALSE);
-     *}
-     *else
-     */
+    if (mFlags & nsIDocumentEncoder::OutputForColoredSourceView)
+    {
+      AppendToString(kEscapedGreaterThan, aStr);
+      AppendToString(kSpanEnd, aStr, PR_FALSE, PR_FALSE);
+    }
+    else
       AppendToString(kGreaterThan, aStr);
   }
 
-  /*
-   *if ((mFlags & nsIDocumentEncoder::OutputForColoredSourceView) &&
-   *    aElement == mEndSelectionContainer)
-   *  AppendToString(kSelectionEnd, aStr, PR_FALSE, PR_FALSE);
-   */
-#else
-  if (LineBreakBeforeClose(name, hasDirtyAttr)) {
-    AppendToString(mLineBreak, aStr);
-    mMayIgnoreLineBreakSequence = PR_TRUE;
-    mColPos = 0;
-    mAddSpace = PR_FALSE;
-  }
-  else if (mAddSpace) {
-    AppendToString(PRUnichar(' '), aStr);
-    mAddSpace = PR_FALSE;
-  }
+  if ((mFlags & nsIDocumentEncoder::OutputForColoredSourceView) &&
+      aElement == mEndSelectionContainer)
+    AppendToString(kSelectionEnd, aStr, PR_FALSE, PR_FALSE);
 
-  EndIndentation(name, hasDirtyAttr, aStr);
-
-  nsAutoString nameStr;
-  name->ToString(nameStr);
-
-  AppendToString(kEndTag, aStr);
-  AppendToString(nameStr.get(), -1, aStr);
-  AppendToString(kGreaterThan, aStr);
-#endif
   if (LineBreakAfterClose(name, hasDirtyAttr)) {
     AppendToString(mLineBreak, aStr);
     mMayIgnoreLineBreakSequence = PR_TRUE;
@@ -1019,7 +1122,8 @@ void
 nsHTMLContentSerializer::AppendToString(const nsAString& aStr,
                                         nsAString& aOutputStr,
                                         PRBool aTranslateEntities,
-                                        PRBool aIncrColumn)
+                                        PRBool aIncrColumn,
+                                        PRBool aAsInCDATA)
 {
   if (mBodyOnly && !mInBody) {
     return;
@@ -1029,11 +1133,13 @@ nsHTMLContentSerializer::AppendToString(const nsAString& aStr,
     mColPos += aStr.Length();
   }
 
-  if (aTranslateEntities && !mInCDATA) {
+  if (aTranslateEntities &&
+      (!mInCDATA || (mFlags & nsIDocumentEncoder::OutputForColoredSourceView))) {
     if (mFlags & (nsIDocumentEncoder::OutputEncodeBasicEntities  |
                   nsIDocumentEncoder::OutputEncodeLatin1Entities |
                   nsIDocumentEncoder::OutputEncodeHTMLEntities   |
-                  nsIDocumentEncoder::OutputEncodeW3CEntities)) {
+                  nsIDocumentEncoder::OutputEncodeW3CEntities    |
+                  nsIDocumentEncoder::OutputEncodeCharacterEntities)) {
       nsIParserService* parserService =
         nsContentUtils::GetParserServiceWeakRef();
 
@@ -1055,8 +1161,6 @@ nsHTMLContentSerializer::AppendToString(const nsAString& aStr,
            iter != done_reading; 
            iter.advance(PRInt32(advanceLength))) {
         PRUint32 fragmentLength = iter.size_forward();
-        PRUint32 lengthReplaced = 0; // the number of UTF-16 codepoints
-                                     //  replaced by a particular entity
         const PRUnichar* c = iter.get();
         const PRUnichar* fragmentStart = c;
         const PRUnichar* fragmentEnd = c + fragmentLength;
@@ -1069,11 +1173,22 @@ nsHTMLContentSerializer::AppendToString(const nsAString& aStr,
         // needs to be replaced
         for (; c < fragmentEnd; c++, advanceLength++) {
           PRUnichar val = *c;
-          if (val == kValNBSP) {
+          PRBool dontEncodeGT = PRBool(mFlags & nsIDocumentEncoder::DontEncodeGreatherThan) &&
+                                !mInAttribute;
+          if ((mFlags & nsIDocumentEncoder::OutputEncodeCharacterEntities) &&
+              (val == kValNBSP || val > 127 || ((!dontEncodeGT && val <= kGTVal) || 
+                                                (dontEncodeGT && val < kGTVal))
+                               && (entityTable[val][0] != 0))) {
+            nsAutoString entityValue(PRUnichar('#'));
+            entityValue.AppendInt(val);
+            entityText = ToNewCString(entityValue);
+            break;
+          }
+          else if (val == kValNBSP) {
             entityText = kEntityNBSP;
             break;
           }
-          else if ((val <= kGTVal) && (entityTable[val][0] != 0)) {
+          else if (((!dontEncodeGT && val <= kGTVal) || (dontEncodeGT && val < kGTVal)) && (entityTable[val][0] != 0)) {
             entityText = entityTable[val];
             break;
           } else if (val > 127 &&
@@ -1089,41 +1204,32 @@ nsHTMLContentSerializer::AppendToString(const nsAString& aStr,
           }
           else if (val > 127 && 
                    mFlags & nsIDocumentEncoder::OutputEncodeW3CEntities &&
-                   mEntityConverter) {
-            if (IS_HIGH_SURROGATE(val) &&
-                c + 1 < fragmentEnd &&
-                IS_LOW_SURROGATE(*(c + 1))) {
-              PRUint32 valUTF32 = SURROGATE_TO_UCS4(val, *(++c));
-              if (NS_SUCCEEDED(mEntityConverter->ConvertUTF32ToEntity(valUTF32,
-                               nsIEntityConverter::entityW3C, &fullEntityText))) {
-                lengthReplaced = 2;
-                break;
-              }
-              else {
-                advanceLength++;
-              }
-            }
-            else if (NS_SUCCEEDED(mEntityConverter->ConvertToEntity(val,
-                                  nsIEntityConverter::entityW3C, 
-                                  &fullEntityText))) {
-              lengthReplaced = 1;
-              break;
-            }
+                   mEntityConverter &&
+                   NS_SUCCEEDED(mEntityConverter->ConvertToEntity(val,
+                                nsIEntityConverter::entityW3C, &fullEntityText))) {
+            break;
           }
         }
 
         aOutputStr.Append(fragmentStart, advanceLength);
         if (entityText) {
-          aOutputStr.Append(PRUnichar('&'));
+          if (!mInCDATA && !aAsInCDATA && (mFlags & nsIDocumentEncoder::OutputForColoredSourceView))
+            aOutputStr.Append(NS_LITERAL_STRING("&amp;"));
+          else
+            aOutputStr.Append(PRUnichar('&'));
           AppendASCIItoUTF16(entityText, aOutputStr);
           aOutputStr.Append(PRUnichar(';'));
           advanceLength++;
         }
         // if it comes from nsIEntityConverter, it already has '&' and ';'
         else if (fullEntityText) {
-          AppendASCIItoUTF16(fullEntityText, aOutputStr);
+          nsAutoString fetStr;
+          fetStr.AssignWithConversion(fullEntityText);
+          if (!mInCDATA && !aAsInCDATA && (mFlags & nsIDocumentEncoder::OutputForColoredSourceView))
+            fetStr.ReplaceSubstring(NS_LITERAL_STRING("&").get(), NS_LITERAL_STRING("&amp;").get());
+          aOutputStr.Append(fetStr);
           nsMemory::Free(fullEntityText);
-          advanceLength += lengthReplaced;
+          advanceLength++;
         }
       }
     } else {
@@ -1162,6 +1268,24 @@ nsHTMLContentSerializer::AppendToStringConvertLF(const nsAString& aStr,
 }
 
 PRBool
+nsHTMLContentSerializer::HasDirtyAttr(nsIContent* aContent)
+{
+  return PR_FALSE;
+/*
+nsAutoString val;
+
+  if (NS_CONTENT_ATTR_NOT_THERE != aContent->GetAttr(kNameSpaceID_None,
+                                                     nsLayoutAtoms::mozdirty,
+                                                     val)) {
+    return PR_TRUE;
+  }
+  else {
+    return PR_FALSE;
+  }
+*/
+}
+
+PRBool 
 nsHTMLContentSerializer::LineBreakBeforeOpen(nsIAtom* aName, 
                                              PRBool aHasDirtyAttr)
 {
@@ -1186,7 +1310,10 @@ nsHTMLContentSerializer::LineBreakBeforeOpen(nsIAtom* aName,
     
     if (parserService) {
       PRBool res;
-      parserService->IsBlock(parserService->HTMLAtomTagToId(aName), res);
+      PRInt32 id;
+
+      parserService->HTMLAtomTagToId(aName, &id);
+      parserService->IsBlock(id, res);
       return res;
     }
   }
@@ -1284,7 +1411,10 @@ nsHTMLContentSerializer::LineBreakAfterClose(nsIAtom* aName,
     
     if (parserService) {
       PRBool res;
-      parserService->IsBlock(parserService->HTMLAtomTagToId(aName), res);
+      PRInt32 id;
+
+      parserService->HTMLAtomTagToId(aName, &id);
+      parserService->IsBlock(id, res);
       return res;
     }
   }
@@ -1405,7 +1535,7 @@ nsHTMLContentSerializer::SerializeLIValueAttribute(nsIDOMElement* aElement,
     if (currElement) {
       nsAutoString tagName;
       currElement->GetTagName(tagName);
-      if (tagName.LowerCaseEqualsLiteral("li")) {
+      if (tagName.EqualsIgnoreCase("LI")) {
         currElement->GetAttribute(NS_LITERAL_STRING("value"), valueStr);
         if (valueStr.IsEmpty())
           offset++;
@@ -1423,7 +1553,7 @@ nsHTMLContentSerializer::SerializeLIValueAttribute(nsIDOMElement* aElement,
   if (offset == 0 && found) {
     // offset = 0 => LI itself has the value attribute and we did not need to traverse back.
     // Just serialize value attribute like other tags.
-    SerializeAttr(EmptyString(), NS_LITERAL_STRING("value"), valueStr, aStr, PR_FALSE);
+    SerializeAttr(nsAutoString(), NS_LITERAL_STRING("value"), valueStr, aStr, PR_FALSE);
   }
   else if (offset == 1 && !found) {
     /*(offset = 1 && !found) means either LI is the first child node of OL 
@@ -1438,24 +1568,22 @@ nsHTMLContentSerializer::SerializeLIValueAttribute(nsIDOMElement* aElement,
 
     //As serializer needs to use this valueAttr we are creating here, 
     valueStr.AppendInt(startVal + offset);
-    SerializeAttr(EmptyString(), NS_LITERAL_STRING("value"), valueStr, aStr, PR_FALSE);
+    SerializeAttr(nsAutoString(), NS_LITERAL_STRING("value"), valueStr, aStr, PR_FALSE);
   }
 }
 
 PRBool
 nsHTMLContentSerializer::IsFirstChildOfOL(nsIDOMElement* aElement){
   nsCOMPtr<nsIDOMNode> node = do_QueryInterface(aElement);
+  nsIDOMNode* parentNode;
   nsAutoString parentName;
-  {
-    nsCOMPtr<nsIDOMNode> parentNode;
-    node->GetParentNode(getter_AddRefs(parentNode));
-    if (parentNode)
-      parentNode->GetNodeName(parentName);
-    else
-      return PR_FALSE;
-  }
+  node->GetParentNode(&parentNode);
+  if (parentNode)
+    parentNode->GetNodeName(parentName);
+  else
+    return PR_FALSE;
   
-  if (parentName.LowerCaseEqualsLiteral("ol")) {
+  if (parentName.EqualsIgnoreCase("OL")) {
     olState defaultOLState(0, PR_FALSE);
     olState* state = nsnull;
     if (mOLStateStack.Count() > 0) 

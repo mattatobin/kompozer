@@ -47,11 +47,11 @@
   -moz-image-region: rect(42px 23px 63px 0px);
 }
 
-#button-security:hover {
+#button-security[buttonover] {
   -moz-image-region: rect(42px 46px 63px 23px);
 } 
 
-#button-security:hover:active {
+#button-security[buttondown] {
   -moz-image-region: rect(42px 69px 63px 46px);
 } 
 
@@ -90,3 +90,4 @@
   list-style-image: url("chrome://messenger/skin/smime/icons/sbCryptoNotOk.gif");
   visibility: visible;
 }
+

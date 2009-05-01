@@ -40,17 +40,17 @@
 #define nsMappedAttributes_h___
 
 #include "nsAttrAndChildArray.h"
-#include "nsGenericHTMLElement.h"
+#include "nsIHTMLContent.h"
 #include "nsIStyleRule.h"
 
 class nsIAtom;
-class nsHTMLStyleSheet;
+class nsIHTMLStyleSheet;
 class nsRuleWalker;
 
 class nsMappedAttributes : public nsIStyleRule
 {
 public:
-  nsMappedAttributes(nsHTMLStyleSheet* aSheet,
+  nsMappedAttributes(nsIHTMLStyleSheet* aSheet,
                      nsMapRuleToAttributesFunc aMapRuleFunc);
 
   void* operator new(size_t size, PRUint32 aAttrCount = 1) CPP_THROW_NEW;
@@ -60,6 +60,7 @@ public:
   NS_DECL_ISUPPORTS
 
   nsresult SetAndTakeAttr(nsIAtom* aAttrName, nsAttrValue& aValue);
+  nsresult GetAttribute(nsIAtom* aAttrName, nsHTMLValue& aValue) const;
   const nsAttrValue* GetAttr(nsIAtom* aAttrName) const;
 
   PRUint32 Count() const
@@ -74,8 +75,8 @@ public:
   {
     mSheet = nsnull;
   }
-  void SetStyleSheet(nsHTMLStyleSheet* aSheet);
-  nsHTMLStyleSheet* GetStyleSheet()
+  void SetStyleSheet(nsIHTMLStyleSheet* aSheet);
+  nsIHTMLStyleSheet* GetStyleSheet()
   {
     return mSheet;
   }
@@ -90,14 +91,13 @@ public:
     NS_ASSERTION(aPos < mAttrCount, "out-of-bounds");
     return &Attrs()[aPos].mValue;
   }
-  // Remove the attr at position aPos.  The value of the attr is placed in
-  // aValue; any value that was already in aValue is destroyed.
-  void RemoveAttrAt(PRUint32 aPos, nsAttrValue& aValue);
+  void RemoveAttrAt(PRUint32 aPos);
   const nsAttrName* GetExistingAttrNameFromQName(const nsACString& aName) const;
   PRInt32 IndexOfAttr(nsIAtom* aLocalName, PRInt32 aNamespaceID) const;
   
 
   // nsIStyleRule 
+  NS_IMETHOD GetStyleSheet(nsIStyleSheet*& aSheet) const;
   NS_IMETHOD MapRuleInfoInto(nsRuleData* aRuleData);
 #ifdef DEBUG
   NS_METHOD List(FILE* out = stdout, PRInt32 aIndent = 0) const;
@@ -133,7 +133,7 @@ private:
 #ifdef DEBUG
   PRUint16 mBufferSize;
 #endif
-  nsHTMLStyleSheet* mSheet; //weak
+  nsIHTMLStyleSheet* mSheet; //weak
   nsMapRuleToAttributesFunc mRuleMapper;
   void* mAttrs[1];
 };

@@ -57,7 +57,7 @@
   <spacer id="location" offsetY="50" persist="offsetX offsetY"/>
 
   <groupbox><caption label="&Settings.label;"/>
-    <grid><columns><column/><column/></columns>
+    <grid><columns><column/><column flex="1"/></columns>
       <rows>
         <row align="center">
           <label control="FormName" value="&FormName.label;" accesskey="&FormName.accesskey;"/>
@@ -78,7 +78,7 @@
             </menulist>
           </hbox>
         </row>
-        <hbox>
+        <hbox style="display: -moz-grid-line;">
           <button id="MoreFewerButton" oncommand="onMoreFewer();" persist="more"/>
         </hbox>
         <rows id="MoreSection">

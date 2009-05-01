@@ -1,42 +1,27 @@
 /* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code,
+ * released March 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Sean Su <ssu@netscape.com>
- *   Curt Patrick <curt@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *     Sean Su <ssu@netscape.com>
+ *     Curt Patrick <curt@netscape.com>
+ */
 
 #include "extern.h"
 #include "extra.h"
@@ -51,8 +36,7 @@
 // commdlg.h is needed to build with WIN32_LEAN_AND_MEAN
 #include <commdlg.h>
 
-static WNDPROC OldListBoxWndProc = NULL;
-static WNDPROC OldBrowseWndProc  = NULL;
+static WNDPROC OldListBoxWndProc;
 static BOOL    gbProcessingXpnstallFiles;
 static DWORD   gdwACFlag;
 static DWORD   gdwIndexLastSelected;
@@ -93,25 +77,6 @@ const int InstallProgressDlgItemList[] = {IDC_STATUS0,
                                                  * list, we shouldn't use it.
                                                  */
 
-void ClosePreviousDialog()
-{
-  if(!sgProduct.lastDialog)
-    return;
-
-  DestroyWindow(sgProduct.lastDialog);
-  sgProduct.lastDialog = NULL;
-}
- 
-void UnSubclassWindow(HWND aHwnd, WNDPROC *aWndProc)
-{
-  // Un-subclass the window.
-  if(aHwnd && *aWndProc)
-  {
-    SubclassWindow(aHwnd, *aWndProc);
-    *aWndProc = NULL;
-  }
-}
-
 BOOL AskCancelDlg(HWND hDlg)
 {
   char szDlgQuitTitle[MAX_BUF];
@@ -137,6 +102,7 @@ BOOL AskCancelDlg(HWND hDlg)
     GetPrivateProfileString("Strings", "Message Cancel Setup AUTO mode", "", szMsg, sizeof(szMsg), szFileIniConfig);
     ShowMessage(szMsg, TRUE);
     Delay(5);
+    ShowMessage(szMsg, FALSE);
     bRv = TRUE;
   }
 
@@ -223,8 +189,7 @@ void RepositionWindow(HWND aHwndDlg, DWORD aBannerImage)
   int   iLeft, iTop;
   DWORD width = -1;
   DWORD height = -1;
-  DWORD windowFlags = SWP_NOSIZE | SWP_NOACTIVATE;
-  HWND  insertAfterHwnd;
+  DWORD windowFlags = SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
 
   GetWindowRect(aHwndDlg, &rect);
   if(aBannerImage && !gShowBannerImage)
@@ -237,7 +202,7 @@ void RepositionWindow(HWND aHwndDlg, DWORD aBannerImage)
     ShowWindow(hwndBanner, SW_HIDE);
     width = rect.right;
     height = rect.bottom - rLogo.bottom + rLogo.top;
-    windowFlags = SWP_NOACTIVATE;
+    windowFlags = SWP_NOZORDER | SWP_NOACTIVATE;
 
     /* aBannerImage indicates which dialog we need to move it's dlg items
      * up to fit the resized window.
@@ -257,21 +222,9 @@ void RepositionWindow(HWND aHwndDlg, DWORD aBannerImage)
     }
   }
 
-  if(gSystemInfo.lastWindowIsTopWindow)
-    insertAfterHwnd = HWND_TOP;
-  else
-    insertAfterHwnd = HWND_BOTTOM;
-
   iLeft = (gSystemInfo.lastWindowPosCenterX - ((rect.right - rect.left) / 2));
   iTop  = (gSystemInfo.lastWindowPosCenterY - ((rect.bottom - rect.top) / 2));
-  SetWindowPos(aHwndDlg, insertAfterHwnd, iLeft, iTop, width, height, windowFlags);
-
-  if(gSystemInfo.lastWindowMinimized)
-    ShowWindow(aHwndDlg, SW_SHOWMINNOACTIVE);
-  else if(!gSystemInfo.lastWindowIsTopWindow)
-    ShowWindow(aHwndDlg, SW_SHOWNOACTIVATE);
-  else
-    ShowWindow(aHwndDlg, SW_SHOW);
+  SetWindowPos(aHwndDlg, NULL, iLeft, iTop, width, height, windowFlags);
 }
 
 /* Function: SaveWindowPosition()
@@ -283,45 +236,13 @@ void RepositionWindow(HWND aHwndDlg, DWORD aBannerImage)
  */
 void SaveWindowPosition(HWND aDlg)
 {
-  WINDOWPLACEMENT wndPlacement;
-  HWND            hwndForegroundWindow;
-  HWND            hwndTopWindow;
-  HWND            hwndParent = NULL;
-  HWND            hwndWindow = NULL;
+  RECT rectDlg;
 
-  if(GetWindowPlacement(aDlg, &wndPlacement))
+  if(GetWindowRect(aDlg, &rectDlg))
   {
-    RECT rectDesktop;
-    if (SystemParametersInfo(SPI_GETWORKAREA, 0, &rectDesktop, SPIF_SENDWININICHANGE))
-    {
-      wndPlacement.rcNormalPosition.left   += rectDesktop.left;
-      wndPlacement.rcNormalPosition.right  += rectDesktop.left;
-      wndPlacement.rcNormalPosition.top    += rectDesktop.top;
-      wndPlacement.rcNormalPosition.bottom += rectDesktop.top;
-    }
-    gSystemInfo.lastWindowPosCenterX = ((wndPlacement.rcNormalPosition.right - wndPlacement.rcNormalPosition.left) / 2) + wndPlacement.rcNormalPosition.left;
-    gSystemInfo.lastWindowPosCenterY = ((wndPlacement.rcNormalPosition.bottom - wndPlacement.rcNormalPosition.top) / 2) + wndPlacement.rcNormalPosition.top;
-    gSystemInfo.lastWindowMinimized  = (wndPlacement.showCmd & SW_MINIMIZE)?TRUE:FALSE;
+    gSystemInfo.lastWindowPosCenterX = ((rectDlg.right - rectDlg.left) / 2) + rectDlg.left;
+    gSystemInfo.lastWindowPosCenterY = ((rectDlg.bottom - rectDlg.top) / 2) + rectDlg.top;
   }
-
-  hwndForegroundWindow = GetForegroundWindow();
-  hwndTopWindow        = GetTopWindow(NULL);
-  hwndWindow           = NULL;
-  hwndParent           = GetParent(aDlg);
-  while(hwndParent != NULL)
-  {
-    hwndWindow = hwndParent;
-    hwndParent = GetParent(hwndWindow);
-  }
-
-  if(hwndParent == aDlg)
-    gSystemInfo.lastWindowIsTopWindow = TRUE;
-  else if((hwndParent == NULL) && (hwndWindow == aDlg))
-    gSystemInfo.lastWindowIsTopWindow = TRUE;
-  else if(hwndForegroundWindow == aDlg)
-    gSystemInfo.lastWindowIsTopWindow = TRUE;
-  else
-    gSystemInfo.lastWindowIsTopWindow = FALSE;
 }
 
 LRESULT CALLBACK DlgProcWelcome(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
@@ -348,7 +269,6 @@ LRESULT CALLBACK DlgProcWelcome(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       SendDlgItemMessage (hDlg, IDC_STATIC2, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
       SendDlgItemMessage (hDlg, IDWIZNEXT, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
       SendDlgItemMessage (hDlg, IDCANCEL, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -356,7 +276,7 @@ LRESULT CALLBACK DlgProcWelcome(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       {
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
@@ -422,7 +342,6 @@ LRESULT CALLBACK DlgProcLicense(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       SendDlgItemMessage (hDlg, IDWIZBACK, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDWIZNEXT, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDCANCEL, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -430,13 +349,13 @@ LRESULT CALLBACK DlgProcLicense(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       {
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -461,7 +380,7 @@ LRESULT CALLBACK ListBoxBrowseWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
       break;
   }
 
-  return(CallWindowProc(OldBrowseWndProc, hWnd, uMsg, wParam, lParam));
+  return(CallWindowProc(OldListBoxWndProc, hWnd, uMsg, wParam, lParam));
 }
 
 LRESULT CALLBACK BrowseHookProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -473,15 +392,15 @@ LRESULT CALLBACK BrowseHookProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
   char  szPath[MAX_BUF];
   HWND  hwndLBFolders;
 
-  hwndLBFolders = GetDlgItem(hDlg, 1121);
   switch(message)
   {
     case WM_INITDIALOG:
+      hwndLBFolders  = GetDlgItem(hDlg, 1121);
       SetDlgItemText(hDlg, IDC_EDIT_DESTINATION, szTempSetupPath);
 
       RepositionWindow(hDlg, NO_BANNER_IMAGE);
 
-      OldBrowseWndProc     = SubclassWindow(hwndLBFolders, (WNDPROC)ListBoxBrowseWndProc);
+      OldListBoxWndProc    = SubclassWindow(hwndLBFolders, (WNDPROC)ListBoxBrowseWndProc);
       gdwIndexLastSelected = SendDlgItemMessage(hDlg, 1121, LB_GETCURSEL, 0, (LPARAM)0);
 
       SetWindowText(hDlg, sgInstallGui.szSelectDirectory);
@@ -603,7 +522,6 @@ LRESULT CALLBACK BrowseHookProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 
           lstrcpy(szTempSetupPath, szBuf);
           RemoveBackSlash(szTempSetupPath);
-          UnSubclassWindow(hwndLBFolders, &OldBrowseWndProc);
           EndDialog(hDlg, 0);
           break;
       }
@@ -728,7 +646,6 @@ void TruncateString(HWND hWnd, LPSTR szInURL, LPSTR szOutString, DWORD dwOutStri
   DeleteObject(hfontNew);
   ReleaseDC(hWnd, hdcWnd);
 }
-
 LRESULT CALLBACK DlgProcSetupType(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
 {
   HWND          hRadioSt0;
@@ -865,7 +782,6 @@ LRESULT CALLBACK DlgProcSetupType(HWND hDlg, UINT msg, WPARAM wParam, LONG lPara
       SendDlgItemMessage (hDlg, IDC_STATIC_ST2_DESCRIPTION, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_STATIC_ST3_DESCRIPTION, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_STATIC, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
-      SendDlgItemMessage (hDlg, IDC_DESTINATION, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_EDIT_DESTINATION, WM_SETFONT, (WPARAM)sgInstallGui.systemFont, 0L);
       SendDlgItemMessage (hDlg, IDC_BUTTON_BROWSE, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDWIZBACK, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
@@ -878,7 +794,6 @@ LRESULT CALLBACK DlgProcSetupType(HWND hDlg, UINT msg, WPARAM wParam, LONG lPara
       else
         EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_BROWSE), TRUE);
 
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -982,7 +897,7 @@ LRESULT CALLBACK DlgProcSetupType(HWND hDlg, UINT msg, WPARAM wParam, LONG lPara
 
           dwTempSetupType = dwSetupType;
           SiCNodeSetItemsSelected(dwSetupType);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
@@ -990,7 +905,7 @@ LRESULT CALLBACK DlgProcSetupType(HWND hDlg, UINT msg, WPARAM wParam, LONG lPara
           SaveWindowPosition(hDlg);
           dwTempSetupType = dwSetupType;
           lstrcpy(szTempSetupPath, sgProduct.szPath);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -1044,7 +959,6 @@ LRESULT CALLBACK DlgProcUpgrade(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       SendDlgItemMessage (hDlg, IDCONTINUE, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
       SendDlgItemMessage (hDlg, IDSKIP, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
       SendDlgItemMessage (hDlg, IDWIZBACK, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L); 
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -1066,7 +980,7 @@ LRESULT CALLBACK DlgProcUpgrade(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
 
           SiCNodeSetItemsSelected(dwSetupType);
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
@@ -1074,13 +988,13 @@ LRESULT CALLBACK DlgProcUpgrade(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
           sgProduct.doCleanupOnUpgrade = FALSE;
           SiCNodeSetItemsSelected(dwSetupType);
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -1361,7 +1275,7 @@ LRESULT CALLBACK DlgProcSelectComponents(HWND hDlg, UINT msg, WPARAM wParam, LON
   ULONGLONG           ullDSBuf;
   char                szBuf[MAX_BUF];
 
-  hwndLBComponents = GetDlgItem(hDlg, IDC_LIST_COMPONENTS);
+  hwndLBComponents  = GetDlgItem(hDlg, IDC_LIST_COMPONENTS);
 
   switch(msg)
   {
@@ -1424,7 +1338,6 @@ LRESULT CALLBACK DlgProcSelectComponents(HWND hDlg, UINT msg, WPARAM wParam, LON
 
       gdwACFlag = AC_COMPONENTS;
       OldListBoxWndProc = SubclassWindow(hwndLBComponents, (WNDPROC)NewListBoxWndProc);
-      ClosePreviousDialog();
       break;
 
     case WM_DRAWITEM:
@@ -1467,23 +1380,18 @@ LRESULT CALLBACK DlgProcSelectComponents(HWND hDlg, UINT msg, WPARAM wParam, LON
 
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
-          UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
-          UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
         case IDCANCEL:
-          // AskCancelDlg() will return TRUE if the user
-          // chose to really cancel
-          if(AskCancelDlg(hDlg))
-            UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          AskCancelDlg(hDlg);
           break;
 
         default:
@@ -1507,7 +1415,7 @@ LRESULT CALLBACK DlgProcSelectAdditionalComponents(HWND hDlg, UINT msg, WPARAM w
   ULONGLONG           ullDSBuf;
   char                szBuf[MAX_BUF];
 
-  hwndLBComponents = GetDlgItem(hDlg, IDC_LIST_COMPONENTS);
+  hwndLBComponents  = GetDlgItem(hDlg, IDC_LIST_COMPONENTS);
 
   switch(msg)
   {
@@ -1570,7 +1478,6 @@ LRESULT CALLBACK DlgProcSelectAdditionalComponents(HWND hDlg, UINT msg, WPARAM w
 
       gdwACFlag = AC_ADDITIONAL_COMPONENTS;
       OldListBoxWndProc = SubclassWindow(hwndLBComponents, (WNDPROC)NewListBoxWndProc);
-      ClosePreviousDialog();
       break;
 
     case WM_DRAWITEM:
@@ -1613,23 +1520,18 @@ LRESULT CALLBACK DlgProcSelectAdditionalComponents(HWND hDlg, UINT msg, WPARAM w
 
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
-          UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
-          UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
         case IDCANCEL:
-          // AskCancelDlg() will return TRUE if the user
-          // chose to really cancel
-          if(AskCancelDlg(hDlg))
-            UnSubclassWindow(hwndLBComponents, &OldListBoxWndProc);
+          AskCancelDlg(hDlg);
           break;
 
         default:
@@ -1711,7 +1613,6 @@ LRESULT CALLBACK DlgProcWindowsIntegration(HWND hDlg, UINT msg, WPARAM wParam, L
       SendDlgItemMessage (hDlg, IDC_CHECK2, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_CHECK3, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_MESSAGE1, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -1755,13 +1656,13 @@ LRESULT CALLBACK DlgProcWindowsIntegration(HWND hDlg, UINT msg, WPARAM wParam, L
               diWindowsIntegration.wiCB3.bCheckBoxState = FALSE;
           }
 
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -1824,7 +1725,6 @@ LRESULT CALLBACK DlgProcProgramFolder(HWND hDlg, UINT msg, WPARAM wParam, LONG l
       SendDlgItemMessage (hDlg, IDC_MESSAGE0, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SendDlgItemMessage (hDlg, IDC_EDIT_PROGRAM_FOLDER, WM_SETFONT, (WPARAM)sgInstallGui.systemFont, 0L);
       SendDlgItemMessage (hDlg, IDC_LIST, WM_SETFONT, (WPARAM)sgInstallGui.systemFont, 0L);
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -1843,13 +1743,13 @@ LRESULT CALLBACK DlgProcProgramFolder(HWND hDlg, UINT msg, WPARAM wParam, LONG l
           }
           lstrcpy(sgProduct.szProgramFolderName, szBuf);
         
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -1950,7 +1850,7 @@ LRESULT CALLBACK DlgProcAdvancedSettings(HWND hDlg, UINT msg, WPARAM wParam, LON
         ShowWindow(GetDlgItem(hDlg, IDC_USE_FTP),  SW_HIDE);
         ShowWindow(GetDlgItem(hDlg, IDC_USE_HTTP), SW_HIDE);
       }
-      ClosePreviousDialog();
+
       break;
 
     case WM_COMMAND:
@@ -1965,14 +1865,14 @@ LRESULT CALLBACK DlgProcAdvancedSettings(HWND hDlg, UINT msg, WPARAM wParam, LON
           GetDlgItemText(hDlg, IDC_EDIT_PROXY_PASSWD, diAdvancedSettings.szProxyPasswd, MAX_BUF);
 
           SaveDownloadProtocolOption(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
         case IDCANCEL:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -2101,7 +2001,6 @@ LRESULT CALLBACK DlgProcAdditionalOptions(HWND hDlg, UINT msg, WPARAM wParam, LO
       else
         CheckDlgButton(hDlg, IDC_CHECK_RECAPTURE_HOMEPAGE, BST_UNCHECKED);
 
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -2110,21 +2009,21 @@ LRESULT CALLBACK DlgProcAdditionalOptions(HWND hDlg, UINT msg, WPARAM wParam, LO
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
           SaveAdditionalOptions(hDlg, hwndCBSiteSelector);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
           SaveAdditionalOptions(hDlg, hwndCBSiteSelector);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
         case IDC_BUTTON_ADDITIONAL_SETTINGS:
           SaveWindowPosition(hDlg);
           SaveAdditionalOptions(hDlg, hwndCBSiteSelector);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(OTHER_DLG_1);
           break;
 
@@ -2454,7 +2353,6 @@ LRESULT CALLBACK DlgProcQuickLaunch(HWND hDlg, UINT msg, WPARAM wParam, LONG lPa
       else
         CheckDlgButton(hDlg, IDC_CHECK_TURBO_MODE, BST_UNCHECKED);
 
-      ClosePreviousDialog();
       break;
 
     case WM_COMMAND:
@@ -2470,7 +2368,7 @@ LRESULT CALLBACK DlgProcQuickLaunch(HWND hDlg, UINT msg, WPARAM wParam, LONG lPa
               diQuickLaunch.bTurboMode = FALSE;
           }
  
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
@@ -2483,7 +2381,7 @@ LRESULT CALLBACK DlgProcQuickLaunch(HWND hDlg, UINT msg, WPARAM wParam, LONG lPa
           else {
             diQuickLaunch.bTurboMode = FALSE;
           }
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -2538,7 +2436,7 @@ LRESULT CALLBACK DlgProcStartInstall(HWND hDlg, UINT msg, WPARAM wParam, LONG lP
         SetDlgItemText(hDlg, IDC_CURRENT_SETTINGS, szMessage);
         FreeMemory(&szMessage);
       }
-      ClosePreviousDialog();
+
       break;
 
     case WM_COMMAND:
@@ -2546,13 +2444,13 @@ LRESULT CALLBACK DlgProcStartInstall(HWND hDlg, UINT msg, WPARAM wParam, LONG lP
       {
         case IDWIZNEXT:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(NEXT_DLG);
           break;
 
         case IDWIZBACK:
           SaveWindowPosition(hDlg);
-          sgProduct.lastDialog = hDlg;
+          DestroyWindow(hDlg);
           DlgSequence(PREV_DLG);
           break;
 
@@ -2641,61 +2539,17 @@ LRESULT CALLBACK DlgProcReboot(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
   return(0);
 }
 
-void ResizeAndSetString(HWND aDlg, LPARAM lParam)
+LRESULT CALLBACK DlgProcMessage(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
 {
-  HDC       hdcSTMessage;
   RECT      rDlg;
+  HWND      hSTMessage = GetDlgItem(hDlg, IDC_MESSAGE); /* handle to the Static Text message window */
+  HDC       hdcSTMessage;
   SIZE      sizeString;
   LOGFONT   logFont;
   HFONT     hfontTmp;
   HFONT     hfontOld;
-  LPSTR     string = (LPSTR)lParam;
-  HWND      hSTMessage;
-  int       width;
-  int       height;
-
-  if(!aDlg || !string || (*string == 0))
-    return;
-
-  hSTMessage   = GetDlgItem(aDlg, IDC_MESSAGE); /* handle to the Static Text message window */
-  hdcSTMessage = GetWindowDC(hSTMessage);
-  SystemParametersInfo(SPI_GETICONTITLELOGFONT,
-                       sizeof(logFont),
-                       (PVOID)&logFont,
-                       0);
-  hfontTmp = CreateFontIndirect(&logFont);
-  if(hfontTmp)
-    hfontOld = SelectObject(hdcSTMessage, hfontTmp);
-
-  GetTextExtentPoint32(hdcSTMessage, string, lstrlen(string), &sizeString);
-  SelectObject(hdcSTMessage, hfontOld);
-  ReleaseDC(hSTMessage, hdcSTMessage);
-  DeleteObject(hfontTmp);
-  width  = sizeString.cx + 55>150?sizeString.cx + 55:150;
-  height = sizeString.cy + 50;
-  SetWindowPos(aDlg, aDlg,
-              (gSystemInfo.lastWindowPosCenterX)-(width/2),
-              (gSystemInfo.lastWindowPosCenterY)-(height/2),
-              width,
-              height,
-              SWP_NOACTIVATE|SWP_NOZORDER|SWP_SHOWWINDOW);
-  if(GetClientRect(aDlg, &rDlg))
-    SetWindowPos(hSTMessage,
-                 hSTMessage,
-                 rDlg.left,
-                 rDlg.top,
-                 rDlg.right,
-                 rDlg.bottom,
-                 SWP_NOACTIVATE|SWP_NOZORDER|SWP_SHOWWINDOW);
-  SetDlgItemText(aDlg, IDC_MESSAGE, string);
-  SaveWindowPosition(aDlg);
-}
-
-LRESULT CALLBACK DlgProcMessage(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
-{
   char      szBuf[MAX_BUF];
   char      szBuf2[MAX_BUF];
-  BOOL      wasMinimized = FALSE;
 
   ZeroMemory(szBuf, sizeof(szBuf));
   ZeroMemory(szBuf2, sizeof(szBuf2));
@@ -2703,7 +2557,6 @@ LRESULT CALLBACK DlgProcMessage(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
   switch(msg)
   {
     case WM_INITDIALOG:
-      DisableSystemMenuItems(hDlg, TRUE);
       if(GetPrivateProfileString("Messages", "STR_MESSAGEBOX_TITLE", "", szBuf2, sizeof(szBuf2), szFileIniInstall))
       {
         if((sgProduct.szProductName != NULL) && (*sgProduct.szProductName != '\0'))
@@ -2714,33 +2567,48 @@ LRESULT CALLBACK DlgProcMessage(HWND hDlg, UINT msg, WPARAM wParam, LONG lParam)
       else if((sgProduct.szProductName != NULL) && (*sgProduct.szProductName != '\0'))
         lstrcpy(szBuf, sgProduct.szProductName);
 
-      SendDlgItemMessage(hDlg, IDC_MESSAGE, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
       SetWindowText(hDlg, szBuf);
       RepositionWindow(hDlg, NO_BANNER_IMAGE);
-      break;
-
-    case WM_SIZE:
-      switch(wParam)
-      {
-        case SIZE_MINIMIZED:
-          wasMinimized = TRUE;
-          break;
-
-        case SIZE_RESTORED:
-          if(wasMinimized)
-          {
-            wasMinimized = FALSE;
-            ResizeAndSetString(hDlg, lParam);
-          }
-          break;
-      }
       break;
 
     case WM_COMMAND:
       switch(LOWORD(wParam))
       {
         case IDC_MESSAGE:
-          ResizeAndSetString(hDlg, lParam);
+          SaveWindowPosition(hDlg);
+          hdcSTMessage = GetWindowDC(hSTMessage);
+
+          SystemParametersInfo(SPI_GETICONTITLELOGFONT,
+                               sizeof(logFont),
+                               (PVOID)&logFont,
+                               0);
+          hfontTmp = CreateFontIndirect(&logFont);
+
+          if(hfontTmp)
+            hfontOld = SelectObject(hdcSTMessage, hfontTmp);
+
+          GetTextExtentPoint32(hdcSTMessage, (LPSTR)lParam, lstrlen((LPSTR)lParam), &sizeString);
+          SelectObject(hdcSTMessage, hfontOld);
+          DeleteObject(hfontTmp);
+          ReleaseDC(hSTMessage, hdcSTMessage);
+
+          SetWindowPos(hDlg, NULL,
+                      (gSystemInfo.lastWindowPosCenterX)-((sizeString.cx + 55)/2),
+                      (gSystemInfo.lastWindowPosCenterY)-((sizeString.cy + 50)/2),
+                      sizeString.cx + 55,
+                      sizeString.cy + 50,
+                      SWP_SHOWWINDOW|SWP_NOZORDER);
+
+          if(GetClientRect(hDlg, &rDlg))
+            SetWindowPos(hSTMessage,
+                         HWND_TOP,
+                         rDlg.left,
+                         rDlg.top,
+                         rDlg.right,
+                         rDlg.bottom,
+                         SWP_SHOWWINDOW|SWP_NOZORDER);
+
+          SetDlgItemText(hDlg, IDC_MESSAGE, (LPSTR)lParam);
           break;
       }
       break;
@@ -2761,46 +2629,24 @@ void ProcessWindowsMessages()
 
 void ShowMessage(LPSTR szMessage, BOOL bShow)
 {
-  if(sgProduct.mode == SILENT)
-    return;
-
-  if(bShow)
+  if(sgProduct.mode != SILENT)
   {
-    if(!szMessage || (*szMessage == '\0'))
-      return;
-
-    if(!hDlgMessage)
+    if(bShow && szMessage)
     {
       char szBuf[MAX_BUF];
-
+ 
       ZeroMemory(szBuf, sizeof(szBuf));
       GetPrivateProfileString("Messages", "MB_MESSAGE_STR", "", szBuf, sizeof(szBuf), szFileIniInstall);
       hDlgMessage = InstantiateDialog(hWndMain, DLG_MESSAGE, szBuf, DlgProcMessage);
-    }
-
-    if(!IsWindowVisible(hDlgMessage))
-    {
-      DWORD cmdShow = 0x00000000;
-
-      if(gSystemInfo.lastWindowMinimized)
-        cmdShow = SW_SHOWMINNOACTIVE;
-
-      if(gSystemInfo.lastWindowIsTopWindow)
-        cmdShow = SW_SHOWNORMAL;
-
-      RepositionWindow(hDlgMessage, NO_BANNER_IMAGE);
-      ShowWindow(hDlgMessage, cmdShow);
+      SendMessage(hDlgMessage, WM_COMMAND, IDC_MESSAGE, (LPARAM)szMessage);
+      SendDlgItemMessage (hDlgMessage, IDC_MESSAGE, WM_SETFONT, (WPARAM)sgInstallGui.definedFont, 0L);
     }
     else
+    {
       SaveWindowPosition(hDlgMessage);
-
-    SendMessage(hDlgMessage, WM_COMMAND, IDC_MESSAGE, (LPARAM)szMessage);
-  }
-  else if(hDlgMessage && (IsWindowVisible(hDlgMessage) || gSystemInfo.lastWindowMinimized))
-  {
-    SaveWindowPosition(hDlgMessage);
-    DestroyWindow(hDlgMessage);
-    hDlgMessage = NULL;
+      DestroyWindow(hDlgMessage);
+      hDlgMessage = NULL;
+    }
   }
 }
 
@@ -3144,14 +2990,9 @@ void DlgSequence(int iDirection)
 void CommitInstall(void)
 {
   HRESULT hrErr;
-  char    msgPleaseWait[MAX_BUF];
   char    szDestPath[MAX_BUF];
   char    szInstallLogFile[MAX_BUF];
   long    RetrieveResults;
-
-  GetPrivateProfileString("Messages", "MSG_PLEASE_WAIT", "", msgPleaseWait, sizeof(msgPleaseWait), szFileIniInstall);
-  ShowMessage(msgPleaseWait, TRUE);
-  ClosePreviousDialog();
 
   LogISShared();
   LogISDestinationPath();
@@ -3257,6 +3098,7 @@ void CommitInstall(void)
         bSDUserCanceled = TRUE;
         CleanupXpcomFile();
         PostQuitMessage(0);
+
         return;
       }
 
@@ -3276,7 +3118,7 @@ void CommitInstall(void)
         bSDUserCanceled = TRUE;
         CleanupXpcomFile();
         PostQuitMessage(0);
-        ShowMessage(NULL, FALSE);
+
         return;
       }
 
@@ -3295,7 +3137,6 @@ void CommitInstall(void)
     else
       hrErr = WIZ_OK;
 
-    ShowMessage(msgPleaseWait, TRUE);
     if((hrErr == WIZ_OK) || (hrErr == 999))
     {
       if(sgProduct.bInstallFiles)
@@ -3330,7 +3171,6 @@ void CommitInstall(void)
       }
 
       CleanupXpcomFile();
-      ShowMessage(NULL, FALSE);
       if(NeedReboot())
       {
         LogExitStatus("Reboot");
@@ -3355,6 +3195,5 @@ void CommitInstall(void)
     CleanupArgsRegistry();
     PostQuitMessage(0);
   }
-  ShowMessage(NULL, FALSE);
   gbProcessingXpnstallFiles = FALSE;
 }

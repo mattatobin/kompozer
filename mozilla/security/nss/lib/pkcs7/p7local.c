@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * Support routines for PKCS7 implementation, none of which are exported.
@@ -40,7 +37,7 @@
  * encoding/creation side *and* the decoding/decryption side.  Anything
  * else should be static routines in the appropriate file.
  *
- * $Id: p7local.c,v 1.8.2.1 2007/05/09 19:05:06 rrelyea%redhat.com Exp $
+ * $Id: p7local.c,v 1.6 2003/09/19 04:16:19 jpierre%netscape.com Exp $
  */
 
 #include "p7local.h"
@@ -118,12 +115,11 @@ sec_PKCS7CreateDecryptObject (PK11SymKey *key, SECAlgorithmID *algid)
     if (SEC_PKCS5IsAlgorithmPBEAlg(algid)) {
 	CK_MECHANISM pbeMech, cryptoMech;
 	SECItem *pbeParams, *pwitem;
+	SEC_PKCS5KeyAndPassword *keyPwd;
 
-	pwitem = (SECItem *)PK11_GetSymKeyUserData(key);
-	if (!pwitem) {
-	    PORT_Free(result);
-	    return NULL;
-	}
+	keyPwd = (SEC_PKCS5KeyAndPassword *)key;
+	key = keyPwd->key;
+	pwitem = keyPwd->pwitem;
 
 	pbeMech.mechanism = PK11_AlgtagToMechanism(algtag);
 	pbeParams = PK11_ParamFromAlgid(algid);
@@ -212,16 +208,11 @@ sec_PKCS7CreateEncryptObject (PRArenaPool *poolp, PK11SymKey *key,
     ciphercx = NULL;
     if (SEC_PKCS5IsAlgorithmPBEAlg(algid)) {
 	CK_MECHANISM pbeMech, cryptoMech;
-	SECItem *pbeParams, *pwitem;
+	SECItem *pbeParams;
+	SEC_PKCS5KeyAndPassword *keyPwd;
 
 	PORT_Memset(&pbeMech, 0, sizeof(CK_MECHANISM));
 	PORT_Memset(&cryptoMech, 0, sizeof(CK_MECHANISM));
-
-	pwitem = (SECItem *)PK11_GetSymKeyUserData(key);
-	if (!pwitem) {
-	    PORT_Free(result);
-	    return NULL;
-	}
 
 	pbeMech.mechanism = PK11_AlgtagToMechanism(algtag);
 	pbeParams = PK11_ParamFromAlgid(algid);
@@ -229,11 +220,13 @@ sec_PKCS7CreateEncryptObject (PRArenaPool *poolp, PK11SymKey *key,
 	    PORT_Free(result);
 	    return NULL;
 	}
+	keyPwd = (SEC_PKCS5KeyAndPassword *)key;
+	key = keyPwd->key;
 
 	pbeMech.pParameter = pbeParams->data;
 	pbeMech.ulParameterLen = pbeParams->len;
-	if(PK11_MapPBEMechanismToCryptoMechanism(&pbeMech, &cryptoMech, pwitem,
-							 PR_FALSE) != CKR_OK) {
+	if(PK11_MapPBEMechanismToCryptoMechanism(&pbeMech, &cryptoMech, 
+					 keyPwd->pwitem, PR_FALSE) != CKR_OK) {
 	    PORT_Free(result);
 	    SECITEM_ZfreeItem(pbeParams, PR_TRUE);
 	    return NULL;
@@ -278,8 +271,6 @@ sec_PKCS7CreateEncryptObject (PRArenaPool *poolp, PK11SymKey *key,
     if (needToEncodeAlgid) {
 	rv = PK11_ParamToAlgid(algtag,param,poolp,algid);
 	if(rv != SECSuccess) {
-	    PORT_Free (result);
-            SECITEM_FreeItem(param,PR_TRUE);
 	    return NULL;
 	}
     }

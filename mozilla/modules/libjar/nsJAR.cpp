@@ -1,44 +1,29 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code, 
+ * released March 31, 1998. 
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
+ * The Initial Developer of the Original Code is Netscape Communications 
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Veditz <dveditz@netscape.com>
- *   Samir Gehani <sgehani@netscape.com>
- *   Mitch Stoltz <mstoltz@netsape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): 
+ *     Daniel Veditz <dveditz@netscape.com>
+ *     Samir Gehani <sgehani@netscape.com>
+ *     Mitch Stoltz <mstoltz@netsape.com>
+ *     Pierre Phaneuf <pp@ludusdesign.com>
+ */
 #include <string.h>
 #include "nsJARInputStream.h"
 #include "nsJAR.h"
@@ -50,7 +35,6 @@
 #include "nsIConsoleService.h"
 #include "nscore.h"
 #include "nsCRT.h"
-#include "nsICryptoHash.h"
 
 #ifdef XP_UNIX
   #include <sys/stat.h>
@@ -160,7 +144,7 @@ PR_STATIC_CALLBACK(PRBool)
 DeleteManifestEntry(nsHashKey* aKey, void* aData, void* closure)
 {
 //-- deletes an entry in  mManifestData.
-  delete (nsJARManifestItem*)aData;
+  PR_FREEIF(aData);
   return PR_TRUE;
 }
 
@@ -195,7 +179,7 @@ nsrefcnt nsJAR::Release(void)
   if (0 == count) {
     mRefCnt = 1; /* stabilize */ 
     /* enable this to find non-threadsafe destructors: */ 
-    /* NS_ASSERT_OWNINGTHREAD(nsJAR); */ 
+    /* NS_ASSERT_OWNINGTHREAD(_class); */ 
     NS_DELETEXPCOM(this); 
     return 0; 
   }
@@ -295,7 +279,7 @@ nsJAR::Extract(const char *zipEntry, nsIFile* outFile)
   else
   {
 #if defined(XP_UNIX)
-    if (item->isSymlink) 
+    if (item->flags & ZIFLAG_SYMLINK) 
     {
       nsCAutoString path;
       rv = outFile->GetNativePath(path);
@@ -392,8 +376,15 @@ nsJAR::GetCertificatePrincipal(const char* aFilename, nsIPrincipal** aPrincipal)
     return NS_ERROR_NULL_POINTER;
   *aPrincipal = nsnull;
 
+  //-- Get the signature verifier service
+  nsresult rv;
+  nsCOMPtr<nsISignatureVerifier> verifier = 
+           do_GetService(SIGNATURE_VERIFIER_CONTRACTID, &rv);
+  if (NS_FAILED(rv)) // No signature verifier available
+    return NS_OK;
+
   //-- Parse the manifest
-  nsresult rv = ParseManifest();
+  rv = ParseManifest(verifier);
   if (NS_FAILED(rv)) return rv;
   if (mGlobalStatus == nsIJAR::NO_MANIFEST)
     return NS_OK;
@@ -413,7 +404,7 @@ nsJAR::GetCertificatePrincipal(const char* aFilename, nsIPrincipal** aPrincipal)
       PRUint32 entryDataLen;
       rv = LoadEntry(aFilename, getter_Copies(entryData), &entryDataLen);
       if (NS_FAILED(rv)) return rv;
-      rv = VerifyEntry(manItem, entryData, entryDataLen);
+      rv = VerifyEntry(verifier, manItem, entryData, entryDataLen);
       if (NS_FAILED(rv)) return rv;
     }
     requestedStatus = manItem->status;
@@ -526,7 +517,7 @@ nsJAR::ReadLine(const char** src)
 #define JAR_SF_HEADER (const char*)"Signature-Version: 1.0"
 
 nsresult
-nsJAR::ParseManifest()
+nsJAR::ParseManifest(nsISignatureVerifier* verifier)
 {
   //-- Verification Step 1
   if (mParsedManifest)
@@ -564,7 +555,7 @@ nsJAR::ParseManifest()
   if (NS_FAILED(rv)) return rv;
 
   //-- Parse it
-  rv = ParseOneFile(manifestBuffer, JAR_MF);
+  rv = ParseOneFile(verifier, manifestBuffer, JAR_MF);
   if (NS_FAILED(rv)) return rv;
 
   //-- (2)Signature (SF) file
@@ -611,16 +602,6 @@ nsJAR::ParseManifest()
     return NS_OK;
   }
 
-  //-- Get the signature verifier service
-  nsCOMPtr<nsISignatureVerifier> verifier = 
-           do_GetService(SIGNATURE_VERIFIER_CONTRACTID, &rv);
-  if (NS_FAILED(rv)) // No signature verifier available
-  {
-    mGlobalStatus = nsIJAR::NO_MANIFEST;
-    mParsedManifest = PR_TRUE;
-    return NS_OK;
-  }
-
   //-- Verify that the signature file is a valid signature of the SF file
   PRInt32 verifyError;
   rv = verifier->VerifySignature(sigBuffer, sigLen, manifestBuffer, manifestLen, 
@@ -637,14 +618,15 @@ nsJAR::ParseManifest()
   // is null, and ParseOneFile will mark the relevant entries as invalid.
   // if ParseOneFile fails, then it has no effect, and we can safely 
   // continue to the next SF file, or return. 
-  ParseOneFile(manifestBuffer, JAR_SF);
+  ParseOneFile(verifier, manifestBuffer, JAR_SF);
   mParsedManifest = PR_TRUE;
 
   return NS_OK;
 }
 
 nsresult
-nsJAR::ParseOneFile(const char* filebuf, PRInt16 aFileType)
+nsJAR::ParseOneFile(nsISignatureVerifier* verifier,
+                    const char* filebuf, PRInt16 aFileType)
 {
   //-- Check file header
   const char* nextLineStart = filebuf;
@@ -714,7 +696,7 @@ nsJAR::ParseOneFile(const char* filebuf, PRInt16 aFileType)
         else //-- calculate section digest
         {
           PRUint32 sectionLength = curPos - sectionStart;
-          CalculateDigest(sectionStart, sectionLength,
+          CalculateDigest(verifier, sectionStart, sectionLength,
                           &(curItemMF->calculatedSectionDigest));
           //-- Save item in the hashtable
           nsCStringKey itemKey(curItemName);
@@ -830,7 +812,8 @@ nsJAR::ParseOneFile(const char* filebuf, PRInt16 aFileType)
 } //ParseOneFile()
 
 nsresult
-nsJAR::VerifyEntry(nsJARManifestItem* aManItem, const char* aEntryData,
+nsJAR::VerifyEntry(nsISignatureVerifier* verifier,
+                   nsJARManifestItem* aManItem, const char* aEntryData,
                    PRUint32 aLen)
 {
   if (aManItem->status == nsIJAR::VALID)
@@ -841,7 +824,7 @@ nsJAR::VerifyEntry(nsJARManifestItem* aManItem, const char* aEntryData,
     else
     { //-- Calculate and compare digests
       char* calculatedEntryDigest;
-      nsresult rv = CalculateDigest(aEntryData, aLen, &calculatedEntryDigest);
+      nsresult rv = CalculateDigest(verifier, aEntryData, aLen, &calculatedEntryDigest);
       if (NS_FAILED(rv)) return NS_ERROR_FAILURE;
       if (PL_strcmp(aManItem->storedEntryDigest, calculatedEntryDigest) != 0)
         aManItem->status = nsIJAR::INVALID_ENTRY;
@@ -857,31 +840,31 @@ void nsJAR::ReportError(const char* aFilename, PRInt16 errorCode)
 {
   //-- Generate error message
   nsAutoString message; 
-  message.AssignLiteral("Signature Verification Error: the signature on ");
+  message.Assign(NS_LITERAL_STRING("Signature Verification Error: the signature on "));
   if (aFilename)
     message.AppendWithConversion(aFilename);
   else
-    message.AppendLiteral("this .jar archive");
-  message.AppendLiteral(" is invalid because ");
+    message.Append(NS_LITERAL_STRING("this .jar archive"));
+  message.Append(NS_LITERAL_STRING(" is invalid because "));
   switch(errorCode)
   {
   case nsIJAR::NOT_SIGNED:
-    message.AppendLiteral("the archive did not contain a valid PKCS7 signature.");
+    message.Append(NS_LITERAL_STRING("the archive did not contain a valid PKCS7 signature."));
     break;
   case nsIJAR::INVALID_SIG:
     message.Append(NS_LITERAL_STRING("the digital signature (*.RSA) file is not a valid signature of the signature instruction file (*.SF)."));
     break;
   case nsIJAR::INVALID_UNKNOWN_CA:
-    message.AppendLiteral("the certificate used to sign this file has an unrecognized issuer.");
+    message.Append(NS_LITERAL_STRING("the certificate used to sign this file has an unrecognized issuer."));
     break;
   case nsIJAR::INVALID_MANIFEST:
     message.Append(NS_LITERAL_STRING("the signature instruction file (*.SF) does not contain a valid hash of the MANIFEST.MF file."));
     break;
   case nsIJAR::INVALID_ENTRY:
-    message.AppendLiteral("the MANIFEST.MF file does not contain a valid hash of the file being verified.");
+    message.Append(NS_LITERAL_STRING("the MANIFEST.MF file does not contain a valid hash of the file being verified."));
     break;
   default:
-    message.AppendLiteral("of an unknown problem.");
+    message.Append(NS_LITERAL_STRING("of an unknown problem."));
   }
   
   // Report error in JS console
@@ -899,29 +882,33 @@ void nsJAR::ReportError(const char* aFilename, PRInt16 errorCode)
 }
 
 
-nsresult nsJAR::CalculateDigest(const char* aInBuf, PRUint32 aLen,
+nsresult nsJAR::CalculateDigest(nsISignatureVerifier* verifier,
+                                const char* aInBuf, PRUint32 aLen,
                                 char** digest)
 {
   *digest = nsnull;
   nsresult rv;
   
-
-  nsCOMPtr<nsICryptoHash> hasher = do_CreateInstance("@mozilla.org/security/hash;1", &rv);
+  //-- Calculate the digest
+  HASHContextStr* id;
+  rv = verifier->HashBegin(nsISignatureVerifier::SHA1, &id);
   if (NS_FAILED(rv)) return rv;
 
-  rv = hasher->Init(nsICryptoHash::SHA1);
+  rv = verifier->HashUpdate(id, aInBuf, aLen);
   if (NS_FAILED(rv)) return rv;
+  
+  PRUint32 len;
+  unsigned char* rawDigest = (unsigned char*)PR_MALLOC(nsISignatureVerifier::SHA1_LENGTH);
+  if (rawDigest == nsnull) return NS_ERROR_OUT_OF_MEMORY;
+  rv = verifier->HashEnd(id, &rawDigest, &len, nsISignatureVerifier::SHA1_LENGTH);
+  if (NS_FAILED(rv)) { PR_FREEIF(rawDigest); return rv; }
 
-  rv = hasher->Update((const PRUint8*) aInBuf, aLen);
-  if (NS_FAILED(rv)) return rv;
-
-  nsCAutoString hashString;
-  rv = hasher->Finish(PR_TRUE, hashString);
-  if (NS_FAILED(rv)) return rv;
-
-  *digest = ToNewCString(hashString);
-
-  return *digest ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
+  //-- Encode the digest in base64
+  *digest = PL_Base64Encode((char*)rawDigest, len, *digest);
+  if (!(*digest)) { PR_FREEIF(rawDigest); return NS_ERROR_OUT_OF_MEMORY; }
+  
+  PR_FREEIF(rawDigest);
+  return NS_OK;
 }
 
 //----------------------------------------------
@@ -1165,15 +1152,15 @@ nsZipReaderCache::nsZipReaderCache()
 NS_IMETHODIMP
 nsZipReaderCache::Init(PRUint32 cacheSize)
 {
+  nsresult rv;
   mCacheSize = cacheSize; 
   
 // Register as a memory pressure observer 
   nsCOMPtr<nsIObserverService> os = 
-           do_GetService("@mozilla.org/observer-service;1");
-  if (os)
+           do_GetService("@mozilla.org/observer-service;1", &rv);
+  if (NS_SUCCEEDED(rv))   
   {
-    os->AddObserver(this, "memory-pressure", PR_TRUE);
-    os->AddObserver(this, "chrome-flush-caches", PR_TRUE);
+    rv = os->AddObserver(this, "memory-pressure", PR_TRUE);
   }
 // ignore failure of the observer registration.
 
@@ -1206,7 +1193,6 @@ nsZipReaderCache::~nsZipReaderCache()
 NS_IMETHODIMP
 nsZipReaderCache::GetZip(nsIFile* zipFile, nsIZipReader* *result)
 {
-  NS_ENSURE_ARG_POINTER(zipFile);
   nsresult rv;
   nsAutoLock lock(mLock);
 
@@ -1368,7 +1354,7 @@ nsZipReaderCache::Observe(nsISupports *aSubject,
                           const char *aTopic, 
                           const PRUnichar *aSomeData)
 {
-  if (strcmp(aTopic, "memory-pressure") == 0) {
+  if (nsCRT::strcmp(aTopic, "memory-pressure") == 0) {
     nsAutoLock lock(mLock);
     while (PR_TRUE) {
       nsHashKey* flushable = nsnull;
@@ -1382,11 +1368,7 @@ nsZipReaderCache::Observe(nsISupports *aSubject,
       printf("flushed something from the jar cache\n");
 #endif
     }
-  }
-  else if (strcmp(aTopic, "chrome-flush-caches") == 0) {
-    mZips.Enumerate(DropZipReaderCache, nsnull);
-    mZips.Reset();
-  }
+  }  
   return NS_OK;
 }
 

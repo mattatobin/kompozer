@@ -20,11 +20,11 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: Aaron Leventhal (aaronl@netscape.com)
+ * Original Author: Aaron Leventhal (aaronl@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
@@ -43,11 +43,8 @@
 #include "nsIAccessibilityService.h"
 #include "nsIAccessibleDocument.h"
 #include "nsPIAccessibleDocument.h"
-#include "nsIDocShell.h"
-#include "nsIDocShellTreeItem.h"
 #include "nsIDocument.h"
 #include "nsIDOMCSSStyleDeclaration.h"
-#include "nsIDOMDocument.h"
 #include "nsIDOMElement.h"
 #include "nsIDOMNSHTMLElement.h"
 #include "nsIDOMViewCSS.h"
@@ -56,11 +53,10 @@
 #include "nsIFrame.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIPresShell.h"
 #include "nsIServiceManager.h"
 #include "nsIStringBundle.h"
-#include "nsITimer.h"
 
 /* For documentation of the accessibility architecture, 
  * see http://lxr.mozilla.org/seamonkey/source/accessible/accessible-docs.html
@@ -68,7 +64,6 @@
 
 nsIStringBundle *nsAccessNode::gStringBundle = 0;
 nsIStringBundle *nsAccessNode::gKeyStringBundle = 0;
-nsITimer *nsAccessNode::gDoCommandTimer = 0;
 nsIDOMNode *nsAccessNode::gLastFocusedNode = 0;
 PRBool nsAccessNode::gIsAccessibilityActive = PR_FALSE;
 PRBool nsAccessNode::gIsCacheDisabled = PR_FALSE;
@@ -84,7 +79,8 @@ nsInterfaceHashtable<nsVoidHashKey, nsIAccessNode> nsAccessNode::gGlobalDocAcces
 NS_IMPL_ISUPPORTS2(nsAccessNode, nsIAccessNode, nsPIAccessNode)
 
 nsAccessNode::nsAccessNode(nsIDOMNode *aNode, nsIWeakReference* aShell): 
-  mDOMNode(aNode), mWeakShell(aShell), mRefCnt(0)
+  mDOMNode(aNode), mWeakShell(aShell), mRefCnt(0),
+  mAccChildCount(eChildCountUninitialized)
 {
 #ifdef DEBUG
   mIsInitialized = PR_FALSE;
@@ -116,7 +112,9 @@ NS_IMETHODIMP nsAccessNode::Init()
     // Create a doc accessible so we can cache this node
     nsCOMPtr<nsIPresShell> presShell(do_QueryReferent(mWeakShell));
     if (presShell) {
-      nsCOMPtr<nsIDOMNode> docNode(do_QueryInterface(presShell->GetDocument()));
+      nsCOMPtr<nsIDocument> doc;
+      presShell->GetDocument(getter_AddRefs(doc));
+      nsCOMPtr<nsIDOMNode> docNode(do_QueryInterface(doc));
       if (docNode) {
         nsCOMPtr<nsIAccessibilityService> accService = 
           do_GetService("@mozilla.org/accessibilityService;1");
@@ -208,7 +206,6 @@ void nsAccessNode::ShutdownXPAccessibility()
   }
   NS_IF_RELEASE(gStringBundle);
   NS_IF_RELEASE(gKeyStringBundle);
-  NS_IF_RELEASE(gDoCommandTimer);
   NS_IF_RELEASE(gLastFocusedNode);
 
   ClearCache(gGlobalDocAccessibleCache);
@@ -218,9 +215,7 @@ void nsAccessNode::ShutdownXPAccessibility()
 
 already_AddRefed<nsIPresShell> nsAccessNode::GetPresShell()
 {
-  nsIPresShell *presShell = nsnull;
-  if (mWeakShell)
-    CallQueryReferent(mWeakShell.get(), &presShell);
+  nsCOMPtr<nsIPresShell> presShell(do_QueryReferent(mWeakShell));
   if (!presShell) {
     if (mWeakShell) {
       // If our pres shell has died, but we're still holding onto
@@ -230,21 +225,27 @@ already_AddRefed<nsIPresShell> nsAccessNode::GetPresShell()
     }
     return nsnull;
   }
-  return presShell;
+  nsIPresShell *resultShell = presShell;
+  NS_IF_ADDREF(resultShell);
+  return resultShell;
 }
 
-nsPresContext* nsAccessNode::GetPresContext()
+already_AddRefed<nsIPresContext> nsAccessNode::GetPresContext()
 {
   nsCOMPtr<nsIPresShell> presShell(GetPresShell());
   if (!presShell) {
     return nsnull;
   }
-  return presShell->GetPresContext();
+  nsIPresContext *presContext;
+  presShell->GetPresContext(&presContext);  // Addref'd
+  return presContext;
 }
 
 already_AddRefed<nsIAccessibleDocument> nsAccessNode::GetDocAccessible()
 {
-  return GetDocAccessibleFor(mWeakShell); // Addref'd
+  nsIAccessibleDocument *docAccessible;
+  GetDocAccessibleFor(mWeakShell, &docAccessible); // Addref'd
+  return docAccessible;
 }
 
 nsIFrame* nsAccessNode::GetFrame()
@@ -253,18 +254,10 @@ nsIFrame* nsAccessNode::GetFrame()
   if (!shell) 
     return nsnull;  
 
-  nsIFrame* frame;
+  nsIFrame* frame = nsnull;
   nsCOMPtr<nsIContent> content(do_QueryInterface(mDOMNode));
-  while (content) {
-    shell->GetPrimaryFrameFor(content, &frame);
-    if (frame) {
-      return frame;
-    }
-    nsCOMPtr<nsIContent> tempContent = content->GetParent();
-    content = tempContent;
-  }
-
-  return nsnull;
+  shell->GetPrimaryFrameFor(content, &frame);
+  return frame;
 }
 
 NS_IMETHODIMP
@@ -293,7 +286,7 @@ nsAccessNode::GetNumChildren(PRInt32 *aNumChildren)
 NS_IMETHODIMP
 nsAccessNode::GetAccessibleDocument(nsIAccessibleDocument **aDocAccessible)
 {
-  *aDocAccessible = GetDocAccessibleFor(mWeakShell).get();
+  GetDocAccessibleFor(mWeakShell, aDocAccessible);
   return NS_OK;
 }
 
@@ -419,7 +412,7 @@ NS_IMETHODIMP
 nsAccessNode::GetComputedStyleValue(const nsAString& aPseudoElt, const nsAString& aPropertyName, nsAString& aValue)
 {
   nsCOMPtr<nsIDOMElement> domElement(do_QueryInterface(mDOMNode));
-  nsPresContext *presContext = GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext(GetPresContext());
   NS_ENSURE_TRUE(domElement && presContext, NS_ERROR_FAILURE);
 
   nsCOMPtr<nsISupports> container = presContext->GetContainer();
@@ -436,75 +429,18 @@ nsAccessNode::GetComputedStyleValue(const nsAString& aPseudoElt, const nsAString
 
 /***************** Hashtable of nsIAccessNode's *****************/
 
-already_AddRefed<nsIAccessibleDocument>
-nsAccessNode::GetDocAccessibleFor(nsIWeakReference *aPresShell)
+void nsAccessNode::GetDocAccessibleFor(nsIWeakReference *aPresShell, 
+                                       nsIAccessibleDocument **aDocAccessible)
 {
-  nsIAccessibleDocument *docAccessible = nsnull;
+  *aDocAccessible = nsnull;
+
   nsCOMPtr<nsIAccessNode> accessNode;
   gGlobalDocAccessibleCache.Get(NS_STATIC_CAST(void*, aPresShell), getter_AddRefs(accessNode));
   if (accessNode) {
-    CallQueryInterface(accessNode, &docAccessible);
+    CallQueryInterface(accessNode, aDocAccessible);
   }
-  return docAccessible;
 }
  
-already_AddRefed<nsIAccessibleDocument>
-nsAccessNode::GetDocAccessibleFor(nsISupports *aContainer)
-{
-  nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(aContainer));
-  NS_ASSERTION(docShell, "This method currently only supports docshells");
-  nsCOMPtr<nsIPresShell> presShell;
-  docShell->GetPresShell(getter_AddRefs(presShell));
-  nsCOMPtr<nsIWeakReference> weakShell(do_GetWeakReference(presShell));
-  return weakShell ? GetDocAccessibleFor(weakShell) : nsnull;
-}
- 
-already_AddRefed<nsIAccessibleDocument>
-nsAccessNode::GetDocAccessibleFor(nsIDOMNode *aNode)
-{
-  nsCOMPtr<nsIPresShell> eventShell = GetPresShellFor(aNode);
-  nsCOMPtr<nsIWeakReference> weakEventShell(do_GetWeakReference(eventShell));
-  return weakEventShell? GetDocAccessibleFor(weakEventShell) : nsnull;
-}
-
-already_AddRefed<nsIPresShell>
-nsAccessNode::GetPresShellFor(nsIDOMNode *aNode)
-{
-  nsCOMPtr<nsIDOMDocument> domDocument;
-  aNode->GetOwnerDocument(getter_AddRefs(domDocument));
-  nsCOMPtr<nsIDocument> doc(do_QueryInterface(domDocument));
-  if (!doc) {   // This is necessary when the node is the document node
-    doc = do_QueryInterface(aNode);
-  }
-  nsIPresShell *presShell = nsnull;
-  if (doc) {
-    presShell = doc->GetShellAt(0);
-    NS_IF_ADDREF(presShell);
-  }
-  return presShell;
-}
-
-
-already_AddRefed<nsIDocShellTreeItem>
-nsAccessNode::GetDocShellTreeItemFor(nsIDOMNode *aStartNode)
-{
-  nsCOMPtr<nsIDOMDocument> domDoc;
-  aStartNode->GetOwnerDocument(getter_AddRefs(domDoc));
-  nsCOMPtr<nsIDocument> doc(do_QueryInterface(domDoc));
-  if (!doc) {
-    doc = do_QueryInterface(aStartNode);
-  }
-  NS_ASSERTION(doc, "No document for node passed in");
-  NS_ENSURE_TRUE(doc, nsnull);
-  nsCOMPtr<nsISupports> container = doc->GetContainer();
-  nsIDocShellTreeItem *docShellTreeItem = nsnull;
-  if (container) {
-    CallQueryInterface(container, &docShellTreeItem);
-  }
-
-  return docShellTreeItem;
-}
-
 void nsAccessNode::PutCacheEntry(nsInterfaceHashtable<nsVoidHashKey, nsIAccessNode> &aCache, 
                                  void* aUniqueID, 
                                  nsIAccessNode *aAccessNode)

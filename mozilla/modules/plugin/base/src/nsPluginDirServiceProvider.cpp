@@ -40,8 +40,7 @@
 
 #include "nsCRT.h"
 #include "nsILocalFile.h"
-#include "nsIPrefBranch.h"
-#include "nsIPrefService.h"
+#include "nsIPref.h"
 #include "nsDependentString.h"
 #include "nsXPIDLString.h"
 #include "prmem.h"
@@ -59,8 +58,7 @@ typedef struct structVer
   WORD wBuild;
 } verBlock;
 
-static void
-ClearVersion(verBlock *ver)
+static void ClearVersion(verBlock *ver)
 {
   ver->wMajor   = 0;
   ver->wMinor   = 0;
@@ -68,15 +66,13 @@ ClearVersion(verBlock *ver)
   ver->wBuild   = 0;
 }
 
-static BOOL
-FileExists(LPCSTR szFile)
+static BOOL FileExists(LPCSTR szFile)
 {
   return GetFileAttributes(szFile) != 0xFFFFFFFF;
 }
 
 // Get file version information from a file
-static BOOL
-GetFileVersion(LPSTR szFile, verBlock *vbVersion)
+static BOOL GetFileVersion(LPSTR szFile, verBlock *vbVersion)
 {
   UINT              uLen;
   UINT              dwLen;
@@ -87,35 +83,35 @@ GetFileVersion(LPSTR szFile, verBlock *vbVersion)
   VS_FIXEDFILEINFO  *lpBuffer2;
 
   ClearVersion(vbVersion);
-  if (FileExists(szFile)) {
+  if(FileExists(szFile))
+  {
     bRv    = TRUE;
     dwLen  = GetFileVersionInfoSize(szFile, &dwHandle);
     lpData = (LPVOID)malloc(dwLen);
     uLen   = 0;
 
-    if (lpData && GetFileVersionInfo(szFile, dwHandle, dwLen, lpData) != 0) {
-      if (VerQueryValue(lpData, "\\", &lpBuffer, &uLen) != 0) {
-        lpBuffer2 = (VS_FIXEDFILEINFO *)lpBuffer;
-
+    if(lpData && GetFileVersionInfo(szFile, dwHandle, dwLen, lpData) != 0)
+    {
+      if(VerQueryValue(lpData, "\\", &lpBuffer, &uLen) != 0)
+      {
+        lpBuffer2             = (VS_FIXEDFILEINFO *)lpBuffer;
         vbVersion->wMajor   = HIWORD(lpBuffer2->dwFileVersionMS);
         vbVersion->wMinor   = LOWORD(lpBuffer2->dwFileVersionMS);
         vbVersion->wRelease = HIWORD(lpBuffer2->dwFileVersionLS);
         vbVersion->wBuild   = LOWORD(lpBuffer2->dwFileVersionLS);
       }
     }
-
     free(lpData);
-  } else {
+  }
+  else
     /* File does not exist */
     bRv = FALSE;
-  }
 
-  return bRv;
+  return(bRv);
 }
 
 // Will deep copy ver2 into ver1
-static void
-CopyVersion(verBlock *ver1, verBlock *ver2)
+static void CopyVersion(verBlock *ver1, verBlock *ver2)
 {
   ver1->wMajor   = ver2->wMajor;
   ver1->wMinor   = ver2->wMinor;
@@ -123,9 +119,8 @@ CopyVersion(verBlock *ver1, verBlock *ver2)
   ver1->wBuild   = ver2->wBuild;
 }
 
-// Convert a string version to a version struct
-static void
-TranslateVersionStr(const char* szVersion, verBlock *vbVersion)
+// convert a string version to a version struct
+static void TranslateVersionStr(const char* szVersion, verBlock *vbVersion)
 {
   LPSTR szNum1 = NULL;
   LPSTR szNum2 = NULL;
@@ -134,21 +129,16 @@ TranslateVersionStr(const char* szVersion, verBlock *vbVersion)
   LPSTR szJavaBuild = NULL;
 
   char *strVer = nsnull;
-  if (szVersion) {
+  if (szVersion)
     strVer = PL_strdup(szVersion);
-  }
-
-  if (!strVer) {
-    // Out of memory
+  if (!strVer) {  // out of memory
     ClearVersion(vbVersion);
     return;
   }
-
   // Java may be using an underscore instead of a dot for the build ID
   szJavaBuild = strchr(strVer, '_');
-  if (szJavaBuild) {
+  if (szJavaBuild)
     szJavaBuild[0] = '.';
-  }
 
   szNum1 = strtok(strVer, ".");
   szNum2 = strtok(NULL,   ".");
@@ -164,35 +154,30 @@ TranslateVersionStr(const char* szVersion, verBlock *vbVersion)
 }
 
 // Compare two version struct, return zero if the same
-static int
-CompareVersion(verBlock vbVersionOld, verBlock vbVersionNew)
+static int CompareVersion(verBlock vbVersionOld, verBlock vbVersionNew)
 {
-  if (vbVersionOld.wMajor > vbVersionNew.wMajor) {
-    return 4;
-  } else if (vbVersionOld.wMajor < vbVersionNew.wMajor) {
-    return -4;
-  }
+  if(vbVersionOld.wMajor > vbVersionNew.wMajor)
+    return(4);
+  else if(vbVersionOld.wMajor < vbVersionNew.wMajor)
+    return(-4);
 
-  if (vbVersionOld.wMinor > vbVersionNew.wMinor) {
-    return 3;
-  } else if (vbVersionOld.wMinor < vbVersionNew.wMinor) {
-    return -3;
-  }
+  if(vbVersionOld.wMinor > vbVersionNew.wMinor)
+    return(3);
+  else if(vbVersionOld.wMinor < vbVersionNew.wMinor)
+    return(-3);
 
-  if (vbVersionOld.wRelease > vbVersionNew.wRelease) {
-    return 2;
-  } else if (vbVersionOld.wRelease < vbVersionNew.wRelease) {
-    return -2;
-  }
+  if(vbVersionOld.wRelease > vbVersionNew.wRelease)
+    return(2);
+  else if(vbVersionOld.wRelease < vbVersionNew.wRelease)
+    return(-2);
 
-  if (vbVersionOld.wBuild > vbVersionNew.wBuild) {
-    return 1;
-  } else if (vbVersionOld.wBuild < vbVersionNew.wBuild) {
-    return -1;
-  }
+  if(vbVersionOld.wBuild > vbVersionNew.wBuild)
+    return(1);
+  else if(vbVersionOld.wBuild < vbVersionNew.wBuild)
+    return(-1);
 
   /* the versions are all the same */
-  return 0;
+  return(0);
 }
 #endif
 
@@ -212,16 +197,14 @@ nsPluginDirServiceProvider::~nsPluginDirServiceProvider()
 // nsPluginDirServiceProvider::nsISupports
 //*****************************************************************************
 
-NS_IMPL_THREADSAFE_ISUPPORTS1(nsPluginDirServiceProvider,
-                              nsIDirectoryServiceProvider)
+NS_IMPL_THREADSAFE_ISUPPORTS1(nsPluginDirServiceProvider, nsIDirectoryServiceProvider)
 
 //*****************************************************************************
 // nsPluginDirServiceProvider::nsIDirectoryServiceProvider
 //*****************************************************************************
 
 NS_IMETHODIMP
-nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
-                                    nsIFile **_retval)
+nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant, nsIFile **_retval)
 {
   nsCOMPtr<nsILocalFile>  localFile;
   nsresult rv = NS_ERROR_FAILURE;
@@ -230,38 +213,31 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
   *_retval = nsnull;
   *persistant = PR_TRUE;
 
-#if defined(XP_WIN)
-  nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
-  if (!prefs) {
-    return rv;
-  }
+#if defined(XP_WIN)    
+  nsCOMPtr<nsIPref> prefs = do_GetService(NS_PREF_CONTRACTID);
+  if (!prefs) return rv;
 
   if (nsCRT::strcmp(prop, NS_WIN_4DOTX_SCAN_KEY) == 0) {
-    // Check our prefs to see if scanning the 4.x folder has been
-    // explictly overriden failure to get the pref is okay, we'll do
-    // what we've been doing -- a filtered scan
+    // check our prefs to see if scanning the 4.x folder has been explictly overriden
+    // failure to get the pref is okay, we'll do what we've been doing -- a filtered scan
     PRBool bScan4x;
-    if (NS_SUCCEEDED(prefs->GetBoolPref(NS_WIN_4DOTX_SCAN_KEY, &bScan4x)) &&
-        !bScan4x) {
+    if (NS_SUCCEEDED(prefs->GetBoolPref(NS_WIN_4DOTX_SCAN_KEY, &bScan4x)) && !bScan4x)
       return rv;
-    }
 
-    // Look for the plugin folder that the user has in their
-    // Communicator 4x install
-    HKEY keyloc;
+    // look for the plugin folder that the user has in their Communicator 4x install
+    HKEY keyloc; 
     long result;
-    DWORD type;
+    DWORD type; 
     char szKey[_MAX_PATH] = "Software\\Netscape\\Netscape Navigator";
     char path[_MAX_PATH];
 
-    result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, szKey, 0, KEY_READ, &keyloc);
+    result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, szKey, 0, KEY_READ, &keyloc); 
 
     if (result == ERROR_SUCCESS) {
       char current_version[80];
       DWORD length = sizeof(current_version);
 
-      result = ::RegQueryValueEx(keyloc, "CurrentVersion", NULL, &type,
-                                 (LPBYTE)&current_version, &length);
+      result = ::RegQueryValueEx(keyloc, "CurrentVersion", NULL, &type, (LPBYTE)&current_version, &length); 
 
       ::RegCloseKey(keyloc);
       PL_strcat(szKey, "\\");
@@ -270,24 +246,19 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
       result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, szKey, 0, KEY_READ, &keyloc);
 
       if (result == ERROR_SUCCESS) {
-        DWORD pathlen = sizeof(path);
+        DWORD pathlen = sizeof(path); 
 
-        result = ::RegQueryValueEx(keyloc, "Plugins Directory", NULL, &type,
-                                   (LPBYTE)&path, &pathlen);
-        if (result == ERROR_SUCCESS) {
-          rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE,
-                                     getter_AddRefs(localFile));
-        }
-
-        ::RegCloseKey(keyloc);
+        result = ::RegQueryValueEx(keyloc, "Plugins Directory", NULL, &type, (LPBYTE)&path, &pathlen); 
+        if (result == ERROR_SUCCESS)
+          rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE, getter_AddRefs(localFile));
+        ::RegCloseKey(keyloc); 
       }
     }
   } else if (nsCRT::strcmp(prop, NS_WIN_JRE_SCAN_KEY) == 0) {
     PRBool isJavaEnabled;
     nsXPIDLCString strVer;
 #ifdef OJI
-    if ((NS_FAILED(prefs->GetBoolPref("security.enable_java", &isJavaEnabled))
-         || !isJavaEnabled) ||
+    if ((NS_FAILED(prefs->GetBoolPref("security.enable_java", &isJavaEnabled)) || !isJavaEnabled) ||
         NS_FAILED(prefs->GetCharPref(prop, getter_Copies(strVer))))
 #endif /* OJI */
       return NS_ERROR_FAILURE;
@@ -299,71 +270,44 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
     HKEY keyloc;
     HKEY entryloc;
     FILETIME modTime;
-    DWORD type;
+    DWORD type; 
     DWORD index = 0;
     DWORD numChars = _MAX_PATH;
     DWORD pathlen;
     verBlock maxVer;
     ClearVersion(&maxVer);
-    char curKey[_MAX_PATH] = "Software\\JavaSoft\\Java Runtime Environment";
+    char curKey[_MAX_PATH] = "Software\\JavaSoft\\Java Plug-in";
     char path[_MAX_PATH];
-    // Add + 4 to prevent buffer overrun when adding \bin
-    char newestPath[_MAX_PATH + 4];
+    char newestPath[_MAX_PATH + 4]; // to prevent buffer overrun when adding \bin
     const char mozPath[_MAX_PATH] = "Software\\mozilla.org\\Mozilla";
-    char browserJavaVersion[_MAX_PATH];
 
     newestPath[0] = 0;
-    LONG result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ,
-                                 &baseloc);
+    LONG result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ, &baseloc);
     if (ERROR_SUCCESS != result)
       return NS_ERROR_FAILURE;
 
-    // Look for "BrowserJavaVersion"
-    if (ERROR_SUCCESS != ::RegQueryValueEx(baseloc, "BrowserJavaVersion", NULL,
-                                           NULL, (LPBYTE)&browserJavaVersion,
-                                           &numChars))
-      browserJavaVersion[0] = 0;
-
-    // We must enumerate through the keys because what if there is
-    // more than one version?
+    // we must enumerate through the keys because what if there is more than one version?
     do {
       path[0] = 0;
       numChars = _MAX_PATH;
       pathlen = sizeof(path);
-      result = ::RegEnumKeyEx(baseloc, index, curKey, &numChars, NULL, NULL,
-                              NULL, &modTime);
+      result = ::RegEnumKeyEx(baseloc, index, curKey, &numChars, NULL, NULL, NULL, &modTime);
       index++;
-
-      // Skip major.minor as it always points to latest in its family
-      numChars = 0;
-      for (char *p = curKey; *p; p++) {
-        if (*p == '.') {
-          numChars++;
-        }
-      }
-      if (numChars < 2)
-        continue;
-
       if (ERROR_SUCCESS == result) {
-        if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0,
-                                            KEY_QUERY_VALUE, &keyloc)) {
-          // We have a sub key
-          if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "JavaHome", NULL,
-                                                 &type, (LPBYTE)&path,
-                                                 &pathlen)) {
+        if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0, KEY_QUERY_VALUE, &keyloc)) {
+          // we have a sub key
+          if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "JavaHome", NULL, &type, (LPBYTE)&path, &pathlen)) {
             verBlock curVer;
-            TranslateVersionStr(curKey, &curVer);
-            if (CompareVersion(curVer, minVer) >= 0) {
-              if (!strncmp(browserJavaVersion, curKey, _MAX_PATH)) {
-                PL_strcpy(newestPath, path);
-                ::RegCloseKey(keyloc);
-                break;
+            TranslateVersionStr(curKey, &curVer);            
+            if (CompareVersion(curVer, maxVer) >= 0 && CompareVersion(curVer, minVer) >= 0) {
+              PL_strcpy(newestPath, path);
+              CopyVersion(&maxVer, &curVer);
+              if (ERROR_SUCCESS == ::RegCreateKeyEx(HKEY_LOCAL_MACHINE, mozPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE|KEY_QUERY_VALUE, NULL, &entryloc, NULL)) {
+              	if (ERROR_SUCCESS != ::RegQueryValueEx(entryloc, "CurrentVersion", 0, NULL, NULL, NULL)) {
+              	  ::RegSetValueEx(entryloc, "CurrentVersion", 0, REG_SZ, (const BYTE*)MOZILLA_VERSION, sizeof(MOZILLA_VERSION));
+                }
               }
-
-              if (CompareVersion(curVer, maxVer) >= 0) {
-                PL_strcpy(newestPath, path);
-                CopyVersion(&maxVer, &curVer);
-              }
+              ::RegCloseKey(entryloc);
             }
           }
           ::RegCloseKey(keyloc);
@@ -373,25 +317,10 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
 
     ::RegCloseKey(baseloc);
 
-    // If nothing is found, then don't add \bin dir and don't set
-    // CurrentVersion for Mozilla
+    // if nothing is found, then don't add \bin dir
     if (newestPath[0] != 0) {
-      if (ERROR_SUCCESS == ::RegCreateKeyEx(HKEY_LOCAL_MACHINE, mozPath, 0,
-                                            NULL, REG_OPTION_NON_VOLATILE,
-                                            KEY_SET_VALUE|KEY_QUERY_VALUE,
-                                            NULL, &entryloc, NULL)) {
-        if (ERROR_SUCCESS != ::RegQueryValueEx(entryloc, "CurrentVersion", 0,
-                                               NULL, NULL, NULL)) {
-          ::RegSetValueEx(entryloc, "CurrentVersion", 0, REG_SZ,
-                          (const BYTE*)MOZILLA_VERSION,
-                          sizeof(MOZILLA_VERSION));
-        }
-        ::RegCloseKey(entryloc);
-      }
-
       PL_strcat(newestPath,"\\bin");
-      rv = NS_NewNativeLocalFile(nsDependentCString(newestPath), PR_TRUE,
-                                 getter_AddRefs(localFile));
+      rv = NS_NewNativeLocalFile(nsDependentCString(newestPath), PR_TRUE, getter_AddRefs(localFile));
     }
   } else if (nsCRT::strcmp(prop, NS_WIN_QUICKTIME_SCAN_KEY) == 0) {
     nsXPIDLCString strVer;
@@ -400,20 +329,18 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
     verBlock minVer;
     TranslateVersionStr(strVer.get(), &minVer);
 
-    // Look for the Quicktime system installation plugins directory
-    HKEY keyloc;
+    // look for the Quicktime system installation plugins directory
+    HKEY keyloc; 
     long result;
-    DWORD type;
+    DWORD type; 
     verBlock qtVer;
     ClearVersion(&qtVer);
     char path[_MAX_PATH];
-    DWORD pathlen = sizeof(path);
+    DWORD pathlen = sizeof(path);      
 
-    // First we need to check the version of Quicktime via checking
-    // the EXE's version table
+    // first we need to check the version of Quicktime via checking the EXE's version table
     if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, "software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\QuickTimePlayer.exe", 0, KEY_READ, &keyloc)) {
-      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type,
-                                             (LPBYTE)&path, &pathlen)) {
+      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type, (LPBYTE)&path, &pathlen)) {
         GetFileVersion((char*)path, &qtVer);
       }
       ::RegCloseKey(keyloc);
@@ -422,14 +349,12 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
       return rv;
 
     if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, "software\\Apple Computer, Inc.\\QuickTime", 0, KEY_READ, &keyloc)) {
-      DWORD pathlen = sizeof(path);
+      DWORD pathlen = sizeof(path); 
 
-      result = ::RegQueryValueEx(keyloc, "InstallDir", NULL, &type,
-                                 (LPBYTE)&path, &pathlen);
+      result = ::RegQueryValueEx(keyloc, "InstallDir", NULL, &type, (LPBYTE)&path, &pathlen); 
       PL_strcat(path, "\\Plugins");
       if (result == ERROR_SUCCESS)
-        rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE,
-                                   getter_AddRefs(localFile));
+        rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE, getter_AddRefs(localFile));
       ::RegCloseKey(keyloc);
     }
   } else if (nsCRT::strcmp(prop, NS_WIN_WMP_SCAN_KEY) == 0) {
@@ -439,18 +364,17 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
     verBlock minVer;
     TranslateVersionStr(strVer.get(), &minVer);
 
-    // Look for Windows Media Player system installation plugins directory
+    // look for Windows Media Player system installation plugins directory
     HKEY keyloc;
-    DWORD type;
+    DWORD type; 
     verBlock wmpVer;
     ClearVersion(&wmpVer);
     char path[_MAX_PATH];
-    DWORD pathlen = sizeof(path);
+    DWORD pathlen = sizeof(path); 
 
-    // First we need to check the version of WMP
+    // first we need to check the version of WMP
     if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, "software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\wmplayer.exe", 0, KEY_READ, &keyloc)) {
-      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type,
-                                             (LPBYTE)&path, &pathlen)) {
+      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type, (LPBYTE)&path, &pathlen)) {
         GetFileVersion((char*)path, &wmpVer);
       }
       ::RegCloseKey(keyloc);
@@ -458,32 +382,23 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
     if (CompareVersion(wmpVer, minVer) < 0)
       return rv;
 
-    if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-                                        "software\\Microsoft\\MediaPlayer", 0,
-                                        KEY_READ, &keyloc)) {
-      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "Installation Directory",
-                                             NULL, &type, (LPBYTE)&path,
-                                             &pathlen)) {
-        rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE,
-                                   getter_AddRefs(localFile));
-      }
-
+    if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, "software\\Microsoft\\MediaPlayer", 0, KEY_READ, &keyloc)) {
+      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "Installation Directory", NULL, &type, (LPBYTE)&path, &pathlen))
+        rv = NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE, getter_AddRefs(localFile));
       ::RegCloseKey(keyloc);
     }
   } else if (nsCRT::strcmp(prop, NS_WIN_ACROBAT_SCAN_KEY) == 0) {
     nsXPIDLCString strVer;
-    if (NS_FAILED(prefs->GetCharPref(prop, getter_Copies(strVer)))) {
+    if (NS_FAILED(prefs->GetCharPref(prop, getter_Copies(strVer))))
       return NS_ERROR_FAILURE;
-    }
-
     verBlock minVer;
     TranslateVersionStr(strVer.get(), &minVer);
 
-    // Look for Adobe Acrobat system installation plugins directory
+    // look for Adobe Acrobat system installation plugins directory
     HKEY baseloc;
     HKEY keyloc;
     FILETIME modTime;
-    DWORD type;
+    DWORD type; 
     DWORD index = 0;
     DWORD numChars = _MAX_PATH;
     DWORD pathlen;
@@ -491,57 +406,43 @@ nsPluginDirServiceProvider::GetFile(const char *prop, PRBool *persistant,
     ClearVersion(&maxVer);
     char curKey[_MAX_PATH] = "software\\Adobe\\Acrobat Reader";
     char path[_MAX_PATH];
-    // Add + 8 to prevent buffer overrun when adding \browser
-    char newestPath[_MAX_PATH + 8];
+    char newestPath[_MAX_PATH + 8]; // to prevent buffer overrun when adding \browser
 
     newestPath[0] = 0;
-    if (ERROR_SUCCESS != ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0,
-                                        KEY_READ, &baseloc)) {
+    if (ERROR_SUCCESS != ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ, &baseloc)) {
       PL_strcpy(curKey, "software\\Adobe\\Adobe Acrobat");
-      if (ERROR_SUCCESS != ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0,
-                                          KEY_READ, &baseloc)) {
+      if (ERROR_SUCCESS != ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ, &baseloc))
         return NS_ERROR_FAILURE;
-      }
     }
 
-    // We must enumerate through the keys because what if there is
-    // more than one version?
+    // we must enumerate through the keys because what if there is more than one version?
     LONG result = ERROR_SUCCESS;
     while (ERROR_SUCCESS == result) {
       path[0] = 0;
       numChars = _MAX_PATH;
       pathlen = sizeof(path);
-      result = ::RegEnumKeyEx(baseloc, index, curKey, &numChars, NULL, NULL,
-                              NULL, &modTime);
+      result = ::RegEnumKeyEx(baseloc, index, curKey, &numChars, NULL, NULL, NULL, &modTime);
       index++;
-
       if (ERROR_SUCCESS == result) {
         verBlock curVer;
         TranslateVersionStr(curKey, &curVer);
         PL_strcat(curKey, "\\InstallPath");
-        if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0,
-                                            KEY_QUERY_VALUE, &keyloc)) {
-          // We have a sub key
-          if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type,
-                                                 (LPBYTE)&path, &pathlen)) {
-            if (CompareVersion(curVer, maxVer) >= 0 &&
-                CompareVersion(curVer, minVer) >= 0) {
+        if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0, KEY_QUERY_VALUE, &keyloc)) {
+          // we have a sub key
+          if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, NULL, NULL, &type, (LPBYTE)&path, &pathlen)) {
+            if (CompareVersion(curVer, maxVer) >= 0 && CompareVersion(curVer, minVer) >= 0) {
               PL_strcpy(newestPath, path);
               CopyVersion(&maxVer, &curVer);
             }
           }
-
           ::RegCloseKey(keyloc);
         }
       }
     }
-
     ::RegCloseKey(baseloc);
-
     if (newestPath[0] != 0) {
       PL_strcat(newestPath,"\\browser");
-      rv = NS_NewNativeLocalFile(nsDependentCString(newestPath), PR_TRUE,
-                                 getter_AddRefs(localFile));
+      rv = NS_NewNativeLocalFile(nsDependentCString(newestPath), PR_TRUE, getter_AddRefs(localFile));
     }
 
   }
@@ -566,8 +467,7 @@ nsPluginDirServiceProvider::GetPLIDDirectories(nsISimpleEnumerator **aEnumerator
   HKEY keyloc;
   char curKey[_MAX_PATH] = "Software\\MozillaPlugins";
 
-  LONG result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ,
-                               &baseloc);
+  LONG result = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, curKey, 0, KEY_READ, &baseloc);
   if (ERROR_SUCCESS != result)
     return NS_ERROR_FAILURE;
 
@@ -579,20 +479,16 @@ nsPluginDirServiceProvider::GetPLIDDirectories(nsISimpleEnumerator **aEnumerator
     char path[_MAX_PATH];
     DWORD pathlen = sizeof(path);
 
-    result = ::RegEnumKeyEx(baseloc, index++, curKey, &numChars, NULL, NULL,
-                            NULL, &modTime);
+    result = ::RegEnumKeyEx(baseloc, index++, curKey, &numChars, NULL, NULL, NULL, &modTime);
 
-    if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0, KEY_QUERY_VALUE,
-                                        &keyloc)) {
-      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "Path", NULL, &type,
-                                             (LPBYTE)&path, &pathlen)) {
+    if (ERROR_SUCCESS == ::RegOpenKeyEx(baseloc, curKey, 0, KEY_QUERY_VALUE, &keyloc)) {
+      if (ERROR_SUCCESS == ::RegQueryValueEx(keyloc, "Path", NULL, &type, (LPBYTE)&path, &pathlen)) {
+        
         nsCOMPtr<nsILocalFile> localFile;
-        if (NS_SUCCEEDED(NS_NewNativeLocalFile(nsDependentCString(path),
-                                               PR_TRUE,
-                                               getter_AddRefs(localFile))) &&
+        if (NS_SUCCEEDED(NS_NewNativeLocalFile(nsDependentCString(path), PR_TRUE, getter_AddRefs(localFile))) &&
             localFile) {
-          // Some vendors use a path directly to the DLL so chop off
-          // the filename
+          
+          // Some vendors use a path directly to the DLL so chop off the filename
           PRBool isDir = PR_FALSE;
           if (NS_SUCCEEDED(localFile->IsDirectory(&isDir)) && !isDir) {
             nsCOMPtr<nsIFile> temp;
@@ -601,8 +497,8 @@ nsPluginDirServiceProvider::GetPLIDDirectories(nsISimpleEnumerator **aEnumerator
               localFile = do_QueryInterface(temp);
           }
 
-          // Now we check to make sure it's actually on disk and
-          // To see if we already have this directory in the array
+          // now we check to make sure it's actually on disk and
+          // to see if we already have this directory in the array
           PRBool isFileThere = PR_FALSE;
           PRBool isDupEntry = PR_FALSE;
           if (NS_SUCCEEDED(localFile->Exists(&isFileThere)) && isFileThere) {
@@ -627,7 +523,7 @@ nsPluginDirServiceProvider::GetPLIDDirectories(nsISimpleEnumerator **aEnumerator
   } while (ERROR_SUCCESS == result);
 
   ::RegCloseKey(baseloc);
-
+  
   return NS_NewArrayEnumerator(aEnumerator, dirs);
 }
 

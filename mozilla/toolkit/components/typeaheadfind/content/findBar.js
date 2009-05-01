@@ -20,10 +20,7 @@
 # the Initial Developer.  All Rights Reserved.
 # 
 # Contributor(s):
-#     Blake Ross <blake@cs.stanford.edu> (Original Author)
-#     Masayuki Nakano <masayuki@d-toybox.com>
-#     Ben Basson <contact@cusser.net>
-#     Jason Barnabe <jason_barnabe@fastmail.fm>
+#     Blake Ross     <blake@cs.stanford.edu> (Original Author)
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -43,1076 +40,610 @@ const FIND_NORMAL = 0;
 const FIND_TYPEAHEAD = 1;
 const FIND_LINKS = 2;
 
-const CHAR_CODE_SPACE = " ".charCodeAt(0);
-const CHAR_CODE_SLASH = "/".charCodeAt(0);
-const CHAR_CODE_APOSTROPHE = "'".charCodeAt(0);
-
-/*
- * WARNING:
- * Don't define global variables and functions in this file. Because this file
- * is included by some files. So, the global name space is not safety.
- *
- * But we need global functions for the Timer Event Handlers or for the Event
- * Listener Handlers. In this case, we MUST define global functions with
- * "findBar_" prefix.
- */
-
-var gFindBar = {
-  SELECTION_CONTROLLER: Components.interfaces.nsISelectionController,
-
-  mFindEnabled: true,
-  mFindMode: FIND_NORMAL,
-  mFoundLink: null,
-  mFoundEditable: null,
-  mCurrentWindow: null,
-  mTmpOutline: null,
-  mTmpOutlineOffset: "0",
-  mDrawOutline: false,
-  mQuickFindTimeout: null,
-  mQuickFindTimeoutLength: 0,
-  mHighlightTimeout: null,
-  mUseTypeAheadFind: false,
-  mWrappedToTopStr: "",
-  mWrappedToBottomStr: "",
-  mNotFoundStr: "",
-  mCaseSensitiveStr: "",
-  mFlashFindBar: 0,
-  mFlashFindBarCount: 6,
-  mFlashFindBarTimeout: null,
-  mLastHighlightString: "",
-  mTypeAheadLinksOnly: false,
-  mTypeAheadCaseSensitive: -1,
-  mIsIMEComposing: false,
-  mTextToSubURIService: null,
-
-  // DOMRange used during highlighting
-  mSearchRange: null,
-  mStartPt: null,
-  mEndPt: null,
-
-  mTypeAheadFind: {
-    useTAFPref: "accessibility.typeaheadfind",
-    searchLinksPref: "accessibility.typeaheadfind.linksonly",
-    caseSensePref: "accessibility.typeaheadfind.casesensitive",
-
-    observe: function(aSubject, aTopic, aPrefName)
-    {
-      if (aTopic != "nsPref:changed" ||
-          (aPrefName != this.useTAFPref && aPrefName != this.searchLinksPref &&
-           aPrefName != this.caseSensePref))
-        return;
-
-      var prefService =
-        Components.classes["@mozilla.org/preferences-service;1"]
-                  .getService(Components.interfaces.nsIPrefBranch);
-
-      gFindBar.mUseTypeAheadFind =
-        prefService.getBoolPref("accessibility.typeaheadfind");
-      gFindBar.mTypeAheadLinksOnly =
-        prefService.getBoolPref("accessibility.typeaheadfind.linksonly");
-      gFindBar.mTypeAheadCaseSensitive =
-        prefService.getIntPref("accessibility.typeaheadfind.casesensitive");
-      gFindBar.setCaseSensitivity();
-    }
-  },
-
-  initFindBar: function ()
-  {
-    getBrowser().addEventListener("keypress",
-                                  findBar_OnBrowserKeyPress, false);
-    getBrowser().addEventListener("mouseup",
-                                  findBar_OnBrowserMouseUp, false);
-
-    var prefService =
-      Components.classes["@mozilla.org/preferences-service;1"]
-                .getService(Components.interfaces.nsIPrefBranch);
-
-    var pbi = prefService.QueryInterface(Components.interfaces.nsIPrefBranch2);
-
-    this.mQuickFindTimeoutLength =
-      prefService.getIntPref("accessibility.typeaheadfind.timeout");
-    this.mFlashFindBar =
-      prefService.getIntPref("accessibility.typeaheadfind.flashBar");
-
-    pbi.addObserver(this.mTypeAheadFind.useTAFPref,
-                    this.mTypeAheadFind, false);
-    pbi.addObserver(this.mTypeAheadFind.searchLinksPref,
-                    this.mTypeAheadFind, false);
-    pbi.addObserver(this.mTypeAheadFind.caseSensePref,
-                    this.mTypeAheadFind, false);
-    this.mUseTypeAheadFind =
-      prefService.getBoolPref("accessibility.typeaheadfind");
-    this.mTypeAheadLinksOnly =
-      prefService.getBoolPref("accessibility.typeaheadfind.linksonly");
-    this.mTypeAheadCaseSensitive =
-      prefService.getIntPref("accessibility.typeaheadfind.casesensitive");
-
-    var findField = document.getElementById("find-field");
-    findField.addEventListener("dragdrop", findBar_OnDrop, true);
-
-    this.mTextToSubURIService =
-      Components.classes["@mozilla.org/intl/texttosuburi;1"]
-                .getService(Components.interfaces.nsITextToSubURI);
-  },
-
-  mFindbarObserver: {
-    onDrop: function (aEvent, aXferData, aDragSession)
-    {
-        var findField = document.getElementById("find-field");
-        findField.value = aXferData.data;
-        gFindBar.find(aXferData.data);
-    },
-    getSupportedFlavours: function ()
-    {
-      var flavourSet = new FlavourSet();
-      flavourSet.appendFlavour("text/unicode");
-      return flavourSet;
-    }
-  },
-
-  uninitFindBar: function ()
-  {
-    var prefService =
-      Components.classes["@mozilla.org/preferences-service;1"]
-                .getService(Components.interfaces.nsIPrefBranch);
-
-    var pbi = prefService.QueryInterface(Components.interfaces.nsIPrefBranch2);
-    pbi.removeObserver(this.mTypeAheadFind.useTAFPref,
-                       this.mTypeAheadFind);
-    pbi.removeObserver(this.mTypeAheadFind.searchLinksPref,
-                       this.mTypeAheadFind);
-    pbi.removeObserver(this.mTypeAheadFind.caseSensePref,
-                       this.mTypeAheadFind);
-
-    getBrowser().removeEventListener("keypress",
-                                     findBar_OnBrowserKeyPress, false);
-    getBrowser().removeEventListener("mouseup",
-                                     findBar_OnBrowserMouseUp, false);
-  },
-
- /**
-  * Turns highlighting on or off.
-  *
-  * @param aHighlight true to turn highlighting on
-  */
-  toggleHighlight: function (aHighlight)
-  {
-    var word = document.getElementById("find-field").value;
-    if (aHighlight) {
-      // We have to update the status because we might still have the status
-      // of another tab
-      if (this.highlightDoc('yellow', 'black', word))
-        this.updateStatus(Components.interfaces.nsITypeAheadFind.FIND_FOUND, false);
-      else
-        this.updateStatus(Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND, false);
-    } else {
-      this.highlightDoc(null, null, null);
-      this.mLastHighlightString = null;
-    }
-  },
-
- /**
-  * (Un)highlights each instance of the searched word in the passed window's content.
-  *
-  * @param highBackColor the background color for the highlight 
-  * @param highTextColor the text color for the highlight, or null to make it unhighlight
-  * @param word the word to search for
-  * @param win the window to search in. Passing undefined will search the current window.
-  * @return true if the text was found
-  */
-  highlightDoc: function (highBackColor, highTextColor, word, win)
-  {
-    if (!win)
-      win = window.content; 
-
-    var textFound = false;
-    for (var i = 0; win.frames && i < win.frames.length; i++) {
-      if (this.highlightDoc(highBackColor, highTextColor, word, win.frames[i]))
-        textFound = true;
-    }
-
-    var doc = win.document;
-    if (!doc || !("body" in doc))
-      return textFound;
-
-    var body = doc.body;
-
-    var count = body.childNodes.length;
-    this.mSearchRange = doc.createRange();
-    this.mStartPt = doc.createRange();
-    this.mEndPt = doc.createRange();
-
-    this.mSearchRange.setStart(body, 0);
-    this.mSearchRange.setEnd(body, count);
-
-    this.mStartPt.setStart(body, 0);
-    this.mStartPt.setEnd(body, 0);
-    this.mEndPt.setStart(body, count);
-    this.mEndPt.setEnd(body, count);
-
-    if (!highBackColor) {
-      // Remove highlighting.  We use the find API again rather than
-      // searching for our span elements by id so that we gain access to the
-      // anonymous content that nsIFind searches.
-
-      if (!this.mLastHighlightString)
-        return textFound;
-
-      var retRange = null;
-      var finder = Components.classes["@mozilla.org/embedcomp/rangefind;1"]
-                             .createInstance()
-                             .QueryInterface(Components.interfaces.nsIFind);
-
-      while ((retRange = finder.Find(this.mLastHighlightString,
-                                     this.mSearchRange, this.mStartPt,
-                                     this.mEndPt))) {
-        var startContainer = retRange.startContainer;
-        var elem = null;
-        try {
-          elem = startContainer.parentNode;
-        }
-        catch (e) { }
-
-        if (elem && elem.getAttribute("id") == "__firefox-findbar-search-id") {
-          var child = null;
-          var docfrag = doc.createDocumentFragment();
-          var next = elem.nextSibling;
-          var parent = elem.parentNode;
-
-          while ((child = elem.firstChild)) {
-            docfrag.appendChild(child);
-          }
-
-          this.mStartPt = doc.createRange();
-          this.mStartPt.setStartAfter(elem);
-
-          parent.removeChild(elem);
-          parent.insertBefore(docfrag, next);
-          parent.normalize();
-        }
-        else {
-          // Somehow we didn't highlight this instance; just skip it.
-          this.mStartPt = doc.createRange();
-          this.mStartPt.setStart(retRange.endContainer, retRange.endOffset);
-        }
-
-        this.mStartPt.collapse(true);
-
-        textFound = true;
-      }
-      return textFound;
-    }
-
-    var baseNode = doc.createElement("span");
-    baseNode.setAttribute("style", "background-color: " + highBackColor + "; " +
-                                   "color: " + highTextColor + "; " +
-                                   "display: inline; font-size: inherit;" +
-                                   " padding: 0;");
-    baseNode.setAttribute("id", "__firefox-findbar-search-id");
-
-    return this.highlightText(word, baseNode) || textFound;
-  },
-
- /**
-  * Highlights each instance of the searched word in the current range.
-  *
-  * @param word the word to search for
-  * @param baseNode a node to use as a template for what will replace the
-  *                 searched word
-  * @return true if the text was found
-  */
-  highlightText: function (word, baseNode)
-  {
-    var retRange = null;
-    var finder = Components.classes["@mozilla.org/embedcomp/rangefind;1"]
-                           .createInstance()
-                           .QueryInterface(Components.interfaces.nsIFind);
-
-    finder.caseSensitive = this.shouldBeCaseSensitive(word);
-
-    var textFound = false;
-    while((retRange = finder.Find(word, this.mSearchRange,
-                                  this.mStartPt, this.mEndPt))) {
-      // Highlight
-      var nodeSurround = baseNode.cloneNode(true);
-      var node = this.highlight(retRange, nodeSurround);
-      this.mStartPt = node.ownerDocument.createRange();
-      this.mStartPt.setStart(node, node.childNodes.length);
-      this.mStartPt.setEnd(node, node.childNodes.length);
-
-      textFound = true;
-    }
-
-    this.mLastHighlightString = word;
-
-    return textFound;
-  },
-
- /**
-  * Highlights the word in the passed range.
-  *
-  * @param range the range that contains the word to highlight
-  * @param node the node replace the searched word with
-  * @return the node that replaced the searched word
-  */
-  highlight: function (range, node)
-  {
-    var startContainer = range.startContainer;
-    var startOffset = range.startOffset;
-    var endOffset = range.endOffset;
-    var docfrag = range.extractContents();
-    var before = startContainer.splitText(startOffset);
-    var parent = before.parentNode;
-    node.appendChild(docfrag);
-    parent.insertBefore(node, before);
-    return node;
-  },
-
-  setCaseSensitivity: function (val)
-  {
-    var findToolbar = document.getElementById("FindToolbar");
-    if (findToolbar.hidden)
-      return;
-
-    if (!val)
-      val = document.getElementById("find-field").value;
-
-    var matchCaseCheckbox = document.getElementById("find-case-sensitive");
-    matchCaseCheckbox.checked = this.shouldBeCaseSensitive(val);
-
-    var matchCaseText = document.getElementById("match-case-status");
-    matchCaseText.value = matchCaseCheckbox.checked ?
-      this.mCaseSensitiveStr : "";
-
-    // Show the checkbox on the full Find bar in non-auto mode.  Show the label
-    // in all other cases.
-    matchCaseCheckbox.hidden = this.mUsingMinimalUI ||
-      (this.mTypeAheadCaseSensitive != 0 && this.mTypeAheadCaseSensitive != 1);
-    matchCaseText.hidden = !matchCaseCheckbox.hidden;
-
-    var fastFind = getBrowser().fastFind;
-    fastFind.caseSensitive = matchCaseCheckbox.checked;
-  },
-
-  toggleCaseSensitiveCheckbox: function (aCaseSensitive)
-  {
-    var prefService =
-      Components.classes["@mozilla.org/preferences-service;1"]
-                .getService(Components.interfaces.nsIPrefBranch);
-
-    // Just set the pref; our observer will change the find bar behavior
-    prefService.setIntPref("accessibility.typeaheadfind.casesensitive",
-                           aCaseSensitive ? 1 : 0);
-  },
-
-  /**
-   * Opens and displays the find bar.
-   *
-   * @param   showMinimalUI
-   *          true if the find bar is to contain minimalist UI, false (or
-   *          undefined, as happens if no arguments are provided) if the find
-   *          bar is to display more generalized search UI
-   * @returns bool
-   *          true if the find bar wasn't previously open, false otherwise
-   */
-  openFindBar: function (showMinimalUI)
-  {
-    // Notify anyone else that might want to handle this event
-    var findActivatedEvent = document.createEvent("Events");
-    findActivatedEvent.initEvent("find-activated", false, true);
-    window.dispatchEvent(findActivatedEvent);
-    if (!this.mFindEnabled)
-      throw Components.results.NS_OK;
- 
-    if (!this.mNotFoundStr || !this.mWrappedToTopStr ||
-        !this.mWrappedToBottomStr || !this.mNormalFindStr ||
-        !this.mFastFindStr || !this.mCaseSensitiveStr) {
-      var bundle = document.getElementById("bundle_findBar");
-      this.mNotFoundStr = bundle.getString("NotFound");
-      this.mWrappedToTopStr = bundle.getString("WrappedToTop");
-      this.mWrappedToBottomStr = bundle.getString("WrappedToBottom");
-      this.mNormalFindStr = bundle.getString("NormalFindLabel");
-      this.mFastFindStr = bundle.getString("FastFindLabel");
-      this.mCaseSensitiveStr = bundle.getString("CaseSensitive");
-    }
-
-    this.updateFindUI(showMinimalUI);
-    var findToolbar = document.getElementById("FindToolbar");
-    if (findToolbar.hidden) {
-      findToolbar.hidden = false;
-
-      var findField = document.getElementById("find-field");
-      this.setCaseSensitivity(findField.value);
-      this.updateStatus(Components.interfaces.nsITypeAheadFind.FIND_FOUND, false);
-
-      return true;
-    }
-    return false;
-  },
-
-  focusFindBar: function ()
-  {
-    var findField = document.getElementById("find-field");
-    findField.focus();    
-  },
-
-  selectFindBar: function ()
-  {
-    var findField = document.getElementById("find-field");
-    findField.select();    
-  },
-
-  closeFindBar: function ()
-  {
-    // ensure the dom is ready...
-    setTimeout(findBar_DelayedCloseFindBar, 0);
-  },
-
-  fireKeypressEvent: function (target, evt)
-  {
-    if (!target)
-      return;
-    var event = document.createEvent("KeyEvents");
-    event.initKeyEvent(evt.type, evt.canBubble, evt.cancelable,
-                       evt.view, evt.ctrlKey, evt.altKey, evt.shiftKey,
-                       evt.metaKey, evt.keyCode, evt.charCode);
-    target.dispatchEvent(event);
-  },
-
-  updateStatusBar: function ()
-  {
-    var xulBrowserWindow = window.XULBrowserWindow;
-    if (!xulBrowserWindow)
-      return false;
-
-    if (!this.mFoundLink || !this.mFoundLink.href ||
-        this.mFoundLink.href == "") {
-      xulBrowserWindow.setOverLink("");
-      return true;
-    }
-
-    var docCharset = "";
-    var ownerDoc = this.mFoundLink.ownerDocument;
-    if (ownerDoc)
-      docCharset = ownerDoc.characterSet;
-
-    var url =
-      this.mTextToSubURIService.unEscapeURIForUI(docCharset,
-                                                 this.mFoundLink.href);
-    xulBrowserWindow.setOverLink(url);
-
-    return true;
-  },
-
-  setFoundLink: function (foundLink)
-  {
-    if (this.mFoundLink == foundLink)
-      return;
-
-    if (this.mFoundLink && this.mDrawOutline) {
-      // restore original outline
-      this.mFoundLink.style.outline = this.mTmpOutline;
-      this.mFoundLink.style.outlineOffset = this.mTmpOutlineOffset;
-    }
-    this.mDrawOutline = (foundLink && this.mFindMode != FIND_NORMAL);
-    if (this.mDrawOutline) {
-      // backup original outline
-      this.mTmpOutline = foundLink.style.outline;
-      this.mTmpOutlineOffset = foundLink.style.outlineOffset;
-      // draw pseudo focus rect
-      // XXX Should we change the following style for FAYT pseudo focus?
-      // XXX Shouldn't we change default design if outline is visible already?
-      foundLink.style.outline = "1px dotted invert";
-      foundLink.style.outlineOffset = "0";
-    }
-
-    this.mFoundLink = foundLink;
-
-    // We should update status bar. But we need delay. If the mouse cursor is
-    // on the document, the status bar text is changed by mouse event that is
-    // fired by scroll event. So, we need to change the status bar text after
-    // mouse event.
-    if (this.mFindMode != FIND_NORMAL)
-      setTimeout(findBar_UpdateStatusBar, 0);
-  },
-
-  finishFAYT: function (aKeypressEvent)
-  {
-    try {
-      if (this.mFoundLink)
-        this.mFoundLink.focus();
-      else if (this.mFoundEditable) {
-        this.mFoundEditable.focus();
-        var fastFind = getBrowser().fastFind;
-        fastFind.collapseSelection();
-      } else if (this.mCurrentWindow)
-        this.mCurrentWindow.focus();
-      else
-        return false;
-    }
-    catch(e) {
-      return false;
-    }
-
-    if (aKeypressEvent)
-      aKeypressEvent.preventDefault();
-
-    this.closeFindBar();
-    return true;
-  },
-
-  delayedCloseFindBar: function ()
-  {
-    var findField = document.getElementById("find-field");
-    var findToolbar = document.getElementById("FindToolbar");
-    var ww = Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
-                       .getService(Components.interfaces.nsIWindowWatcher);
-
-    if (window == ww.activeWindow) { 
-      var focusedElement = document.commandDispatcher.focusedElement;
-      if (focusedElement && focusedElement.parentNode &&
-            (focusedElement.parentNode == findToolbar ||
-             focusedElement.parentNode.parentNode == findField)) {
-        // block scrolling on focus since find already scrolls, further
-        // scrolling is due to user action, so don't override this
-        var suppressedScroll = document.commandDispatcher.suppressFocusScroll;
-        document.commandDispatcher.suppressFocusScroll = true;
-        // We MUST reset suppressFocusScroll.
-        try {
-          if (this.mFoundLink)
-            this.mFoundLink.focus();
-          else if (this.mFoundEditable)
-            this.mFoundEditable.focus();
-          else if (this.mCurrentWindow)
-            this.mCurrentWindow.focus();
-          else
-            window.content.focus();
-        }
-        catch(e) {
-          // Retry to set focus.
-          try {
-            window.content.focus();
-          }
-          catch(e) { /* We lose focused element! */ }
-        }
-        document.commandDispatcher.suppressFocusScroll = suppressedScroll;
-      }
-    }
-
-    findToolbar.hidden = true;
-    var fastFind = getBrowser().fastFind;
-    fastFind.setSelectionModeAndRepaint(this.SELECTION_CONTROLLER.SELECTION_ON);
-    this.setFoundLink(null);
-    this.mFoundEditable = null;
-    this.mCurrentWindow = null;
-    if (this.mQuickFindTimeout) {
-      clearTimeout(this.mQuickFindTimeout);
-      this.mQuickFindTimeout = null;    
-    }
-  },
-
-  shouldFastFind: function (evt)
-  {
-    if (evt.ctrlKey || evt.altKey || evt.metaKey || evt.getPreventDefault())
-      return false;
-
-    var elt = document.commandDispatcher.focusedElement;
-    if (elt) {
-      if (elt instanceof HTMLInputElement) {
-        // block FAYT when an <input> textfield element is focused
-        var inputType = elt.type;
-        switch (inputType) {
-          case "text":
-          case "password":
-          case "file":
-            return false;
-        }
-      }
-      else if (elt instanceof HTMLTextAreaElement ||
-               elt instanceof HTMLSelectElement ||
-               elt instanceof HTMLIsIndexElement ||
-               elt instanceof HTMLObjectElement ||
-               elt instanceof HTMLEmbedElement)
-        return false;
-    }
-
-    // disable FAYT in about:config and about:blank to prevent FAYT opening
-    // unexpectedly - to fix bugs 264562, 267150, 269712
-    var url = getBrowser().currentURI.spec;
-    if (url == "about:blank" || url == "about:config")
-      return false;
-
-    var win = document.commandDispatcher.focusedWindow;
-    if (win && win.document.designMode == "on")
-      return false;
-
-    return true;
-  },
-
-  shouldBeCaseSensitive: function (str)
-  {
-    if (this.mTypeAheadCaseSensitive == 0)
-      return false;
-    if (this.mTypeAheadCaseSensitive == 1)
-      return true;
-
-    return (str != str.toLowerCase());
-  },
-
-  onFindBarBlur: function ()
-  {
-    var fastFind = getBrowser().fastFind;
-    if (this.mFoundEditable) {
-      fastFind.collapseSelection();
-    } else {
-      fastFind.setSelectionModeAndRepaint(this.SELECTION_CONTROLLER.SELECTION_ON);
-    }
-    this.setFoundLink(null);
-    this.mFoundEditable = null;
-    this.mCurrentWindow = null;
-  },
-
-  onBrowserMouseUp: function (evt)
-  {
-    var findToolbar = document.getElementById("FindToolbar");
-    if (!findToolbar.hidden && this.mFindMode != FIND_NORMAL)
-      this.closeFindBar();
-  },
-
-  onBrowserKeyPress: function (evt)
-  {
-    // Check focused elt
-    if (!this.shouldFastFind(evt))
-      return;
-
-    var findField = document.getElementById("find-field");
-    if (this.mFindMode != FIND_NORMAL && this.mQuickFindTimeout) {
-      if (!evt.charCode)
-        return;
-      this.selectFindBar();
-      this.focusFindBar();
-      this.fireKeypressEvent(findField.inputField, evt);
-      evt.preventDefault();
-      return;
-    }
-
-    if (evt.charCode == CHAR_CODE_APOSTROPHE ||
-        evt.charCode == CHAR_CODE_SLASH ||
-        (this.mUseTypeAheadFind &&
-         evt.charCode && evt.charCode != CHAR_CODE_SPACE)) {
-      var findMode =
-        (evt.charCode == CHAR_CODE_APOSTROPHE ||
-        (this.mTypeAheadLinksOnly && evt.charCode != CHAR_CODE_SLASH)) ?
-          FIND_LINKS : FIND_TYPEAHEAD;
-      this.setFindMode(findMode);
-
-      // Clear bar first, so that when openFindBar() calls setCaseSensitivity()
-      // it doesn't get confused by a lingering value
-      findField.value = "";
-
-      try {
-        var opened = this.openFindBar(true);
-      }
-      catch (e) {
-        return;
-      }    
-      if (opened) {
-        this.setFindCloseTimeout();
-        this.selectFindBar();
-        this.focusFindBar();
-        if (this.mUseTypeAheadFind &&
-            evt.charCode != CHAR_CODE_APOSTROPHE &&
-            evt.charCode != CHAR_CODE_SLASH)
-          this.fireKeypressEvent(findField.inputField, evt);
-        else
-          this.updateStatus(Components.interfaces.nsITypeAheadFind.FIND_FOUND, false);
-        evt.preventDefault();
-      }
-      else {
-        this.selectFindBar();
-        this.focusFindBar();
-        if (this.mFindMode != FIND_NORMAL) {
-          if (evt.charCode != CHAR_CODE_APOSTROPHE &&
-              evt.charCode != CHAR_CODE_SLASH)
-            this.fireKeypressEvent(findField.inputField, evt);
-          else
-            this.updateStatus(Components.interfaces.nsITypeAheadFind.FIND_FOUND, false);
-          evt.preventDefault();
-        }
-      }
-    }
-  },
-
-  onFindBarKeyPress: function (evt)
-  {
-    if (evt.keyCode == KeyEvent.DOM_VK_RETURN) {
-      if (this.mFindMode == FIND_NORMAL) {
-        var findString = document.getElementById("find-field");
-        if (!findString.value)
-          return;
-
-#ifdef XP_MACOSX
-        if (evt.metaKey) {
-#else
-        if (evt.ctrlKey) {
-#endif
-          document.getElementById("highlight").click();
-          return;
-        }
-
-        if (evt.shiftKey)
-          this.findPrevious();
-        else
-          this.findNext();
-      }
-      else {
-        if (this.mFoundLink) {
-          var tmpLink = this.mFoundLink;
-          if (this.finishFAYT(evt))
-            this.fireKeypressEvent(tmpLink, evt);
-        }
-      }
-    }
-    else if (evt.keyCode == KeyEvent.DOM_VK_TAB) {
-      var shouldHandle = !evt.altKey && !evt.ctrlKey && !evt.metaKey;
-      if (shouldHandle && this.mFindMode != FIND_NORMAL &&
-          this.finishFAYT(evt)) {
-        if (evt.shiftKey)
-          document.commandDispatcher.rewindFocus();
-        else
-          document.commandDispatcher.advanceFocus();
-      }
-    }
-    else if (evt.keyCode == KeyEvent.DOM_VK_ESCAPE) {
-      this.closeFindBar();
-      evt.preventDefault();
-    } 
-    else if (evt.keyCode == KeyEvent.DOM_VK_PAGE_UP) {
-      window.top._content.scrollByPages(-1);
-      evt.preventDefault();
-    }
-    else if (evt.keyCode == KeyEvent.DOM_VK_PAGE_DOWN) {
-      window.top._content.scrollByPages(1);
-      evt.preventDefault();
-    }
-    else if (evt.keyCode == KeyEvent.DOM_VK_UP) {
-      window.top._content.scrollByLines(-1);
-      evt.preventDefault();
-    }
-    else if (evt.keyCode == KeyEvent.DOM_VK_DOWN) {
-      window.top._content.scrollByLines(1);
-      evt.preventDefault();
-    }
-  },
-
-  enableFindButtons: function (aEnable)
-  {
-    var findNext = document.getElementById("find-next");
-    var findPrev = document.getElementById("find-previous");
-    var highlight = document.getElementById("highlight");
-    findNext.disabled = findPrev.disabled = highlight.disabled = !aEnable;
-  },
-
-  /**
-   * Determines whether minimalist or general-purpose search UI is to be
-   * displayed when the find bar is activated.
-   *
-   * @param showMinimalUI
-   *        true if minimalist UI should be used, false if general-purpose UI
-   *        should be used
-   */
-  updateFindUI: function (showMinimalUI)
-  {
-    this.mUsingMinimalUI = showMinimalUI;
-    
-    var findBar = document.getElementById("FindToolbar");
-    for (var i = 0; i < findBar.childNodes.length; i++) {
-      var node = findBar.childNodes[i];
-      if (node.className == "find-fast")
-        continue;
-      
-      node.hidden = showMinimalUI;
-    }
-
-    var findLabel = document.getElementById("find-label");
-    if (showMinimalUI)
-      findLabel.value = this.mFastFindStr;
-    else
-      findLabel.value = this.mNormalFindStr;
-  },
+// Global find variables
+var gFindMode = FIND_NORMAL;
+var gQuickFindTimeout = null;
+var gQuickFindTimeoutLength = 0;
+var gHighlightTimeout = null;
+var gUseTypeAheadFind = false;
+var gWrappedToTopStr = "";
+var gWrappedToBottomStr = "";
+var gNotFoundStr = "";
+var gTypeAheadFindBuffer = "";
+var gIsBack = true;
+var gBackProtectBuffer = 3;
+var gFlashFindBar = 0;
+var gFlashFindBarCount = 6;
+var gFlashFindBarTimeout = null;
+var gLastHighlightString = "";
+var gTypeAheadLinksOnly = false;
+
+// DOMRange used during highlighting
+var searchRange;
+var startPt;
+var endPt;
+
+var gTypeAheadFind = {
+  useTAFPref: "accessibility.typeaheadfind",
+  searchLinksPref: "accessibility.typeaheadfind.linksonly",
   
-  updateFoundLink: function (res)
+  observe: function(aSubject, aTopic, aPrefName)
   {
-    var val = document.getElementById("find-field").value;
-    if (res == Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND || !val) {
-      this.setFoundLink(null);
-      this.mFoundEditable = null;
-      this.mCurrentWindow = null;
-    } else {
-      this.setFoundLink(getBrowser().fastFind.foundLink);
-      this.mFoundEditable = getBrowser().fastFind.foundEditable;
-      this.mCurrentWindow = getBrowser().fastFind.currentWindow;
-    }
-  },
-
-  find: function (val)
-  {
-    if (!val)
-      val = document.getElementById("find-field").value;
-
-    this.enableFindButtons(val);
-
-    var highlightBtn = document.getElementById("highlight");
-    if (highlightBtn.checked)
-      this.setHighlightTimeout();
-
-    this.setCaseSensitivity(val);
-
-    var fastFind = getBrowser().fastFind;
-    var res = fastFind.find(val, this.mFindMode == FIND_LINKS);
-    this.updateFoundLink(res);
-    this.updateStatus(res, true);
-
-    if (this.mFindMode != FIND_NORMAL)
-      this.setFindCloseTimeout();
-  },
-
-  flashFindBar: function ()
-  {
-    var findToolbar = document.getElementById("FindToolbar");
-    if (this.mFlashFindBarCount-- == 0) {
-      clearInterval(this.mFlashFindBarTimeout);
-      findToolbar.removeAttribute("flash");
-      this.mFlashFindBarCount = 6;
+    if (aTopic != "nsPref:changed" || (aPrefName != this.useTAFPref && aPrefName != this.searchLinksPref))
       return;
-    }
-   
-    findToolbar.setAttribute("flash",
-                             (this.mFlashFindBarCount % 2 == 0) ?
-                             "false" : "true");
-  },
 
-  onFindCmd: function ()
-  {
-    try {
-      this.openFindBar();
-    }
-    catch (e) {
-    }
-    this.setFindMode(FIND_NORMAL);
-    if (this.mFlashFindBar) {
-      this.mFlashFindBarTimeout = setInterval(findBar_FlashFindBar, 500);
-      var prefService =
-            Components.classes["@mozilla.org/preferences-service;1"]
-                      .getService(Components.interfaces.nsIPrefBranch);
-
-      prefService.setIntPref("accessibility.typeaheadfind.flashBar",
-                             --this.mFlashFindBar);
-    }
-    this.selectFindBar();
-    this.focusFindBar();
-  },
-
-  onFindAgainCmd: function ()
-  {
-    var findString = getBrowser().findString;
-    if (!findString) {
-      this.onFindCmd();
-      return;
-    }
-
-    var res = this.findNext();
-    if (res == Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND) {
-      try {
-        var opened = this.openFindBar(this.mUsingMinimalUI);
-      }
-      catch(e) {
-      }
-      if (opened) {
-        this.focusFindBar();
-        this.selectFindBar();
-        if (this.mFindMode != FIND_NORMAL)
-          this.setFindCloseTimeout();
-
-        this.updateStatus(res, true);
-      }
-    }
-  },
-
-  onFindPreviousCmd: function ()
-  {
-    var findString = getBrowser().findString;
-    if (!findString) {
-      this.onFindCmd();
-      return;
-    }
-
-    var res = this.findPrevious();
-    if (res == Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND) {
-      try {
-        var opened = this.openFindBar(this.mUsingMinimalUI);
-      }
-      catch (e) {
-      }
-      if (opened) {
-        this.focusFindBar();
-        this.selectFindBar();
-        if (this.mFindMode != FIND_NORMAL)
-          this.setFindCloseTimeout();
-
-        this.updateStatus(res, false);
-      }
-    }
-  },
-
-  setHighlightTimeout: function ()
-  {
-    if (this.mHighlightTimeout)
-      clearTimeout(this.mHighlightTimeout);
-    this.mHighlightTimeout =
-      setTimeout(function() {
-                   gFindBar.toggleHighlight(false);
-                   gFindBar.toggleHighlight(true);
-                 }, 500);  
-  },
-
-  isFindBarVisible: function ()
-  {
-    var findBar = document.getElementById("FindToolbar");
-    return !findBar.hidden;
-  },
-
-  findNext: function ()
-  {
-    var fastFind = getBrowser().fastFind; 
-    var res = fastFind.findNext();  
-    this.updateFoundLink(res);
-    this.updateStatus(res, true);
-
-    if (this.mFindMode != FIND_NORMAL && this.isFindBarVisible())
-      this.setFindCloseTimeout();
-
-    return res;
-  },
-
-  findPrevious: function ()
-  {
-    var fastFind = getBrowser().fastFind;
-    var res = fastFind.findPrevious();
-    this.updateFoundLink(res);
-    this.updateStatus(res, false);
-
-    if (this.mFindMode != FIND_NORMAL && this.isFindBarVisible())
-      this.setFindCloseTimeout();
-
-    return res;
-  },
-
-  updateStatus: function (res, findNext)
-  {
-    var findBar = document.getElementById("FindToolbar");
-    var field = document.getElementById("find-field");
-    var statusIcon = document.getElementById("find-status-icon");
-    var statusText = document.getElementById("find-status");
-    switch(res) {
-      case Components.interfaces.nsITypeAheadFind.FIND_WRAPPED:
-        statusIcon.setAttribute("status", "wrapped");      
-        statusText.value =
-          findNext ? this.mWrappedToTopStr : this.mWrappedToBottomStr;
-        break;
-      case Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND:
-        statusIcon.setAttribute("status", "notfound");
-        statusText.value = this.mNotFoundStr;
-        field.setAttribute("status", "notfound");      
-        break;
-      case Components.interfaces.nsITypeAheadFind.FIND_FOUND:
-      default:
-        statusIcon.removeAttribute("status");      
-        statusText.value = "";
-        field.removeAttribute("status");
-        break;
-    }
-  },
-
-  setFindCloseTimeout: function ()
-  {
-    if (this.mQuickFindTimeout)
-      clearTimeout(this.mQuickFindTimeout);
-
-    // Don't close the find toolbar while IME is composing.
-    if (this.mIsIMEComposing) {
-      this.mQuickFindTimeout = null;
-      return;
-    }
-
-    this.mQuickFindTimeout =
-      setTimeout(function() {
-                   if (gFindBar.mFindMode != FIND_NORMAL)
-                     gFindBar.closeFindBar();
-                 },
-                 this.mQuickFindTimeoutLength);
-  },
-
-  findBarOnDrop: function (evt)
-  {
-    nsDragAndDrop.drop(evt, this.mFindbarObserver);
-  },
-
-  onFindBarCompositionStart: function (evt)
-  {
-    this.mIsIMEComposing = true;
-    // Don't close the find toolbar while IME is composing.
-    if (this.mQuickFindTimeout) {
-      clearTimeout(this.mQuickFindTimeout);
-      this.mQuickFindTimeout = null;
-    }
-  },
-
-  onFindBarCompositionEnd: function (evt)
-  {
-    this.mIsIMEComposing = false;
-    if (this.mFindMode != FIND_NORMAL && this.isFindBarVisible())
-      this.setFindCloseTimeout();
-  },
-
-  setFindMode: function (mode)
-  {
-    this.mFindMode = mode;
+    var prefService = Components.classes["@mozilla.org/preferences-service;1"]
+                                .getService(Components.interfaces.nsIPrefBranch);
+      
+    gUseTypeAheadFind = prefService.getBoolPref("accessibility.typeaheadfind");
+    gTypeAheadLinksOnly = gPrefService.getBoolPref("accessibility.typeaheadfind.linksonly");
   }
 };
 
-// ================
-//  Event Handlers
-// ================
-function findBar_OnDrop(aEvt)
+function initFindBar()
 {
-  gFindBar.findBarOnDrop(aEvt);
+  getBrowser().addEventListener("keypress", onBrowserKeyPress, false);
+  getBrowser().addEventListener("mousedown", onBrowserMouseDown, false);
+  
+  var prefService = Components.classes["@mozilla.org/preferences-service;1"]
+                              .getService(Components.interfaces.nsIPrefBranch);
+
+  var pbi = prefService.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
+
+  gQuickFindTimeoutLength = prefService.getIntPref("accessibility.typeaheadfind.timeout");
+  gFlashFindBar = prefService.getIntPref("accessibility.typeaheadfind.flashBar");
+
+  pbi.addObserver(gTypeAheadFind.useTAFPref, gTypeAheadFind, false);
+  pbi.addObserver(gTypeAheadFind.searchLinksPref, gTypeAheadFind, false);
+  gUseTypeAheadFind = prefService.getBoolPref("accessibility.typeaheadfind");
+  gTypeAheadLinksOnly = prefService.getBoolPref("accessibility.typeaheadfind.linksonly");
 }
 
-function findBar_OnBrowserKeyPress(aEvt)
+function uninitFindBar()
 {
-  gFindBar.onBrowserKeyPress(aEvt);
+   var prefService = Components.classes["@mozilla.org/preferences-service;1"]
+                               .getService(Components.interfaces.nsIPrefBranch);
+
+   var pbi = prefService.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
+   pbi.removeObserver(gTypeAheadFind.useTAFPref, gTypeAheadFind);
+   pbi.removeObserver(gTypeAheadFind.searchLinksPref, gTypeAheadFind);
+
+   getBrowser().removeEventListener("keypress", onBrowserKeyPress, false);
+   getBrowser().removeEventListener("mousedown", onBrowserMouseDown, false);
 }
 
-function findBar_OnBrowserMouseUp(aEvt)
+function toggleHighlight(aHighlight)
 {
-  gFindBar.onBrowserMouseUp(aEvt);
+  var word = document.getElementById("find-field").value;
+  if (aHighlight) {
+    highlightDoc('yellow', word);
+  } else {
+    highlightDoc(null, null);
+    gLastHighlightString = null;
+  }
 }
 
-// ======================
-//  Timer Event Handlers
-// ======================
-function findBar_DelayedCloseFindBar()
+function highlightDoc(color, word, win)
 {
-  gFindBar.delayedCloseFindBar();
+  if (!win)
+    win = window._content; 
+
+  for (var i = 0; win.frames && i < win.frames.length; i++) {
+    highlightDoc(color, word, win.frames[i]);
+  }
+
+  var doc = win.document;
+  if (!document)
+    return;
+
+  if (!("body" in doc))
+    return;
+
+  var body = doc.body;
+  
+  var count = body.childNodes.length;
+  searchRange = doc.createRange();
+  startPt = doc.createRange();
+  endPt = doc.createRange();
+
+  searchRange.setStart(body, 0);
+  searchRange.setEnd(body, count);
+
+  startPt.setStart(body, 0);
+  startPt.setEnd(body, 0);
+  endPt.setStart(body, count);
+  endPt.setEnd(body, count);
+
+  if (!color) {
+    // Remove highlighting.  We use the find API again rather than
+    // searching for our span elements by id so that we gain access to the
+    // anonymous content that nsIFind searches.
+
+    if (!gLastHighlightString)
+      return;
+
+    var retRange = null;
+    var finder = Components.classes["@mozilla.org/embedcomp/rangefind;1"].createInstance()
+                         .QueryInterface(Components.interfaces.nsIFind);
+
+    while ((retRange = finder.Find(gLastHighlightString, searchRange,startPt, endPt))) {
+      var startContainer = retRange.startContainer;
+      var elem = null;
+      try {
+        elem = startContainer.parentNode;
+      }
+      catch (e) { }
+
+      if (elem && elem.getAttribute("id") == "__firefox-findbar-search-id") {
+        var child = null;
+        var docfrag = doc.createDocumentFragment();
+        var next = elem.nextSibling;
+        var parent = elem.parentNode;
+
+        while ((child = elem.firstChild)) {
+          docfrag.appendChild(child);
+        }
+
+        startPt = doc.createRange();
+        startPt.setStartAfter(elem);
+
+        parent.removeChild(elem);
+        parent.insertBefore(docfrag, next);
+      }
+      else {
+        // Somehow we didn't highlight this instance; just skip it.
+        startPt = doc.createRange();
+        startPt.setStart(retRange.endContainer, retRange.endOffset);
+      }
+
+      startPt.collapse(true);
+    }
+    return;
+  }
+
+  var baseNode = doc.createElement("span");
+  baseNode.setAttribute("style", "background-color: " + color + ";");
+  baseNode.setAttribute("id", "__firefox-findbar-search-id");
+
+  highlightText(word, baseNode);
 }
 
-function findBar_UpdateStatusBar()
+function highlightText(word, baseNode)
 {
-  gFindBar.updateStatusBar();
+  var retRange = null;
+  var finder = Components.classes["@mozilla.org/embedcomp/rangefind;1"].createInstance()
+                         .QueryInterface(Components.interfaces.nsIFind);
+
+  finder.caseSensitive = document.getElementById("find-case-sensitive").checked;
+
+  while((retRange = finder.Find(word, searchRange, startPt, endPt))) {
+    // Highlight
+    var nodeSurround = baseNode.cloneNode(true);
+    var node = highlight(retRange, nodeSurround);
+    startPt = node.ownerDocument.createRange();
+    startPt.setStart(node, node.childNodes.length);
+    startPt.setEnd(node, node.childNodes.length);
+  }
+  
+  gLastHighlightString = word;
 }
 
-function findBar_FlashFindBar()
+function highlight(range, node)
 {
-  gFindBar.flashFindBar();
+  var startContainer = range.startContainer;
+  var startOffset = range.startOffset;
+  var endOffset = range.endOffset;
+  var docfrag = range.extractContents();
+  var before = startContainer.splitText(startOffset);
+  var parent = before.parentNode;
+  node.appendChild(docfrag);
+  parent.insertBefore(node, before);
+  return node;
+}
+
+function getSelectionControllerForFindToolbar(ds)
+{
+  var display = ds.QueryInterface(Components.interfaces.nsIInterfaceRequestor).getInterface(Components.interfaces.nsISelectionDisplay);
+  if (!display)
+    return null;
+  return display.QueryInterface(Components.interfaces.nsISelectionController);
+}
+
+function toggleCaseSensitivity(aCaseSensitive)
+{
+  var fastFind = getBrowser().fastFind;
+  fastFind.caseSensitive = aCaseSensitive;
+  
+  if (gFindMode != FIND_NORMAL)
+    setFindCloseTimeout();
+}
+  
+function changeSelectionColor(aAttention)
+{
+  var ds = getBrowser().docShell;
+  var dsEnum = ds.getDocShellEnumerator(Components.interfaces.nsIDocShellTreeItem.typeContent,
+                                        Components.interfaces.nsIDocShell.ENUMERATE_FORWARDS);
+  while (dsEnum.hasMoreElements()) {
+    ds = dsEnum.getNext().QueryInterface(Components.interfaces.nsIDocShell);
+    var controller = getSelectionControllerForFindToolbar(ds);
+    if (!controller)
+      continue;
+    const selCon = Components.interfaces.nsISelectionController;
+    controller.setDisplaySelection(aAttention? selCon.SELECTION_ATTENTION : selCon.SELECTION_ON);
+  }
+}
+
+function openFindBar()
+{
+  if (!gNotFoundStr || !gWrappedToTopStr || !gWrappedToBottomStr) {
+    var bundle = document.getElementById("bundle_findBar");
+    gNotFoundStr = bundle.getString("NotFound");
+    gWrappedToTopStr = bundle.getString("WrappedToTop");
+    gWrappedToBottomStr = bundle.getString("WrappedToBottom");
+  }
+
+  var findToolbar = document.getElementById("FindToolbar");
+  if (findToolbar.hidden) {
+    findToolbar.hidden = false;
+  
+    var statusIcon = document.getElementById("find-status-icon");
+    var statusText = document.getElementById("find-status");
+    var findField = document.getElementById("find-field");
+    findField.removeAttribute("status");
+    statusIcon.removeAttribute("status");
+    statusText.value = "";
+
+    return true;
+  }
+  return false;
+}
+
+function focusFindBar()
+{
+  var findField = document.getElementById("find-field");
+  findField.focus();    
+}
+
+function selectFindBar()
+{
+  var findField = document.getElementById("find-field");
+  findField.select();    
+}
+
+function closeFindBar()
+{
+  var findField = document.getElementById("find-field");
+  var ww = Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
+                     .getService(Components.interfaces.nsIWindowWatcher);
+  if (window == ww.activeWindow && document.commandDispatcher.focusedElement &&
+      document.commandDispatcher.focusedElement.parentNode.parentNode == findField) {
+    _content.focus();
+  }
+
+  var findToolbar = document.getElementById("FindToolbar");
+  findToolbar.hidden = true;
+  gTypeAheadFindBuffer = "";
+  changeSelectionColor(false);
+  if (gQuickFindTimeout) {
+    clearTimeout(gQuickFindTimeout);
+    gQuickFindTimeout = null;    
+  } 
+}
+
+function shouldFastFind(evt)
+{
+  if (evt.ctrlKey || evt.altKey || evt.metaKey || evt.getPreventDefault())
+    return false;
+    
+  var elt = document.commandDispatcher.focusedElement;
+  if (elt) {
+    var ln = elt.localName.toLowerCase();
+    if (ln == "input" || ln == "textarea" || ln == "select" || ln == "button" || ln == "isindex")
+      return false;
+  }
+  
+  var win = document.commandDispatcher.focusedWindow;
+  if (win && win.document.designMode == "on")
+    return false;
+  
+  return true;
+}
+
+function onFindBarFocus()
+{
+  toggleLinkFocus(false);
+}
+
+function onFindBarBlur()
+{
+  toggleLinkFocus(true);
+  changeSelectionColor(false);
+}
+
+function onBrowserMouseDown(evt)
+{
+  var findToolbar = document.getElementById("FindToolbar");
+  if (!findToolbar.hidden && gFindMode != FIND_NORMAL)
+    closeFindBar();
+}
+
+function onBrowserKeyPress(evt)
+{  
+  // Check focused elt
+  if (!shouldFastFind(evt))
+    return;
+  
+  var findField = document.getElementById("find-field");
+  if (gFindMode != FIND_NORMAL && gQuickFindTimeout) {    
+    if (evt.keyCode == 8) { // Backspace
+      if (findField.value) {
+        findField.value = findField.value.substr(0, findField.value.length - 1);
+        gIsBack = true;   
+        gBackProtectBuffer = 3;
+      }
+      else if (gBackProtectBuffer > 0) {
+        gBackProtectBuffer--;
+      }
+      
+      if (gIsBack || gBackProtectBuffer > 0)
+        evt.preventDefault();
+        
+      find(findField.value);
+    }
+    else if (evt.keyCode == 27) { // Escape
+      closeFindBar();
+      evt.preventDefault();
+    }
+    else if (evt.charCode) {
+      if (evt.charCode == 32) // Space
+        evt.preventDefault();
+        
+      findField.value += String.fromCharCode(evt.charCode);
+      find(findField.value);
+    }
+    return;
+  }
+  
+  if (evt.charCode == 39 /* ' */ || evt.charCode == 47 /* / */ || (gUseTypeAheadFind && evt.charCode && evt.charCode != 32)) {   
+    gFindMode = (evt.charCode == 39 || (gTypeAheadLinksOnly && evt.charCode != 47)) ? FIND_LINKS : FIND_TYPEAHEAD;
+    toggleLinkFocus(true);
+    if (openFindBar()) {      
+      setFindCloseTimeout();      
+      if (gUseTypeAheadFind && evt.charCode != 39 && evt.charCode != 47) {
+        gTypeAheadFindBuffer += String.fromCharCode(evt.charCode);        
+        findField.value = gTypeAheadFindBuffer;
+        find(findField.value);
+      }
+      else {
+        findField.value = "";
+      }
+    }
+    else {
+      if (gFindMode == FIND_NORMAL) {
+        selectFindBar();      
+        focusFindBar();
+      }
+      else {
+        findField.value = String.fromCharCode(evt.charCode);
+        find(findField.value);
+      }
+    }        
+  }
+}
+
+function toggleLinkFocus(aFocusLinks)
+{
+  var fastFind = getBrowser().fastFind;
+  fastFind.focusLinks = aFocusLinks;
+}
+
+function onBrowserKeyUp(evt)
+{
+  if (evt.keyCode == 8)
+    gIsBack = false;
+}
+
+function onFindBarKeyPress(evt)
+{
+  if (evt.keyCode == KeyEvent.DOM_VK_RETURN) {
+    var findString = document.getElementById("find-field");
+    if (!findString.value)
+      return;
+      
+    if (evt.ctrlKey) {
+      document.getElementById("highlight").click();
+      return;
+    }
+    
+    if (evt.shiftKey)
+      findPrevious();
+    else
+      findNext();
+  }
+  else if (evt.keyCode == KeyEvent.DOM_VK_ESCAPE) {
+    closeFindBar();
+    evt.preventDefault();
+  } 
+  else if (evt.keyCode == KeyEvent.DOM_VK_PAGE_UP) {
+    window.top._content.scrollByPages(-1);
+    evt.preventDefault();
+  }
+  else if (evt.keyCode == KeyEvent.DOM_VK_PAGE_DOWN) {
+    window.top._content.scrollByPages(1);
+    evt.preventDefault();
+  }
+  else if (evt.keyCode == KeyEvent.DOM_VK_UP) {
+    window.top._content.scrollByLines(-1);
+    evt.preventDefault();
+  }
+  else if (evt.keyCode == KeyEvent.DOM_VK_DOWN) {
+    window.top._content.scrollByLines(1);
+    evt.preventDefault();
+  }
+
+} 
+
+function enableFindButtons(aEnable)
+{
+  var findNext = document.getElementById("find-next");
+  var findPrev = document.getElementById("find-previous");  
+  var highlight = document.getElementById("highlight");
+  findNext.disabled = findPrev.disabled = highlight.disabled = !aEnable;  
+}
+
+function find(val)
+{
+  if (!val)
+    val = document.getElementById("find-field").value;
+    
+  enableFindButtons(val);
+ 
+  var highlightBtn = document.getElementById("highlight");
+  if (highlightBtn.checked)
+    setHighlightTimeout();
+        
+  changeSelectionColor(true);
+  var fastFind = getBrowser().fastFind;  
+  var res = fastFind.find(val, gFindMode == FIND_LINKS);
+  updateStatus(res, true);
+  
+  if (gFindMode != FIND_NORMAL)
+    setFindCloseTimeout();
+}
+
+function flashFindBar()
+{
+  var findToolbar = document.getElementById("FindToolbar");
+  if (gFlashFindBarCount-- == 0) {
+    clearInterval(gFlashFindBarTimeout);
+    findToolbar.removeAttribute("flash");
+    gFlashFindBarCount = 6;
+    return true;
+  }
+ 
+  findToolbar.setAttribute("flash", (gFlashFindBarCount % 2 == 0) ? "false" : "true");
+}
+
+function onFindCmd()
+{
+  gFindMode = FIND_NORMAL;
+  openFindBar();
+  if (gFlashFindBar) {
+    gFlashFindBarTimeout = setInterval(flashFindBar, 500);
+    var prefService = Components.classes["@mozilla.org/preferences-service;1"]
+                                .getService(Components.interfaces.nsIPrefBranch);
+
+    prefService.setIntPref("accessibility.typeaheadfind.flashBar", --gFlashFindBar);
+  }
+  selectFindBar();
+  focusFindBar();
+}
+
+function onFindAgainCmd()
+{
+  var findString = getBrowser().findString;
+  if (!findString)
+    return onFindCmd();
+
+  var res = findNext();
+  if (res == Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND) {
+    if (openFindBar()) {
+      focusFindBar();
+      selectFindBar();
+      if (gFindMode != FIND_NORMAL)
+        setFindCloseTimeout();
+      
+      updateStatus(res, true);
+    }
+  }
+}
+
+function onFindPreviousCmd()
+{
+  var findString = getBrowser().findString;
+  if (!findString)
+    return onFindCmd();
+ 
+  var res = findPrevious();
+  if (res == Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND) {
+    if (openFindBar()) {
+      focusFindBar();
+      selectFindBar();
+      if (gFindMode != FIND_NORMAL)
+        setFindCloseTimeout();
+      
+      updateStatus(res, false);
+    }
+  }
+}
+
+function setHighlightTimeout()
+{
+  if (gHighlightTimeout)
+    clearTimeout(gHighlightTimeout);
+  gHighlightTimeout = setTimeout(function() { toggleHighlight(false); toggleHighlight(true); }, 500);  
+}
+
+function isFindBarVisible()
+{
+  var findBar = document.getElementById("FindToolbar");
+  return !findBar.hidden;
+}
+
+function findNext()
+{
+  changeSelectionColor(true);
+  var fastFind = getBrowser().fastFind; 
+  var res = fastFind.findNext();  
+  updateStatus(res, true);
+    
+  if (gFindMode != FIND_NORMAL && isFindBarVisible())
+    setFindCloseTimeout();
+  
+  return res;
+}
+
+function findPrevious()
+{
+  changeSelectionColor(true);
+  var fastFind = getBrowser().fastFind;
+  var res = fastFind.findPrevious();
+  updateStatus(res, false);
+  
+  if (gFindMode != FIND_NORMAL && isFindBarVisible())
+    setFindCloseTimeout();
+  
+  return res;
+}
+
+function updateStatus(res, findNext)
+{
+  var findBar = document.getElementById("FindToolbar");
+  var field = document.getElementById("find-field");
+  var statusIcon = document.getElementById("find-status-icon");
+  var statusText = document.getElementById("find-status");
+  switch(res) {
+    case Components.interfaces.nsITypeAheadFind.FIND_WRAPPED:
+      statusIcon.setAttribute("status", "wrapped");      
+      statusText.value = findNext ? gWrappedToTopStr : gWrappedToBottomStr;
+      break;
+    case Components.interfaces.nsITypeAheadFind.FIND_NOTFOUND:
+      statusIcon.setAttribute("status", "notfound");
+      statusText.value = gNotFoundStr;
+      field.setAttribute("status", "notfound");      
+      break;
+    case Components.interfaces.nsITypeAheadFind.FIND_FOUND:
+    default:
+      statusIcon.removeAttribute("status");      
+      statusText.value = "";
+      field.removeAttribute("status");
+      break;
+  }
+}
+
+function setFindCloseTimeout()
+{
+  if (gQuickFindTimeout)
+    clearTimeout(gQuickFindTimeout);
+  gQuickFindTimeout = setTimeout(function() { if (gFindMode != FIND_NORMAL) closeFindBar(); }, gQuickFindTimeoutLength);
 }

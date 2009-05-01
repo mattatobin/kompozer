@@ -55,8 +55,7 @@ class nsDirEnumerator;
 // for the conversion to NFC (composed Unicode) done in "non-Native" getters.
 //*****************************************************************************
 
-class NS_COM nsLocalFile : public nsILocalFileMac, 
-                           public nsILocalFileMac_MOZILLA_1_8_BRANCH
+class NS_COM nsLocalFile : public nsILocalFileMac
 {
     friend class nsDirEnumerator;
     
@@ -71,7 +70,6 @@ public:
     NS_DECL_NSIFILE
     NS_DECL_NSILOCALFILE
     NS_DECL_NSILOCALFILEMAC
-    NS_DECL_NSILOCALFILEMAC_MOZILLA_1_8_BRANCH
 
 public:
 
@@ -90,9 +88,7 @@ protected:
     nsresult            GetFSRefInternal(FSRef& aFSSpec, PRBool bForceUpdateCache = PR_TRUE);
     nsresult            GetPathInternal(nsACString& path);  // Returns path WRT mFollowLinks
 
-    nsresult            CopyInternal(nsIFile* newParentDir,
-                                     const nsAString& newName,
-                                     PRBool followLinks);
+    nsresult            MoveCopy(nsIFile* newParentDir, const nsAString &newName, PRBool isCopy, PRBool followLinks);
 
     static PRInt64      HFSPlustoNSPRTime(const UTCDateTime& utcTime);
     static void         NSPRtoHFSPlusTime(PRInt64 nsprTime, UTCDateTime& utcTime);

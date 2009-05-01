@@ -1,5 +1,4 @@
 /* 
- * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -12,15 +11,15 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is the elliptic curve math library for prime field curves.
+ * The Original Code is the elliptic curve math library for prime
+ * field curves.
  *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Sun Microsystems, Inc.
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Stephen Fung <fungstep@hotmail.com>, Sun Microsystems Laboratories
+ *      Stephen Fung <fungstep@hotmail.com>, Sun Microsystems Laboratories
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -34,7 +33,7 @@
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "ecp.h"
 #include "ecl-priv.h"
@@ -283,7 +282,7 @@ ec_GFp_pt_mul_jm_wNAF(const mp_int *n, const mp_int *px, const mp_int *py,
 	orderBitSize = mpl_significant_bits(&group->order);
 
 	/* Allocate memory for NAF */
-	naf = (signed char *) malloc(sizeof(signed char) * (orderBitSize + 1));
+	naf = (signed char *) malloc(sizeof(signed char) * orderBitSize);
 	if (naf == NULL) {
 		res = MP_MEM;
 		goto CLEANUP;

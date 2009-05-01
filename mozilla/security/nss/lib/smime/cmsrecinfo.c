@@ -1,43 +1,40 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * CMS recipientInfo methods.
  *
- * $Id: cmsrecinfo.c,v 1.16.2.2 2006/07/19 00:34:19 nelson%bolyard.com Exp $
+ * $Id: cmsrecinfo.c,v 1.13 2003/03/11 03:38:54 jpierre%netscape.com Exp $
  */
 
 #include "cmslocal.h"
@@ -63,15 +60,8 @@ nss_cmsrecipientinfo_usessubjectkeyid(NSSCMSRecipientInfo *ri)
     return PR_FALSE;
 }
 
-/*
- * NOTE: fakeContent marks CMSMessage structure which is only used as a carrier
- * of pwfn_arg and arena pools. In an ideal world, NSSCMSMessage would not have
- * been exported, and we would have added an ordinary enum to handle this 
- * check. Unfortunatly wo don't have that luxury so we are overloading the
- * contentTypeTag field. NO code should every try to interpret this content tag
- * as a real OID tag, or use any fields other than pwfn_arg or poolp of this 
- * CMSMessage for that matter */
-static const SECOidData fakeContent;
+
+static SECOidData fakeContent = { 0 };
 NSSCMSRecipientInfo *
 nss_cmsrecipientinfo_create(NSSCMSMessage *cmsg, NSSCMSRecipientIDSelector type,
                             CERTCertificate *cert, SECKEYPublicKey *pubKey, 
@@ -187,9 +177,27 @@ nss_cmsrecipientinfo_create(NSSCMSMessage *cmsg, NSSCMSRecipientIDSelector type,
 	    rv = SECFailure;
 	}
 	break;
+    case SEC_OID_MISSI_KEA_DSS_OLD:
+    case SEC_OID_MISSI_KEA_DSS:
+    case SEC_OID_MISSI_KEA:
+        PORT_Assert(type != NSSCMSRecipientID_SubjectKeyID);
+	if (type == NSSCMSRecipientID_SubjectKeyID) {
+	    rv = SECFailure;
+	    break;
+	}
+	/* backward compatibility - this is not really a keytrans operation */
+	ri->recipientInfoType = NSSCMSRecipientInfoID_KeyTrans;
+	/* hardcoded issuerSN choice for now */
+	ri->ri.keyTransRecipientInfo.recipientIdentifier.identifierType = NSSCMSRecipientID_IssuerSN;
+	ri->ri.keyTransRecipientInfo.recipientIdentifier.id.issuerAndSN = CERT_GetCertIssuerAndSN(poolp, cert);
+	if (ri->ri.keyTransRecipientInfo.recipientIdentifier.id.issuerAndSN == NULL) {
+	    rv = SECFailure;
+	    break;
+	}
+	break;
     case SEC_OID_X942_DIFFIE_HELMAN_KEY: /* dh-public-number */
-	PORT_Assert(type == NSSCMSRecipientID_IssuerSN);
-	if (type != NSSCMSRecipientID_IssuerSN) {
+        PORT_Assert(type != NSSCMSRecipientID_SubjectKeyID);
+	if (type == NSSCMSRecipientID_SubjectKeyID) {
 	    rv = SECFailure;
 	    break;
 	}
@@ -277,9 +285,6 @@ done:
     return ri;
 
 loser:
-    if (ri && ri->cert) {
-        CERT_DestroyCertificate(ri->cert);
-    }
     if (freeSpki) {
       SECKEY_DestroySubjectPublicKeyInfo(freeSpki);
     }
@@ -511,6 +516,20 @@ NSS_CMSRecipientInfo_WrapBulkKey(NSSCMSRecipientInfo *ri, PK11SymKey *bulkkey,
 	}
 
 	rv = SECOID_SetAlgorithmID(poolp, &(ri->ri.keyTransRecipientInfo.keyEncAlg), certalgtag, NULL);
+	break;
+    case SEC_OID_MISSI_KEA_DSS_OLD:
+    case SEC_OID_MISSI_KEA_DSS:
+    case SEC_OID_MISSI_KEA:
+	rv = NSS_CMSUtil_EncryptSymKey_MISSI(poolp, cert, bulkkey,
+					bulkalgtag,
+					&ri->ri.keyTransRecipientInfo.encKey,
+					&params, ri->cmsg->pwfn_arg);
+	if (rv != SECSuccess)
+	    break;
+
+	/* here, we DO need to pass the params to the wrap function because, with
+	 * RSA, there is no funny stuff going on with generation of IV vectors or so */
+	rv = SECOID_SetAlgorithmID(poolp, &(ri->ri.keyTransRecipientInfo.keyEncAlg), certalgtag, params);
 	break;
     case SEC_OID_X942_DIFFIE_HELMAN_KEY: /* dh-public-number */
 	rek = ri->ri.keyAgreeRecipientInfo.recipientEncryptedKeys[0];

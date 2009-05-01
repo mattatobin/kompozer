@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim:set et cin ts=4 sw=4 sts=4: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Darin Fisher <darin@netscape.com> (original author)
- *   Christian Biesinger <cbiesinger@web.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef nsHttpChannel_h__
 #define nsHttpChannel_h__
@@ -44,19 +27,13 @@
 #include "nsHttpTransaction.h"
 #include "nsHttpRequestHead.h"
 #include "nsHttpAuthCache.h"
-#include "nsInputStreamPump.h"
 #include "nsXPIDLString.h"
-#include "nsAutoPtr.h"
 #include "nsCOMPtr.h"
-#include "nsInt64.h"
-
-#include "nsHashPropertyBag.h"
 
 #include "nsIHttpChannel.h"
 #include "nsIHttpChannelInternal.h"
 #include "nsIHttpHeaderVisitor.h"
 #include "nsIHttpEventSink.h"
-#include "nsIChannelEventSink.h"
 #include "nsIStreamListener.h"
 #include "nsIIOService.h"
 #include "nsIURI.h"
@@ -74,23 +51,19 @@
 #include "nsIStringEnumerator.h"
 #include "nsIOutputStream.h"
 #include "nsIAsyncInputStream.h"
+#include "nsIInputStreamPump.h"
 #include "nsIPrompt.h"
-#include "nsIResumableChannel.h"
-#include "nsISupportsPriority.h"
-#include "nsIProtocolProxyCallback.h"
-#include "nsICancelable.h"
 
 class nsHttpResponseHead;
 class nsAHttpConnection;
 class nsIHttpAuthenticator;
-class nsProxyInfo;
+class nsIProxyInfo;
 
 //-----------------------------------------------------------------------------
 // nsHttpChannel
 //-----------------------------------------------------------------------------
 
-class nsHttpChannel : public nsHashPropertyBag
-                    , public nsIHttpChannel
+class nsHttpChannel : public nsIHttpChannel
                     , public nsIHttpChannelInternal
                     , public nsIStreamListener
                     , public nsICachingChannel
@@ -98,12 +71,9 @@ class nsHttpChannel : public nsHashPropertyBag
                     , public nsICacheListener
                     , public nsIEncodedChannel
                     , public nsITransportEventSink
-                    , public nsIResumableChannel
-                    , public nsISupportsPriority
-                    , public nsIProtocolProxyCallback
 {
 public:
-    NS_DECL_ISUPPORTS_INHERITED
+    NS_DECL_ISUPPORTS
     NS_DECL_NSIREQUEST
     NS_DECL_NSICHANNEL
     NS_DECL_NSIHTTPCHANNEL
@@ -115,30 +85,18 @@ public:
     NS_DECL_NSIENCODEDCHANNEL
     NS_DECL_NSIHTTPCHANNELINTERNAL
     NS_DECL_NSITRANSPORTEVENTSINK
-    NS_DECL_NSIRESUMABLECHANNEL
-    NS_DECL_NSISUPPORTSPRIORITY
-    NS_DECL_NSIPROTOCOLPROXYCALLBACK
 
     nsHttpChannel();
     virtual ~nsHttpChannel();
 
     nsresult Init(nsIURI *uri,
                   PRUint8 capabilities,
-                  nsProxyInfo* proxyInfo);
+                  nsIProxyInfo* proxyInfo);
 
 public: /* internal; workaround lame compilers */ 
     typedef void (nsHttpChannel:: *nsAsyncCallback)(void);
 
 private:
-
-    // Helper function to simplify getting notification callbacks.
-    template <class T>
-    void GetCallback(nsCOMPtr<T> &aResult)
-    {
-        NS_QueryNotificationCallbacks(mCallbacks, mLoadGroup, NS_GET_IID(T),
-                                      getter_AddRefs(aResult));
-    }
-
     //
     // AsyncCall may be used to call a member function asynchronously.
     //
@@ -149,7 +107,6 @@ private:
 
     nsresult AsyncCall(nsAsyncCallback funcPtr);
 
-    PRBool   RequestIsConditional();
     nsresult Connect(PRBool firstTime = PR_TRUE);
     nsresult AsyncAbort(nsresult status);
     nsresult SetupTransaction();
@@ -161,18 +118,15 @@ private:
     nsresult ProcessNotModified();
     nsresult ProcessRedirection(PRUint32 httpStatus);
     nsresult ProcessAuthentication(PRUint32 httpStatus);
+    void     GetCallback(const nsIID &aIID, void **aResult);
     PRBool   ResponseWouldVary();
 
     // redirection specific methods
     void     HandleAsyncRedirect();
     void     HandleAsyncNotModified();
     nsresult PromptTempRedirect();
-    nsresult SetupReplacementChannel(nsIURI *, nsIChannel *, PRBool preserveMethod);
-
-    // proxy specific methods
     nsresult ProxyFailover();
-    nsresult ReplaceWithProxy(nsIProxyInfo *);
-    nsresult ResolveProxy();
+    nsresult SetupReplacementChannel(nsIURI *, nsIChannel *, PRBool preserveMethod);
 
     // cache specific methods
     nsresult OpenCacheEntry(PRBool offline, PRBool *delayed);
@@ -192,7 +146,6 @@ private:
     nsresult OnDoneReadingPartialCacheEntry(PRBool *streamDone);
 
     // auth specific methods
-    nsresult PrepareForAuthentication(PRBool proxyAuth);
     nsresult GenCredsAndSetEntry(nsIHttpAuthenticator *, PRBool proxyAuth, const char *scheme, const char *host, PRInt32 port, const char *dir, const char *realm, const char *challenge, const nsHttpAuthIdentity &ident, nsCOMPtr<nsISupports> &session, char **result);
     nsresult GetCredentials(const char *challenges, PRBool proxyAuth, nsAFlatCString &creds);
     nsresult GetCredentialsForChallenge(const char *challenge, const char *scheme,  PRBool proxyAuth, nsIHttpAuthenticator *auth, nsAFlatCString &creds);
@@ -221,16 +174,16 @@ private:
     nsCOMPtr<nsISupports>             mOwner;
     nsCOMPtr<nsIInterfaceRequestor>   mCallbacks;
     nsCOMPtr<nsIProgressEventSink>    mProgressSink;
+    nsCOMPtr<nsIHttpEventSink>        mHttpEventSink;
     nsCOMPtr<nsIInputStream>          mUploadStream;
     nsCOMPtr<nsIURI>                  mReferrer;
     nsCOMPtr<nsISupports>             mSecurityInfo;
     nsCOMPtr<nsIEventQueue>           mEventQ;
-    nsCOMPtr<nsICancelable>           mProxyRequest;
 
     nsHttpRequestHead                 mRequestHead;
     nsHttpResponseHead               *mResponseHead;
 
-    nsRefPtr<nsInputStreamPump>       mTransactionPump;
+    nsCOMPtr<nsIInputStreamPump>      mTransactionPump;
     nsHttpTransaction                *mTransaction;     // hard ref
     nsHttpConnectionInfo             *mConnectionInfo;  // hard ref
 
@@ -238,33 +191,28 @@ private:
 
     PRUint32                          mLoadFlags;
     PRUint32                          mStatus;
-    nsUint64                          mLogicalOffset;
+    PRUint32                          mLogicalOffset;
     PRUint8                           mCaps;
-    PRInt16                           mPriority;
 
     nsCString                         mContentTypeHint;
     nsCString                         mContentCharsetHint;
-    nsCString                         mUserSetCookieHeader;
 
+    // mProperties must be nsISupports, not nsIProperties, due to aggregation
+    nsCOMPtr<nsISupports>             mProperties;
+    
     // cache specific data
     nsCOMPtr<nsICacheEntryDescriptor> mCacheEntry;
-    nsRefPtr<nsInputStreamPump>       mCachePump;
+    nsCOMPtr<nsIInputStreamPump>      mCachePump;
     nsHttpResponseHead               *mCachedResponseHead;
     nsCacheAccessMode                 mCacheAccess;
     PRUint32                          mPostID;
     PRUint32                          mRequestTime;
 
     // auth specific data
-    nsISupports                      *mProxyAuthContinuationState;
-    nsCString                         mProxyAuthType;
     nsISupports                      *mAuthContinuationState;
     nsCString                         mAuthType;
     nsHttpAuthIdentity                mIdent;
     nsHttpAuthIdentity                mProxyIdent;
-
-    // Resumable channel specific data
-    nsCString                         mEntityID;
-    PRUint64                          mStartPos;
 
     // redirection specific data.
     PRUint8                           mRedirectionLimit;
@@ -281,8 +229,6 @@ private:
     PRUint32                          mUploadStreamHasHeaders   : 1;
     PRUint32                          mAuthRetryPending         : 1;
     PRUint32                          mSuppressDefensiveAuth    : 1;
-    PRUint32                          mResuming                 : 1;
-    PRUint32                          mOpenedCacheForWriting    : 1;
 
     class nsContentEncodings : public nsIUTF8StringEnumerator
     {

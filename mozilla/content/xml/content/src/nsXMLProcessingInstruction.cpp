@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,39 +41,26 @@
 #include "nsUnicharUtils.h"
 #include "nsXMLProcessingInstruction.h"
 #include "nsParserUtils.h"
-#include "nsContentCreatorFunctions.h"
 
 nsresult
 NS_NewXMLProcessingInstruction(nsIContent** aInstancePtrResult,
-                               nsNodeInfoManager *aNodeInfoManager,
                                const nsAString& aTarget,
                                const nsAString& aData)
 {
-  NS_PRECONDITION(aNodeInfoManager, "Missing nodeinfo manager");
-
-  if (aTarget.EqualsLiteral("xml-stylesheet")) {
-    return NS_NewXMLStylesheetProcessingInstruction(aInstancePtrResult,
-                                                    aNodeInfoManager, aData);
+  if (aTarget.Equals(NS_LITERAL_STRING("xml-stylesheet"))) {
+    return NS_NewXMLStylesheetProcessingInstruction(aInstancePtrResult, aData);
   }
+  *aInstancePtrResult = new nsXMLProcessingInstruction(aTarget, aData);
+  NS_ENSURE_TRUE(*aInstancePtrResult, NS_ERROR_OUT_OF_MEMORY);
 
-  *aInstancePtrResult = nsnull;
-
-  nsXMLProcessingInstruction *instance =
-    new nsXMLProcessingInstruction(aNodeInfoManager, aTarget, aData);
-  if (!instance) {
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  NS_ADDREF(*aInstancePtrResult = instance);
+  NS_ADDREF(*aInstancePtrResult);
 
   return NS_OK;
 }
 
-nsXMLProcessingInstruction::nsXMLProcessingInstruction(nsNodeInfoManager *aNodeInfoManager,
-                                                       const nsAString& aTarget,
-                                                       const nsAString& aData)
-  : nsGenericDOMDataNode(aNodeInfoManager),
-    mTarget(aTarget)
+nsXMLProcessingInstruction::nsXMLProcessingInstruction(const nsAString& aTarget,
+                                                       const nsAString& aData) :
+  mTarget(aTarget)
 {
   nsGenericDOMDataNode::SetData(aData);
 }
@@ -115,12 +103,13 @@ nsXMLProcessingInstruction::GetData(nsAString& aData)
 }
 
 PRBool
-nsXMLProcessingInstruction::GetAttrValue(nsIAtom *aName, nsAString& aValue)
+nsXMLProcessingInstruction::GetAttrValue(const nsAString& aAttr,
+                                         nsAString& aValue)
 {
   nsAutoString data;
 
   GetData(data);
-  return nsParserUtils::GetQuotedAttributeValue(data, aName, aValue);
+  return nsParserUtils::GetQuotedAttributeValue(data, aAttr, aValue);
 }
 
 nsIAtom *
@@ -133,13 +122,6 @@ PRBool
 nsXMLProcessingInstruction::IsContentOfType(PRUint32 aFlags) const
 {
   return !(aFlags & ~ePROCESSING_INSTRUCTION);
-}
-
-// virtual
-PRBool
-nsXMLProcessingInstruction::MayHaveFrame() const
-{
-  return PR_FALSE;
 }
 
 NS_IMETHODIMP
@@ -174,13 +156,12 @@ nsXMLProcessingInstruction::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
   nsAutoString data;
   GetData(data);
 
-  nsXMLProcessingInstruction *pi =
-    new nsXMLProcessingInstruction(GetNodeInfoManager(), mTarget, data);
-  if (!pi) {
+  *aReturn = new nsXMLProcessingInstruction(mTarget, data);
+  if (!*aReturn) {
     return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  NS_ADDREF(*aReturn = pi);
+  NS_ADDREF(*aReturn);
 
   return NS_OK;
 }
@@ -189,7 +170,7 @@ nsXMLProcessingInstruction::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
 void
 nsXMLProcessingInstruction::List(FILE* out, PRInt32 aIndent) const
 {
-  NS_PRECONDITION(IsInDoc(), "bad content");
+  NS_PRECONDITION(mDocument, "bad content");
 
   PRInt32 index;
   for (index = aIndent; --index >= 0; ) fputs("  ", out);

@@ -131,6 +131,32 @@ function LoadActiveCharSets()
   }
 }
 
+
+function SelectAvailableCharset()
+{
+  //Remove the selection in the active charsets list
+  var active_charsets = document.getElementById('active_charsets');
+
+  if (active_charsets.selectedItems.length > 0)
+    active_charsets.clearSelection();
+
+  update_buttons();
+} //SelectAvailableCharset
+
+
+
+function SelectActiveCharset()
+{
+  //Remove the selection in the available charsets list
+  var available_charsets = document.getElementById('available_charsets');
+
+  if (available_charsets.selectedItems.length > 0)
+      available_charsets.clearSelection();
+
+  update_buttons();
+} //SelectActiveCharset
+
+
 function enable_save()
 {
   var save_button = document.documentElement.getButton("accept");
@@ -205,12 +231,24 @@ function RemoveActiveCharset()
   var numSelected = listbox.selectedItems.length;
   var deleted_all = false;
 
-  var numSelectedItems = listbox.selectedItems.length;
-  for (count = 0; count < numSelectedItems; count ++) {
-    listbox.removeChild(listbox.selectedItems[0]);
-  }
+  while (listbox.selectedItems.length > 0) {
+    var selectedNode = listbox.selectedItems[0];
+    dump(selectedNode + " - " + listbox.selectedItems.length + "\n");
+    nextNode = selectedNode.nextSibling;
 
-  listbox.clearSelection();
+    if (!nextNode) {
+      if (selectedNode.previousSibling)
+        nextNode = selectedNode.previousSibling;
+    }
+
+    listbox.removeChild(selectedNode);
+  } //while
+
+  if (nextNode) {
+    listbox.selectItem(nextNode)
+  } else {
+    //listbox.clearSelection();
+  }
 
   enable_save();
 } //RemoveActiveCharset

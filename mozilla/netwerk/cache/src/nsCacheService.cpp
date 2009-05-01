@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsCacheService.cpp, released
- * February 10, 2001.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Gordon Sheridan, 10-February-2001
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
+ * The Original Code is nsCacheService.cpp, released February 10, 2001.
+ * 
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
+ *    Gordon Sheridan, 10-February-2001
+ */
 
 #include "necko-config.h"
 
@@ -46,27 +29,22 @@
 #include "nsCacheEntry.h"
 #include "nsCacheEntryDescriptor.h"
 #include "nsCacheDevice.h"
+#include "nsDiskCacheDevice.h"
 #include "nsMemoryCacheDevice.h"
 #include "nsICacheVisitor.h"
-
-#ifdef NECKO_DISK_CACHE_SQL
-#include "nsDiskCacheDeviceSQL.h"
-#else
-#include "nsDiskCacheDevice.h"
-#endif
+#include "nsCRT.h"
 
 #include "nsAutoLock.h"
 #include "nsIEventQueue.h"
 #include "nsIObserverService.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsILocalFile.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsVoidArray.h"
-#include "nsDeleteDir.h"
-#include <math.h>  // for log()
+
 
 
 /******************************************************************************
@@ -155,7 +133,7 @@ nsCacheProfilePrefObserver::Install()
     
     
     // install preferences observer
-    nsCOMPtr<nsIPrefBranch2> branch = do_GetService(NS_PREFSERVICE_CONTRACTID);
+    nsCOMPtr<nsIPrefBranchInternal> branch = do_GetService(NS_PREFSERVICE_CONTRACTID);
     if (!branch) return NS_ERROR_FAILURE;
 
     char * prefList[] = { 
@@ -200,6 +178,7 @@ nsCacheProfilePrefObserver::Remove()
     // remove Observer Service observers
     nsCOMPtr<nsIObserverService> observerService = do_GetService("@mozilla.org/observer-service;1", &rv);
     if (NS_FAILED(rv)) return rv;
+    NS_ENSURE_ARG(observerService);
 
     rv = observerService->RemoveObserver(this, "profile-before-change");
     if (NS_FAILED(rv)) rv2 = rv;
@@ -212,7 +191,7 @@ nsCacheProfilePrefObserver::Remove()
 
 
     // remove Pref Service observers
-    nsCOMPtr<nsIPrefBranch2> prefInternal = do_GetService(NS_PREFSERVICE_CONTRACTID);
+    nsCOMPtr<nsIPrefBranchInternal> prefInternal = do_GetService(NS_PREFSERVICE_CONTRACTID);
 
     // remove Disk cache pref observers
     rv  = prefInternal->RemoveObserver(DISK_CACHE_ENABLE_PREF, this);
@@ -342,34 +321,15 @@ nsCacheProfilePrefObserver::ReadPrefs(nsIPrefBranch* branch)
                                     getter_AddRefs(directory));
         if (NS_FAILED(rv)) {
             // try to get the profile directory (there may not be a profile yet)
-            nsCOMPtr<nsIFile> profDir;
-            NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR,
-                                   getter_AddRefs(profDir));
-            NS_GetSpecialDirectory(NS_APP_USER_PROFILE_LOCAL_50_DIR,
-                                   getter_AddRefs(directory));
-            if (!directory)
-                directory = profDir;
-            else if (profDir) {
-                PRBool same;
-                if (NS_SUCCEEDED(profDir->Equals(directory, &same)) && !same) {
-                    // We no longer store the cache directory in the main
-                    // profile directory, so we should cleanup the old one.
-                    rv = profDir->AppendNative(NS_LITERAL_CSTRING("Cache"));
-                    if (NS_SUCCEEDED(rv)) {
-                        PRBool exists;
-                        if (NS_SUCCEEDED(profDir->Exists(&exists)) && exists)
-                            DeleteDir(profDir, PR_FALSE, PR_FALSE);
-                    }
-                }
-            }
-        }
+            rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR,
+                                        getter_AddRefs(directory));
 #if DEBUG
-        if (!directory) {
+        } else if (NS_FAILED(rv)) {
             // use current process directory during development
             rv = NS_GetSpecialDirectory(NS_XPCOM_CURRENT_PROCESS_DIR,
                                         getter_AddRefs(directory));
-        }
 #endif
+        }
         if (directory)
             mDiskCacheParentDirectory = do_QueryInterface(directory, &rv);
     }
@@ -450,9 +410,11 @@ nsCacheService::~nsCacheService()
 }
 
 
-nsresult
+NS_IMETHODIMP
 nsCacheService::Init()
 {
+    nsresult  rv;
+
     NS_ASSERTION(!mInitialized, "nsCacheService already initialized.");
     if (mInitialized)
         return NS_ERROR_ALREADY_INITIALIZED;
@@ -463,7 +425,7 @@ nsCacheService::Init()
     CACHE_LOG_INIT();
 
     // initialize hashtable for active cache entries
-    nsresult rv = mActiveEntries.Init();
+    rv = mActiveEntries.Init();
     if (NS_FAILED(rv)) return rv;
     
     // get references to services we'll be using frequently
@@ -491,7 +453,7 @@ nsCacheService::Init()
 }
 
 
-void
+NS_IMETHODIMP
 nsCacheService::Shutdown()
 {
     nsAutoLock  lock(mCacheServiceLock);
@@ -522,6 +484,7 @@ nsCacheService::Shutdown()
 #endif
 #endif
     }
+    return NS_OK;
 }
 
 
@@ -579,27 +542,7 @@ nsresult
 nsCacheService::EvictEntriesForClient(const char *          clientID,
                                       nsCacheStoragePolicy  storagePolicy)
 {
-    if (this == nsnull) return NS_ERROR_NOT_AVAILABLE; // XXX eh?
-
-    nsCOMPtr<nsIObserverService> obsSvc =
-        do_GetService("@mozilla.org/observer-service;1");
-    if (obsSvc) {
-        // Proxy to the UI thread since the observer service isn't thredsafe.
-        // We use an async proxy, since this it's not important whether this
-        // notification happens before or after the actual eviction.
-
-        nsCOMPtr<nsIObserverService> obsProxy;
-        NS_GetProxyForObject(NS_UI_THREAD_EVENTQ,
-                             NS_GET_IID(nsIObserverService),
-                             obsSvc, PROXY_ASYNC, getter_AddRefs(obsProxy));
-
-        if (obsProxy) {
-            obsProxy->NotifyObservers(this,
-                                      NS_CACHESERVICE_EMPTYCACHE_TOPIC_ID,
-                                      nsnull);
-        }
-    }
-
+    if (this == nsnull) return NS_ERROR_NOT_AVAILABLE;
     nsAutoLock lock(mCacheServiceLock);
     nsresult rv = NS_OK;
 
@@ -621,8 +564,7 @@ nsCacheService::EvictEntriesForClient(const char *          clientID,
     if (storagePolicy == nsICache::STORE_ANYWHERE ||
         storagePolicy == nsICache::STORE_IN_MEMORY) {
 
-        // If there is no memory device, there is no need to evict it...
-        if (mMemoryDevice) {
+        if (mEnableMemoryDevice) {
             rv = mMemoryDevice->EvictEntries(clientID);
             if (NS_FAILED(rv)) return rv;
         }
@@ -665,8 +607,6 @@ nsCacheService::IsStorageEnabledForPolicy_Locked(nsCacheStoragePolicy  storagePo
 
 NS_IMETHODIMP nsCacheService::VisitEntries(nsICacheVisitor *visitor)
 {
-    NS_ENSURE_ARG_POINTER(visitor);
-
     nsAutoLock lock(mCacheServiceLock);
 
     if (!(mEnableDiskDevice || mEnableMemoryDevice))
@@ -676,8 +616,7 @@ NS_IMETHODIMP nsCacheService::VisitEntries(nsICacheVisitor *visitor)
     // XXX i.e. keep list of visitors in progress.
     
     nsresult rv = NS_OK;
-    // If there is no memory device, there are then also no entries to visit...
-    if (mMemoryDevice) {
+    if (mEnableMemoryDevice) {
         rv = mMemoryDevice->Visit(visitor);
         if (NS_FAILED(rv)) return rv;
     }
@@ -767,18 +706,18 @@ nsCacheService::CreateMemoryDevice()
 
 nsresult
 nsCacheService::CreateRequest(nsCacheSession *   session,
-                              const nsACString & clientKey,
+                              const char *       clientKey,
                               nsCacheAccessMode  accessRequested,
                               PRBool             blockingMode,
                               nsICacheListener * listener,
                               nsCacheRequest **  request)
 {
-    NS_ASSERTION(request, "CreateRequest: request is null");
+    NS_ASSERTION(request, "CreateRequest: request or entry is null");
      
     nsCString * key = new nsCString(*session->ClientID());
     if (!key)
         return NS_ERROR_OUT_OF_MEMORY;
-    key->Append(':');
+    key->Append(":");
     key->Append(clientKey);
 
     if (mMaxKeyLength < key->Length()) mMaxKeyLength = key->Length();
@@ -890,7 +829,7 @@ nsCacheService::ProcessRequest(nsCacheRequest *           request,
 
 nsresult
 nsCacheService::OpenCacheEntry(nsCacheSession *           session,
-                               const nsACString &         key,
+                               const char *               key,
                                nsCacheAccessMode          accessRequested,
                                PRBool                     blockingMode,
                                nsICacheListener *         listener,
@@ -942,11 +881,7 @@ nsCacheService::ActivateEntry(nsCacheRequest * request,
 
     if (!entry) {
         // search cache devices for entry
-        PRBool collision = PR_FALSE;
-        entry = SearchCacheDevices(request->mKey, request->StoragePolicy(), &collision);
-        // When there is a hashkey collision just refuse to cache it...
-        if (collision) return NS_ERROR_CACHE_IN_USE;
-
+        entry = SearchCacheDevices(request->mKey, request->StoragePolicy());
         if (entry)  entry->MarkInitialized();
     }
 
@@ -1007,15 +942,13 @@ nsCacheService::ActivateEntry(nsCacheRequest * request,
 
 
 nsCacheEntry *
-nsCacheService::SearchCacheDevices(nsCString * key, nsCacheStoragePolicy policy, PRBool *collision)
+nsCacheService::SearchCacheDevices(nsCString * key, nsCacheStoragePolicy policy)
 {
     nsCacheEntry * entry = nsnull;
 
-    *collision = PR_FALSE;
     if ((policy == nsICache::STORE_ANYWHERE) || (policy == nsICache::STORE_IN_MEMORY)) {
-        // If there is no memory device, then there is nothing to search...
-        if (mMemoryDevice)
-            entry = mMemoryDevice->FindEntry(key, collision);
+        if (mEnableMemoryDevice)
+            entry = mMemoryDevice->FindEntry(key);
     }
 
     if (!entry && 
@@ -1029,7 +962,7 @@ nsCacheService::SearchCacheDevices(nsCString * key, nsCacheStoragePolicy policy,
                     return nsnull;
             }
             
-            entry = mDiskDevice->FindEntry(key, collision);
+            entry = mDiskDevice->FindEntry(key);
         }
 #endif // !NECKO_DISK_CACHE
     }
@@ -1043,17 +976,18 @@ nsCacheService::EnsureEntryHasDevice(nsCacheEntry * entry)
 {
     nsCacheDevice * device = entry->CacheDevice();
     if (device)  return device;
+    nsresult rv = NS_OK;
 
 #ifdef NECKO_DISK_CACHE
     if (entry->IsStreamData() && entry->IsAllowedOnDisk() && mEnableDiskDevice) {
         // this is the default
         if (!mDiskDevice) {
-            (void)CreateDiskDevice();  // ignore the error (check for mDiskDevice instead)
+            rv = CreateDiskDevice();  // ignore the error (check for mDiskDevice instead)
         }
 
         if (mDiskDevice) {
             entry->MarkBinding();  // enter state of binding
-            nsresult rv = mDiskDevice->BindEntry(entry);
+            rv = mDiskDevice->BindEntry(entry);
             entry->ClearBinding(); // exit state of binding
             if (NS_SUCCEEDED(rv))
                 device = mDiskDevice;
@@ -1063,20 +997,16 @@ nsCacheService::EnsureEntryHasDevice(nsCacheEntry * entry)
      
     // if we can't use mDiskDevice, try mMemoryDevice
     if (!device && mEnableMemoryDevice && entry->IsAllowedInMemory()) {        
-        if (!mMemoryDevice) {
-            (void)CreateMemoryDevice();  // ignore the error (check for mMemoryDevice instead)
-        }
-        if (mMemoryDevice) {
-            entry->MarkBinding();  // enter state of binding
-            nsresult rv = mMemoryDevice->BindEntry(entry);
-            entry->ClearBinding(); // exit state of binding
-            if (NS_SUCCEEDED(rv))
-                device = mMemoryDevice;
-        }
+        entry->MarkBinding();  // enter state of binding
+        rv = mMemoryDevice->BindEntry(entry);
+        entry->ClearBinding(); // exit state of binding
+        if (NS_SUCCEEDED(rv))
+            device = mMemoryDevice;
     }
 
-    if (device) 
-        entry->SetCacheDevice(device);
+    if (device == nsnull)  return nsnull;
+
+    entry->SetCacheDevice(device);
     return device;
 }
 
@@ -1182,6 +1112,10 @@ nsCacheService::OnProfileShutdown(PRBool cleanse)
     if (gService->mMemoryDevice) {
         // clear memory cache
         gService->mMemoryDevice->EvictEntries(nsnull);
+#if 0
+        gService->mMemoryDevice->Shutdown();
+        gService->mEnableMemoryDevice = PR_FALSE;
+#endif
     }
 
 }
@@ -1260,17 +1194,11 @@ nsCacheService::SetMemoryCacheEnabled(PRBool  enabled)
     if (!gService)  return;
     nsAutoLock lock(gService->mCacheServiceLock);
     gService->mEnableMemoryDevice = enabled;
-
-    if (enabled) {
-        if (!gService->mMemoryDevice) {
-            // allocate memory device, if necessary
-            (void) gService->CreateMemoryDevice();
-        }
-    } else {
-        if (gService->mMemoryDevice) {
-            // tell memory device to evict everything
-            gService->mMemoryDevice->SetCapacity(0);
-        }
+    (void) gService->CreateMemoryDevice();    // allocate memory device, if necessary
+    
+    if (!enabled && gService->mMemoryDevice) {
+        // tell memory device to evict everything
+        gService->mMemoryDevice->SetCapacity(0);
     }
 }
 
@@ -1300,26 +1228,41 @@ nsCacheService::SetMemoryCacheCapacity(PRInt32  capacity)
  * If browser.cache.memory.capacity is zero, the memory cache is disabled.
  * 
  * If browser.cache.memory.capacity is negative or not present, we use a
- * formula that grows less than linearly with the amount of system memory, 
- * with an upper limit on the cache size. No matter how much physical RAM is
- * present, the default cache size would not exceed 32 MB. This maximum would
- * apply only to systems with more than 4 GB of RAM (e.g. terminal servers)
+ * formula that grows less than linearly with the amount of system memory.
  *
  *   RAM   Cache
  *   ---   -----
  *   32 Mb   2 Mb
  *   64 Mb   4 Mb
- *  128 Mb   6 Mb
- *  256 Mb  10 Mb
- *  512 Mb  14 Mb
- * 1024 Mb  18 Mb
- * 2048 Mb  24 Mb
- * 4096 Mb  30 Mb
+ *  128 Mb   8 Mb
+ *  256 Mb  14 Mb
+ *  512 Mb  22 Mb
+ * 1024 Mb  32 Mb
+ * 2048 Mb  44 Mb
+ * 4096 Mb  58 Mb
  *
- * The equation for this is (for cache size C and memory size K (kbytes)):
- *  C = x^2/3 + x + 2/3 + 0.1 (0.1 for rounding)
- *  if (C > 32) C = 32
  */
+
+#include <math.h>
+#if defined(__linux) || defined(__sun)
+#include <unistd.h>
+#elif defined(__hpux)
+#include <sys/pstat.h>
+#elif defined(XP_MACOSX)
+extern "C" {
+#include <mach/mach_init.h>
+#include <mach/mach_host.h>
+}
+#elif defined(XP_OS2)
+#define INCL_DOSMISC
+#include <os2.h>
+#elif defined(XP_WIN)
+#include <windows.h>
+#elif defined(_AIX)
+#include <cf.h>
+#include <sys/cfgodm.h>
+#endif
+
 
 PRInt32
 nsCacheService::CacheMemoryAvailable()
@@ -1328,28 +1271,76 @@ nsCacheService::CacheMemoryAvailable()
     if (capacity >= 0)
         return capacity;
 
-    PRUint64 bytes = PR_GetPhysicalMemorySize();
+    long kbytes  = 0;
 
-    if (LL_CMP(bytes, ==, LL_ZERO))
-        return 0;
+#if defined(__linux) || defined(__sun)
 
-    // Conversion from unsigned int64 to double doesn't work on all platforms.
-    // We need to truncate the value at LL_MAXINT to make sure we don't
-    // overflow.
-    if (LL_CMP(bytes, >, LL_MAXINT))
-        bytes = LL_MAXINT;
+    long pageSize  = sysconf(_SC_PAGESIZE);
+    long pageCount = sysconf(_SC_PHYS_PAGES);
+    kbytes         = (pageSize / 1024) * pageCount;
 
-    PRUint64 kbytes;
-    LL_SHR(kbytes, bytes, 10);
+#elif defined(__hpux)
+    
+    struct pst_static  info;
+    int result = pstat_getstatic(&info, sizeof(info), 1, 0);
+    if (result == 1) {
+        kbytes = info.physical_memory * (info.page_size / 1024);
+    }
+    
+#elif defined(XP_MACOSX)
 
-    double kBytesD;
-    LL_L2D(kBytesD, (PRInt64) kbytes);
+    struct host_basic_info hInfo;
+    mach_msg_type_number_t count;
 
-    double x = log(kBytesD)/log(2.0) - 14;
+    int result = host_info(mach_host_self(),
+                           HOST_BASIC_INFO,
+                           (host_info_t) &hInfo,
+                           &count);
+    if (result == KERN_SUCCESS) {
+        kbytes = hInfo.memory_size / 1024;
+    }
+
+#elif defined(XP_WIN)
+    
+    // XXX we should use GlobalMemoryStatusEx on XP and 2000, but
+    // XXX our current build environment doesn't support it.
+    MEMORYSTATUS  memStat;
+    memset(&memStat, 0, sizeof(memStat));
+    GlobalMemoryStatus(&memStat);
+    kbytes = memStat.dwTotalPhys / 1024;
+
+#elif defined(XP_OS2)
+
+    ULONG ulPhysMem;
+    DosQuerySysInfo(QSV_TOTPHYSMEM,
+                    QSV_TOTPHYSMEM,
+                    &ulPhysMem,
+                    sizeof(ulPhysMem));
+    kbytes = (long)(ulPhysMem / 1024);
+      
+#elif defined(_AIX)
+
+    int how_many;
+    struct CuAt *obj;
+    if (odm_initialize() == 0) {
+        obj = getattr("sys0", "realmem", 0, &how_many);
+        if (obj != NULL) {
+            kbytes = atoi(obj->value);
+            free(obj);
+        }
+        odm_terminate();
+    }
+
+#else
+    return MEMORY_CACHE_CAPACITY;
+#endif
+
+    if (kbytes == 0)  return 0;
+    if (kbytes < 0)   kbytes = LONG_MAX; // cap overflows
+
+    double x = log((double)kbytes)/log((double)2) - 14;
     if (x > 0) {
-        capacity = (PRInt32)(x * x / 3.0 + x + 2.0 / 3 + 0.1); // 0.1 for rounding
-        if (capacity > 32)
-            capacity = 32;
+        capacity    = (PRInt32)(x * x - x + 2.001); // add .001 for rounding
         capacity   *= 1024;
     } else {
         capacity    = 0;

@@ -1,46 +1,28 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
+/*
  * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * 1.1 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
+ * the specific language governing rights and limitations under the License.
  *
  * The Original Code is Mozilla XML-RPC Client component.
  *
- * The Initial Developer of the Original Code is
- * Digital Creations 2, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Digital Creations 2, Inc.
+ * Portions created by Digital Creations 2, Inc. are Copyright (C) 2000 Digital
+ * Creations 2, Inc.  All Rights Reserved.
  *
- * Contributor(s):
- *   Martijn Pieters <mj@digicool.com> (original author)
- *   Samuel Sieb <samuel@sieb.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * Contributor(s): Martijn Pieters <mj@digicool.com> (original author)
+ *                 Samuel Sieb <samuel@sieb.net> brought it up to date with 
+ *                             current APIs and added authentication
+ */
 
 /*
  *  nsXmlRpcClient XPCOM component
- *  Version: $Revision: 1.34.28.3 $
+ *  Version: $Revision: 1.33 $
  *
- *  $Id: nsXmlRpcClient.js,v 1.34.28.3 2006/11/28 18:18:44 gijskruitbosch%gmail.com Exp $
+ *  $Id: nsXmlRpcClient.js,v 1.33 2003/03/26 01:37:02 suresh%netscape.com Exp $
  */
 
 /*
@@ -48,7 +30,7 @@
  */
 const XMLRPCCLIENT_CONTRACTID = '@mozilla.org/xml-rpc/client;1';
 const XMLRPCCLIENT_CID =
-    Components.ID('{4d7d15c0-3747-4f7f-b6b3-792a5ea1a9aa}');
+    Components.ID('{37127241-1e6e-46aa-ba87-601d41bb47df}');
 const XMLRPCCLIENT_IID = Components.interfaces.nsIXmlRpcClient;
 
 const XMLRPCFAULT_CONTRACTID = '@mozilla.org/xml-rpc/fault;1';
@@ -56,14 +38,9 @@ const XMLRPCFAULT_CID =
     Components.ID('{691cb864-0a7e-448c-98ee-4a7f359cf145}');
 const XMLRPCFAULT_IID = Components.interfaces.nsIXmlRpcFault;
 
-const XMLHTTPREQUEST_CONTRACTID = '@mozilla.org/xmlextras/xmlhttprequest;1';
-
-const NSICHANNEL = Components.interfaces.nsIChannel;
-
 const DEBUG = false;
 const DEBUGPARSE = false;
 
-const DOMNode = Components.interfaces.nsIDOMNode;
 /*
  * Class definitions
  */
@@ -102,10 +79,21 @@ function nsXmlRpcClient() {}
 nsXmlRpcClient.prototype = {
     _serverUrl: null,
     _useAuth: false,
+    _passwordTried: false,
 
     init: function(serverURL) {
-        this._serverUrl = serverURL;
-        this._encoding = "UTF-8";
+        var ios = Components.classes["@mozilla.org/network/io-service;1"].
+            getService(Components.interfaces.nsIIOService);
+        var oURL = ios.newURI(serverURL, null, null);
+
+        // Make sure it is a complete spec
+        // Note that we don't care what the scheme is otherwise.
+        // Should we care? POST works only on http and https..
+        if (!oURL.scheme) oURL.scheme = 'http';
+        if ((oURL.scheme != 'http') && (oURL.scheme != 'https'))
+            throw Components.Exception('Only HTTP is supported');
+
+        this._serverUrl = oURL;
     },
 
     setAuthentication: function(username, password){
@@ -114,6 +102,7 @@ nsXmlRpcClient.prototype = {
           this._useAuth = true;
           this._username = username;
           this._password = password;
+          this._passwordTried = false;
         }
     },
 
@@ -121,15 +110,13 @@ nsXmlRpcClient.prototype = {
         this._useAuth = false;
     },
 
-    setEncoding: function(encoding){
-        this._encoding = encoding;
-    },
-
     get serverUrl() { return this._serverUrl; },
 
     // Internal copy of the status
     _status: null,
+    _errorMsg: null,
     _listener: null,
+    _seenStart: false,
 
     asyncCall: function(listener, context, methodName, methodArgs, count) {
         debug('asyncCall');
@@ -139,18 +126,13 @@ nsXmlRpcClient.prototype = {
 
         // Check for the server URL;
         if (!this._serverUrl)
-            throw Components.Exception('Not initialized');
+            throw Components.Exception('Not initilized');
 
         this._inProgress = true;
 
         // Clear state.
-        this._foundFault = false;
-        this._passwordTried = false;
-        this._result = null;
-        this._fault = null;
         this._status = null;
-        this._responseStatus = null;
-        this._responseString = null;
+        this._errorMsg = null;
         this._listener = listener;
         this._seenStart = false;
         this._context = context;
@@ -158,99 +140,194 @@ nsXmlRpcClient.prototype = {
         debug('Arguments: ' + methodArgs);
 
         // Generate request body
-        var xmlWriter = new XMLWriter(this._encoding);
+        var xmlWriter = new XMLWriter();
         this._generateRequestBody(xmlWriter, methodName, methodArgs);
 
         var requestBody = xmlWriter.data;
 
         debug('Request: ' + requestBody);
 
-        this.xmlhttp = Components.classes[XMLHTTPREQUEST_CONTRACTID]
-            .createInstance(Components.interfaces.nsIXMLHttpRequest);
-        if (this._useAuth) {
-            this.xmlhttp.open('POST', this._serverUrl, true,
-                              this._username, this._password);
-        } else {
-            this.xmlhttp.open('POST', this._serverUrl);
-        }
-        this.xmlhttp.onload = this._onload;
-        this.xmlhttp.onerror = this._onerror;
-        this.xmlhttp.parent = this;
-        this.xmlhttp.setRequestHeader('Content-Type','text/xml');
-        this.xmlhttp.send(requestBody);
-        var chan = this.xmlhttp.channel.QueryInterface(NSICHANNEL);
-        chan.notificationCallbacks = this;
+        var chann = this._getChannel(requestBody);
+
+        // And...... call!
+        chann.asyncOpen(this, context);
     },
 
-    _onload: function(e) {
-        var result;
-        var parent = e.target.parent;
-        parent._inProgress = false;
-        parent._responseStatus = e.target.status;
-        parent._responseString = e.target.statusText;
-        if (!e.target.responseXML) {
-            if (e.target.status) {
-                try {
-                    parent._listener.onError(parent, parent._context,
-                        Components.results.NS_ERROR_FAILURE,
-                        'Server returned status ' + e.target.status);
-                } catch (ex) {
-                    debug('Exception in listener.onError: ' + ex);
-                }
-            } else {
-                try {
-                    parent._listener.onError(parent, parent._context,
-                                      Components.results.NS_ERROR_FAILURE,
-                                      'Unknown network error');
-                } catch (ex) {
-                    debug('Exception in listener.onError: ' + ex);
-                }
-            }
-            return;
-        }
-        try {
-            e.target.responseXML.normalize();
-            result = parent.parse(e.target.responseXML);
-        } catch (ex) {
+    // Return a HTTP channel ready for POSTing.
+    _getChannel: function(request) {
+        // Set up channel.
+        var ioService = getService('@mozilla.org/network/io-service;1',
+            'nsIIOService');
+
+        var chann = ioService.newChannelFromURI(this._serverUrl)
+            .QueryInterface(Components.interfaces.nsIHttpChannel);
+
+        // Create a stream out of the request and attach it to the channel
+        var upload = chann.QueryInterface(Components.interfaces.nsIUploadChannel);
+        var postStream = createInstance('@mozilla.org/io/string-input-stream;1',
+            'nsIStringInputStream');
+        postStream.setData(request, request.length);
+        upload.setUploadStream(postStream, 'text/xml', -1);
+
+        // Set the request method. setUploadStream guesses the method,
+        // so we gotta do this afterwards.
+        chann.requestMethod = 'POST';
+
+        chann.notificationCallbacks = this;
+
+        return chann;
+    },
+
+    // Flag indicating wether or not we are calling the server.
+    _inProgress: false,
+    get inProgress() { return this._inProgress; },
+
+    // nsIStreamListener interface, so's we know about the pending request.
+    onStartRequest: function(channel, ctxt) { 
+        debug('Start Request') 
+    }, // Do exactly nada.
+
+    // End of the request
+    onStopRequest: function(channel, ctxt, status) {
+        debug('Stop Request');
+        if (!this._inProgress) return; // No longer interested.
+
+        this._inProgress = false;
+        this._parser = null;
+        
+        if (status) {
+            debug('Non-zero status: (' + status.toString(16) + ') ');
+            this._status = status;
+            this._errorMsg = errorMsg;
             try {
-                parent._listener.onError(parent, parent._context,
-                                         ex.result, ex.message);
+                this._listener.onError(this, ctxt, status,
+                                       status.toString(16));
             } catch (ex) {
                 debug('Exception in listener.onError: ' + ex);
             }
             return;
         }
-        if (parent._foundFault) {
-            parent._fault = result;
+
+        // All done.
+        debug('Parse finished');
+        if (this._foundFault) {
             try {
-                parent._listener.onFault(parent, parent._context, result);
-            } catch(ex) {
+                this._fault = createInstance(XMLRPCFAULT_CONTRACTID,
+                    'nsIXmlRpcFault');
+                this._fault.init(this._result.getValue('faultCode').data,
+                    this._result.getValue('faultString').data);
+                this._result = null;
+            } catch(e) {
+                this._fault = null;
+                this._result = null;
+                throw Components.Exception('Could not parse response');
+                try { 
+                    this._listener.onError(this, ctxt, 
+                        Components.results.NS_ERROR_FAIL, 
+                        'Server returned invalid Fault');
+                }
+                catch(ex) {
+                    debug('Exception in listener.onError: ' + ex);
+                }
+            }
+            debug('Fault: ' + this._fault);
+            try { this._listener.onFault(this, ctxt, this._fault); }
+            catch(ex) {
                 debug('Exception in listener.onFault: ' + ex);
             }
         } else {
-            parent._result = result.value;
+            debug('Result: ' + this._result);
             try { 
-                parent._listener.onResult(parent, parent._context,
-                                          result.value);
+                this._listener.onResult(this, ctxt, this._result);
             } catch (ex) {
                 debug('Exception in listener.onResult: ' + ex);
             }
         }
     },
 
-    _onerror: function(e) {
-        var parent = e.target.parent;
-        parent._inProgress = false;
-        try {
-            parent._listener.onError(parent, parent._context,
-                                Components.results.NS_ERROR_FAILURE,
-                                'Unknown network error');
-        } catch (ex) {
-            debug('Exception in listener.onError: ' + ex);
-        }
-    },
-    
+    _parser: null,
     _foundFault: false,
+    
+    // Houston, we have data.
+    onDataAvailable: function(channel, ctxt, inStr, sourceOffset, count) {
+        debug('Data available (' + sourceOffset + ', ' + count + ')');
+        if (!this._inProgress) return; // No longer interested.
+
+        if (!this._seenStart) {
+            // First time round
+            this._seenStart = true;
+
+            // Store request status and message.
+            channel = channel
+                .QueryInterface(Components.interfaces.nsIHttpChannel);
+            this._responseStatus = channel.responseStatus;
+            this._responseString = channel.responseString;
+
+            // Check for a 200 response.
+            if (channel.responseStatus != 200) {
+                this._status = Components.results.NS_ERROR_FAILURE;
+                this._errorMsg = 'Server returned unexpected status ' +
+                    channel.responseStatus;
+                this._inProgress = false;
+                try {
+                    this._listener.onError(this, ctxt,
+                        Components.results.NS_ERROR_FAILURE,
+                        'Server returned unexpected status ' +
+                            channel.responseStatus);
+                } catch (ex) {
+                    debug('Exception in listener.onError: ' + ex);
+                }
+                return;
+            }
+
+            // check content type
+            if (channel.contentType != 'text/xml') {
+                this._status = Components.results.NS_ERROR_FAILURE;
+                this._errorMsg = 'Server returned unexpected content-type ' +
+                    channel.contentType;
+                this._inProgress = false;
+                try {
+                    this._listener.onError(this, ctxt,
+                        Components.results.NS_ERROR_FAILURE,
+                        'Server returned unexpected content-type ' +
+                            channel.contentType);
+                } catch (ex) {
+                    debug('Exception in listener.onError: ' + ex);
+                }
+                return;
+            }
+
+            debug('Viable response. Let\'s parse!');
+            debug('Content length = ' + channel.contentLength);
+            
+            this._parser = new SimpleXMLParser(toScriptableStream(inStr),
+                channel.contentLength);
+            this._parser.setDocumentHandler(this);
+
+            // Make sure state is clean
+            this._valueStack = [];
+            this._currValue = null;
+            this._cdata = null;
+            this._foundFault = false;
+        }
+        
+        debug('Cranking up the parser, window = ' + count);
+        try {
+            this._parser.parse(count);
+        } catch(ex) {
+            debug('Parser exception: ' + ex);
+            this._status = ex.result;
+            this._errorMsg = ex.message;
+            try {
+                this._listener.onError(this, ctxt, ex.result, ex.message);
+            } catch(ex) {
+                debug('Exception in listener.onError: ' + ex);
+            }
+            this._inProgress = false;
+            this._parser = null;
+        }
+
+    },
 
     _fault: null,
     _result: null,
@@ -317,6 +394,9 @@ nsXmlRpcClient.prototype = {
     QueryInterface: function(iid) {
         if (!iid.equals(Components.interfaces.nsISupports) &&
             !iid.equals(XMLRPCCLIENT_IID) &&
+            !iid.equals(Components.interfaces.nsIXmlRpcClientListener) &&
+            !iid.equals(Components.interfaces.nsIRequestObserver) &&
+            !iid.equals(Components.interfaces.nsIStreamListener) &&
             !iid.equals(Components.interfaces.nsIInterfaceRequestor))
             throw Components.results.NS_ERROR_NO_INTERFACE;
         return this;
@@ -338,6 +418,14 @@ nsXmlRpcClient.prototype = {
 
         if (this._useAuth){
             if (this._passwordTried){
+                try { 
+                    this._listener.onError(this, ctxt, 
+                        Components.results.NS_ERROR_FAIL, 
+                        'Server returned invalid Fault');
+                }
+                catch(ex) {
+                    debug('Exception in listener.onError: ' + ex);
+                }
                 return false;
             }
             user.value = this._username;
@@ -357,7 +445,7 @@ nsXmlRpcClient.prototype = {
         writer.endElement('methodName');
 
         writer.startElement('params');
-        for (var i = 0; i < methodArgs.length; i++) {
+        for (var i in methodArgs) {
             writer.startElement('param');
             this._generateArgumentBody(writer, methodArgs[i]);
             writer.endElement('param');
@@ -440,7 +528,7 @@ nsXmlRpcClient.prototype = {
                 obj = obj.QueryInterface(Components.interfaces.nsIDictionary);
                 writer.startElement('struct');
                 var keys = obj.getKeys({});
-                for (var k = 0; k < keys.length; k++) {
+                for (var k in keys) {
                     writer.startElement('member');
                     writer.startElement('name');
                     writer.write(keys[k]);
@@ -543,179 +631,115 @@ nsXmlRpcClient.prototype = {
     _currValue: null,
     _cdata: null,
 
-    parse: function(doc) {
-        var node = doc.firstChild;
-        var result;
-        if (node.nodeType == DOMNode.TEXT_NODE)
-            node = node.nextSibling;
-        if ((node.nodeType != DOMNode.ELEMENT_NODE) ||
-            (node.nodeName != 'methodResponse')) {
-            throw Components.Exception('Expecting a methodResponse', null, null,
-                                       doc);
-        }
-        node = node.firstChild;
-        if (node.nodeType == DOMNode.TEXT_NODE)
-            node = node.nextSibling;
-        if (node.nodeType != DOMNode.ELEMENT_NODE)
-            throw Components.Exception('Expecting a params or fault', null,
-                                       null, doc);
-        if (node.nodeName == 'params') {
-            node = node.firstChild;
-            if (node.nodeType == DOMNode.TEXT_NODE)
-                node = node.nextSibling;
-            if ((node.nodeType != DOMNode.ELEMENT_NODE) ||
-                (node.nodeName != 'param')) {
-                throw Components.Exception('Expecting a param', null, null,
-                                           doc);
-            }
-            result = this.parseValue(node.firstChild);
-        } else if (node.nodeName == 'fault') {
-            this._foundFault = true;
-            result = this.parseFault(node.firstChild);
-        } else {
-            throw Components.Exception('Expecting a params or fault', null,
-                                       null, doc);
-        }
-        debug('Parse finished');
-        return result;
+    /* SAX documentHandler interface (well, sorta) */
+    characters: function(chars) {
+        if (DEBUGPARSE) debug('character data: ' + chars);
+        if (this._cdata == null) return;
+        this._cdata += chars;
     },
 
-    parseValue: function(node) {
-        var cValue = new Value();
-        if (node && (node.nodeType == DOMNode.TEXT_NODE))
-            node = node.nextSibling;
-        if (!node || (node.nodeType != DOMNode.ELEMENT_NODE) ||
-            (node.nodeName != 'value')) {
-            throw Components.Exception('Expecting a value', null, null, node);
-        }
-        node = node.firstChild;
-        if (!node)
-            return cValue;
-        if (node.nodeType == DOMNode.TEXT_NODE){
-            if (!node.nextSibling) {
-                cValue.value = node.nodeValue;
-                return cValue;
-            } else {
-                node = node.nextSibling;
-            }
-        }
-        if (node.nodeType != DOMNode.ELEMENT_NODE)
-            throw Components.Exception('Expecting a value type', null, null,
-                                       node);
-        switch (node.nodeName) {
-            case 'string':
-                cValue.value = this.parseString(node.firstChild);
+    startElement: function(name) {
+        if (DEBUGPARSE) debug('Start element ' + name);
+        switch (name) {
+            case 'fault':
+                this._foundFault = true;
                 break;
+
+            case 'value':
+                var val = new Value();
+                this._valueStack.push(val);
+                this._currValue = val;
+                this._cdata = '';
+                break;
+
+            case 'name':
+                this._cdata = '';
+                break;
+
             case 'i4':
             case 'int':
-                cValue.type = this.INT;
-                cValue.value = this.parseString(node.firstChild);
+                this._currValue.type = this.INT;
                 break;
+
             case 'boolean':
-                cValue.type = this.BOOLEAN;
-                cValue.value = this.parseString(node.firstChild);
+                this._currValue.type = this.BOOLEAN;
                 break;
+
             case 'double':
-                cValue.type = this.DOUBLE;
-                cValue.value = this.parseString(node.firstChild);
+                this._currValue.type = this.DOUBLE;
                 break;
+
             case 'dateTime.iso8601':
-                cValue.type = this.DATETIME;
-                cValue.value = this.parseString(node.firstChild);
+                this._currValue.type = this.DATETIME;
                 break;
+
             case 'base64':
-                cValue.type = this.BASE64;
-                cValue.value = this.parseString(node.firstChild);
+                this._currValue.type = this.BASE64;
                 break;
+
             case 'struct':
-                cValue.type = this.STRUCT;
-                this.parseStruct(cValue, node.firstChild);
+                this._currValue.type = this.STRUCT;
                 break;
+
             case 'array':
-                cValue.type = this.ARRAY;
-                this.parseArray(cValue, node.firstChild);
+                this._currValue.type = this.ARRAY;
                 break;
-            default:
-                throw Components.Exception('Expecting a value type', null, null,
-                                           node);
-        }
-        return cValue;
-    },
-
-    parseString: function(node) {
-        value = '';
-        while (node) {
-            if (node.nodeType != DOMNode.TEXT_NODE)
-                throw Components.Exception('Expecting a text node', null, null,
-                                           node);
-            value += node.nodeValue; 
-            node = node.nextSibling;
-        }
-        return value;
-    },
-
-    parseStruct: function(struct, node) {
-        while (node) {
-            if (node.nodeType == DOMNode.TEXT_NODE)
-                node = node.nextSibling;
-            if (!node)
-                return;
-            if ((node.nodeType != DOMNode.ELEMENT_NODE) ||
-                (node.nodeName != 'member')) {
-                throw Components.Exception('Expecting a member', null, null,
-                                           node);
-            }
-            this.parseMember(struct, node.firstChild);
-            node = node.nextSibling;
         }
     },
 
-    parseMember: function(struct, node) {
-        var cValue;
-        if (node.nodeType == DOMNode.TEXT_NODE)
-            node = node.nextSibling;
-        if (!node || (node.nodeType != DOMNode.ELEMENT_NODE) ||
-            (node.nodeName != 'name')) {
-            throw Components.Exception('Expecting a name', null, null, node);
-        }
-        struct.name = this.parseString(node.firstChild);
-        cValue = this.parseValue(node.nextSibling);
-        struct.appendValue(cValue.value);
-    },
+    endElement: function(name) {
+        var val;
+        if (DEBUGPARSE) debug('End element ' + name);
+        switch (name) {
+            case 'value':
+                // take cdata and put it in this value;
+                if (this._currValue.type != this.ARRAY &&
+                    this._currValue.type != this.STRUCT) {
+                    this._currValue.value = this._cdata;
+                    this._cdata = null;
+                }
 
-    parseArray: function(array, node) {
-        if (node.nodeType == DOMNode.TEXT_NODE)
-            node = node.nextSibling;
-        if (!node || (node.nodeType != DOMNode.ELEMENT_NODE) ||
-            (node.nodeName != 'data')) {
-            throw Components.Exception('Expecting array data', null, null, node);
-        }
-        for (node = node.firstChild; node; node = node.nextSibling) {
-            if (node.nodeType == DOMNode.TEXT_NODE)
-                continue;
-            array.appendValue(this.parseValue(node).value);
-        }
-    },
+                // Find out if this is the end value
+                // Note that we treat a struct differently, see 'member'
+                var depth = this._valueStack.length;
+                if (depth < 2 || 
+                    this._valueStack[depth - 2].type != this.STRUCT) {
+                    val = this._currValue;
+                    this._valueStack.pop();
 
-    parseFault: function(node) {
-        var fault = createInstance(XMLRPCFAULT_CONTRACTID, 'nsIXmlRpcFault');
-        var cValue = this.parseValue(node);
-        if ((cValue.type != this.STRUCT) ||
-            (!cValue.value.hasKey('faultCode')) ||
-            (!cValue.value.hasKey('faultString'))) {
-            throw Components.Exception('Invalid fault', null, null, node);
+                    if (depth < 2) {
+                        if (DEBUG) debug('Found result');
+                        // This is the top level object
+                        this._result = val.value;
+                        this._currValue = null;
+                    } else {
+                        // This is an array element. Add it.
+                        this._currValue = 
+                            this._valueStack[this._valueStack.length - 1];
+                        this._currValue.appendValue(val.value);
+                    }
+                }
+                break;
+                
+            case 'member':
+                val = this._currValue;
+                this._valueStack.pop();
+                this._currValue = this._valueStack[this._valueStack.length - 1];
+                this._currValue.appendValue(val.value);
+                break;
+            
+            case 'name':
+                this._currValue.name = this._cdata;
+                this._cdata = null;
+                break;
         }
-        fault.init(cValue.value.getValue('faultCode').data,
-                   cValue.value.getValue('faultString').data);
-        return fault;
     }
 };
 
 /* The XMLWriter class constructor */
-function XMLWriter(encoding) {
-    if (!encoding)
-        encoding = "UTF-8";
-    this.data = '<?xml version="1.0" encoding="' + encoding + '"?>';
+function XMLWriter() {
+    // We assume for now that all data is already in ISO-8859-1.
+    this.data = '<?xml version="1.0" encoding="ISO-8859-1"?>';
 }
 
 /* The XMLWriter class def */
@@ -826,6 +850,349 @@ Value.prototype = {
     }
 };
 
+/* The SimpleXMLParser class constructor 
+ * This parser is specific to the XML-RPC format!
+ * It assumes tags without arguments, in lowercase.
+ */
+function SimpleXMLParser(instream, contentLength) {
+    this._stream = new PushbackInputStream(instream);
+    this._maxlength = contentLength;
+}
+
+/* The SimpleXMLParser class def */
+SimpleXMLParser.prototype = {
+    _stream: null,
+    _docHandler: null,
+    _bufferSize: 256,
+    _parsed: 0,
+    _maxlength: 0,
+    _window: 0, // When async on big documents, release after windowsize.
+
+    setDocumentHandler: function(handler) { this._docHandler = handler; },
+
+    parse: function(windowsize) {
+        this._window += windowsize;
+        
+        this._start();
+    },
+
+    // Guard maximum length
+    _read: function(length) {
+        length = Math.min(this._available(), length);
+        if (!length) return '';
+        var read = this._stream.read(length);
+        this._parsed += read.length;
+        return read;
+    },
+    _unread: function(data) {
+        this._stream.unread(data);
+        this._parsed -= data.length;
+    },
+    _available: function() {
+        return Math.min(this._stream.available(), this._maxAvailable());
+    },
+    _maxAvailable: function() { return this._maxlength - this._parsed; },
+    
+    // read length characters from stream, block until we get them.
+    _blockingRead: function(length) {
+        length = Math.min(length, this._maxAvailable());
+        if (!length) return '';
+        var read = '';
+        while (read.length < length) read += this._read(length - read.length);
+        return read;
+    },
+
+    // read until the the 'findChar' character appears in the stream.
+    // We read no more than _bufferSize characters, and return what we have
+    // found so far, but no more than up to 'findChar' if found.
+    _readUntil: function(findChar) {
+        var read = this._blockingRead(this._bufferSize);
+        var pos = read.indexOf(findChar.charAt(0));
+        if (pos > -1) {
+            this._unread(read.slice(pos + 1));
+            return read.slice(0, pos + 1);
+        }
+        return read;
+    },
+
+    // Skip stream until string end is found.
+    _skipUntil: function(end) {
+        var read = '';
+        while (this._maxAvailable()) {
+            read += this._readUntil(end.charAt(0)) + 
+                this._blockingRead(end.length - 1);
+            var pos = read.indexOf(end);
+            if (pos > -1) {
+                this._unread(read.slice(pos + end.length));
+                return;
+            }
+            read = read.slice(-(end.length)); // make sure don't miss our man.
+        }
+        return;
+    },
+
+    _buff: '',
+    // keep track of whitespce, so's we can discard it.
+    _killLeadingWS: false,
+    _trailingWS: '',
+    
+    _start: function() {
+        // parse until exhausted. Note that we only look at a window
+        // of max. this._bufferSize. Also, parsing of comments, PI's and
+        // CDATA isn't as solid as it could be. *shrug*, XML-RPC responses
+        // are 99.99% of the time generated anyway.
+        // We don't check well-formedness either. Errors in tags will
+        // be caught at the doc handler.
+        ParseLoop: while (this._maxAvailable() || this._buff) {
+            // Check for window size. We stop parsing until more comes
+            // available (only in async parsing).
+            if (this._window < this._maxlength && 
+                this._parsed >= this._window) 
+                return;
+        
+            this._buff += this._read(this._bufferSize - this._buff.length);
+            this._buff = this._buff.replace('\r\n', '\n');
+            this._buff = this._buff.replace('\r', '\n');
+            
+            var startTag = this._buff.indexOf('<');
+            var endTag;
+            if (startTag > -1) {
+                if (startTag > 0) { // We have character data.
+                    var chars = this._buff.slice(0, startTag);
+                    chars = chars.replace(/[ \t\n]*$/, '');
+                    if (chars && this._killLeadingWS)
+                        chars = chars.replace(/^[ \t\n]*/, '');
+                    if (chars) {
+                        // Any whitespace previously marked as trailing is in
+                        // fact in the middle. Prepend.
+                        chars = this._trailingWS + chars;
+                        this._docHandler.characters(chars);
+                    }
+                    this._buff = this._buff.slice(startTag);
+                    this._trailingWS = '';
+                    this._killLeadingWS = false;
+                }
+
+                // Check for a PI
+                if (this._buff.charAt(1) == '?') {
+                    endTag = this._buff.indexOf('?>');
+                    if (endTag > -1) this._buff = this._buff.slice(endTag + 2);
+                    else {
+                        // Make sure we don't miss '?' at the end of the buffer
+                        this._unread(this._buff.slice(-1));
+                        this._buff = '';
+                        this._skipUntil('?>');
+                    }
+                    this._killLeadingWS = true;
+                    continue;
+                }
+
+                // Check for a comment
+                if (this._buff.slice(0, 4) == '<!--') {
+                    endTag = this._buff.indexOf('-->');
+                    if (endTag > -1) this._buff = this._buff.slice(endTag + 3);
+                    else {
+                        // Make sure we don't miss '--' at the end of the buffer
+                        this._unread(this._buff.slice(-2));
+                        this._buff = '';
+                        this._skipUntil('-->');
+                    }
+                    this._killLeadingWS = true;
+                    continue;
+                }
+
+                // Check for CDATA
+                // We only check the first four characters. Anything longer and
+                // we'd miss it and it would be recognized as a corrupt element
+                // Anything shorter will be missed by the element scanner as
+                // well. Next loop we'll have more characters to do a better
+                // match.
+                if (this._buff.slice(0, 4) == '<![C') {
+                    // We need to be sure. If we have less than
+                    // 9 characters in the buffer, we can't _be_ sure.
+                    if (this._buff.length < 9 && this._maxAvailable()) continue;
+
+                    if (this._buff.slice(0, 9) != '<![CDATA[')
+                        throw Components.Exception('Error parsing response');
+                    
+                    endTag = this._buff.indexOf(']]>');
+                    if (endTag > -1) {
+                        this._buff = this._buff.slice(endTag + 3);
+                        this._docHandler.characters(this._buff.slice(9, 
+                            endTag));
+                        this._killLeadingWS = true;
+                        continue;
+                    }  
+                    
+                    // end not in stream. Hrmph
+                    this._docHandler.characters(this._buff.slice(9));
+                    this._buff = '';
+                    while(this._maxAvailable()) {
+                        this._buff += this._readUntil(']') +
+                            this._blockingRead(2);
+                        // Find end.
+                        var pos = this._buff.indexOf(']]>');
+                        // Found.
+                        if (pos > -1) {
+                            this._docHandler.characters(this._buff.slice(0, 
+                                pos));
+                            this._buff = this._buff.slice(pos + 3);
+                            this._killLeadingWS = true;
+                            continue ParseLoop;
+                        }
+                        // Not yet found. Last 2 chars could be part of end.
+                        this._docHandler.characters(this._buff.slice(0, -2));
+                        this._buff = this._buff.slice(-2); 
+                    }
+
+                    if (this._buff) // Uhoh. No ]]> found before EOF.
+                        throw Components.Exception('Error parsing response');
+
+                    continue;
+                }
+
+                // Check for a DOCTYPE decl.
+                if (this._buff.slice(0, 4) == '<!DO') {
+                    if (this._buff.length < 9 && this.maxAvailable()) continue;
+
+                    if (this._buff.slice(0, 9) != '<!DOCTYPE')
+                        throw Components.Exception('Error parsing response');
+                    
+                    // Look for markup decl.
+                    var startBrace = this._buff.indexOf('[');
+                    if (startBrace > -1) {
+                        this._unread(this._buff.slice(startBrace + 1));
+                        this._buff = '';
+                        this._skipUntil(']');
+                        this._skipUntil('>');
+                        this._killLeadingWS = true;
+                        continue;
+                    }
+ 
+                    endTag = this._buff.indexOf('>');
+                    if (endTag > -1) {
+                        this._buff = this._buff.slice(endTag + 1);
+                        this._killLeadingWS = true;
+                        continue;
+                    }
+
+                    this._buff = '';
+                    while(this._available()) {
+                        this._buff = this._readUntil('>');
+
+                        startBrace = this._buff.indexOf('[');
+                        if (startBrace > -1) {
+                            this._unread(this._buff.slice(startBrace + 1));
+                            this._buff = '';
+                            this._skipUntil(']');
+                            this._skipUntil('>');
+                            this._killLeadingWS = true;
+                            continue ParseLoop;
+                        }
+
+                        endTag = this._buff.indexOf('>');
+                        if (endTag > -1) {
+                            this._buff = this._buff.slice(pos + 1);
+                            this._killLeadingWS = true;
+                            continue;
+                        }
+                    }
+
+                    if (this._buff)
+                        throw Components.Exception('Error parsing response');
+
+                    continue;
+                }
+            
+                endTag = this._buff.indexOf('>');
+                if (endTag > -1) {
+                    var tag = this._buff.slice(1, endTag);
+                    this._buff = this._buff.slice(endTag + 1);
+                    tag = tag.replace(/[ \t\n]+.*?(\/?)$/, '$1');
+
+                    // XML-RPC tags are pretty simple.
+                    if (/[^a-zA-Z0-9.\/]/.test(tag))
+                        throw Components.Exception('Error parsing response');
+
+                    // Determine start and/or end tag.
+                    if (tag.charAt(tag.length - 1) == '/') {
+                        this._docHandler.startElement(tag.slice(0, -1));
+                        this._docHandler.endElement(tag.slice(0, -1));
+                    } else if (tag.charAt(0) == '/') {
+                        this._docHandler.endElement(tag.slice(1));
+                    } else {
+                        this._docHandler.startElement(tag);
+                    }
+                    this._killLeadingWS = true; 
+                } else {
+                    // No end tag. Check for window size to avoid an endless
+                    // loop here.. hackish, I know, but if we get here this is
+                    // not a XML-RPC request..
+                    if (this._buff.length >= this._bufferSize)
+                        throw Components.Exception('Error parsing response');
+                    // If we get here and all what is to be read has
+                    // been readinto the buffer, we have an incomplete stream.
+                    if (!this._maxAvailable())
+                        throw Components.Exception('Error parsing response');
+                }
+            } else {
+                if (this._killLeadingWS) {
+                    this._buff = this._buff.replace(/^[ \t\n]*/, '');
+                    if (this._buff) this._killLeadingWS = false;
+                } else {
+                    // prepend supposed trailing whitespace to the front.
+                    this._buff = this._trailingWS + this._buff;
+                    this._trailingWS = '';
+                }
+
+                // store trailing whitespace, and only hand it over
+                // the next time round. Unless we hit a tag, then we kill it
+                if (this._buff) {
+                    this._trailingWS = this._buff.match(/[ \t\n]*$/);
+                    this._buff = this._buff.replace(/[ \t\n]*$/, '');
+                }
+
+                if (this._buff) this._docHandler.characters(this._buff);
+
+                this._buff = '';
+            }
+        }
+    }
+};
+                
+
+/* The PushbackInputStream class constructor */
+function PushbackInputStream(stream) {
+    this._stream = stream;
+}
+
+/* The PushbackInputStream class def */
+PushbackInputStream.prototype = {
+    _stream: null,
+    _read_characters: '',
+
+    available: function() {
+        return this._read_characters.length + this._stream.available();
+    },
+
+    read: function(length) {
+        var read;
+        if (this._read_characters.length >= length) {
+            read = this._read_characters.slice(0, length);
+            this._read_characters = this._read_characters.slice(length);
+            return read;
+        } else {
+            read = this._read_characters;
+            this._read_characters = '';
+            return read + this._stream.read(length - read.length);
+        }
+    },
+
+    unread: function(chars) { 
+        this._read_characters = chars + this._read_characters;
+    }
+};
+            
 /*
  * Objects
  */
@@ -907,8 +1274,7 @@ function createInstance(contractId, intf) {
 
 /* Get a pointer to a service indicated by the ContractID, with given interface */
 function getService(contractId, intf) {
-    return Components.classes[contractId]
-        .getService(Components.interfaces[intf]);
+    return Components.classes[contractId].getService(Components.interfaces[intf]);
 }
 
 /* Convert an inputstream to a scriptable inputstream */
@@ -940,7 +1306,7 @@ function iso8601Format(date) {
 }
 
 /* Convert a stream to Base64, writing it away to a string writer */
-const BASE64CHUNK = 255; // Has to be dividable by 3!!
+const BASE64CHUNK = 255; // Has to be devidable by 3!!
 function streamToBase64(stream, writer) {
     while (stream.available()) {
         var data = [];
@@ -1000,10 +1366,10 @@ const toBinaryTable = [
 function base64ToString(data) {
     var result = '';
     var leftbits = 0; // number of bits decoded, but yet to be appended
-    var leftdata = 0; // bits decoded, but yet to be appended
+    var leftdata = 0; // bits decoded, bt yet to be appended
 
     // Convert one by one.
-    for (var i = 0; i < data.length; i++) {
+    for (var i in data) {
         var c = toBinaryTable[data.charCodeAt(i) & 0x7f];
         var padding = (data[i] == base64Pad);
         // Skip illegal characters and whitespace

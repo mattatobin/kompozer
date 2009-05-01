@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +44,6 @@
 #include "nsIDOMEventTarget.h"
 #include "nsIDOMMutationEvent.h"
 #include "nsIAttribute.h"
-#include "nsIDocument.h"
 
 /**
  * Class used to implement DOM text nodes
@@ -52,7 +52,7 @@ class nsTextNode : public nsGenericDOMDataNode,
                    public nsIDOMText
 {
 public:
-  nsTextNode(nsNodeInfoManager *aNodeInfoManager);
+  nsTextNode();
   virtual ~nsTextNode();
 
   // nsISupports
@@ -75,8 +75,8 @@ public:
   virtual void DumpContent(FILE* out, PRInt32 aIndent, PRBool aDumpAll) const;
 #endif
 
-  virtual already_AddRefed<nsITextContent> CloneContent(PRBool aCloneText,
-                                                        nsNodeInfoManager *aNodeInfoManager);
+  // nsITextContent
+  NS_IMETHOD CloneContent(PRBool aCloneText, nsITextContent** aClone);
 };
 
 /**
@@ -112,19 +112,16 @@ public:
     nsITextContent* mContent;  // Weak ref; it owns us
   };
 
-  nsAttributeTextNode(nsNodeInfoManager *aNodeInfoManager)
-    : nsTextNode(aNodeInfoManager)
-  {
-  }
   virtual ~nsAttributeTextNode() {
     DetachListener();
   }
-
-  virtual nsresult BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                              nsIContent* aBindingParent,
-                              PRBool aCompileEventHandlers);
-  virtual void UnbindFromTree(PRBool aDeep = PR_TRUE,
-                              PRBool aNullParent = PR_TRUE);
+  
+  virtual void SetParent(nsIContent* aParent) {
+    if (!aParent) {
+      DetachListener();
+    }
+    nsTextNode::SetParent(aParent);
+  }
 
   nsRefPtr<nsAttrChangeListener> mListener;  // our listener
 private:
@@ -132,25 +129,17 @@ private:
 };
 
 nsresult
-NS_NewTextNode(nsITextContent** aInstancePtrResult,
-               nsNodeInfoManager *aNodeInfoManager)
+NS_NewTextNode(nsITextContent** aInstancePtrResult)
 {
-  NS_PRECONDITION(aNodeInfoManager, "Missing nodeInfoManager");
+  *aInstancePtrResult = new nsTextNode();
+  NS_ENSURE_TRUE(*aInstancePtrResult, NS_ERROR_OUT_OF_MEMORY);
 
-  *aInstancePtrResult = nsnull;
-
-  nsCOMPtr<nsITextContent> instance = new nsTextNode(aNodeInfoManager);
-  if (!instance) {
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  NS_ADDREF(*aInstancePtrResult = instance);
+  NS_ADDREF(*aInstancePtrResult);
 
   return NS_OK;
 }
 
-nsTextNode::nsTextNode(nsNodeInfoManager *aNodeInfoManager)
-  : nsGenericDOMDataNode(aNodeInfoManager)
+nsTextNode::nsTextNode()
 {
 }
 
@@ -180,7 +169,7 @@ nsTextNode::Tag() const
 NS_IMETHODIMP
 nsTextNode::GetNodeName(nsAString& aNodeName)
 {
-  aNodeName.AssignLiteral("#text");
+  aNodeName.Assign(NS_LITERAL_STRING("#text"));
   return NS_OK;
 }
 
@@ -206,27 +195,29 @@ nsTextNode::GetNodeType(PRUint16* aNodeType)
 NS_IMETHODIMP
 nsTextNode::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
 {
-  nsCOMPtr<nsITextContent> textContent = CloneContent(PR_TRUE,
-                                                      GetNodeInfoManager());
-  NS_ENSURE_TRUE(textContent, NS_ERROR_OUT_OF_MEMORY);
+  nsCOMPtr<nsITextContent> textContent;
+  nsresult rv = CloneContent(PR_TRUE, getter_AddRefs(textContent));
+  NS_ENSURE_SUCCESS(rv, rv);
 
   return CallQueryInterface(textContent, aReturn);
 }
 
-already_AddRefed<nsITextContent>
-nsTextNode::CloneContent(PRBool aCloneText, nsNodeInfoManager *aNodeInfoManager)
+NS_IMETHODIMP
+nsTextNode::CloneContent(PRBool aCloneText, nsITextContent** aReturn)
 {
-  nsTextNode* it = new nsTextNode(aNodeInfoManager);
-  if (!it)
-    return nsnull;
+  nsTextNode* it = new nsTextNode();
+  NS_ENSURE_TRUE(it, NS_ERROR_OUT_OF_MEMORY);
+
+  nsCOMPtr<nsIContent> kungFuDeathGrip(it);
 
   if (aCloneText) {
     it->mText = mText;
   }
 
-  NS_ADDREF(it);
+  *aReturn = it;
+  NS_ADDREF(*aReturn);
 
-  return it;
+  return NS_OK;
 }
 
 PRBool
@@ -239,7 +230,7 @@ nsTextNode::IsContentOfType(PRUint32 aFlags) const
 void
 nsTextNode::List(FILE* out, PRInt32 aIndent) const
 {
-  NS_PRECONDITION(IsInDoc(), "bad content");
+  NS_PRECONDITION(mDocument, "bad content");
 
   PRInt32 index;
   for (index = aIndent; --index >= 0; ) fputs("  ", out);
@@ -256,7 +247,7 @@ nsTextNode::List(FILE* out, PRInt32 aIndent) const
 void
 nsTextNode::DumpContent(FILE* out, PRInt32 aIndent, PRBool aDumpAll) const
 {
-  NS_PRECONDITION(IsInDoc(), "bad content");
+  NS_PRECONDITION(mDocument, "bad content");
 
   if(aDumpAll) {
     PRInt32 index;
@@ -265,7 +256,7 @@ nsTextNode::DumpContent(FILE* out, PRInt32 aIndent, PRBool aDumpAll) const
     nsAutoString tmp;
     ToCString(tmp, 0, mText.GetLength());
 
-    if(!tmp.EqualsLiteral("\\n")) {
+    if(!tmp.Equals(NS_LITERAL_STRING("\\n"))) {
       fputs(NS_LossyConvertUCS2toASCII(tmp).get(), out);
       if(aIndent) fputs("\n", out);
     }
@@ -311,71 +302,41 @@ nsAttributeTextNode::nsAttrChangeListener::HandleEvent(nsIDOMEvent* aEvent)
 }
 
 nsresult
-NS_NewAttributeContent(nsNodeInfoManager *aNodeInfoManager,
-                       PRInt32 aNameSpaceID, nsIAtom* aAttrName,
-                       nsIContent** aResult)
+NS_NewAttributeContent(nsIContent* aContent, PRInt32 aNameSpaceID,
+                       nsIAtom* aAttrName, nsIContent** aResult)
 {
-  NS_PRECONDITION(aNodeInfoManager, "Missing nodeInfoManager");
+  NS_PRECONDITION(aContent, "Must have parent content");
   NS_PRECONDITION(aAttrName, "Must have an attr name");
   NS_PRECONDITION(aNameSpaceID != kNameSpaceID_Unknown, "Must know namespace");
   
   *aResult = nsnull;
   
-  nsRefPtr<nsAttributeTextNode> textNode =
-    new nsAttributeTextNode(aNodeInfoManager);
-  if (!textNode) {
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
+  nsRefPtr<nsAttributeTextNode> textNode = new nsAttributeTextNode();
+  NS_ENSURE_TRUE(textNode, NS_ERROR_OUT_OF_MEMORY);
 
-  textNode->mListener =
+  nsCOMPtr<nsIDOMEventTarget> eventTarget(do_QueryInterface(aContent));
+  NS_ENSURE_TRUE(eventTarget, NS_ERROR_UNEXPECTED);
+  
+  nsRefPtr<nsAttributeTextNode::nsAttrChangeListener> listener =
     new nsAttributeTextNode::nsAttrChangeListener(aNameSpaceID,
                                                   aAttrName,
                                                   textNode);
-  NS_ENSURE_TRUE(textNode->mListener, NS_ERROR_OUT_OF_MEMORY);
+  NS_ENSURE_TRUE(listener, NS_ERROR_OUT_OF_MEMORY);
+
+  nsresult rv = eventTarget->AddEventListener(NS_LITERAL_STRING("DOMAttrModified"),
+                                              listener,
+                                              PR_FALSE);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsAutoString attrValue;
+  aContent->GetAttr(aNameSpaceID, aAttrName, attrValue);
+  textNode->SetData(attrValue);
+
+  textNode->SetParent(aContent);
+  textNode->mListener = listener;  // Now textNode going away will detach the listener automatically.
 
   NS_ADDREF(*aResult = textNode);
   return NS_OK;
-}
-
-nsresult
-nsAttributeTextNode::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                                nsIContent* aBindingParent,
-                                PRBool aCompileEventHandlers)
-{
-  NS_PRECONDITION(aParent, "This node can't be a child of the document");
-
-  nsresult rv = nsTextNode::BindToTree(aDocument, aParent,
-                                       aBindingParent, aCompileEventHandlers);
-  NS_ENSURE_SUCCESS(rv, rv);
-  
-  if (mListener) {
-    // Attach it to the new parent
-    
-    nsCOMPtr<nsIDOMEventTarget> eventTarget(do_QueryInterface(aParent));
-    NS_ENSURE_TRUE(eventTarget, NS_ERROR_UNEXPECTED);
-  
-    rv = eventTarget->AddEventListener(NS_LITERAL_STRING("DOMAttrModified"),
-                                       mListener,
-                                       PR_FALSE);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    nsAutoString attrValue;
-    aParent->GetAttr(mListener->mNameSpaceID, mListener->mAttrName,
-                     attrValue);
-    SetData(attrValue);
-  }
-
-  return NS_OK;
-}
-
-void
-nsAttributeTextNode::UnbindFromTree(PRBool aDeep, PRBool aNullParent)
-{
-  // Detach the listener while we know who our parent is!
-  if (aNullParent) {
-    DetachListener();
-  }
-  nsTextNode::UnbindFromTree(aDeep, aNullParent);
 }
 
 void
@@ -384,16 +345,16 @@ nsAttributeTextNode::DetachListener()
   if (!mListener)
     return;
 
+  NS_ASSERTION(GetParent(), "How did our parent go away while we still have an observer?");
+
   nsCOMPtr<nsIDOMEventTarget> target(do_QueryInterface(GetParent()));
-  if (target) {
 #ifdef DEBUG
-    nsresult rv =
+  nsresult rv =
 #endif
-      target->RemoveEventListener(NS_LITERAL_STRING("DOMAttrModified"),
-                                  mListener,
-                                  PR_FALSE);
-    NS_ASSERTION(NS_SUCCEEDED(rv), "'Leaking' listener for lifetime of this page");
-  }
+    target->RemoveEventListener(NS_LITERAL_STRING("DOMAttrModified"),
+                                mListener,
+                                PR_FALSE);
+  NS_ASSERTION(NS_SUCCEEDED(rv), "'Leaking' listener for lifetime of this page");
   mListener->mContent = nsnull;  // Make it forget us
   mListener = nsnull; // Goodbye, listener
 }

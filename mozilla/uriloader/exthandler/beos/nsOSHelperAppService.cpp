@@ -73,19 +73,8 @@ NS_IMETHODIMP nsOSHelperAppService::ExternalProtocolHandlerExists(const char * a
 		BString protoStr(aProtocolScheme);
 		protoStr.Prepend("application/x-vnd.Be.URL.");
 		BMimeType protocol;
-		if (protocol.SetTo(protoStr.String()) == B_OK)
-		{
-			if (protocol.IsInstalled())
-				*aHandlerExists = PR_TRUE;
-		}
-		if ((!*aHandlerExists) && (!strcmp("mailto", aProtocolScheme)))
-		{
-			// mailto link, no x-vnd.Be.URL.mailto entry
-			if (protocol.SetTo("text/x-email") == B_OK)
-			{
-				if (protocol.IsInstalled())
-					*aHandlerExists = PR_TRUE;
-			}
+		if (protocol.SetTo(protoStr.String()) == B_OK) {
+			*aHandlerExists = PR_TRUE;
 		}
 	}
 
@@ -106,37 +95,29 @@ nsresult nsOSHelperAppService::LoadUriInternal(nsIURI * aURL)
 		// Get the Spec
 		nsCAutoString spec;
 		aURL->GetSpec(spec);
-		const char* args[] = { spec.get() };
-		
-		//Launch the app		
-		BMimeType protocol;
-		bool isInstalled = false;
-		if (protocol.SetTo(protoStr.String()) == B_OK)
-		{
-			if(protocol.IsInstalled())
-			{
-				isInstalled = true;	
-				be_roster->Launch(protoStr.String(), NS_ARRAY_LENGTH(args), (char **)args);
-			}
-		}
-		if ((!isInstalled) && (!strcmp("mailto", scheme.get())))
-			be_roster->Launch("text/x-email", NS_ARRAY_LENGTH(args), (char **)args);
+		// Set up the BRoster message
+		BMessage args(B_ARGV_RECEIVED);
+		args.AddInt32("argc",1);
+		args.AddString("argv",spec.get());
+
+		be_roster->Launch(protoStr.String(), &args);
 	}
 	return rv;
 }
 
 
-nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsMIMEInfoBeOS**_retval) {
+nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsIMIMEInfo **_retval) {
 
 	LOG(("-- nsOSHelperAppService::SetMIMEInfoForType: %s\n",aMIMEType));
 
 	nsresult rv = NS_ERROR_FAILURE;
 
-	nsMIMEInfoBeOS* mimeInfo = new nsMIMEInfoBeOS(aMIMEType);
+	nsMIMEInfoBeOS* mimeInfo = new nsMIMEInfoBeOS();
 	if (mimeInfo) {
 		NS_ADDREF(mimeInfo);
 		BMimeType mimeType(aMIMEType);
 		BMessage data;
+		mimeInfo->SetMIMEType(aMIMEType);
 		int32 index = 0;
 		BString strData;
 		LOG(("   Adding extensions:\n"));
@@ -146,7 +127,7 @@ nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsMIMEI
 				// it to the mime info object.
 				if (strData.ByteAt(0) == '.')
 					strData.RemoveFirst(".");
-				mimeInfo->AppendExtension(nsDependentCString(strData.String()));
+				mimeInfo->AppendExtension(strData.String());
 				LOG(("      %s\n",strData.String()));
 				index++;
 			}
@@ -154,12 +135,12 @@ nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsMIMEI
 
 		char desc[B_MIME_TYPE_LENGTH + 1];
 		if (mimeType.GetShortDescription(desc) == B_OK) {
-			mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(desc));
+			mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(desc).get());
 		} else {
 			if (mimeType.GetLongDescription(desc) == B_OK) {
-				mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(desc));
+				mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(desc).get());
 			} else {
-				mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(aMIMEType));
+				mimeInfo->SetDescription(NS_ConvertUTF8toUCS2(aMIMEType).get());
 			}
 		}
 		
@@ -185,7 +166,7 @@ nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsMIMEI
 				if (NS_SUCCEEDED(rv)) {
 					mimeInfo->SetDefaultApplication(handlerFile);
 					mimeInfo->SetPreferredAction(nsIMIMEInfo::useSystemDefault);
-					mimeInfo->SetDefaultDescription(NS_ConvertUTF8toUCS2(path.Leaf()));
+					mimeInfo->SetDefaultDescription(NS_ConvertUTF8toUCS2(path.Leaf()).get());
 					LOG(("    Preferred App: %s\n",path.Leaf()));
 					doSave = false;
 				}
@@ -206,61 +187,134 @@ nsresult nsOSHelperAppService::SetMIMEInfoForType(const char *aMIMEType, nsMIMEI
 }
 
 nsresult nsOSHelperAppService::GetMimeInfoFromExtension(const char *aFileExt,
-        nsMIMEInfoBeOS ** _retval) {
+        nsIMIMEInfo ** _retval) {
 	// if the extension is null, return immediately
 	if (!aFileExt || !*aFileExt)
 		return NS_ERROR_INVALID_ARG;
 
 	LOG(("Here we do an extension lookup for '%s'\n", aFileExt));
 
-	BMimeType mimeType, tmpType;
+	BString fileExtToUse(aFileExt);
+	if (fileExtToUse.ByteAt(0) != '.')
+		fileExtToUse.Prepend(".");
 
-	if( B_OK == mimeType.GuessMimeType(aFileExt, &tmpType))
-		return SetMIMEInfoForType(tmpType.Type(), _retval);
-	
+
+	BMessage mimeData;
+	BMessage extData;
+	BMimeType mimeType;
+	int32 mimeIndex = 0;
+	int32 extIndex = 0;
+	bool found = false;
+	BString mimeStr;
+	BString extStr;
+	// Get a list of all registered MIME types
+	if (BMimeType::GetInstalledTypes(&mimeData) == B_OK) {
+		// check to see if the given MIME type is registerred
+		while (!found && mimeData.FindString("types",mimeIndex,&mimeStr) == B_OK) {
+			if ((mimeType.SetTo(mimeStr.String()) == B_OK) &&
+			        (mimeType.GetFileExtensions(&extData) == B_OK)) {
+				extIndex = 0;
+				while (!found && extData.FindString("extensions",extIndex,&extStr) == B_OK) {
+					if (extStr.ByteAt(0) != '.')
+						extStr.Prepend(".");
+					if (fileExtToUse.ICompare(extStr) == 0)
+						found = true;
+					else
+						extIndex++;
+				}
+			}
+			mimeIndex++;
+		}
+		if (found) {
+			return SetMIMEInfoForType(mimeStr.String(), _retval);
+		}
+	}
+
 	// Extension not found
 	return NS_ERROR_FAILURE;
 }
 
 nsresult nsOSHelperAppService::GetMimeInfoFromMIMEType(const char *aMIMEType,
-        nsMIMEInfoBeOS ** _retval) {
+        nsIMIMEInfo ** _retval) {
 	// if the mime type is null, return immediately
 	if (!aMIMEType || !*aMIMEType)
 		return NS_ERROR_INVALID_ARG;
 
 	LOG(("Here we do a mimetype lookup for '%s'\n", aMIMEType));
-	
-	BMimeType mimeType(aMIMEType);
-	if (mimeType.IsInstalled())
-		return SetMIMEInfoForType(aMIMEType, _retval);
-	
+
+	BMessage data;
+	int32 index = 0;
+	bool found = false;
+	BString strData;
+	// Get a list of all registerred MIME types
+	if (BMimeType::GetInstalledTypes(&data) == B_OK) {
+		// check to see if the given MIME type is registerred
+		while (!found && data.FindString("types",index,&strData) == B_OK) {
+			if (strData == aMIMEType)
+				found = true;
+			else
+				index++;
+		}
+		if (found) {
+			return SetMIMEInfoForType(aMIMEType, _retval);
+		}
+	}
+
 	return NS_ERROR_FAILURE;
 }
 
 already_AddRefed<nsIMIMEInfo>
-nsOSHelperAppService::GetMIMEInfoFromOS(const nsACString& aMIMEType, const nsACString& aFileExt, PRBool* aFound)
+nsOSHelperAppService::GetMIMEInfoFromOS(const char *aMIMEType, const char *aFileExt, PRBool* aFound)
 {
   *aFound = PR_TRUE;
-  nsMIMEInfoBeOS* mi = nsnull;
-  const nsCString& flatType = PromiseFlatCString(aMIMEType);
-  const nsCString& flatExt = PromiseFlatCString(aFileExt);
-  GetMimeInfoFromMIMEType(flatType.get(), &mi);
+  nsIMIMEInfo* mi = nsnull;
+  GetMimeInfoFromMIMEType(aMIMEType, &mi);
   if (mi)
     return mi;
 
-  GetMimeInfoFromExtension(flatExt.get(), &mi);
-  if (mi && !aMIMEType.IsEmpty())
+  GetMimeInfoFromExtension(aFileExt, &mi);
+  if (mi && aMIMEType && *aMIMEType)
     mi->SetMIMEType(aMIMEType);
   if (mi)
     return mi;
 
   *aFound = PR_FALSE;
-  mi = new nsMIMEInfoBeOS(flatType);
+  mi = new nsMIMEInfoBeOS();
   if (!mi)
     return nsnull;
   NS_ADDREF(mi);
-  if (!aFileExt.IsEmpty())
+  if (aMIMEType && *aMIMEType)
+    mi->SetMIMEType(aMIMEType);
+  if (aFileExt && *aFileExt)
     mi->AppendExtension(aFileExt);
 
   return mi;
+}
+
+nsresult nsOSHelperAppService::GetFileTokenForPath(const PRUnichar* platformAppPath, nsIFile ** aFile)
+{
+	LOG(("-- nsOSHelperAppService::GetFileTokenForPath: '%s'\n", NS_ConvertUCS2toUTF8(platformAppPath).get()));
+	nsCOMPtr<nsILocalFile> localFile (do_CreateInstance(NS_LOCAL_FILE_CONTRACTID));
+	nsresult rv = NS_OK;
+
+	if (!localFile) return NS_ERROR_NOT_INITIALIZED;
+
+	// A BPath will convert relative paths automagically
+	BPath path;
+	PRBool exists = PR_FALSE;
+	if (path.SetTo(NS_ConvertUCS2toUTF8(platformAppPath).get()) == B_OK) {
+		localFile->InitWithPath(NS_ConvertUTF8toUCS2(path.Path()));
+		localFile->Exists(&exists);
+	}
+
+	if (exists) {
+		rv = NS_OK;
+	} else {
+		rv = NS_ERROR_NOT_AVAILABLE;
+	}
+
+	*aFile = localFile;
+	NS_IF_ADDREF(*aFile);
+
+	return rv;
 }

@@ -37,7 +37,6 @@
 #include "nsISupports.idl"
 
 interface nsIRDFResource;
-interface nsISimpleEnumerator;
 interface mozISqlConnection;
 
 /**
@@ -78,15 +77,13 @@ interface mozISqlService : nsISupports
    * @param aHostname   hostname for the database
    * @param aPort       port for the database
    * @param aDatabase   database name
-   * @param aPriority   priority
    * @return            an RDF resource representing the alias
    */
    nsIRDFResource addAlias(in AString aName,
                            in AString aType,
                            in AString aHostname,
                            in long aPort,
-                           in AString aDatabase,
-                           in long aPriority);
+                           in AString aDatabase);
 
   /**
    * Retrieves alias information. The out parameters are filled in with
@@ -98,15 +95,13 @@ interface mozISqlService : nsISupports
    * @param aHostname   hostname of the database
    * @param aPort       port of the database
    * @param aDatabase   database name
-   * @param aPriority   priority
    */
   void fetchAlias(in nsIRDFResource aAlias,
                   out AString aName,
                   out AString aType,
                   out AString aHostname,
                   out long aPort,
-                  out AString aDatabase,
-                  out long aPriority);
+                  out AString aDatabase);
 
   /**
    * Update the information of an alias that has already been added. The new
@@ -119,15 +114,13 @@ interface mozISqlService : nsISupports
    * @param aHostname   hostname for the database
    * @param aPort       port for the database
    * @param aDatabase   database name
-   * @param aPriority   priority
    */
   void updateAlias(in nsIRDFResource aAlias,
                    in AString aName,
                    in AString aType,
                    in AString aHostname,
                    in long aPort,
-                   in AString aDatabase,
-                   in long aPriority);
+                   in AString aDatabase);
 
   /**
    * Removes an alias that already exists.
@@ -143,14 +136,6 @@ interface mozISqlService : nsISupports
    * @return           the RDF resource for the alias, or null if it doesn't exist.
    */
   nsIRDFResource getAlias(in AString aName);
-
-  /**
-   * Get the aliases with the given name.
-   *
-   * @param aName      the name of the aliases to retrieve
-   * @return           an enumerator for the aliases
-   */
-  nsISimpleEnumerator getAliases(in AString aName);
 
   /**
    * Retrieves an SQL connection to a database given its alias. If a

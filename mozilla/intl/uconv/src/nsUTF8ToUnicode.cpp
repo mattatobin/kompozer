@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -21,17 +21,18 @@
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -76,26 +77,11 @@ nsUTF8ToUnicode::nsUTF8ToUnicode()
 //----------------------------------------------------------------------
 // Subclassing of nsTableDecoderSupport class [implementation]
 
-/**
- * Normally the maximum length of the output of the UTF8 decoder in UTF16
- *  code units is the same as the length of the input in UTF8 code units,
- *  since 1-byte, 2-byte and 3-byte UTF-8 sequences decode to a single
- *  UTF-16 character, and 4-byte UTF-8 sequences decode to a surrogate pair.
- *
- * However, there is an edge case where the output can be longer than the
- *  input: if the previous buffer ended with an incomplete multi-byte
- *  sequence and this buffer does not begin with a valid continuation
- *  byte, we will return NS_ERROR_UNEXPECTED and the caller may insert a
- *  replacement character in the output buffer which corresponds to no
- *  character in the input buffer. So in the worst case the destination
- *  will need to be one code unit longer than the source.
- *  See bug 301797.
- */
 NS_IMETHODIMP nsUTF8ToUnicode::GetMaxLength(const char * aSrc,
                                             PRInt32 aSrcLength,
                                             PRInt32 * aDestLength)
 {
-  *aDestLength = aSrcLength + 1;
+  *aDestLength = aSrcLength;
   return NS_OK;
 }
 
@@ -106,12 +92,10 @@ NS_IMETHODIMP nsUTF8ToUnicode::GetMaxLength(const char * aSrc,
 NS_IMETHODIMP nsUTF8ToUnicode::Reset()
 {
 
-  mUcs4  = 0;     // cached Unicode character
   mState = 0;     // cached expected number of octets after the current octet
                   // until the beginning of the next UTF8 character sequence
+  mUcs4  = 0;     // cached Unicode character
   mBytes = 1;     // cached expected number of octets in the current sequence
-  mFirst = PR_TRUE;
-
   return NS_OK;
 
 }
@@ -135,11 +119,6 @@ NS_IMETHODIMP nsUTF8ToUnicode::Convert(const char * aSrc,
   outend = aDest + aDestLen;
 
   nsresult res = NS_OK; // conversion result
-
-  // Set mFirst to PR_FALSE now so we don't have to every time through the ASCII
-  // branch within the loop.
-  if (mFirst && aSrcLen && (0 == (0x80 & (*aSrc))))
-    mFirst = PR_FALSE;
 
   for (in = aSrc, out = aDest; ((in < inend) && (out < outend)); ++in) {
     if (0 == mState) {
@@ -230,15 +209,12 @@ NS_IMETHODIMP nsUTF8ToUnicode::Convert(const char * aSrc,
             mUcs4 -= 0x00010000;
             *out++ = 0xD800 | (0x000003FF & (mUcs4 >> 10));
             *out++ = 0xDC00 | (0x000003FF & mUcs4);
-          } else if (UNICODE_BYTE_ORDER_MARK != mUcs4 || !mFirst) {
-            // Don't output the BOM only if it is the first character
+          } else if (UNICODE_BYTE_ORDER_MARK != mUcs4) {
+            // BOM is legal but we don't want to output it
             *out++ = mUcs4;
           }
           //initialize UTF8 cache
-          mUcs4  = 0;
-          mState = 0;
-          mBytes = 1;
-          mFirst = PR_FALSE;
+          Reset();
         }
       } else {
         /* ((0xC0 & (*in) != 0x80) && (mState != 0))

@@ -1,53 +1,35 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Vidur Apparao <vidur@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef __nsSchemaPrivate_h__
 #define __nsSchemaPrivate_h__
 
-#include "nsIWebServiceErrorHandler.h"
 #include "nsISchema.h"
 
 // XPCOM Includes
-#include "nsAutoPtr.h"
 #include "nsCOMPtr.h"
-#include "nsCOMArray.h"
-#include "nsHashKeys.h"
-#include "nsInterfaceHashtable.h"
+#include "nsSupportsArray.h"
+#include "nsHashtable.h"
 #include "nsString.h"
 #include "nsIDOMElement.h"
 
@@ -57,17 +39,6 @@
    "http://schemas.xmlsoap.org/soap/encoding/"
 #define NS_SOAP_1_2_ENCODING_NAMESPACE \
    "http://www.w3.org/2001/09/soap-encoding"
-
-/**
- * Fire error on error handler passed as argument, only to be used
- * in ProcessXXX or Resolve methods.
- */
-#define NS_SCHEMALOADER_FIRE_ERROR(status,statusMessage)   \
-  PR_BEGIN_MACRO                                           \
-  if (aErrorHandler) {                                     \
-    aErrorHandler->OnError(status, statusMessage);         \
-  }                                                        \
-  PR_END_MACRO
 
 class nsSchema : public nsISchema 
 {
@@ -79,32 +50,29 @@ public:
   NS_DECL_NSISCHEMACOMPONENT
   NS_DECL_NSISCHEMA
 
-  nsresult Init();
-
   NS_IMETHOD AddType(nsISchemaType* aType);
   NS_IMETHOD AddAttribute(nsISchemaAttribute* aAttribute);
   NS_IMETHOD AddElement(nsISchemaElement* aElement);
   NS_IMETHOD AddAttributeGroup(nsISchemaAttributeGroup* aAttributeGroup);
   NS_IMETHOD AddModelGroup(nsISchemaModelGroup* aModelGroup);
   void DropCollectionReference();
-  nsresult ResolveTypePlaceholder(nsIWebServiceErrorHandler* aErrorHandler,
-                                  nsISchemaType* aPlaceholder,
+  nsresult ResolveTypePlaceholder(nsISchemaType* aPlaceholder,
                                   nsISchemaType** aType);
   PRBool IsElementFormQualified() { return mElementFormQualified; }
 
 protected:
   nsString mTargetNamespace;
   nsString mSchemaNamespace;
-  nsCOMArray<nsISchemaType> mTypes;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaType> mTypesHash;
-  nsCOMArray<nsISchemaAttribute> mAttributes;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaAttribute> mAttributesHash;
-  nsCOMArray<nsISchemaElement> mElements;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaElement> mElementsHash;
-  nsCOMArray<nsISchemaAttributeGroup> mAttributeGroups;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaAttributeGroup> mAttributeGroupsHash;
-  nsCOMArray<nsISchemaModelGroup> mModelGroups;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaModelGroup> mModelGroupsHash;
+  nsSupportsArray mTypes;
+  nsSupportsHashtable mTypesHash;
+  nsSupportsArray mAttributes;
+  nsSupportsHashtable mAttributesHash;
+  nsSupportsArray mElements;
+  nsSupportsHashtable mElementsHash;
+  nsSupportsArray mAttributeGroups;
+  nsSupportsHashtable mAttributeGroupsHash;
+  nsSupportsArray mModelGroups;
+  nsSupportsHashtable mModelGroupsHash;
   nsISchemaCollection* mCollection;  // [WEAK] it owns me
   PRPackedBool mElementFormQualified;
 };
@@ -127,7 +95,7 @@ protected:
   NS_IMETHOD GetTargetNamespace(nsAString& aTargetNamespace) {          \
     return nsSchemaComponentBase::GetTargetNamespace(aTargetNamespace); \
   }                                                                     \
-  NS_IMETHOD Resolve(nsIWebServiceErrorHandler* aErrorHandler);                                                 \
+  NS_IMETHOD Resolve();                                                 \
   NS_IMETHOD Clear();
 
 class nsSchemaBuiltinType : public nsISchemaBuiltinType
@@ -183,7 +151,7 @@ public:
 
 protected:
   nsString mName;
-  nsCOMArray<nsISchemaSimpleType> mUnionTypes;
+  nsSupportsArray mUnionTypes;
 };
 
 class nsSchemaRestrictionType : public nsSchemaComponentBase,
@@ -205,7 +173,7 @@ public:
 protected:
   nsString mName;
   nsCOMPtr<nsISchemaSimpleType> mBaseType;
-  nsCOMArray<nsISchemaFacet> mFacets;
+  nsSupportsArray mFacets;
 };
 
 class nsComplexTypeArrayInfo {
@@ -235,11 +203,6 @@ public:
   NS_DECL_NSISCHEMATYPE
   NS_DECL_NSISCHEMACOMPLEXTYPE
 
-  nsresult Init()
-  {
-    return mAttributesHash.Init() ? NS_OK : NS_ERROR_FAILURE;
-  }
-
   NS_IMETHOD SetContentModel(PRUint16 aContentModel);
   NS_IMETHOD SetDerivation(PRUint16 aDerivation, nsISchemaType* aBaseType);
   NS_IMETHOD SetSimpleBaseType(nsISchemaSimpleType* aSimpleBaseType);
@@ -255,9 +218,9 @@ protected:
   nsCOMPtr<nsISchemaType> mBaseType;
   nsCOMPtr<nsISchemaSimpleType> mSimpleBaseType;
   nsCOMPtr<nsISchemaModelGroup> mModelGroup;
-  nsCOMArray<nsISchemaAttributeComponent> mAttributes;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaAttributeComponent> mAttributesHash;
-  nsAutoPtr<nsComplexTypeArrayInfo> mArrayInfo;
+  nsSupportsArray mAttributes;
+  nsSupportsHashtable mAttributesHash;
+  nsComplexTypeArrayInfo* mArrayInfo;
 };
 
 class nsSchemaTypePlaceholder : public nsSchemaComponentBase,
@@ -328,7 +291,7 @@ public:
 protected:
   nsString mName;
   PRUint16 mCompositor;
-  nsCOMArray<nsISchemaParticle> mParticles;
+  nsSupportsArray mParticles;
 };
 
 class nsSchemaModelGroupRef : public nsSchemaParticleBase,
@@ -336,8 +299,7 @@ class nsSchemaModelGroupRef : public nsSchemaParticleBase,
 {
 public:
   nsSchemaModelGroupRef(nsSchema* aSchema, 
-                        const nsAString& aRef,
-                        const nsAString& aRefNS);
+                        const nsAString& aRef);
   virtual ~nsSchemaModelGroupRef();
 
   NS_DECL_ISUPPORTS
@@ -346,7 +308,7 @@ public:
   NS_DECL_NSISCHEMAMODELGROUP
 
 protected:
-  nsString mRef, mRefNS;
+  nsString mRef;
   nsCOMPtr<nsISchemaModelGroup> mModelGroup;
 };
 
@@ -386,7 +348,7 @@ public:
   NS_DECL_NSISCHEMAELEMENT
 
   NS_IMETHOD GetTargetNamespace(nsAString& aTargetNamespace);
-  NS_IMETHOD Resolve(nsIWebServiceErrorHandler* aErrorHandler);
+  NS_IMETHOD Resolve();
   NS_IMETHOD Clear();
   NS_IMETHOD SetType(nsISchemaType* aType);
   NS_IMETHOD SetConstraints(const nsAString& aDefaultValue,
@@ -405,7 +367,7 @@ class nsSchemaElementRef : public nsSchemaParticleBase,
                            public nsISchemaElement
 {
 public:
-  nsSchemaElementRef(nsSchema* aSchema, const nsAString& aRef, const nsAString& aRefNS);
+  nsSchemaElementRef(nsSchema* aSchema, const nsAString& aRef);
   virtual ~nsSchemaElementRef();
 
   NS_DECL_ISUPPORTS
@@ -415,7 +377,6 @@ public:
 
 protected:
   nsString mRef;
-  nsString mRefNS;
   nsCOMPtr<nsISchemaElement> mElement;
 };
 
@@ -448,8 +409,7 @@ class nsSchemaAttributeRef : public nsSchemaComponentBase,
                              public nsISchemaAttribute 
 {
 public:
-  nsSchemaAttributeRef(nsSchema* aSchema, const nsAString& aRef, 
-                       const nsAString& aRefNS);
+  nsSchemaAttributeRef(nsSchema* aSchema, const nsAString& aRef);
   virtual ~nsSchemaAttributeRef();
   
   NS_DECL_ISUPPORTS
@@ -462,7 +422,7 @@ public:
   NS_IMETHOD SetUse(PRUint16 aUse);
 
 protected:
-  nsString mRef, mRefNS;
+  nsString mRef;
   nsCOMPtr<nsISchemaAttribute> mAttribute;
   nsString mDefaultValue;
   nsString mFixedValue;
@@ -480,26 +440,20 @@ public:
   NS_IMPL_NSISCHEMACOMPONENT_USING_BASE
   NS_DECL_NSISCHEMAATTRIBUTECOMPONENT
   NS_DECL_NSISCHEMAATTRIBUTEGROUP
-
-  nsresult Init()
-  {
-    return mAttributesHash.Init() ? NS_OK : NS_ERROR_FAILURE;
-  }
-
+  
   NS_IMETHOD AddAttribute(nsISchemaAttributeComponent* aAttribute);
 
 protected:
   nsString mName;
-  nsCOMArray<nsISchemaAttributeComponent> mAttributes;
-  nsInterfaceHashtable<nsStringHashKey, nsISchemaAttributeComponent> mAttributesHash;
+  nsSupportsArray mAttributes;
+  nsSupportsHashtable mAttributesHash;
 };
 
 class nsSchemaAttributeGroupRef : public nsSchemaComponentBase,
                                   public nsISchemaAttributeGroup
 {
 public:
-  nsSchemaAttributeGroupRef(nsSchema* aSchema, const nsAString& aRef, 
-                            const nsAString& aRefNS);
+  nsSchemaAttributeGroupRef(nsSchema* aSchema, const nsAString& aRef);
   virtual ~nsSchemaAttributeGroupRef();
   
   NS_DECL_ISUPPORTS
@@ -508,7 +462,7 @@ public:
   NS_DECL_NSISCHEMAATTRIBUTEGROUP
 
 protected:
-  nsString mRef, mRefNS;
+  nsString mRef;
   nsCOMPtr<nsISchemaAttributeGroup> mAttributeGroup;
 };
 

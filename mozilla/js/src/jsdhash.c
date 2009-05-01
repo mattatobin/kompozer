@@ -56,32 +56,6 @@
 # define METER(x)       /* nothing */
 #endif
 
-/*
- * The following DEBUG-only code is used to assert that calls to one of
- * table->ops or to an enumerator do not cause re-entry into a call that
- * can mutate the table.  The recursion level is stored in additional
- * space allocated at the end of the entry store to avoid changing
- * JSDHashTable, which could cause issues when mixing DEBUG and
- * non-DEBUG components.
- */
-#ifdef DEBUG
-
-#define RECURSION_LEVEL(table_) (*(uint32*)(table_->entryStore + \
-                                            JS_DHASH_TABLE_SIZE(table_) * \
-                                            table_->entrySize))
-
-#define ENTRY_STORE_EXTRA                   sizeof(uint32)
-#define INCREMENT_RECURSION_LEVEL(table_)   (++RECURSION_LEVEL(table_))
-#define DECREMENT_RECURSION_LEVEL(table_)   (--RECURSION_LEVEL(table_))
-
-#else
-
-#define ENTRY_STORE_EXTRA 0
-#define INCREMENT_RECURSION_LEVEL(table_)   ((void)1)
-#define DECREMENT_RECURSION_LEVEL(table_)   ((void)0)
-
-#endif /* defined(DEBUG) */
-
 JS_PUBLIC_API(void *)
 JS_DHashAllocTable(JSDHashTable *table, uint32 nbytes)
 {
@@ -117,7 +91,7 @@ JS_DHashGetKeyStub(JSDHashTable *table, JSDHashEntryHdr *entry)
 JS_PUBLIC_API(JSDHashNumber)
 JS_DHashVoidPtrKeyStub(JSDHashTable *table, const void *key)
 {
-    return (JSDHashNumber)(unsigned long)key >> 2;
+    return (JSDHashNumber)key >> 2;
 }
 
 JS_PUBLIC_API(JSBool)
@@ -233,9 +207,7 @@ JS_DHashTableInit(JSDHashTable *table, const JSDHashTableOps *ops, void *data,
     table->data = data;
     if (capacity < JS_DHASH_MIN_SIZE)
         capacity = JS_DHASH_MIN_SIZE;
-
-    JS_CEILING_LOG2(log2, capacity);
-
+    log2 = JS_CeilingLog2(capacity);
     capacity = JS_BIT(log2);
     if (capacity >= JS_DHASH_SIZE_LIMIT)
         return JS_FALSE;
@@ -247,16 +219,11 @@ JS_DHashTableInit(JSDHashTable *table, const JSDHashTableOps *ops, void *data,
     table->generation = 0;
     nbytes = capacity * entrySize;
 
-    table->entryStore = ops->allocTable(table, nbytes + ENTRY_STORE_EXTRA);
+    table->entryStore = ops->allocTable(table, nbytes);
     if (!table->entryStore)
         return JS_FALSE;
     memset(table->entryStore, 0, nbytes);
     METER(memset(&table->stats, 0, sizeof table->stats));
-
-#ifdef DEBUG
-    RECURSION_LEVEL(table) = 0;
-#endif
-
     return JS_TRUE;
 }
 
@@ -361,8 +328,6 @@ JS_DHashTableFinish(JSDHashTable *table)
     }
 #endif
 
-    INCREMENT_RECURSION_LEVEL(table);
-
     /* Call finalize before clearing entries, so it can enumerate them. */
     table->ops->finalize(table);
 
@@ -379,14 +344,11 @@ JS_DHashTableFinish(JSDHashTable *table)
         entryAddr += entrySize;
     }
 
-    DECREMENT_RECURSION_LEVEL(table);
-    JS_ASSERT(RECURSION_LEVEL(table) == 0);
-
     /* Free entry storage last. */
     table->ops->freeTable(table, table->entryStore);
 }
 
-static JSDHashEntryHdr * JS_DHASH_FASTCALL
+static JSDHashEntryHdr *
 SearchTable(JSDHashTable *table, const void *key, JSDHashNumber keyHash,
             JSDHashOperator op)
 {
@@ -471,9 +433,6 @@ ChangeTable(JSDHashTable *table, int deltaLog2)
     JSDHashEntryHdr *oldEntry, *newEntry;
     JSDHashGetKey getKey;
     JSDHashMoveEntry moveEntry;
-#ifdef DEBUG
-    uint32 recursionLevel;
-#endif
 
     /* Look, but don't touch, until we succeed in getting new entry store. */
     oldLog2 = JS_DHASH_BITS - table->hashShift;
@@ -485,14 +444,11 @@ ChangeTable(JSDHashTable *table, int deltaLog2)
     entrySize = table->entrySize;
     nbytes = newCapacity * entrySize;
 
-    newEntryStore = table->ops->allocTable(table, nbytes + ENTRY_STORE_EXTRA);
+    newEntryStore = table->ops->allocTable(table, nbytes);
     if (!newEntryStore)
         return JS_FALSE;
 
     /* We can't fail from here on, so update table parameters. */
-#ifdef DEBUG
-    recursionLevel = RECURSION_LEVEL(table);
-#endif
     table->hashShift = JS_DHASH_BITS - newLog2;
     table->removedCount = 0;
     table->generation++;
@@ -503,9 +459,6 @@ ChangeTable(JSDHashTable *table, int deltaLog2)
     table->entryStore = newEntryStore;
     getKey = table->ops->getKey;
     moveEntry = table->ops->moveEntry;
-#ifdef DEBUG
-    RECURSION_LEVEL(table) = recursionLevel;
-#endif
 
     /* Copy only live entries, leaving removed ones behind. */
     for (i = 0; i < oldCapacity; i++) {
@@ -525,16 +478,13 @@ ChangeTable(JSDHashTable *table, int deltaLog2)
     return JS_TRUE;
 }
 
-JS_PUBLIC_API(JSDHashEntryHdr *) JS_DHASH_FASTCALL
+JS_PUBLIC_API(JSDHashEntryHdr *)
 JS_DHashTableOperate(JSDHashTable *table, const void *key, JSDHashOperator op)
 {
     JSDHashNumber keyHash;
     JSDHashEntryHdr *entry;
     uint32 size;
     int deltaLog2;
-
-    JS_ASSERT(op == JS_DHASH_LOOKUP || RECURSION_LEVEL(table) == 0);
-    INCREMENT_RECURSION_LEVEL(table);
 
     keyHash = table->ops->hashKey(table, key);
     keyHash *= JS_DHASH_GOLDEN_RATIO;
@@ -573,8 +523,7 @@ JS_DHashTableOperate(JSDHashTable *table, const void *key, JSDHashOperator op)
             if (!ChangeTable(table, deltaLog2) &&
                 table->entryCount + table->removedCount == size - 1) {
                 METER(table->stats.addFailures++);
-                entry = NULL;
-                break;
+                return NULL;
             }
         }
 
@@ -595,8 +544,7 @@ JS_DHashTableOperate(JSDHashTable *table, const void *key, JSDHashOperator op)
                 !table->ops->initEntry(table, entry, key)) {
                 /* We haven't claimed entry yet; fail with null return. */
                 memset(entry + 1, 0, table->entrySize - sizeof *entry);
-                entry = NULL;
-                break;
+                return NULL;
             }
             entry->keyHash = keyHash;
             table->entryCount++;
@@ -628,8 +576,6 @@ JS_DHashTableOperate(JSDHashTable *table, const void *key, JSDHashOperator op)
         entry = NULL;
     }
 
-    DECREMENT_RECURSION_LEVEL(table);
-
     return entry;
 }
 
@@ -655,12 +601,10 @@ JS_PUBLIC_API(uint32)
 JS_DHashTableEnumerate(JSDHashTable *table, JSDHashEnumerator etor, void *arg)
 {
     char *entryAddr, *entryLimit;
-    uint32 i, capacity, entrySize, ceiling;
+    uint32 i, capacity, entrySize;
     JSBool didRemove;
     JSDHashEntryHdr *entry;
     JSDHashOperator op;
-
-    INCREMENT_RECURSION_LEVEL(table);
 
     entryAddr = table->entryStore;
     entrySize = table->entrySize;
@@ -683,8 +627,6 @@ JS_DHashTableEnumerate(JSDHashTable *table, JSDHashEnumerator etor, void *arg)
         entryAddr += entrySize;
     }
 
-    JS_ASSERT(!didRemove || RECURSION_LEVEL(table) == 1);
-
     /*
      * Shrink or compress if a quarter or more of all entries are removed, or
      * if the table is underloaded according to the configured minimum alpha,
@@ -701,15 +643,10 @@ JS_DHashTableEnumerate(JSDHashTable *table, JSDHashEnumerator etor, void *arg)
         capacity += capacity >> 1;
         if (capacity < JS_DHASH_MIN_SIZE)
             capacity = JS_DHASH_MIN_SIZE;
-
-        JS_CEILING_LOG2(ceiling, capacity);
-        ceiling -= JS_DHASH_BITS - table->hashShift;
-
-        (void) ChangeTable(table, ceiling);
+        (void) ChangeTable(table,
+                           JS_CeilingLog2(capacity)
+                           - (JS_DHASH_BITS - table->hashShift));
     }
-
-    DECREMENT_RECURSION_LEVEL(table);
-
     return i;
 }
 

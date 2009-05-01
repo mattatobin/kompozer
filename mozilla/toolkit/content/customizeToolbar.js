@@ -1,44 +1,32 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
+# The contents of this file are subject to the Netscape Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/NPL/
+# 
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
+# 
 # The Original Code is Mozilla Communicator client code, released
 # March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# David Hyatt.
-# Portions created by the Initial Developer are Copyright (C) 2002
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
+# 
+# The Initial Developer of the Original Code is David Hyatt. 
+# Portions created by David Hyatt are
+# Copyright (C) 2002 David Hyatt. All
+# Rights Reserved.
+# 
+# Contributor(s): 
 #   David Hyatt (hyatt@apple.com)
 #   Blake Ross (blaker@netscape.com)
 #   Joe Hewitt (hewitt@netscape.com)
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
 
 const kRowMax = 4;
+const kWindowWidth = 635;
+const kWindowHeight = 400;
+const kAnimateIncrement = 50;
+const kAnimateSteps = kWindowHeight / kAnimateIncrement - 1;
+const kVSizeSlop = 5;
 
 var gToolboxDocument = null;
 var gToolbox = null;
@@ -48,13 +36,7 @@ var gToolboxIconSize = false;
 
 function onLoad()
 {
-  InitWithToolbox(window.arguments[0]);
-  repositionDialog();
-}
-
-function InitWithToolbox(aToolbox)
-{
-  gToolbox = aToolbox;
+  gToolbox = window.arguments[0];
   gToolboxDocument = gToolbox.ownerDocument;
   
   gToolbox.addEventListener("draggesture", onToolbarDragGesture, false);
@@ -62,21 +44,19 @@ function InitWithToolbox(aToolbox)
   gToolbox.addEventListener("dragexit", onToolbarDragExit, false);
   gToolbox.addEventListener("dragdrop", onToolbarDragDrop, false);
 
+  repositionDialog();
+  
   initDialog();
 }
 
-function finishToolbarCustomization()
+function onUnload(aEvent)
 {
   removeToolboxListeners();
   unwrapToolbarItems();
   persistCurrentSets();
   
   notifyParentComplete();
-}
-
-function onUnload(aEvent)
-{
-  finishToolbarCustomization();
+  
   window.close();
 }
 
@@ -109,16 +89,17 @@ function initDialog()
 function repositionDialog()
 {
   // Position the dialog touching the bottom of the toolbox and centered with 
-  // it.
-  var width;
-  if (document.documentElement.hasAttribute("width"))
-    width = document.documentElement.getAttribute("width");
-  else
-    width = parseInt(document.documentElement.style.width);
-  var screenX = gToolbox.boxObject.screenX 
-                + ((gToolbox.boxObject.width - width) / 2);
+  // it. We must resize the window smaller first so that it is positioned 
+  // properly. 
+  var screenX = gToolbox.boxObject.screenX + ((gToolbox.boxObject.width - kWindowWidth) / 2);
   var screenY = gToolbox.boxObject.screenY + gToolbox.boxObject.height;
 
+  var newHeight = kWindowHeight;
+  if (newHeight >= screen.availHeight - screenY - kVSizeSlop) {
+    newHeight = screen.availHeight - screenY - kVSizeSlop;
+  }
+
+  window.resizeTo(kWindowWidth, newHeight);
   window.moveTo(screenX, screenY);
 }
 
@@ -503,11 +484,10 @@ function setWrapperType(aItem, aWrapper)
 function setDragActive(aItem, aValue)
 {
   var node = aItem;
-  var direction = window.getComputedStyle(aItem, null).direction;
-  var value = direction == "ltr"? "left" : "right";
+  var value = "left";
   if (aItem.localName == "toolbar") {
     node = aItem.lastChild;
-    value = direction == "ltr"? "right" : "left";
+    value = "right";
   }
   
   if (!node)
@@ -529,42 +509,33 @@ function addNewToolbar()
   var stringBundle = document.getElementById("stringBundle");
   var message = stringBundle.getString("enterToolbarName");
   var title = stringBundle.getString("enterToolbarTitle");
-
+  
   var name = {};
-
   while (true) {
-
     if (!promptService.prompt(window, title, message, name, null, {}))
       return;
-    
-    if (!name.value) {
-      message = stringBundle.getFormattedString("enterToolbarBlank", [name.value]);
-      continue;
-    }
-
+      
     var dupeFound = false;
-
+     
      // Check for an existing toolbar with the same display name
     for (i = 0; i < gToolbox.childNodes.length; ++i) {
       var toolbar = gToolbox.childNodes[i];
       var toolbarName = toolbar.getAttribute("toolbarname");
-
-      if (toolbarName == name.value &&
-          toolbar.getAttribute("type") != "menubar" &&
-          toolbar.nodeName == 'toolbar') {
+      if (toolbarName == name.value && toolbar.getAttribute("type") != "menubar") {
         dupeFound = true;
         break;
       }
-    }
+    }          
 
     if (!dupeFound)
       break;
-
-    message = stringBundle.getFormattedString("enterToolbarDup", [name.value]);
+     
+    message = stringBundle.getFormattedString("enterToolbarDup", [name.value]);      
   }
     
   gToolbox.appendCustomToolbar(name.value, "");
   
+  repositionDialog();
   gToolboxChanged = true;
 }
 
@@ -618,6 +589,7 @@ function restoreDefaultSet()
   // Restore the disabled and command states
   restoreItemAttributes(["itemdisabled", "itemcommand"], savedAttributes);
 
+  repositionDialog();
   gToolboxChanged = true;
 }
 
@@ -672,6 +644,8 @@ function updateIconSize(aUseSmallIcons)
       gToolboxDocument.persist(toolbar.id, "iconsize");
     }
   }
+
+  repositionDialog();
 }
 
 function updateToolbarMode(aModeValue)
@@ -689,6 +663,8 @@ function updateToolbarMode(aModeValue)
 
   var iconSizeCheckbox = document.getElementById("smallicons");
   iconSizeCheckbox.disabled = aModeValue == "text";
+
+  repositionDialog();
 }
 
 
@@ -787,16 +763,11 @@ var toolbarDNDObserver =
     if (dropTarget.localName == "toolbar") {
       gCurrentDragOverItem = dropTarget;
     } else {
-      gCurrentDragOverItem = null;
+      var dropTargetWidth = dropTarget.boxObject.width;
+      var dropTargetX = dropTarget.boxObject.x;
 
-      var direction = window.getComputedStyle(dropTarget.parentNode, null).direction;
-      var dropTargetCenter = dropTarget.boxObject.x + (dropTarget.boxObject.width / 2);
-      if (direction == "ltr")
-        dragAfter = aEvent.clientX > dropTargetCenter;
-      else
-        dragAfter = aEvent.clientX < dropTargetCenter;
-        
-      if (dragAfter) {
+      gCurrentDragOverItem = null;
+      if (aEvent.clientX > (dropTargetX + (dropTargetWidth / 2))) {
         gCurrentDragOverItem = dropTarget.nextSibling;
         if (!gCurrentDragOverItem)
           gCurrentDragOverItem = toolbar;
@@ -920,6 +891,7 @@ var toolbarDNDObserver =
     
     gCurrentDragOverItem = null;
 
+    repositionDialog();
     gToolboxChanged = true;
   },
   
@@ -976,6 +948,7 @@ var paletteDNDObserver =
       }
     }
     
+    repositionDialog();
     gToolboxChanged = true;
   },
   

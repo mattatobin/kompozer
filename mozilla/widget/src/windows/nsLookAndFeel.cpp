@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,63 +14,39 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Michael Lowe <michael.lowe@bigfoot.com>
- *   Jens Bannmann <jens.b@web.de>
+ *  Michael Lowe <michael.lowe@bigfoot.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsLookAndFeel.h"
 #include "nsXPLookAndFeel.h"
 #include <windows.h>
-#include <shellapi.h>
 #include "nsWindow.h"
  
-#ifndef WINCE
-typedef UINT (CALLBACK *SHAppBarMessagePtr)(DWORD, PAPPBARDATA);
-SHAppBarMessagePtr gSHAppBarMessage = NULL;
-static HINSTANCE gShell32DLLInst = NULL;
-#endif
-
 nsLookAndFeel::nsLookAndFeel() : nsXPLookAndFeel()
 {
-#ifndef WINCE
-  gShell32DLLInst = LoadLibrary("Shell32.dll");
-  if (gShell32DLLInst)
-  {
-      gSHAppBarMessage = (SHAppBarMessagePtr) GetProcAddress(gShell32DLLInst,
-                                                             "SHAppBarMessage");
-  }
-#endif
 }
 
 nsLookAndFeel::~nsLookAndFeel()
 {
-#ifndef WINCE
-   if (gShell32DLLInst)
-   {
-       FreeLibrary(gShell32DLLInst);
-       gShell32DLLInst = NULL;
-       gSHAppBarMessage = NULL;
-   }
-#endif
 }
 
 nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
@@ -130,7 +106,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
       idx = COLOR_BACKGROUND;
       break;
     case eColor_buttonface:
-    case eColor__moz_buttonhoverface:
       idx = COLOR_BTNFACE;
       break;
     case eColor_buttonhighlight:
@@ -140,7 +115,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
       idx = COLOR_BTNSHADOW;
       break;
     case eColor_buttontext:
-    case eColor__moz_buttonhovertext:
       idx = COLOR_BTNTEXT;
       break;
     case eColor_captiontext:
@@ -150,11 +124,9 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
       idx = COLOR_GRAYTEXT;
       break;
     case eColor_highlight:
-    case eColor__moz_menuhover:
       idx = COLOR_HIGHLIGHT;
       break;
     case eColor_highlighttext:
-    case eColor__moz_menuhovertext:
       idx = COLOR_HIGHLIGHTTEXT;
       break;
     case eColor_inactiveborder:
@@ -212,11 +184,9 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
       idx = COLOR_WINDOWTEXT;
       break;
     case eColor__moz_dialog:
-    case eColor__moz_cellhighlight:
       idx = COLOR_3DFACE;
       break;
     case eColor__moz_dialogtext:
-    case eColor__moz_cellhighlighttext:
       idx = COLOR_WINDOWTEXT;
       break;
     case eColor__moz_dragtargetzone:
@@ -247,14 +217,12 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_WindowTitleHeight:
         aMetric = ::GetSystemMetrics(SM_CYCAPTION);
         break;
-#ifndef WINCE
     case eMetric_WindowBorderWidth:
         aMetric = ::GetSystemMetrics(SM_CXFRAME);
         break;
     case eMetric_WindowBorderHeight:
         aMetric = ::GetSystemMetrics(SM_CYFRAME);
         break;
-#endif
     case eMetric_Widget3DBorder:
         aMetric = ::GetSystemMetrics(SM_CXEDGE);
         break;
@@ -303,8 +271,11 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_CaretBlinkTime:
         aMetric = (PRInt32)::GetCaretBlinkTime();
         break;
-    case eMetric_CaretWidth:
+    case eMetric_SingleLineCaretWidth:
         aMetric = 1;
+        break;
+    case eMetric_MultiLineCaretWidth:
+        aMetric = 2;
         break;
     case eMetric_ShowCaretDuringSelection:
         aMetric = 0;
@@ -326,7 +297,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
 
           sSubmenuDelay = 300;
 
-#ifndef WINCE
           result = ::RegOpenKeyEx(HKEY_CURRENT_USER, 
                    "Control Panel\\Desktop", 0, KEY_READ, &key);
 
@@ -347,7 +317,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
               }
             }
           }
-#endif
         }
         aMetric = sSubmenuDelay;
         }
@@ -359,7 +328,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_DragFullWindow:
         {
         static PRInt32 sDragFullWindow = -1;
-#ifndef WINCE
         if (sDragFullWindow == -1) {
           HKEY key;
           char value[100];
@@ -384,13 +352,11 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
               sDragFullWindow = str.ToInteger(&errorCode);         
             }
           }
-        } 
-#endif
+        }        
         aMetric = sDragFullWindow ? 1 : 0;
         }
         break;
 
-#ifndef WINCE
     case eMetric_DragThresholdX:
         // The system metric is the number of pixels at which a drag should
         // start.  Our look and feel metric is the number of pixels you can
@@ -401,27 +367,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_DragThresholdY:
         aMetric = ::GetSystemMetrics(SM_CYDRAG) - 1;
         break;
-    case eMetric_UseAccessibilityTheme:
-        // High contrast is a misnomer under Win32 -- any theme can be used with it, 
-        // e.g. normal contrast with large fonts, low contrast, etc.
-        // The high contrast flag really means -- use this theme and don't override it.
-        HIGHCONTRAST contrastThemeInfo;
-        contrastThemeInfo.cbSize = sizeof(contrastThemeInfo);
-        // Need to check return from SystemParametersInfo since 
-        // SPI_GETHIGHCONTRAST is not supported on Windows NT 
-        if (SystemParametersInfo(SPI_GETHIGHCONTRAST, 0, &contrastThemeInfo, 0)) {
-          aMetric = (contrastThemeInfo.dwFlags & HCF_HIGHCONTRASTON) != 0;
-        }
-        else {
-          aMetric = 0;
-        }
-        break;
-    case eMetric_IsScreenReaderActive:
-      BOOL isScreenReaderActive;
-      aMetric = SystemParametersInfo(SPI_GETSCREENREADER, 0, &isScreenReaderActive, 0) && 
-                isScreenReaderActive;
-      break;
-#endif
     case eMetric_ScrollArrowStyle:
         aMetric = eMetric_ScrollArrowStyleSingle;
         break;
@@ -443,43 +388,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_TreeScrollLinesMax:
         aMetric = 3;
         break;
-#ifndef WINCE
-    case eMetric_AlertNotificationOrigin:
-        aMetric = 0;
-        if (gSHAppBarMessage)
-        {
-          // Get task bar window handle
-          HWND shellWindow = FindWindow("Shell_TrayWnd", NULL);
-
-          if (shellWindow != NULL)
-          {
-            // Determine position
-            APPBARDATA appBarData;
-            appBarData.hWnd = shellWindow;
-            appBarData.cbSize = sizeof(appBarData);
-            if (gSHAppBarMessage(ABM_GETTASKBARPOS, &appBarData))
-            {
-              // Set alert origin as a bit field - see nsILookAndFeel.h
-              // 0 represents bottom right, sliding vertically.
-              switch(appBarData.uEdge)
-              {
-                case ABE_LEFT:
-                  aMetric = NS_ALERT_HORIZONTAL | NS_ALERT_LEFT;
-                  break;
-                case ABE_RIGHT:
-                  aMetric = NS_ALERT_HORIZONTAL;
-                  break;
-                case ABE_TOP:
-                  aMetric = NS_ALERT_TOP;
-                  break;
-                case ABE_BOTTOM:
-                  break;
-              }
-            }
-          }
-        }
-        break;
-#endif
 
     default:
         aMetric = 0;

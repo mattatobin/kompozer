@@ -1,5 +1,4 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ts=2 sw=2 et tw=80: */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -22,7 +21,6 @@
  *
  * Contributor(s):
  *   Christopher A. Aillon <christopher@aillon.com>
- *   Giorgio Maone <g.maone@informaction.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -45,7 +43,6 @@
 #include "plstr.h"
 #include "nsCRT.h"
 #include "nsIURI.h"
-#include "nsIJARURI.h"
 #include "nsNetUtil.h"
 #include "nsJSPrincipals.h"
 #include "nsVoidArray.h"
@@ -63,9 +60,14 @@ PRInt32 nsPrincipal::sCapabilitiesOrdinal = 0;
 const char nsPrincipal::sInvalid[] = "Invalid";
 
 
-NS_IMPL_QUERY_INTERFACE2_CI(nsPrincipal,
-                            nsIPrincipal,
-                            nsISerializable)
+NS_INTERFACE_MAP_BEGIN(nsPrincipal)
+  NS_INTERFACE_MAP_ENTRY(nsIPrincipal)
+  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISerializable, nsIPrincipal)
+  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIPrincipal)
+  NS_INTERFACE_MAP_ENTRY(nsIPrincipalObsolete)
+  NS_IMPL_QUERY_CLASSINFO(nsPrincipal)
+NS_INTERFACE_MAP_END
+
 NS_IMPL_CI_INTERFACE_GETTER2(nsPrincipal,
                              nsIPrincipal,
                              nsISerializable)
@@ -102,24 +104,20 @@ nsPrincipal::nsPrincipal()
 }
 
 nsresult
-nsPrincipal::Init(const nsACString& aCertFingerprint,
-                  const nsACString& aSubjectName,
-                  const nsACString& aPrettyName,
-                  nsISupports* aCert,
-                  nsIURI *aCodebase)
+nsPrincipal::Init(const char *aCertID, nsIURI *aCodebase)
 {
   NS_ENSURE_STATE(!mInitialized);
-  NS_ENSURE_ARG(!aCertFingerprint.IsEmpty() || aCodebase); // better have one of these.
+  NS_ENSURE_ARG_POINTER(aCertID || aCodebase); // better have one of these.
 
   mInitialized = PR_TRUE;
 
   mCodebase = aCodebase;
 
   nsresult rv;
-  if (!aCertFingerprint.IsEmpty()) {
-    rv = SetCertificate(aCertFingerprint, aSubjectName, aPrettyName, aCert);
+  if (aCertID) {
+    rv = SetCertificate(aCertID, nsnull);
     if (NS_SUCCEEDED(rv)) {
-      rv = mJSPrincipals.Init(this, mCert->fingerprint.get());
+      rv = mJSPrincipals.Init(this, aCertID);
     }
   }
   else {
@@ -147,7 +145,6 @@ deleteElement(void* aElement, void *aData)
 nsPrincipal::~nsPrincipal(void)
 {
   mAnnotations.EnumerateForwards(deleteElement, nsnull);
-  SetSecurityPolicy(nsnull); 
 }
 
 NS_IMETHODIMP
@@ -165,34 +162,27 @@ nsPrincipal::GetOrigin(char **aOrigin)
 {
   *aOrigin = nsnull;
 
-  nsCOMPtr<nsIURI> origin = mCodebase;
-  if (mCodebase) {
-    // If uri is a jar URI, get the base URI
-    nsCOMPtr<nsIJARURI> jarURI;
-    while((jarURI = do_QueryInterface(origin)))
-    {
-      jarURI->GetJARFile(getter_AddRefs(origin));
-    }
-  }
-      
-  if (!origin) {
-      NS_ASSERTION(mCert, "No Domain or Codebase for a non-cert principal");
-      return NS_ERROR_FAILURE;
+  nsIURI* uri = mDomain ? mDomain : mCodebase;
+  if (!uri) {
+    NS_ASSERTION(mCert, "No Domain or Codebase for a non-cert principal");
+    return NS_ERROR_FAILURE;
   }
 
   nsCAutoString hostPort;
 
   // chrome: URLs don't have a meaningful origin, so make
   // sure we just get the full spec for them.
+  // XXX this should be removed in favor of the solution in
+  // bug 160042.
   PRBool isChrome;
-  nsresult rv = origin->SchemeIs("chrome", &isChrome);
+  nsresult rv = uri->SchemeIs("chrome", &isChrome);
   if (NS_SUCCEEDED(rv) && !isChrome) {
-    rv = origin->GetHostPort(hostPort);
+    rv = uri->GetHostPort(hostPort);
   }
 
   if (NS_SUCCEEDED(rv) && !isChrome) {
     nsCAutoString scheme;
-    rv = origin->GetScheme(scheme);
+    rv = uri->GetScheme(scheme);
     NS_ENSURE_SUCCESS(rv, rv);
     *aOrigin = ToNewCString(scheme + NS_LITERAL_CSTRING("://") + hostPort);
   }
@@ -200,7 +190,7 @@ nsPrincipal::GetOrigin(char **aOrigin)
     // Some URIs (e.g., nsSimpleURI) don't support host. Just
     // get the full spec.
     nsCAutoString spec;
-    rv = origin->GetSpec(spec);
+    rv = uri->GetSpec(spec);
     NS_ENSURE_SUCCESS(rv, rv);
     *aOrigin = ToNewCString(spec);
   }
@@ -211,25 +201,14 @@ nsPrincipal::GetOrigin(char **aOrigin)
 NS_IMETHODIMP
 nsPrincipal::GetSecurityPolicy(void** aSecurityPolicy)
 {
-  if (mSecurityPolicy && mSecurityPolicy->IsInvalid()) 
-    SetSecurityPolicy(nsnull);
-  
-  *aSecurityPolicy = (void *) mSecurityPolicy;
+  *aSecurityPolicy = mSecurityPolicy;
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsPrincipal::SetSecurityPolicy(void* aSecurityPolicy)
 {
-  DomainPolicy *newPolicy = NS_REINTERPRET_CAST(
-                              DomainPolicy *, aSecurityPolicy);
-  if (newPolicy)
-    newPolicy->Hold();
- 
-  if (mSecurityPolicy)
-    mSecurityPolicy->Drop();
-  
-  mSecurityPolicy = newPolicy;
+  mSecurityPolicy = aSecurityPolicy;
   return NS_OK;
 }
 
@@ -244,46 +223,35 @@ nsPrincipal::Equals(nsIPrincipal *aOther, PRBool *aResult)
   }
 
   if (this != aOther) {
-    PRBool otherHasCert;
-    aOther->GetHasCertificate(&otherHasCert);
-    if (otherHasCert != (mCert != nsnull)) {
-      // One has a cert while the other doesn't.  Not equal.
-      return NS_OK;
-    }
-
     if (mCert) {
-      nsCAutoString str;
-      aOther->GetFingerprint(str);
-      *aResult = str.Equals(mCert->fingerprint);
-
-      // If either subject name is empty, just let the result stand (so that
-      // nsScriptSecurityManager::SetCanEnableCapability works), but if they're
-      // both non-empty, only claim equality if they're equal.
-      if (*aResult && !mCert->subjectName.IsEmpty()) {
-        // Check the other principal's subject name
-        aOther->GetSubjectName(str);
-        *aResult = str.Equals(mCert->subjectName) || str.IsEmpty();
+      PRBool otherHasCert;
+      aOther->GetHasCertificate(&otherHasCert);
+      if (!otherHasCert) {
+        return NS_OK;
       }
-        
+
+      nsXPIDLCString otherCertID;
+      aOther->GetCertificateID(getter_Copies(otherCertID));
+      *aResult = otherCertID.Equals(mCert->certificateID);
       return NS_OK;
     }
 
     // Codebases are equal if they have the same origin.
-    *aResult =
-      NS_SUCCEEDED(nsScriptSecurityManager::GetScriptSecurityManager()
-                   ->CheckSameOriginPrincipal(this, aOther, PR_FALSE));
-    return NS_OK;
+    nsIURI *origin = mDomain ? mDomain : mCodebase;
+    nsCOMPtr<nsIURI> otherOrigin;
+    aOther->GetDomain(getter_AddRefs(otherOrigin));
+    if (!otherOrigin) {
+      aOther->GetURI(getter_AddRefs(otherOrigin));
+    }
+
+    return nsScriptSecurityManager::GetScriptSecurityManager()
+           ->SecurityCompareURIs(origin, otherOrigin, aResult);
   }
 
   *aResult = PR_TRUE;
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsPrincipal::Subsumes(nsIPrincipal *aOther, PRBool *aResult)
-{
-  return Equals(aOther, aResult);
-}
 
 NS_IMETHODIMP
 nsPrincipal::CanEnableCapability(const char *capability, PRInt16 *result)
@@ -508,18 +476,15 @@ nsPrincipal::SetURI(nsIURI* aURI)
 
 
 nsresult
-nsPrincipal::SetCertificate(const nsACString& aFingerprint,
-                            const nsACString& aSubjectName,
-                            const nsACString& aPrettyName,
-                            nsISupports* aCert)
+nsPrincipal::SetCertificate(const char* aID, const char* aName)
 {
   NS_ENSURE_STATE(!mCert);
 
-  if (aFingerprint.IsEmpty()) {
-    return NS_ERROR_INVALID_ARG;
+  if (!aID && !aName) {
+    return NS_ERROR_INVALID_POINTER;
   }
 
-  mCert = new Certificate(aFingerprint, aSubjectName, aPrettyName, aCert);
+  mCert = new Certificate(aID, aName);
   if (!mCert) {
     return NS_ERROR_OUT_OF_MEMORY;
   }
@@ -528,46 +493,44 @@ nsPrincipal::SetCertificate(const nsACString& aFingerprint,
 }
 
 NS_IMETHODIMP
-nsPrincipal::GetFingerprint(nsACString& aFingerprint)
+nsPrincipal::GetCertificateID(char** aID)
 {
   NS_ENSURE_STATE(mCert);
 
-  aFingerprint = mCert->fingerprint;
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsPrincipal::GetPrettyName(nsACString& aName)
-{
-  NS_ENSURE_STATE(mCert);
-
-  aName = mCert->prettyName;
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsPrincipal::GetSubjectName(nsACString& aName)
-{
-  NS_ENSURE_STATE(mCert);
-
-  aName = mCert->subjectName;
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsPrincipal::GetCertificate(nsISupports** aCertificate)
-{
-  if (mCert) {
-    NS_IF_ADDREF(*aCertificate = mCert->cert);
+  *aID = ToNewCString(mCert->certificateID);
+  if (!*aID) {
+    return NS_ERROR_OUT_OF_MEMORY;
   }
-  else {
-    *aCertificate = nsnull;
-  }
+
   return NS_OK;
 }
+
+NS_IMETHODIMP
+nsPrincipal::GetCommonName(char** aName)
+{
+  NS_ENSURE_STATE(mCert);
+
+  *aName = ToNewCString(mCert->commonName);
+  if (!*aName) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsPrincipal::SetCommonName(const char* aName)
+{
+  if (!mCert) {
+    NS_ERROR("You must first initialize the certificate with an ID");
+    return NS_ERROR_FAILURE;
+  }
+
+  mCert->commonName = aName;
+
+  return NS_OK;
+}
+
 
 NS_IMETHODIMP
 nsPrincipal::GetHashValue(PRUint32* aValue)
@@ -576,7 +539,7 @@ nsPrincipal::GetHashValue(PRUint32* aValue)
 
   // If there is a certificate, it takes precendence over the codebase.
   if (mCert) {
-    *aValue = nsCRT::HashCode(mCert->fingerprint.get(), nsnull);
+    *aValue = nsCRT::HashCode(mCert->certificateID.get(), nsnull);
   }
   else {
     nsCAutoString str;
@@ -600,19 +563,16 @@ nsPrincipal::SetDomain(nsIURI* aDomain)
 {
   mDomain = aDomain;
   // Domain has changed, forget cached security policy
-  SetSecurityPolicy(nsnull);
+  mSecurityPolicy = nsnull;
 
   return NS_OK;
 }
 
 nsresult
 nsPrincipal::InitFromPersistent(const char* aPrefName,
-                                const nsCString& aToken,
-                                const nsCString& aSubjectName,
-                                const nsACString& aPrettyName,
+                                const char* aToken,
                                 const char* aGrantedList,
                                 const char* aDeniedList,
-                                nsISupports* aCert,
                                 PRBool aIsCert,
                                 PRBool aTrusted)
 {
@@ -626,8 +586,7 @@ nsPrincipal::InitFromPersistent(const char* aPrefName,
 
   nsresult rv;
   if (aIsCert) {
-    rv = SetCertificate(aToken, aSubjectName, aPrettyName, aCert);
-    
+    rv = SetCertificate(aToken, nsnull);
     if (NS_FAILED(rv)) {
       return rv;
     }
@@ -642,7 +601,7 @@ nsPrincipal::InitFromPersistent(const char* aPrefName,
     mTrusted = aTrusted;
   }
 
-  rv = mJSPrincipals.Init(this, aToken.get());
+  rv = mJSPrincipals.Init(this, aToken);
   NS_ENSURE_SUCCESS(rv, rv);
 
   //-- Save the preference name
@@ -667,24 +626,6 @@ nsPrincipal::InitFromPersistent(const char* aPrefName,
   }
 
   return rv;
-}
-
-nsresult
-nsPrincipal::EnsureCertData(const nsACString& aSubjectName,
-                            const nsACString& aPrettyName,
-                            nsISupports* aCert)
-{
-  NS_ENSURE_STATE(mCert);
-
-  if (!mCert->subjectName.IsEmpty() &&
-      !mCert->subjectName.Equals(aSubjectName)) {
-    return NS_ERROR_INVALID_ARG;
-  }
-
-  mCert->subjectName = aSubjectName;
-  mCert->prettyName = aPrettyName;
-  mCert->cert = aCert;
-  return NS_OK;
 }
 
 struct CapabilityList
@@ -713,7 +654,6 @@ AppendCapability(nsHashKey *aKey, void *aData, void *capListPtr)
 
 NS_IMETHODIMP
 nsPrincipal::GetPreferences(char** aPrefName, char** aID,
-                            char** aSubjectName,
                             char** aGrantedList, char** aDeniedList)
 {
   if (mPrefName.IsEmpty()) {
@@ -730,13 +670,11 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
 
   *aPrefName = nsnull;
   *aID = nsnull;
-  *aSubjectName = nsnull;
   *aGrantedList = nsnull;
   *aDeniedList = nsnull;
 
   char *prefName = nsnull;
   char *id = nsnull;
-  char *subjectName = nsnull;
   char *granted = nsnull;
   char *denied = nsnull;
 
@@ -747,12 +685,9 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
   }
 
   //-- ID
-  nsresult rv = NS_OK;
+  nsresult rv;
   if (mCert) {
-    id = ToNewCString(mCert->fingerprint);
-    if (!id) {
-      rv = NS_ERROR_OUT_OF_MEMORY;
-    }
+    rv = GetCertificateID(&id);
   }
   else {
     rv = GetOrigin(&id);
@@ -761,18 +696,6 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
   if (NS_FAILED(rv)) {
     nsMemory::Free(prefName);
     return rv;
-  }
-
-  if (mCert) {
-    subjectName = ToNewCString(mCert->subjectName);
-  } else {
-    subjectName = ToNewCString(EmptyCString());
-  }
-
-  if (!subjectName) {
-    nsMemory::Free(prefName);
-    nsMemory::Free(id);
-    return NS_ERROR_OUT_OF_MEMORY;
   }
 
   //-- Capabilities
@@ -788,7 +711,6 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
     if (!granted) {
       nsMemory::Free(prefName);
       nsMemory::Free(id);
-      nsMemory::Free(subjectName);
       return NS_ERROR_OUT_OF_MEMORY;
     }
   }
@@ -799,7 +721,6 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
     if (!denied) {
       nsMemory::Free(prefName);
       nsMemory::Free(id);
-      nsMemory::Free(subjectName);
       if (granted) {
         nsMemory::Free(granted);
       }
@@ -809,7 +730,6 @@ nsPrincipal::GetPreferences(char** aPrefName, char** aID,
 
   *aPrefName = prefName;
   *aID = id;
-  *aSubjectName = subjectName;
   *aGrantedList = granted;
   *aDeniedList = denied;
 
@@ -935,5 +855,46 @@ nsPrincipal::Write(nsIObjectOutputStream* aStream)
     return rv;
   }
 
+  return NS_OK;
+}
+
+// nsIPrincipalObsolete interface
+
+NS_IMETHODIMP
+nsPrincipal::ToString(char **aResult)
+{
+  if (mCert)
+    return nsPrincipal::GetCertificateID(aResult);
+
+  return nsPrincipal::GetOrigin(aResult);
+}
+
+NS_IMETHODIMP
+nsPrincipal::ToUserVisibleString(char **aResult)
+{
+  if (mCert)
+    return nsPrincipal::GetCommonName(aResult);
+
+  return nsPrincipal::GetOrigin(aResult);
+}
+
+NS_IMETHODIMP
+nsPrincipal::Equals(nsIPrincipalObsolete *aOther, PRBool *aResult)
+{
+  nsCOMPtr<nsIPrincipal> princ = do_QueryInterface(aOther);
+  return nsPrincipal::Equals(princ, aResult);
+}
+
+NS_IMETHODIMP
+nsPrincipal::HashValue(PRUint32 *aResult)
+{
+  return nsPrincipal::GetHashValue(aResult);
+}
+
+NS_IMETHODIMP
+nsPrincipal::GetJSPrincipals(JSPrincipals **aResult)
+{
+  *aResult = &mJSPrincipals;
+  JSPRINCIPALS_HOLD(nsnull, *aResult);
   return NS_OK;
 }

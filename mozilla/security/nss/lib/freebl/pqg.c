@@ -1,43 +1,40 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.	Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.	If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * PQG parameter generation/verification.  Based on FIPS 186-1.
  *
- * $Id: pqg.c,v 1.9.2.4 2006/05/12 16:51:28 wtchang%redhat.com Exp $
+ * $Id: pqg.c,v 1.7 2001/01/31 15:49:19 mcgreer%netscape.com Exp $
  */
 
 #include "prerr.h"
@@ -76,13 +73,13 @@ static const unsigned char fips_186_1_a5_pqseed[] = {
 ** global random number generator.
 */
 static SECStatus
-getPQseed(SECItem *seed, PRArenaPool* arena)
+getPQseed(SECItem *seed)
 {
-    SECStatus rv;
-
-    if (!seed->data) {
-        seed->data = (unsigned char*)PORT_ArenaZAlloc(arena, seed->len);
+    if (seed->data) {
+        PORT_Free(seed->data);
+        seed->data = NULL;
     }
+    seed->data = (unsigned char*)PORT_ZAlloc(seed->len);
     if (!seed->data) {
 	PORT_SetError(SEC_ERROR_NO_MEMORY);
 	return SECFailure;
@@ -91,15 +88,7 @@ getPQseed(SECItem *seed, PRArenaPool* arena)
     memcpy(seed->data, fips_186_1_a5_pqseed, seed->len);
     return SECSuccess;
 #else
-    rv = RNG_GenerateGlobalRandomBytes(seed->data, seed->len);
-    /*
-     * NIST CMVP disallows a sequence of 20 bytes with the most
-     * significant byte equal to 0.  Perhaps they interpret
-     * "a sequence of at least 160 bits" as "a number >= 2^159".
-     * So we always set the most significant bit to 1. (bug 334533)
-     */
-    seed->data[0] |= 0x80;
-    return rv;
+    return RNG_GenerateGlobalRandomBytes(seed->data, seed->len);
 #endif
 }
 
@@ -332,8 +321,8 @@ makeGfromH(const mp_int *P,     /* input.  */
     CHECK_MPI_OK( mp_init(&exp) );
     CHECK_MPI_OK( mp_init(&pm1) );
     CHECK_MPI_OK( mp_sub_d(P, 1, &pm1) );        /* P - 1            */
-    if ( mp_cmp(H, &pm1) >= 0)                   /* H >= P-1         */
-	CHECK_MPI_OK( mp_sub(H, &pm1, H) );      /* H = H mod (P-1)  */
+    if ( mp_cmp(H, &pm1) > 0)                   /* H = H mod (P-1)  */
+	CHECK_MPI_OK( mp_sub(H, &pm1, H) );
     /* Let b = 2**n (smallest power of 2 greater than P).
     ** Since P-1 >= b/2, and H < b, quotient(H/(P-1)) = 0 or 1
     ** so the above operation safely computes H mod (P-1)
@@ -402,7 +391,7 @@ PQG_ParamGenSeedLen(unsigned int j, unsigned int seedBytes,
     mp_err    err = MP_OKAY;
     SECStatus rv  = SECFailure;
     int iterations = 0;
-    if (j > 8 || seedBytes < 20 || !pParams || !pVfy) {
+    if (j > 8 || !pParams || !pVfy) {
 	PORT_SetError(SEC_ERROR_INVALID_ARGS);
 	return SECFailure;
     }
@@ -463,7 +452,7 @@ step_1:
         goto cleanup;
     }
     seed->len = seedBytes;
-    CHECK_SEC_OK( getPQseed(seed, verify->arena) );
+    CHECK_SEC_OK( getPQseed(seed) );
     /* ******************************************************************
     ** Step 2.
     ** "Compute U = SHA[SEED] XOR SHA[(SEED+1) mod 2**g]."
@@ -548,7 +537,7 @@ step_15:
     **  in certifying the proper generation of p and q."
     */
     /* Generate h. */
-    SECITEM_AllocItem(NULL, &hit, L/8); /* h is no longer than p */
+    SECITEM_AllocItem(NULL, &hit, seedBytes); /* h is no longer than p */
     if (!hit.data) goto cleanup;
     do {
 	/* loop generate h until 1<h<p-1 and (h**[(p-1)/q])mod p > 1 */
@@ -576,9 +565,6 @@ cleanup:
     if (rv) {
 	PORT_FreeArena(params->arena, PR_TRUE);
 	PORT_FreeArena(verify->arena, PR_TRUE);
-    }
-    if (hit.data) {
-        SECITEM_FreeItem(&hit, PR_FALSE);
     }
     return rv;
 }
@@ -638,6 +624,7 @@ PQG_VerifyParams(const PQGParams *params,
     /* 6.  P is prime */
     CHECKPARAM( mpp_pprime(&P, PQG_P_PRIMALITY_TESTS) == MP_YES );
     /* Steps 7-12 are done only if the optional PQGVerify is supplied. */
+    if (!vfy) goto cleanup;
     /* 7.  counter < 4096 */
     CHECKPARAM( vfy->counter < 4096 );
     /* 8.  g >= 160 and g < 2048   (g is length of seed in bits) */

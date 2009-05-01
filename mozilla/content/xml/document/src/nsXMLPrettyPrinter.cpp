@@ -37,11 +37,11 @@
  * ***** END LICENSE BLOCK ***** */
  
 #include "nsXMLPrettyPrinter.h"
-#include "nsContentUtils.h"
 #include "nsIDOMDocumentView.h"
 #include "nsIDOMAbstractView.h"
 #include "nsIDOMCSSStyleDeclaration.h"
 #include "nsIDOMViewCSS.h"
+#include "nsIPrefService.h"
 #include "nsIDOMDocumentXBL.h"
 #include "nsIBindingManager.h"
 #include "nsIObserver.h"
@@ -106,7 +106,7 @@ nsXMLPrettyPrinter::PrettyPrint(nsIDocument* aDocument)
             nsAutoString visibility;
             computedStyle->GetPropertyValue(NS_LITERAL_STRING("visibility"),
                                             visibility);
-            if (!visibility.EqualsLiteral("visible")) {
+            if (!visibility.Equals(NS_LITERAL_STRING("visible"))) {
 
                 return NS_OK;
             }
@@ -114,9 +114,16 @@ nsXMLPrettyPrinter::PrettyPrint(nsIDocument* aDocument)
     }
 
     // check the pref
-    if (!nsContentUtils::GetBoolPref("layout.xml.prettyprint", PR_TRUE)) {
-        return NS_OK;
+    nsCOMPtr<nsIPrefBranch> prefBranch =
+        do_GetService(NS_PREFSERVICE_CONTRACTID);
+    if (prefBranch) {
+        PRBool pref = PR_TRUE;
+        prefBranch->GetBoolPref("layout.xml.prettyprint", &pref);
+        if (!pref) {
+            return NS_OK;
+        }
     }
+
 
     // Ok, we should prettyprint. Let's do it!
     nsresult rv = NS_OK;
@@ -148,7 +155,7 @@ nsXMLPrettyPrinter::PrettyPrint(nsIDocument* aDocument)
 
     nsCOMPtr<nsIDOMDocumentFragment> resultFragment;
     nsCOMPtr<nsIDOMDocument> sourceDocument = do_QueryInterface(aDocument);
-    rv = transformer->TransformToFragment(sourceDocument, sourceDocument,
+    rv = transformer->TransformToFragment(sourceDocument, xslDocument,
                                           getter_AddRefs(resultFragment));
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -173,7 +180,7 @@ nsXMLPrettyPrinter::PrettyPrint(nsIDocument* aDocument)
     nsCOMPtr<nsIObserver> binding;
     nsCOMPtr<nsIContent> rootCont = do_QueryInterface(rootElem);
     NS_ASSERTION(rootCont, "Element doesn't implement nsIContent");
-    aDocument->BindingManager()->GetBindingImplementation(rootCont,
+    aDocument->GetBindingManager()->GetBindingImplementation(rootCont,
                                               NS_GET_IID(nsIObserver),
                                               (void**)getter_AddRefs(binding));
     NS_ASSERTION(binding, "Prettyprint binding doesn't implement nsIObserver");
@@ -259,6 +266,16 @@ void
 nsXMLPrettyPrinter::ContentInserted(nsIDocument* aDocument,
                                     nsIContent* aContainer,
                                     nsIContent* aChild,
+                                    PRInt32 aIndexInContainer)
+{
+    MaybeUnhook(aContainer);
+}
+
+void
+nsXMLPrettyPrinter::ContentReplaced(nsIDocument* aDocument,
+                                    nsIContent* aContainer,
+                                    nsIContent* aOldChild,
+                                    nsIContent* aNewChild,
                                     PRInt32 aIndexInContainer)
 {
     MaybeUnhook(aContainer);

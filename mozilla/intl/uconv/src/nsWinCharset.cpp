@@ -1,11 +1,11 @@
 
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,29 +14,30 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsIPlatformCharset.h"
-#include "nsGREResProperties.h"
+#include "nsURLProperties.h"
 #include "pratom.h"
 #include <windows.h>
 #include "nsUConvDll.h"
@@ -44,11 +45,11 @@
 #include "nsCOMPtr.h"
 #include "nsReadableUtils.h"
 #include "nsLocaleCID.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIComponentManager.h"
 #include "nsITimelineService.h"
 #include "nsPlatformCharset.h"
 
-static nsGREResProperties *gInfo = nsnull;
+static nsURLProperties *gInfo = nsnull;
 static PRInt32 gCnt= 0;
 
 NS_IMPL_ISUPPORTS1(nsPlatformCharset, nsIPlatformCharset)
@@ -59,12 +60,11 @@ nsPlatformCharset::nsPlatformCharset()
 
   nsAutoString acpKey(NS_LITERAL_STRING("acp."));
   acpKey.AppendInt(PRInt32(::GetACP() & 0x00FFFF), 10);
-  MapToCharset(acpKey, mCharset);
+  nsresult res = MapToCharset(acpKey, mCharset);
 
   NS_TIMELINE_STOP_TIMER("nsPlatformCharset()");
   NS_TIMELINE_MARK_TIMER("nsPlatformCharset()");
-}
-
+          }
 nsPlatformCharset::~nsPlatformCharset()
 {
   PR_AtomicDecrement(&gCnt);
@@ -80,7 +80,7 @@ nsPlatformCharset::InitInfo()
   PR_AtomicIncrement(&gCnt); // count for gInfo
 
   if (gInfo == nsnull) {
-    nsGREResProperties *info = new nsGREResProperties(NS_LITERAL_CSTRING("wincharset.properties"));
+    nsURLProperties *info = new nsURLProperties(NS_LITERAL_CSTRING("resource://gre/res/wincharset.properties"));
 
     NS_ASSERTION(info , "cannot open properties file");
     NS_ENSURE_TRUE(info, NS_ERROR_FAILURE);
@@ -93,27 +93,27 @@ nsresult
 nsPlatformCharset::MapToCharset(nsAString& inANSICodePage, nsACString& outCharset)
 {
   //delay loading wincharset.properties bundle if possible
-  if (inANSICodePage.EqualsLiteral("acp.1252")) {
-    outCharset.AssignLiteral("windows-1252");
+  if (inANSICodePage.Equals(NS_LITERAL_STRING("acp.1252"))) {
+    outCharset = NS_LITERAL_CSTRING("windows-1252");
     return NS_OK;
   } 
 
-  if (inANSICodePage.EqualsLiteral("acp.932")) {
-    outCharset.AssignLiteral("Shift_JIS");
+  if (inANSICodePage.Equals(NS_LITERAL_STRING("acp.932"))) {
+    outCharset = NS_LITERAL_CSTRING("Shift_JIS");
     return NS_OK;
   } 
 
   // ensure the .property file is loaded
   nsresult rv = InitInfo();
   if (NS_FAILED(rv)) {
-    outCharset.AssignLiteral("windows-1252");
+    outCharset.Assign(NS_LITERAL_CSTRING("windows-1252"));
     return rv;
   }
 
   nsAutoString charset;
   rv = gInfo->Get(inANSICodePage, charset);
   if (NS_FAILED(rv)) {
-    outCharset.AssignLiteral("windows-1252");
+    outCharset.Assign(NS_LITERAL_CSTRING("windows-1252"));
     return rv;
   }
 
@@ -142,7 +142,7 @@ nsPlatformCharset::GetDefaultCharsetForLocale(const nsAString& localeName, nsACS
   nsresult rv;
   oResult.Truncate();
 
-  winLocale = do_GetService(NS_WIN32LOCALE_CONTRACTID, &rv);
+  winLocale = do_CreateInstance(NS_WIN32LOCALE_CONTRACTID, &rv);
   if (NS_FAILED(rv)) { return rv; }
 
   rv = winLocale->GetPlatformLocale(localeName, &localeAsLCID);

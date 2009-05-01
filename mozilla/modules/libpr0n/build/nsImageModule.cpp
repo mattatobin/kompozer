@@ -1,43 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
+ * 
+ * Contributor(s): 
  *   Stuart Parmenter <pavlov@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-
-#include "nsImgBuildDefines.h"
+ */
 
 #ifdef XP_MAC
 #define IMG_BUILD_gif 1
@@ -51,7 +33,7 @@
 #include "nsIModule.h"
 #include "nsICategoryManager.h"
 #include "nsXPCOMCID.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 
 #include "imgCache.h"
 #include "imgContainer.h"
@@ -59,43 +41,36 @@
 #include "imgRequest.h"
 #include "imgRequestProxy.h"
 
-#ifdef IMG_BUILD_DECODER_gif
+#ifdef IMG_BUILD_gif
 // gif
 #include "imgContainerGIF.h"
 #include "nsGIFDecoder2.h"
 #endif
 
-#ifdef IMG_BUILD_DECODER_bmp
+#ifdef IMG_BUILD_bmp
 // bmp/ico
 #include "nsBMPDecoder.h"
 #include "nsICODecoder.h"
 #endif
 
-#ifdef IMG_BUILD_DECODER_png
+#ifdef IMG_BUILD_png
 // png
 #include "nsPNGDecoder.h"
 #endif
 
-#ifdef IMG_BUILD_DECODER_jpeg
+#if defined(XP_WIN32) && defined(IMG_BUILD_jpeg)
+#include "nsJPEGEncoder.h"
+#endif
+
+#ifdef IMG_BUILD_jpeg
 // jpeg
 #include "nsJPEGDecoder.h"
 #endif
 
-#ifdef IMG_BUILD_DECODER_xbm
+#ifdef IMG_BUILD_xbm
 // xbm
 #include "nsXBMDecoder.h"
 #endif
-
-
-#ifdef IMG_BUILD_ENCODER_png
-// png
-#include "nsPNGEncoder.h"
-#endif
-#ifdef IMG_BUILD_ENCODER_jpeg
-// jpeg
-#include "nsJPEGEncoder.h"
-#endif
-
 
 // objects that just require generic constructors
 
@@ -104,60 +79,55 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(imgContainer)
 NS_GENERIC_FACTORY_CONSTRUCTOR(imgLoader)
 NS_GENERIC_FACTORY_CONSTRUCTOR(imgRequestProxy)
 
-#ifdef IMG_BUILD_DECODER_gif
+#ifdef IMG_BUILD_gif
 // gif
 NS_GENERIC_FACTORY_CONSTRUCTOR(imgContainerGIF)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsGIFDecoder2)
 #endif
 
-#ifdef IMG_BUILD_DECODER_jpeg
+#ifdef IMG_BUILD_jpeg
 // jpeg
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsJPEGDecoder)
 #endif
-#ifdef IMG_BUILD_ENCODER_jpeg
-// jpeg
+
+#if defined(XP_WIN32) && defined(IMG_BUILD_jpeg)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsJPEGEncoder)
 #endif
 
-#ifdef IMG_BUILD_DECODER_bmp
+#ifdef IMG_BUILD_bmp
 // bmp
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsICODecoder)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsBMPDecoder)
 #endif
 
-#ifdef IMG_BUILD_DECODER_png
+#ifdef IMG_BUILD_png
 // png
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsPNGDecoder)
 #endif
-#ifdef IMG_BUILD_ENCODER_png
-// png
-NS_GENERIC_FACTORY_CONSTRUCTOR(nsPNGEncoder)
-#endif
 
-#ifdef IMG_BUILD_DECODER_xbm
+#ifdef IMG_BUILD_xbm
 // xbm
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsXBMDecoder)
 #endif
 
 static const char* gImageMimeTypes[] = {
-#ifdef IMG_BUILD_DECODER_gif
+#ifdef IMG_BUILD_gif
   "image/gif",
 #endif
-#ifdef IMG_BUILD_DECODER_jpeg
+#ifdef IMG_BUILD_jpeg
   "image/jpeg",
   "image/pjpeg",
   "image/jpg",
 #endif
-#ifdef IMG_BUILD_DECODER_bmp
+#ifdef IMG_BUILD_bmp
   "image/x-icon",
-  "image/vnd.microsoft.icon",
   "image/bmp",
 #endif
-#ifdef IMG_BUILD_DECODER_png
+#ifdef IMG_BUILD_png
   "image/png",
   "image/x-png",
 #endif
-#ifdef IMG_BUILD_DECODER_xbm
+#ifdef IMG_BUILD_xbm
   "image/x-xbitmap",
   "image/x-xbm",
   "image/xbm"
@@ -220,7 +190,7 @@ static const nsModuleComponentInfo components[] =
     "@mozilla.org/image/request;1",
     imgRequestProxyConstructor, },
 
-#ifdef IMG_BUILD_DECODER_gif
+#ifdef IMG_BUILD_gif
   // gif
   { "GIF image container",
     NS_GIFCONTAINER_CID,
@@ -232,7 +202,7 @@ static const nsModuleComponentInfo components[] =
      nsGIFDecoder2Constructor, },
 #endif
 
-#ifdef IMG_BUILD_DECODER_jpeg
+#ifdef IMG_BUILD_jpeg
   // jpeg
   { "JPEG decoder",
     NS_JPEGDECODER_CID,
@@ -247,23 +217,19 @@ static const nsModuleComponentInfo components[] =
     "@mozilla.org/image/decoder;2?type=image/jpg",
     nsJPEGDecoderConstructor, },
 #endif
-#ifdef IMG_BUILD_ENCODER_jpeg
-  // jpeg (encoder)
-  { "JPEG Encoder",
-    NS_JPEGENCODER_CID,
+
+#if defined(XP_WIN32) && defined(IMG_BUILD_jpeg)
+  { "JPEG encoder",
+    NS_JPEGENCODER_CID, 
     "@mozilla.org/image/encoder;2?type=image/jpeg",
     nsJPEGEncoderConstructor, },
 #endif
 
-#ifdef IMG_BUILD_DECODER_bmp
+#ifdef IMG_BUILD_bmp
   // bmp
   { "ICO Decoder",
      NS_ICODECODER_CID,
      "@mozilla.org/image/decoder;2?type=image/x-icon",
-     nsICODecoderConstructor, },
-  { "ICO Decoder",
-     NS_ICODECODER_CID,
-     "@mozilla.org/image/decoder;2?type=image/vnd.microsoft.icon",
      nsICODecoderConstructor, },
   { "BMP Decoder",
      NS_BMPDECODER_CID,
@@ -271,7 +237,7 @@ static const nsModuleComponentInfo components[] =
      nsBMPDecoderConstructor, },
 #endif
 
-#ifdef IMG_BUILD_DECODER_png
+#ifdef IMG_BUILD_png
   // png
   { "PNG Decoder",
     NS_PNGDECODER_CID,
@@ -282,15 +248,8 @@ static const nsModuleComponentInfo components[] =
     "@mozilla.org/image/decoder;2?type=image/x-png",
     nsPNGDecoderConstructor, },
 #endif
-#ifdef IMG_BUILD_ENCODER_png
-  // png
-  { "PNG Encoder",
-    NS_PNGENCODER_CID,
-    "@mozilla.org/image/encoder;2?type=image/png",
-    nsPNGEncoderConstructor, },
-#endif
 
-#ifdef IMG_BUILD_DECODER_xbm
+#ifdef IMG_BUILD_xbm
   // xbm
   { "XBM Decoder",
      NS_XBMDECODER_CID,
@@ -318,7 +277,7 @@ PR_STATIC_CALLBACK(void)
 imglib_Shutdown(nsIModule* aSelf)
 {
   imgCache::Shutdown();
-#ifdef IMG_BUILD_DECODER_gif
+#ifdef IMG_BUILD_gif
   nsGifShutdown();
 #endif
 }

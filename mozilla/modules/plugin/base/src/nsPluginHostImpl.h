@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -46,9 +46,6 @@
 #include "nsCRT.h"
 #include "nsCOMPtr.h"
 #include "prlink.h"
-#include "prclist.h"
-#include "npapi.h"
-#include "ns4xPluginInstance.h"
 
 #include "nsIPlugin.h"
 #include "nsIPluginTagInfo2.h"
@@ -119,10 +116,10 @@ public:
   char          **mMimeDescriptionArray;
   char          **mExtensionsArray;
   PRLibrary     *mLibrary;
+  PRBool        mCanUnloadLibrary;
   nsIPlugin     *mEntryPoint;
   PRUint32      mFlags;
-  PRPackedBool  mCanUnloadLibrary;
-  PRPackedBool  mXPConnected;
+  PRBool        mXPConnected;
   char          *mFileName;
   char          *mFullPath;
   PRInt64       mLastModifiedTime;
@@ -135,10 +132,10 @@ struct nsActivePlugin
   nsIPluginInstancePeer* mPeer;
   nsPluginTag*           mPluginTag;
   nsIPluginInstance*     mInstance;
+  PRBool                 mStopped;
   PRTime                 mllStopTime;
-  PRPackedBool           mStopped;
-  PRPackedBool           mDefaultPlugin;
-  PRPackedBool           mXPConnected;
+  PRBool                 mDefaultPlugin;
+  PRBool                 mXPConnected;
   //Array holding all opened stream listeners for this entry
   nsCOMPtr <nsISupportsArray>  mStreams; 
 
@@ -197,8 +194,6 @@ public:
   NS_DECL_AND_IMPL_ZEROING_OPERATOR_NEW
 
   NS_DECL_ISUPPORTS
-
-  static const char *GetPluginName(nsIPluginInstance *aPluginInstance);
 
   //nsIPluginManager interface - the main interface nsIPlugin communicates to
 
@@ -272,10 +267,10 @@ public:
   GetPluginFactory(const char *aMimeType, nsIPlugin** aPlugin);
 
   NS_IMETHOD
-  InstantiateEmbeddedPlugin(const char *aMimeType, nsIURI* aURL, nsIPluginInstanceOwner *aOwner);
+  InstantiateEmbededPlugin(const char *aMimeType, nsIURI* aURL, nsIPluginInstanceOwner *aOwner);
 
   NS_IMETHOD
-  InstantiateFullPagePlugin(const char *aMimeType, nsIURI* aURI, nsIStreamListener *&aStreamListener, nsIPluginInstanceOwner *aOwner);
+  InstantiateFullPagePlugin(const char *aMimeType, nsString& aURLSpec, nsIStreamListener *&aStreamListener, nsIPluginInstanceOwner *aOwner);
 
   NS_IMETHOD
   SetUpPluginInstance(const char *aMimeType, nsIURI *aURL, nsIPluginInstanceOwner *aOwner);
@@ -290,7 +285,7 @@ public:
   GetPluginCount(PRUint32* aPluginCount);
   
   NS_IMETHOD
-  GetPlugins(PRUint32 aPluginCount, nsIDOMPlugin** aPluginArray);
+  GetPlugins(PRUint32 aPluginCount, nsIDOMPlugin* aPluginArray[]);
 
   NS_IMETHOD
   HandleBadPlugin(PRLibrary* aLibrary, nsIPluginInstance *instance);
@@ -413,8 +408,6 @@ public:
   NS_IMETHOD
   AddUnusedLibrary(PRLibrary * aLibrary);
 
-  static nsresult GetPluginTempDir(nsIFile **aDir);
-
 private:
   NS_IMETHOD
   TrySetUpPluginInstance(const char *aMimeType, nsIURI *aURL, nsIPluginInstanceOwner *aOwner);
@@ -423,7 +416,7 @@ private:
   LoadXPCOMPlugins(nsIComponentManager* aComponentManager);
 
   nsresult
-  NewEmbeddedPluginStream(nsIURI* aURL, nsIPluginInstanceOwner *aOwner, nsIPluginInstance* aInstance);
+  NewEmbededPluginStream(nsIURI* aURL, nsIPluginInstanceOwner *aOwner, nsIPluginInstance* aInstance);
 
   nsresult
   NewFullPagePluginStream(nsIStreamListener *&aStreamListener, nsIPluginInstance *aInstance);
@@ -495,18 +488,12 @@ private:
   char        *mPluginPath;
   nsPluginTag *mPlugins;
   nsPluginTag *mCachedPlugins;
-  PRPackedBool mPluginsLoaded;
-  PRPackedBool mDontShowBadPluginMessage;
-  PRPackedBool mIsDestroyed;
-
-  // set by pref plugin.override_internal_types
-  PRPackedBool mOverrideInternalTypes;
-
-  // set by pref plugin.allow_alien_star_handler
-  PRPackedBool mAllowAlienStarHandler;
-
-  // set by pref plugin.default_plugin_disabled
-  PRPackedBool mDefaultPluginDisabled;
+  PRBool      mPluginsLoaded;
+  PRBool      mDontShowBadPluginMessage;
+  PRBool      mIsDestroyed;
+  PRBool      mOverrideInternalTypes; // set by pref plugin.override_internal_types
+  PRBool      mAllowAlienStarHandler;  // set by pref plugin.allow_alien_star_handler
+  PRBool      mDefaultPluginDisabled;
 
   nsActivePluginList mActivePluginList;
   nsVoidArray mUnusedLibraries;
@@ -514,44 +501,8 @@ private:
   nsCOMPtr<nsIFile>                    mPluginRegFile;
   nsCOMPtr<nsIPrefBranch>              mPrefService;
   nsRefPtr<nsPluginDirServiceProvider> mPrivateDirServiceProvider;
-
+  
   nsWeakPtr mCurrentDocument; // weak reference, we use it to id document only
-
-  static nsIFile *sPluginTempDir;
-};
-
-class PluginDestructionGuard : protected PRCList
-{
-public:
-  PluginDestructionGuard(nsIPluginInstance *aInstance)
-    : mInstance(aInstance)
-  {
-    Init();
-  }
-
-  PluginDestructionGuard(NPP npp)
-    : mInstance(npp ? static_cast<ns4xPluginInstance*>(npp->ndata) : nsnull)
-  {
-    Init();
-  }
-
-  ~PluginDestructionGuard();
-
-  static PRBool DelayDestroy(nsIPluginInstance *aInstance);
-
-protected:
-  void Init()
-  {
-    mDelayedDestroy = PR_FALSE;
-
-    PR_INIT_CLIST(this);
-    PR_INSERT_BEFORE(this, &sListHead);
-  }
-
-  nsCOMPtr<nsIPluginInstance> mInstance;
-  PRBool mDelayedDestroy;
-
-  static PRCList sListHead;
 };
 
 #endif

@@ -1,13 +1,9 @@
 ;-------------------------------------------------------------------------
 [General]
 ;-------------------------------------------------------------------------
-Default Location=/usr/local/$AppName$
+Default Location=/usr/local/mozilla
 ; *** LOCALIZE ME BABY ***
-Title=$AppDisplayName$ Installer
-; The Default Setup Type value must exactly match the "Description Short"
-; value of the desired setup type.
-; *** LOCALIZE ME BABY ***
-Default Setup Type=Typical
+Title=Mozilla Installer
 
 
 ;-------------------------------------------------------------------------
@@ -21,7 +17,7 @@ ObjectToIgnore1=install.log
 [Dialog Welcome]
 ;-------------------------------------------------------------------------
 Show Dialog=TRUE
-Title=$AppDisplayName$ Installer
+Title=Mozilla Installer
 Readme File=README
 
 
@@ -29,14 +25,15 @@ Readme File=README
 [Dialog License]
 ;-------------------------------------------------------------------------
 Show Dialog=TRUE
-Title=$AppDisplayName$ Installer
+Title=Mozilla Installer
 License File=MPL-1.1.txt
 
 
 ;-------------------------------------------------------------------------
 [Dialog Setup Type]
 ;-------------------------------------------------------------------------
-Title=$AppDisplayName$ Installer
+Show Dialog=TRUE
+Title=Mozilla Installer
 ; *** LOCALIZE ME BABY ***
 Message0=Please select the setup type you wish to install.
 
@@ -52,14 +49,13 @@ C3=Component3
 C4=Component5
 C5=Component6
 C6=Component7
-C7=Component10
-;C8=Component12
+C7=Component8
 
 [Setup Type1]
 ; *** LOCALIZE ME BABY ***
 Description Short=Complete
 ; *** LOCALIZE ME BABY ***
-Description Long=Navigator, Mail & News, Spellchecker, Chatzilla, Debugger, Inspector, and Reporter
+Description Long=Navigator, Mail & News, Spellchecker, Chatzilla, Debugger, and Inspector
 C0=Component0
 C1=Component1
 C2=Component2
@@ -72,7 +68,6 @@ C8=Component8
 C9=Component9
 C10=Component10
 C11=Component11
-;C12=Component12
 
 [Setup Type2]
 ; *** LOCALIZE ME BABY ***
@@ -83,9 +78,9 @@ C0=Component0
 C1=Component1 
 C2=Component3 
 C3=Component5
-C4=Component6
+C4=COmponent6
 C5=Component7
-;C6=Component12
+C6=Component8
 
 [Setup Type3]
 ; *** LOCALIZE ME BABY ***
@@ -104,13 +99,13 @@ C8=Component8
 C9=Component9
 C10=Component10
 C11=Component11
-;C12=Component12
 
 
 ;-------------------------------------------------------------------------
 [Dialog Select Components]
 ;-------------------------------------------------------------------------
-Title=$AppDisplayName$ Installer
+Show Dialog=TRUE
+Title=Mozilla Installer
 ; *** LOCALIZE ME BABY ***
 Message0=Please select the components you wish to install.
 
@@ -165,6 +160,16 @@ Attributes=SELECTED
 URL0=$URLPath$
 
 [Component5]
+Description Short=Quality Feedback Agent
+; *** LOCALIZE ME BABY ***
+Description Long=for reporting Mozilla crash information
+Archive=talkback.xpi
+Install Size=1960
+Archive Size=812
+Attributes=SELECTED
+URL0=$URLPath$
+
+[Component6]
 Description Short=English US Profile Defaults
 ; *** LOCALIZE ME BABY ***
 Description Long=English US Profile Defaults
@@ -174,7 +179,7 @@ $InstallSizeArchive$:deflenus.xpi
 Attributes=SELECTED|INVISIBLE
 URL0=$URLPath$
 
-[Component6]
+[Component7]
 Description Short=English (US) Language Pack
 ; *** LOCALIZE ME BABY ***
 Description Long=English (US) Language Pack
@@ -184,7 +189,7 @@ $InstallSizeArchive$:langenus.xpi
 Attributes=SELECTED|INVISIBLE
 URL0=$URLPath$
 
-[Component7]
+[Component8]
 Description Short=US Regional Pack
 ; *** LOCALIZE ME BABY ***
 Description Long=Regional contents for US users
@@ -194,7 +199,7 @@ $InstallSizeArchive$:regus.xpi
 Attributes=SELECTED|INVISIBLE
 URL0=$URLPath$
 
-[Component8]
+[Component9]
 Description Short=Debugger
 ; *** LOCALIZE ME BABY ***
 Description Long=for debugging JavaScript
@@ -204,7 +209,7 @@ $InstallSizeArchive$:venkman.xpi
 Attributes=SELECTED
 URL0=$URLPath$
 
-[Component9]
+[Component10]
 Description Short=Inspector
 ; *** LOCALIZE ME BABY ***
 Description Long=DOM Inspector
@@ -214,7 +219,7 @@ $InstallSizeArchive$:inspector.xpi
 Attributes=SELECTED
 URL0=$URLPath$
 
-[Component10]
+[Component11]
 Description Short=Spellchecker
 ; *** LOCALIZE ME BABY ***
 Description Long=Spellchecker
@@ -224,31 +229,11 @@ $InstallSizeArchive$:spellcheck.xpi
 Attributes=SELECTED
 URL0=$URLPath$
 
-[Component11]
-Description Short=Website Reporter
-; *** LOCALIZE ME BABY ***
-Description Long=Website Reporter
-Archive=reporter.xpi
-$InstallSize$:reporter
-$InstallSizeArchive$:reporter.xpi
-Attributes=SELECTED
-URL0=$URLPath$
-
-[Component12]
-Description Short=Quality Feedback Agent
-; *** LOCALIZE ME BABY ***
-Description Long=for reporting $AppDisplayName$ crash information
-Archive=talkback.xpi
-Install Size=1960
-Archive Size=812
-Attributes=SELECTED
-URL0=$URLPath$
-
 ;-------------------------------------------------------------------------
 [Dialog Start Install]
 ;-------------------------------------------------------------------------
 Show Dialog=TRUE
-Title=$AppDisplayName$ Installer
+Title=Mozilla Installer
 ; *** LOCALIZE ME BABY ***
 Message0=Click the Install button to proceed with this installation.
 XPInstall Engine=xpcom.xpi
@@ -271,6 +256,6 @@ Arguments=regchrome
 ;-------------------------------------------------------------------------
 [LegacyCheck0]
 ;-------------------------------------------------------------------------
-Filename=$AppName$-bin
+Filename=mozilla-bin
 ; *** LOCALIZE ME BABY ***
-Message=The selected directory already contains a $AppDisplayName$ installation. To delete %s completely, please press the 'Delete Directory' button. Information in your $AppDisplayName$ profile(s) should not be affected. Or, please press the 'Cancel' button and choose a different destination directory.
+Message=The selected directory already contains a Mozilla installation. To delete %s completely, please press the 'Delete Directory' button. Information in your Mozilla profile(s) should not be affected. Or, please press the 'Cancel' button and choose a different destination directory.

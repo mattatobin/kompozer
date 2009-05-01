@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,9 +44,6 @@
 #include "nsString.h"
 #include "nsIDOMInstallVersion.h"
 #include "nsIDOMInstallTriggerGlobal.h"
-#include "nsIDOMWindow.h"
-#include "nsIDOMDocument.h"
-#include "nsIDocument.h"
 #include "nsIDocShell.h"
 #include "nsIObserverService.h"
 #include "nsInstallTrigger.h"
@@ -70,26 +67,11 @@ extern PRBool ConvertJSValToBool(PRBool* aProp,
                                 JSContext* aContext,
                                 jsval aValue);
 
-PR_STATIC_CALLBACK(void)
-FinalizeInstallTriggerGlobal(JSContext *cx, JSObject *obj);
-
-/***********************************************************************/
-//
-// class for InstallTriggerGlobal
-//
-JSClass InstallTriggerGlobalClass = {
-  "InstallTrigger",
-  JSCLASS_HAS_PRIVATE,
-  JS_PropertyStub,
-  JS_PropertyStub,
-  JS_PropertyStub,
-  JS_PropertyStub,
-  JS_EnumerateStub,
-  JS_ResolveStub,
-  JS_ConvertStub,
-  FinalizeInstallTriggerGlobal
-};
-
+extern PRBool ConvertJSValToObj(nsISupports** aSupports,
+                               REFNSIID aIID,
+                               const nsString& aTypeName,
+                               JSContext* aContext,
+                               jsval aValue);
 
 //
 // InstallTriggerGlobal finalizer
@@ -122,8 +104,12 @@ static JSBool CreateNativeObject(JSContext *cx, JSObject *obj, nsIDOMInstallTrig
     static NS_DEFINE_CID(kInstallTrigger_CID,
                          NS_SoftwareUpdateInstallTrigger_CID);
 
-    result = CallCreateInstance(kInstallTrigger_CID, &nativeThis);
-    if (NS_FAILED(result)) return JS_FALSE;
+    result = nsComponentManager::CreateInstance(kInstallTrigger_CID,
+                                        nsnull,
+                                        NS_GET_IID(nsIDOMInstallTriggerGlobal),
+                                        (void **)&nativeThis);
+
+    if (NS_OK != result) return JS_FALSE;
 
     result = nativeThis->QueryInterface(NS_GET_IID(nsIScriptObjectOwner),
                                         (void **)&owner);
@@ -144,88 +130,17 @@ static JSBool CreateNativeObject(JSContext *cx, JSObject *obj, nsIDOMInstallTrig
 }
 
 //
-// Helper function for URI verification
-//
-static nsresult
-InstallTriggerCheckLoadURIFromScript(JSContext *cx, const nsAString& uriStr)
-{
-    nsresult rv;
-    nsCOMPtr<nsIScriptSecurityManager> secman(
-        do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID,&rv));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    // get the script base URI
-    nsCOMPtr<nsIURI> scriptURI;
-    nsCOMPtr<nsIPrincipal> principal;
-    rv = secman->GetSubjectPrincipal(getter_AddRefs(principal));
-    NS_ENSURE_SUCCESS(rv, rv);
-    if (!principal)
-        return NS_ERROR_FAILURE;
-
-    rv = principal->GetURI(getter_AddRefs(scriptURI));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    if (!scriptURI) {
-      // No URI reachable from the principal, get one from the calling
-      // window.
-
-      nsIScriptContext *scx = GetScriptContextFromJSContext(cx);
-      NS_ENSURE_TRUE(scx, NS_ERROR_FAILURE);
-
-      nsCOMPtr<nsIDOMWindow> window =
-        do_QueryInterface(scx->GetGlobalObject());
-      NS_ENSURE_TRUE(window, NS_ERROR_FAILURE);
-
-      nsCOMPtr<nsIDOMDocument> domDoc;
-      window->GetDocument(getter_AddRefs(domDoc));
-
-      nsCOMPtr<nsIDocument> doc = do_QueryInterface(domDoc);
-      NS_ENSURE_TRUE(doc, NS_ERROR_FAILURE);
-
-      scriptURI = doc->GetDocumentURI();
-    }
-
-    // convert the requested URL string to a URI
-    nsCOMPtr<nsIURI> uri;
-    rv = NS_NewURI(getter_AddRefs(uri), uriStr);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    // are we allowed to load this one?
-    rv = secman->CheckLoadURI(scriptURI, uri,
-                    nsIScriptSecurityManager::DISALLOW_SCRIPT_OR_DATA);
-    return rv;
-}
-
-//
-// Helper function to get native object
-//
-// This is our own version of JS_GetInstancePrivate() that in addition
-// performs the delayed creation of the native InstallTrigger if necessary
-//
-static nsIDOMInstallTriggerGlobal* getTriggerNative(JSContext *cx, JSObject *obj)
-{
-  if (!JS_InstanceOf(cx, obj, &InstallTriggerGlobalClass, nsnull))
-    return nsnull;
-
-  nsIDOMInstallTriggerGlobal *native = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
-  if (!native) {
-    // xpinstall script contexts delay creation of the native.
-    CreateNativeObject(cx, obj, &native);
-  }
-  return native;
-}
-
-//
 // Native method UpdateEnabled
 //
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalUpdateEnabled(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
 
   *rval = JSVAL_FALSE;
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) )
+    return JS_TRUE;
 
   nsIScriptGlobalObject *globalObject = nsnull;
   nsIScriptContext *scriptContext = GetScriptContextFromJSContext(cx);
@@ -240,54 +155,38 @@ InstallTriggerGlobalUpdateEnabled(JSContext *cx, JSObject *obj, uintN argc, jsva
   return JS_TRUE;
 }
 
-
 //
 // Native method Install
 //
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
-{ 
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
+{
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
 
   *rval = JSVAL_FALSE;
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) )
+    return JS_TRUE;
+
 
   // make sure XPInstall is enabled, return false if not
   nsIScriptGlobalObject *globalObject = nsnull;
   nsIScriptContext *scriptContext = GetScriptContextFromJSContext(cx);
   if (scriptContext)
-    globalObject = scriptContext->GetGlobalObject();
+      globalObject = scriptContext->GetGlobalObject();
 
   PRBool enabled = PR_FALSE;
   nativeThis->UpdateEnabled(globalObject, XPI_WHITELIST, &enabled);
-  if (!enabled || !globalObject)
-  {
-    nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
-    if (os)
-    {
-      os->NotifyObservers(globalObject->GetDocShell(),
-                          "xpinstall-install-blocked", 
-                          NS_LITERAL_STRING("install").get());
-    }
-    return JS_TRUE;
+  if (!enabled || !globalObject) {
+      nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
+      if (os && globalObject) {
+          os->NotifyObservers(globalObject->GetDocShell(),
+                              "xpinstall-install-blocked", 
+                              NS_LITERAL_STRING("install").get());
+      }
+      return JS_TRUE;
   }
 
-
-  nsCOMPtr<nsIScriptSecurityManager> secman(do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID));
-  if (!secman)
-  {
-    JS_ReportError(cx, "Could not the script security manager service.");
-    return JS_FALSE;
-  }
-  // get the principal.  if it doesn't exist, die.
-  nsCOMPtr<nsIPrincipal> principal;
-  secman->GetSubjectPrincipal(getter_AddRefs(principal));
-  if (!principal)
-  {
-    JS_ReportError(cx, "Could not get the Subject Principal during InstallTrigger.Install()");
-    return JS_FALSE;
-  }
 
   // get window.location to construct relative URLs
   nsCOMPtr<nsIURI> baseURL;
@@ -303,16 +202,18 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
     }
   }
 
+  // if we can't create a security manager we might be in the wizard, allow
   PRBool abortLoad = PR_FALSE;
+  nsCOMPtr<nsIScriptSecurityManager> secman(
+      do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID));
+
 
   // parse associative array of installs
-  if ( argc >= 1 && JSVAL_IS_OBJECT(argv[0]) && JSVAL_TO_OBJECT(argv[0]) )
+  if ( argc >= 1 && JSVAL_IS_OBJECT(argv[0]) )
   {
     nsXPITriggerInfo *trigger = new nsXPITriggerInfo();
     if (!trigger)
       return JS_FALSE;
-
-    trigger->SetPrincipal(principal);
 
     JSIdArray *ida = JS_Enumerate( cx, JSVAL_TO_OBJECT(argv[0]) );
     if ( ida )
@@ -320,7 +221,6 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
       jsval v;
       const PRUnichar *name, *URL;
       const PRUnichar *iconURL = nsnull;
-      const char *hash;
 
       for (int i = 0; i < ida->length && !abortLoad; i++ )
       {
@@ -328,19 +228,15 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
         name = NS_REINTERPRET_CAST(const PRUnichar*, JS_GetStringChars( JS_ValueToString( cx, v ) ));
 
         URL = iconURL = nsnull;
-        hash = nsnull;
         JS_GetUCProperty( cx, JSVAL_TO_OBJECT(argv[0]), NS_REINTERPRET_CAST(const jschar*, name), nsCRT::strlen(name), &v );
-        if ( JSVAL_IS_OBJECT(v) && JSVAL_TO_OBJECT(v) ) 
+        if ( JSVAL_IS_OBJECT(v) ) 
         {
           jsval v2;
-          if (JS_GetProperty( cx, JSVAL_TO_OBJECT(v), "URL", &v2 ) && !JSVAL_IS_VOID(v2))
+          if (JS_GetProperty( cx, JSVAL_TO_OBJECT(v), "URL", &v2 ))
             URL = NS_REINTERPRET_CAST(const PRUnichar*, JS_GetStringChars( JS_ValueToString( cx, v2 ) ));
 
-          if (JS_GetProperty( cx, JSVAL_TO_OBJECT(v), "IconURL", &v2 ) && !JSVAL_IS_VOID(v2))
+          if (JS_GetProperty( cx, JSVAL_TO_OBJECT(v), "IconURL", &v2 ))
             iconURL = NS_REINTERPRET_CAST(const PRUnichar*, JS_GetStringChars( JS_ValueToString( cx, v2 ) ));
-
-          if (JS_GetProperty( cx, JSVAL_TO_OBJECT(v), "Hash", &v2) && !JSVAL_IS_VOID(v2))
-            hash = NS_REINTERPRET_CAST(const char*, JS_GetStringBytes( JS_ValueToString( cx, v2 ) ));
         }
         else
         {
@@ -358,6 +254,19 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
                 xpiURL = NS_ConvertUTF8toUTF16(resolvedURL);
             }
 
+            // Make sure we're allowed to load this URL
+            if (secman)
+            {
+                nsCOMPtr<nsIURI> uri;
+                nsresult rv = NS_NewURI(getter_AddRefs(uri), xpiURL);
+                if (NS_SUCCEEDED(rv))
+                {
+                    rv = secman->CheckLoadURIFromScript(cx, uri);
+                    if (NS_FAILED(rv))
+                        abortLoad = PR_TRUE;
+                }
+            }
+
             nsAutoString icon(iconURL);
             if (iconURL && baseURL)
             {
@@ -366,30 +275,13 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
                 icon = NS_ConvertUTF8toUTF16(resolvedIcon);
             }
 
-            // Make sure we're allowed to load this URL and the icon URL
-            nsresult rv = InstallTriggerCheckLoadURIFromScript(cx, xpiURL);
-            if (NS_FAILED(rv))
+            nsXPITriggerItem *item = new nsXPITriggerItem( name, xpiURL.get(), icon.get() );
+            if ( item )
+            {
+                trigger->Add( item );
+            }
+            else
                 abortLoad = PR_TRUE;
-
-            if (!abortLoad && iconURL)
-            {
-                rv = InstallTriggerCheckLoadURIFromScript(cx, icon);
-                if (NS_FAILED(rv))
-                    abortLoad = PR_TRUE;
-            }
-
-            if (!abortLoad)
-            {
-                // Add the install item to the trigger collection
-                nsXPITriggerItem *item =
-                    new nsXPITriggerItem( name, xpiURL.get(), icon.get(), hash );
-                if ( item )
-                {
-                    trigger->Add( item );
-                }
-                else
-                    abortLoad = PR_TRUE;
-            }
         }
         else
             abortLoad = PR_TRUE;
@@ -428,15 +320,16 @@ InstallTriggerGlobalInstall(JSContext *cx, JSObject *obj, uintN argc, jsval *arg
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalInstallChrome(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
   uint32       chromeType = NOT_CHROME;
   nsAutoString sourceURL;
   nsAutoString name;
 
   *rval = JSVAL_FALSE;
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) ) {
+    return JS_TRUE;
+  }
 
   // get chromeType first, the update enabled check for skins skips whitelisting
   if (argc >=1)
@@ -449,17 +342,16 @@ InstallTriggerGlobalInstallChrome(JSContext *cx, JSObject *obj, uintN argc, jsva
       globalObject = scriptContext->GetGlobalObject();
 
   PRBool enabled = PR_FALSE;
-  nativeThis->UpdateEnabled(globalObject, XPI_WHITELIST, &enabled);
-  if (!enabled || !globalObject)
-  {
-    nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
-    if (os)
-    {
-      os->NotifyObservers(globalObject->GetDocShell(),
-                          "xpinstall-install-blocked", 
-                          NS_LITERAL_STRING("install").get());
-    }
-    return JS_TRUE;
+  PRBool useWhitelist = ( chromeType != CHROME_SKIN );
+  nativeThis->UpdateEnabled(globalObject, useWhitelist, &enabled);
+  if (!enabled || !globalObject) {
+      nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
+      if (os && globalObject) {
+          os->NotifyObservers(globalObject->GetDocShell(), 
+                              "xpinstall-install-blocked", 
+                              NS_LITERAL_STRING("install-chrome").get());
+      }
+      return JS_TRUE;
   }
 
 
@@ -491,9 +383,20 @@ InstallTriggerGlobalInstallChrome(JSContext *cx, JSObject *obj, uintN argc, jsva
     }
 
     // Make sure caller is allowed to load this url.
-    nsresult rv = InstallTriggerCheckLoadURIFromScript(cx, sourceURL);
-    if (NS_FAILED(rv))
-        return JS_FALSE;
+    // if we can't create a security manager we might be in the wizard, allow
+    nsCOMPtr<nsIScriptSecurityManager> secman(
+        do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID));
+    if (secman)
+    {
+        nsCOMPtr<nsIURI> uri;
+        nsresult rv = NS_NewURI(getter_AddRefs(uri), sourceURL);
+        if (NS_SUCCEEDED(rv))
+        {
+            rv = secman->CheckLoadURIFromScript(cx, uri);
+            if (NS_FAILED(rv))
+                return JS_FALSE;
+        }
+    }
 
     if ( chromeType & CHROME_ALL )
     {
@@ -517,14 +420,14 @@ InstallTriggerGlobalInstallChrome(JSContext *cx, JSObject *obj, uintN argc, jsva
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalStartSoftwareUpdate(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
   PRBool       nativeRet;
   PRInt32      flags = 0;
 
   *rval = JSVAL_FALSE;
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) )
+    return JS_TRUE;
 
   // make sure XPInstall is enabled, return if not
   nsIScriptGlobalObject *globalObject = nsnull;
@@ -536,14 +439,13 @@ InstallTriggerGlobalStartSoftwareUpdate(JSContext *cx, JSObject *obj, uintN argc
   nativeThis->UpdateEnabled(globalObject, XPI_WHITELIST, &enabled);
   if (!enabled || !globalObject)
   {
-    nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
-    if (os)
-    {
-      os->NotifyObservers(globalObject->GetDocShell(),
-                          "xpinstall-install-blocked", 
-                          NS_LITERAL_STRING("install").get());
-    }
-    return JS_TRUE;
+      nsCOMPtr<nsIObserverService> os(do_GetService("@mozilla.org/observer-service;1"));
+      if (os && globalObject) {
+          os->NotifyObservers(globalObject->GetDocShell(),
+                              "xpinstall-install-blocked", 
+                              NS_LITERAL_STRING("install").get());
+      }
+      return JS_TRUE;
   }
 
   // get window.location to construct relative URLs
@@ -573,9 +475,20 @@ InstallTriggerGlobalStartSoftwareUpdate(JSContext *cx, JSObject *obj, uintN argc
     }
 
     // Make sure caller is allowed to load this url.
-    nsresult rv = InstallTriggerCheckLoadURIFromScript(cx, xpiURL);
-    if (NS_FAILED(rv))
-        return JS_FALSE;
+    // if we can't create a security manager we might be in the wizard, allow
+    nsCOMPtr<nsIScriptSecurityManager> secman(
+        do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID));
+    if (secman)
+    {
+        nsCOMPtr<nsIURI> uri;
+        nsresult rv = NS_NewURI(getter_AddRefs(uri), xpiURL);
+        if (NS_SUCCEEDED(rv))
+        {
+            rv = secman->CheckLoadURIFromScript(cx, uri);
+            if (NS_FAILED(rv))
+                return JS_FALSE;
+        }
+    }
 
     if (argc >= 2 && !JS_ValueToInt32(cx, argv[1], (int32 *)&flags))
     {
@@ -604,10 +517,7 @@ InstallTriggerGlobalStartSoftwareUpdate(JSContext *cx, JSObject *obj, uintN argc
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalCompareVersion(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
-
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
   nsAutoString regname;
   nsAutoString version;
   int32        major,minor,release,build;
@@ -615,6 +525,10 @@ InstallTriggerGlobalCompareVersion(JSContext *cx, JSObject *obj, uintN argc, jsv
   // In case of error or disabled return NOT_FOUND
   PRInt32 nativeRet = nsIDOMInstallTriggerGlobal::NOT_FOUND;
   *rval = INT_TO_JSVAL(nativeRet);
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) )
+    return JS_TRUE;
+
 
   // make sure XPInstall is enabled, return if not
   nsIScriptGlobalObject *globalObject = nsnull;
@@ -702,15 +616,17 @@ InstallTriggerGlobalCompareVersion(JSContext *cx, JSObject *obj, uintN argc, jsv
 PR_STATIC_CALLBACK(JSBool)
 InstallTriggerGlobalGetVersion(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
 {
-  nsIDOMInstallTriggerGlobal *nativeThis = getTriggerNative(cx, obj);
-  if (!nativeThis)
-    return JS_FALSE;
+  nsIDOMInstallTriggerGlobal *nativeThis = (nsIDOMInstallTriggerGlobal*)JS_GetPrivate(cx, obj);
 
   nsAutoString regname;
   nsAutoString version;
 
   // In case of error return a null value
   *rval = JSVAL_NULL;
+
+  if (nsnull == nativeThis  &&  (JS_FALSE == CreateNativeObject(cx, obj, &nativeThis)) )
+      return JS_TRUE;
+
 
   // make sure XPInstall is enabled, return if not
   nsIScriptGlobalObject *globalObject = nsnull;
@@ -734,6 +650,23 @@ InstallTriggerGlobalGetVersion(JSContext *cx, JSObject *obj, uintN argc, jsval *
 
   return JS_TRUE;
 }
+
+/***********************************************************************/
+//
+// class for InstallTriggerGlobal
+//
+JSClass InstallTriggerGlobalClass = {
+  "InstallTrigger",
+  JSCLASS_HAS_PRIVATE,
+  JS_PropertyStub,
+  JS_PropertyStub,
+  JS_PropertyStub,
+  JS_PropertyStub,
+  JS_EnumerateStub,
+  JS_ResolveStub,
+  JS_ConvertStub,
+  FinalizeInstallTriggerGlobal
+};
 
 //
 // InstallTriggerGlobal class methods

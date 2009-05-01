@@ -79,8 +79,7 @@ struct ipcLockMsg
 PRUint8 *IPC_FlattenLockMsg(const ipcLockMsg *msg, PRUint32 *bufLen);
 
 //
-// unflatten a lock message.  upon return, msg->key points into buf, so
-// buf must not be deallocated until after msg is no longer needed.
+// unflatten a lock message
 //
 void IPC_UnflattenLockMsg(const PRUint8 *buf, PRUint32 bufLen, ipcLockMsg *msg);
 

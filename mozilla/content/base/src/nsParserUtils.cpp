@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,8 +41,6 @@
 #include "jsapi.h"
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
-#include "nsContentUtils.h"
-#include "nsIParserService.h"
 
 #define SKIP_WHITESPACE(iter, end_iter)                          \
   while ((iter) != (end_iter) && nsCRT::IsAsciiSpace(*(iter))) { \
@@ -59,15 +58,16 @@
     break
 
 PRBool
-nsParserUtils::GetQuotedAttributeValue(const nsString& aSource, nsIAtom *aName,
-                                       nsAString& aValue,
-                                       PRBool aComplyWithSpec)
+nsParserUtils::GetQuotedAttributeValue(const nsAString& aSource,
+                                       const nsAString& aAttribute,
+                                       nsAString& aValue)
 {
+  NS_ASSERTION(!aAttribute.IsEmpty(), "Empty attribute name cannot be searched for usefully");
   aValue.Truncate();
-
-  const PRUnichar *start = aSource.get();
-  const PRUnichar *end = start + aSource.Length();
-  const PRUnichar *iter;
+  nsAString::const_iterator start, end;
+  aSource.BeginReading(start);
+  aSource.EndReading(end);
+  nsAString::const_iterator iter;
   
   while (start != end) {
     SKIP_WHITESPACE(start, end);
@@ -75,7 +75,7 @@ nsParserUtils::GetQuotedAttributeValue(const nsString& aSource, nsIAtom *aName,
     SKIP_ATTR_NAME(iter, end);
 
     // Remember the attr name.
-    const nsDependentSubstring & attrName = Substring(start, iter);
+    const nsAString & attrName = Substring(start, iter);
 
     // Now check whether this is a valid name="value" pair.
     start = iter;
@@ -97,76 +97,23 @@ nsParserUtils::GetQuotedAttributeValue(const nsString& aSource, nsIAtom *aName,
     
     ++start;  // Point to the first char of the value.
     iter = start;
-
-    while (iter != end && *iter != q) {
-      ++iter;
-    }
-
-    if (iter == end) {
+    if (!FindCharInReadable(q, iter, end)) {
       // Oops, unterminated quoted string.
       break;
     }
-
+    
     // At this point attrName holds the name of the "attribute" and
     // the value is between start and iter.
     
-    if (aName->Equals(attrName)) {
-      if (!aComplyWithSpec) {
-        aValue.Append(start, iter - start);
-
-        return PR_TRUE;
-      }
-
-      nsCOMPtr<nsIParserService_MOZILLA_1_8_BRANCH> parserService =
-        do_QueryInterface(nsContentUtils::GetParserServiceWeakRef());
-      NS_ENSURE_TRUE(parserService, PR_FALSE);
-
-      // We'll accumulate as many characters as possible (until we hit either
-      // the end of the string or the beginning of an entity). Chunks will be
-      // delimited by start and chunkEnd.
-      const PRUnichar *chunkEnd = start;
-      while (chunkEnd != iter) {
-        if (*chunkEnd == kLessThan) {
-          aValue.Truncate();
-
-          return PR_FALSE;
-        }
-
-        if (*chunkEnd == kAmpersand) {
-          aValue.Append(start, chunkEnd - start);
-
-          // Point to first character after the ampersand.
-          ++chunkEnd;
-
-          const PRUnichar *afterEntity;
-          PRUnichar result[2];
-          PRUint32 count =
-            parserService->DecodeEntity(chunkEnd, iter, &afterEntity, result);
-          if (count == 0) {
-            aValue.Truncate();
-
-            return PR_FALSE;
-          }
-
-          aValue.Append(result, count);
-
-          // Advance to after the entity and begin a new chunk.
-          start = chunkEnd = afterEntity;
-        }
-        else {
-          ++chunkEnd;
-        }
-      }
-
-      // Append remainder.
-      aValue.Append(start, iter - start);
-
-      return PR_TRUE;
+    if (!attrName.Equals(aAttribute)) {
+      // Resume scanning after the end of the attribute value.
+      start = iter;
+      ++start;  // To move past the quote char.
+      continue;
     }
 
-    // Resume scanning after the end of the attribute value (past the quote
-    // char).
-    start = iter + 1;
+    aValue = Substring(start, iter);
+    return PR_TRUE;
   }
 
   return PR_FALSE;
@@ -182,34 +129,28 @@ nsParserUtils::IsJavaScriptLanguage(const nsString& aName, const char* *aVersion
 {
   JSVersion version = JSVERSION_UNKNOWN;
 
-  if (aName.LowerCaseEqualsLiteral("javascript") ||
-      aName.LowerCaseEqualsLiteral("livescript") ||
-      aName.LowerCaseEqualsLiteral("mocha")) {
+  if (aName.EqualsIgnoreCase("JavaScript") ||
+      aName.EqualsIgnoreCase("LiveScript") ||
+      aName.EqualsIgnoreCase("Mocha")) {
     version = JSVERSION_DEFAULT;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.0")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.0")) {
     version = JSVERSION_1_0;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.1")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.1")) {
     version = JSVERSION_1_1;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.2")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.2")) {
     version = JSVERSION_1_2;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.3")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.3")) {
     version = JSVERSION_1_3;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.4")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.4")) {
     version = JSVERSION_1_4;
   }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.5")) {
+  else if (aName.EqualsIgnoreCase("JavaScript1.5")) {
     version = JSVERSION_1_5;
-  }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.6")) {
-    version = JSVERSION_1_6;
-  }
-  else if (aName.LowerCaseEqualsLiteral("javascript1.7")) {
-    version = JSVERSION_1_7;
   }
   if (version == JSVERSION_UNKNOWN)
     return PR_FALSE;

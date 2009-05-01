@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -52,7 +53,7 @@
 #include "nsILocaleService.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsIPrefLocalizedString.h"
 #include "nsICurrentCharsetListener.h"
 #include "nsQuickSort.h"
@@ -284,7 +285,7 @@ private:
   nsresult RemoveLastMenuItem(nsIRDFContainer * aContainer, 
                               nsVoidArray * aArray);
 
-  nsresult RemoveFlaggedCharsets(nsCStringArray& aList, const nsString& aProp);
+  nsresult RemoveFlaggedCharsets(nsCStringArray& aList, nsString * aProp);
   nsresult NewRDFContainer(nsIRDFDataSource * aDataSource, 
     nsIRDFResource * aResource, nsIRDFContainer ** aResult);
   void FreeMenuItemArray(nsVoidArray * aArray);
@@ -421,24 +422,24 @@ NS_IMETHODIMP nsCharsetMenuObserver::Observe(nsISupports *aSubject, const char *
   if (!nsCRT::strcmp(aTopic, "charsetmenu-selected")) {
     nsDependentString nodeName(someData);
     rv = mCharsetMenu->Init();
-    if (nodeName.EqualsLiteral("browser")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("browser"))) {
       rv = mCharsetMenu->InitBrowserMenu();
     }
-    if (nodeName.EqualsLiteral("composer")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("composer"))) {
       rv = mCharsetMenu->InitComposerMenu();
     }
-    if (nodeName.EqualsLiteral("mailview")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("mailview"))) {
       rv = mCharsetMenu->InitMailviewMenu();
     }
-    if (nodeName.EqualsLiteral("mailedit")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("mailedit"))) {
       rv = mCharsetMenu->InitMaileditMenu();
       rv = mCharsetMenu->InitOthers();
     }
-    if (nodeName.EqualsLiteral("more-menu")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("more-menu"))) {
       rv = mCharsetMenu->InitSecondaryTiers();
       rv = mCharsetMenu->InitAutodetMenu();
     }
-    if (nodeName.EqualsLiteral("other")) {
+    if (nodeName.Equals(NS_LITERAL_STRING("other"))) {
       rv = mCharsetMenu->InitOthers();
       rv = mCharsetMenu->InitMaileditMenu();
     }
@@ -448,7 +449,7 @@ NS_IMETHODIMP nsCharsetMenuObserver::Observe(nsISupports *aSubject, const char *
   if (!nsCRT::strcmp(aTopic, NS_PREFBRANCH_PREFCHANGE_TOPIC_ID)) {
     nsDependentString prefName(someData);
 
-    if (prefName.EqualsLiteral(kBrowserStaticPrefKey)) {
+    if (prefName.Equals(NS_LITERAL_STRING(kBrowserStaticPrefKey))) {
       // refresh menus which share this pref
       rv = mCharsetMenu->RefreshBrowserMenu();
       NS_ENSURE_SUCCESS(rv, rv);
@@ -456,7 +457,7 @@ NS_IMETHODIMP nsCharsetMenuObserver::Observe(nsISupports *aSubject, const char *
       NS_ENSURE_SUCCESS(rv, rv);
       rv = mCharsetMenu->RefreshComposerMenu();
     }
-    else if (prefName.EqualsLiteral(kMaileditPrefKey)) {
+    else if (prefName.Equals(NS_LITERAL_STRING(kMaileditPrefKey))) {
       rv = mCharsetMenu->RefreshMaileditMenu();
     }
   }
@@ -512,9 +513,10 @@ nsCharsetMenu::nsCharsetMenu()
   mRDFService = do_GetService(kRDFServiceCID, &res);
 
   if (NS_SUCCEEDED(res))  {
-    mRDFService->RegisterDataSource(this, PR_FALSE);
+    res = mRDFService->RegisterDataSource(this, PR_FALSE);
   
-    CallCreateInstance(kRDFInMemoryDataSourceCID, &mInner);
+    res = nsComponentManager::CreateInstance(kRDFInMemoryDataSourceCID, nsnull, 
+          NS_GET_IID(nsIRDFDataSource), (void**) &mInner);
 
     mRDFService->GetResource(NS_LITERAL_CSTRING(kURINC_BrowserCharsetMenuRoot),
                              &kNC_BrowserCharsetMenuRoot);
@@ -582,10 +584,6 @@ nsresult nsCharsetMenu::RefreshBrowserMenu()
 
   // mark the end of the static area, the rest is cache
   mBrowserCacheStart = mBrowserMenu.Count();
-
-  // Remove "notForBrowser" entries before populating cache menu
-  res = RemoveFlaggedCharsets(decs, NS_LITERAL_STRING(".notForBrowser"));
-  NS_ASSERTION(NS_SUCCEEDED(res), "error removing flagged charsets");
 
   res = InitCacheMenu(decs, kNC_BrowserCharsetMenuRoot, kBrowserCachePrefKey, 
                       &mBrowserMenu);
@@ -749,7 +747,8 @@ nsresult nsCharsetMenu::Init()
     mRDFService->GetResource(NS_LITERAL_CSTRING(kURINC_type), &kRDF_type);
 
     nsIRDFContainerUtils * rdfUtil = NULL;
-    res = CallGetService(kRDFContainerUtilsCID, &rdfUtil);
+    res = nsServiceManager::GetService(kRDFContainerUtilsCID, 
+      NS_GET_IID(nsIRDFContainerUtils), (nsISupports **)&rdfUtil);
     if (NS_FAILED(res)) goto done;
 
     res = rdfUtil->MakeSeq(mInner, kNC_BrowserAutodetMenuRoot, NULL);
@@ -782,7 +781,7 @@ nsresult nsCharsetMenu::Init()
     if (NS_FAILED(res)) goto done;
 
   done:
-    NS_IF_RELEASE(rdfUtil);
+    if (rdfUtil != NULL) nsServiceManager::ReleaseService(kRDFContainerUtilsCID,rdfUtil);
     if (NS_FAILED(res)) return res;
   }
   mInitialized = NS_SUCCEEDED(res);
@@ -851,7 +850,7 @@ nsresult nsCharsetMenu::FreeResources()
   nsresult res = NS_OK;
 
   if (mCharsetMenuObserver) {
-    nsCOMPtr<nsIPrefBranch2> pbi = do_QueryInterface(mPrefs);
+    nsCOMPtr<nsIPrefBranchInternal> pbi = do_QueryInterface(mPrefs);
     if (pbi) {
       pbi->RemoveObserver(kBrowserStaticPrefKey, mCharsetMenuObserver);
       pbi->RemoveObserver(kMaileditPrefKey, mCharsetMenuObserver);
@@ -897,16 +896,12 @@ nsresult nsCharsetMenu::InitBrowserMenu()
     // elements are numbered from 1 (why god, WHY?!?!?!)
     mBrowserMenuRDFPosition -= mBrowserCacheStart - 1;
 
-    // Remove "notForBrowser" entries before populating cache menu
-    res = RemoveFlaggedCharsets(browserDecoderList, NS_LITERAL_STRING(".notForBrowser"));
-    NS_ASSERTION(NS_SUCCEEDED(res), "error initializing static charset menu from prefs");
-
     res = InitCacheMenu(browserDecoderList, kNC_BrowserCharsetMenuRoot, kBrowserCachePrefKey, 
       &mBrowserMenu);
     NS_ASSERTION(NS_SUCCEEDED(res), "error initializing browser cache charset menu");
 
     // register prefs callback
-    nsCOMPtr<nsIPrefBranch2> pbi = do_QueryInterface(mPrefs);
+    nsCOMPtr<nsIPrefBranchInternal> pbi = do_QueryInterface(mPrefs);
     if (pbi)
       res = pbi->AddObserver(kBrowserStaticPrefKey, mCharsetMenuObserver, PR_FALSE);
   }
@@ -946,7 +941,7 @@ nsresult nsCharsetMenu::InitMaileditMenu()
     NS_ASSERTION(NS_SUCCEEDED(res), "error initializing mailedit charset menu from prefs");
 
     // register prefs callback
-    nsCOMPtr<nsIPrefBranch2> pbi = do_QueryInterface(mPrefs);
+    nsCOMPtr<nsIPrefBranchInternal> pbi = do_QueryInterface(mPrefs);
     if (pbi)
       res = pbi->AddObserver(kMaileditPrefKey, mCharsetMenuObserver, PR_FALSE);
   }
@@ -1208,12 +1203,13 @@ nsresult nsCharsetMenu::InitMoreMenu(nsCStringArray& aDecs,
   nsresult res = NS_OK;
   nsCOMPtr<nsIRDFContainer> container;
   nsVoidArray moreMenu;
+  nsAutoString prop; prop.AssignWithConversion(aFlag);
 
   res = NewRDFContainer(mInner, aResource, getter_AddRefs(container));
   if (NS_FAILED(res)) goto done;
 
   // remove charsets "not for browser"
-  res = RemoveFlaggedCharsets(aDecs, NS_ConvertASCIItoUTF16(aFlag));
+  res = RemoveFlaggedCharsets(aDecs, &prop);
   if (NS_FAILED(res)) goto done;
 
   res = AddCharsetArrayToItemArray(moreMenu, aDecs);
@@ -1547,7 +1543,7 @@ nsresult nsCharsetMenu::AddFromStringToMenu(
 nsresult nsCharsetMenu::AddSeparatorToContainer(nsIRDFContainer * aContainer)
 {
   nsCAutoString str;
-  str.AssignLiteral("----");
+  str.Assign(NS_LITERAL_CSTRING("----"));
 
   // hack to generate unique id's for separators
   static PRInt32 u = 0;
@@ -1624,33 +1620,35 @@ nsresult nsCharsetMenu::UpdateCachePrefs(const char * aCacheKey,
                                          const char * aStaticKey,
                                          const PRUnichar * aCharset)
 {
-  nsresult rv = NS_OK;
-  nsXPIDLCString cachePrefValue;
-  nsXPIDLCString staticPrefValue;
-  NS_LossyConvertUTF16toASCII currentCharset(aCharset);
+  nsresult res = NS_OK;
+  char * cachePrefValue = NULL;
+  char * staticPrefValue = NULL;
+  NS_ConvertUCS2toUTF8 currentCharset(aCharset);
   PRInt32 cacheSize = 0;
 
-  mPrefs->GetCharPref(aCacheKey, getter_Copies(cachePrefValue));
-  mPrefs->GetCharPref(aStaticKey, getter_Copies(staticPrefValue));
-  rv = mPrefs->GetIntPref(aCacheSizeKey, &cacheSize);
+  res = mPrefs->GetCharPref(aCacheKey, &cachePrefValue);
+  res = mPrefs->GetCharPref(aStaticKey, &staticPrefValue);
+  res = mPrefs->GetIntPref(aCacheSizeKey, &cacheSize);
 
-  if (NS_FAILED(rv) || cacheSize <= 0)
-    return NS_ERROR_UNEXPECTED;
+  nsCAutoString strCachePrefValue(cachePrefValue);
+  nsCAutoString strStaticPrefValue(staticPrefValue);
 
-  if ((cachePrefValue.Find(currentCharset) == kNotFound) && 
-      (staticPrefValue.Find(currentCharset) == kNotFound)) {
+  if ((strCachePrefValue.Find(currentCharset) == -1) && 
+      (strStaticPrefValue.Find(currentCharset) == -1)) {
 
-    if (!cachePrefValue.IsEmpty())
-      cachePrefValue.Insert(", ", 0);
+    if (!strCachePrefValue.IsEmpty())
+      strCachePrefValue.Insert(", ", 0);
 
-    cachePrefValue.Insert(currentCharset, 0);
-    if (cacheSize < (PRInt32) cachePrefValue.CountChar(',') + 1)
-      cachePrefValue.Truncate(cachePrefValue.RFindChar(','));
+    strCachePrefValue.Insert(currentCharset, 0);
+    if ((cacheSize - 1) < (PRInt32) strCachePrefValue.CountChar(','))
+      strCachePrefValue.Truncate(strCachePrefValue.RFindChar(','));
 
-    rv = mPrefs->SetCharPref(aCacheKey, cachePrefValue);
+    res = mPrefs->SetCharPref(aCacheKey, PromiseFlatCString(strCachePrefValue).get());
   }
 
-  return rv;
+  nsMemory::Free(cachePrefValue);
+  nsMemory::Free(staticPrefValue);
+  return res;
 }
 
 nsresult nsCharsetMenu::ClearMenu(nsIRDFContainer * aContainer,  
@@ -1695,7 +1693,7 @@ nsresult nsCharsetMenu::RemoveLastMenuItem(nsIRDFContainer * aContainer,
 }
 
 nsresult nsCharsetMenu::RemoveFlaggedCharsets(nsCStringArray& aList, 
-                                              const nsString& aProp)
+                                              nsString * aProp)
 {
   nsresult res = NS_OK;
   PRUint32 count;
@@ -1710,7 +1708,7 @@ nsresult nsCharsetMenu::RemoveFlaggedCharsets(nsCStringArray& aList,
     charset = aList.CStringAt(i);
     if (!charset) continue;
 
-    res = mCCManager->GetCharsetData(charset->get(), aProp.get(), str);
+    res = mCCManager->GetCharsetData(charset->get(), aProp->get(), str);
     if (NS_FAILED(res)) continue;
 
     aList.RemoveCStringAt(i);
@@ -1726,7 +1724,10 @@ nsresult nsCharsetMenu::NewRDFContainer(nsIRDFDataSource * aDataSource,
                                         nsIRDFResource * aResource, 
                                         nsIRDFContainer ** aResult)
 {
-  nsresult res = CallCreateInstance(kRDFContainerCID, aResult);
+  nsresult res;
+
+  res = nsComponentManager::CreateInstance(kRDFContainerCID, NULL, 
+    NS_GET_IID(nsIRDFContainer), (void**)aResult);
   if (NS_FAILED(res)) return res;
 
   res = (*aResult)->Init(aDataSource, aResource);
@@ -1821,7 +1822,8 @@ nsresult nsCharsetMenu::GetCollation(nsICollation ** aCollation)
   res = localeServ->GetApplicationLocale(getter_AddRefs(locale));
   if (NS_FAILED(res)) return res;
 
-  res = CallCreateInstance(kCollationFactoryCID, &collationFactory);
+  res = nsComponentManager::CreateInstance(kCollationFactoryCID, NULL, 
+      NS_GET_IID(nsICollationFactory), (void**) &collationFactory);
   if (NS_FAILED(res)) return res;
 
   res = collationFactory->CreateCollation(locale, aCollation);
@@ -1838,13 +1840,6 @@ NS_IMETHODIMP nsCharsetMenu::SetCurrentCharset(const PRUnichar * aCharset)
   nsresult res = NS_OK;
 
   if (mBrowserMenuInitialized) {
-    // Don't add item to the cache if it's marked "notForBrowser"
-    nsAutoString str;
-    res = mCCManager->GetCharsetData(NS_LossyConvertUTF16toASCII(aCharset).get(),
-                                     NS_LITERAL_STRING(".notForBrowser").get(), str);
-    if (NS_SUCCEEDED(res)) // succeeded means attribute exists
-      return res; // don't throw
-
     res = AddCharsetToCache(NS_LossyConvertUCS2toASCII(aCharset),
                             &mBrowserMenu, kNC_BrowserCharsetMenuRoot, 
                             mBrowserCacheStart, mBrowserCacheSize,
@@ -1857,8 +1852,8 @@ NS_IMETHODIMP nsCharsetMenu::SetCurrentCharset(const PRUnichar * aCharset)
     res = WriteCacheToPrefs(&mBrowserMenu, mBrowserCacheStart, 
       kBrowserCachePrefKey);
   } else {
-    res = UpdateCachePrefs(kBrowserCachePrefKey, kBrowserCacheSizePrefKey, 
-                           kBrowserStaticPrefKey, aCharset);
+    UpdateCachePrefs(kBrowserCachePrefKey, kBrowserCacheSizePrefKey, 
+                     kBrowserStaticPrefKey, aCharset);
   }
   NS_TIMELINE_STOP_TIMER("nsCharsetMenu:SetCurrentCharset");
   NS_TIMELINE_MARK_TIMER("nsCharsetMenu:SetCurrentCharset");
@@ -1880,8 +1875,8 @@ NS_IMETHODIMP nsCharsetMenu::SetCurrentMailCharset(const PRUnichar * aCharset)
     res = WriteCacheToPrefs(&mMailviewMenu, mMailviewCacheStart, 
                             kMailviewCachePrefKey);
   } else {
-    res = UpdateCachePrefs(kMailviewCachePrefKey, kMailviewCacheSizePrefKey, 
-                           kMailviewStaticPrefKey, aCharset);
+    UpdateCachePrefs(kMailviewCachePrefKey, kMailviewCacheSizePrefKey, 
+                     kMailviewStaticPrefKey, aCharset);
   }
   NS_TIMELINE_STOP_TIMER("nsCharsetMenu:SetCurrentMailCharset");
   NS_TIMELINE_MARK_TIMER("nsCharsetMenu:SetCurrentMailCharset");
@@ -1904,8 +1899,8 @@ NS_IMETHODIMP nsCharsetMenu::SetCurrentComposerCharset(const PRUnichar * aCharse
     res = WriteCacheToPrefs(&mComposerMenu, mComposerCacheStart, 
       kComposerCachePrefKey);
   } else {
-    res = UpdateCachePrefs(kComposerCachePrefKey, kComposerCacheSizePrefKey, 
-                           kComposerStaticPrefKey, aCharset);
+    UpdateCachePrefs(kComposerCachePrefKey, kComposerCacheSizePrefKey, 
+                     kComposerStaticPrefKey, aCharset);
   }
   NS_TIMELINE_STOP_TIMER("nsCharsetMenu:SetCurrentComposerCharset");
   NS_TIMELINE_MARK_TIMER("nsCharsetMenu:SetCurrentComposerCharset");

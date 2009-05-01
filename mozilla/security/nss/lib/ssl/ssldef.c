@@ -1,42 +1,39 @@
 /*
  * "Default" SSLSocket methods, used by sockets that do neither SSL nor socks.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: ssldef.c,v 1.10.2.1 2006/04/23 03:05:42 nelson%bolyard.com Exp $ */
+ * $Id: ssldef.c,v 1.7 2001/12/07 02:30:53 relyea%netscape.com Exp $
+ */
 
 #include "cert.h"
 #include "ssl.h"
@@ -104,43 +101,50 @@ int ssl_DefRecv(sslSocket *ss, unsigned char *buf, int len, int flags)
 }
 
 /* Default (unencrypted) send.
- * For blocking sockets, always returns len or SECFailure, no short writes.
- * For non-blocking sockets:
- *   Returns positive count if any data was written, else returns SECFailure. 
- *   Short writes may occur.  Does not return SECWouldBlock.
+ * Returns SECSuccess or SECFailure,  NOT SECWouldBlock. 
+ * Returns positive count if any data was written. 
+ * ALWAYS check for a short write after calling ssl_DefSend.
  */
 int ssl_DefSend(sslSocket *ss, const unsigned char *buf, int len, int flags)
 {
     PRFileDesc *lower = ss->fd->lower;
-    int sent = 0;
+    int rv, count;
 
 #if NSS_DISABLE_NAGLE_DELAYS
     /* Although this is overkill, we disable Nagle delays completely for 
     ** SSL sockets.
     */
-    if (ss->opt.useSecurity && !ss->delayDisabled) {
+    if (ss->useSecurity && !ss->delayDisabled) {
 	ssl_EnableNagleDelay(ss, PR_FALSE);   /* ignore error */
     	ss->delayDisabled = 1;
     }
 #endif
-    do {
-	int rv = lower->methods->send(lower, (const void *)(buf + sent), 
-	                              len - sent, flags, ss->wTimeout);
+    count = 0;
+    for (;;) {
+	rv = lower->methods->send(lower, (const void *)buf, len,
+				 flags, ss->wTimeout);
 	if (rv < 0) {
 	    PRErrorCode err = PR_GetError();
 	    if (err == PR_WOULD_BLOCK_ERROR) {
 		ss->lastWriteBlocked = 1;
-		return sent ? sent : SECFailure;
+		return count ? count : rv;
 	    }
 	    ss->lastWriteBlocked = 0;
 	    MAP_ERROR(PR_CONNECT_ABORTED_ERROR, PR_CONNECT_RESET_ERROR)
 	    /* Loser */
 	    return rv;
 	}
-	sent += rv;
-    } while (len > sent);
+	count += rv;
+	if (rv < len) {
+	    /* Short send. Send the rest in the next call */
+	    buf += rv;
+	    len -= rv;
+	    continue;
+	}
+	break;
+    }
     ss->lastWriteBlocked = 0;
-    return sent;
+    return count;
 }
 
 int ssl_DefRead(sslSocket *ss, unsigned char *buf, int len)
@@ -159,26 +163,33 @@ int ssl_DefRead(sslSocket *ss, unsigned char *buf, int len)
 int ssl_DefWrite(sslSocket *ss, const unsigned char *buf, int len)
 {
     PRFileDesc *lower = ss->fd->lower;
-    int sent = 0;
+    int rv, count;
 
-    do {
-	int rv = lower->methods->write(lower, (const void *)(buf + sent), 
-	                               len - sent);
+    count = 0;
+    for (;;) {
+	rv = lower->methods->write(lower, (void *)buf, len);
 	if (rv < 0) {
 	    PRErrorCode err = PR_GetError();
 	    if (err == PR_WOULD_BLOCK_ERROR) {
 		ss->lastWriteBlocked = 1;
-		return sent ? sent : SECFailure;
+		return count ? count : rv;
 	    }
 	    ss->lastWriteBlocked = 0;
 	    MAP_ERROR(PR_CONNECT_ABORTED_ERROR, PR_CONNECT_RESET_ERROR)
 	    /* Loser */
 	    return rv;
 	}
-	sent += rv;
-    } while (len > sent);
+	count += rv;
+	if (rv != len) {
+	    /* Short write. Send the rest in the next call */
+	    buf += rv;
+	    len -= rv;
+	    continue;
+	}
+	break;
+    }
     ss->lastWriteBlocked = 0;
-    return sent;
+    return count;
 }
 
 int ssl_DefGetpeername(sslSocket *ss, PRNetAddr *name)

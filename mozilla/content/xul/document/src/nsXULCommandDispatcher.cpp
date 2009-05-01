@@ -1,12 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ts=2 sw=2 et tw=80: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,25 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -52,10 +52,11 @@
 #include "nsIDOMElement.h"
 #include "nsIDOMNSHTMLInputElement.h"
 #include "nsIDOMNSHTMLTextAreaElement.h"
+#include "nsIDOMUIEvent.h"
 #include "nsIDOMWindowInternal.h"
 #include "nsIDOMXULElement.h"
 #include "nsIDocument.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIPresShell.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsPIDOMWindow.h"
@@ -68,7 +69,6 @@
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
 #include "nsDOMError.h"
-#include "nsIDOMNSDocument.h"
 
 #ifdef PR_LOGGING
 static PRLogModuleInfo* gLog;
@@ -109,7 +109,7 @@ NS_IMPL_RELEASE(nsXULCommandDispatcher)
 
 
 NS_IMETHODIMP
-nsXULCommandDispatcher::Create(nsIDocument* aDoc, nsXULCommandDispatcher** aResult)
+nsXULCommandDispatcher::Create(nsIDocument* aDoc, nsIDOMXULCommandDispatcher** aResult)
 {
   nsXULCommandDispatcher* dispatcher = new nsXULCommandDispatcher(aDoc);
   if (!dispatcher)
@@ -123,14 +123,16 @@ nsXULCommandDispatcher::Create(nsIDocument* aDoc, nsXULCommandDispatcher** aResu
 void
 nsXULCommandDispatcher::EnsureFocusController()
 {
-  if (!mFocusController && mDocument) {
+  if (!mFocusController) {
     nsCOMPtr<nsPIDOMWindow> win(do_QueryInterface(mDocument->GetScriptGlobalObject()));
   
     // An inelegant way to retrieve this to be sure, but we are
     // guaranteed that the focus controller outlives us, so it
     // is safe to hold on to it (since we can't die until it has
     // died).
-    mFocusController = win->GetRootFocusController(); // Store as a weak ptr.
+    nsCOMPtr<nsIFocusController> focus;
+    win->GetRootFocusController(getter_AddRefs(focus));
+    mFocusController = focus; // Store as a weak ptr.
   }
 }
 
@@ -143,19 +145,7 @@ nsXULCommandDispatcher::GetFocusedElement(nsIDOMElement** aElement)
   EnsureFocusController();
   NS_ENSURE_TRUE(mFocusController, NS_ERROR_FAILURE);
 
-  nsresult rv = mFocusController->GetFocusedElement(aElement);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // Make sure the caller can access the focused element.
-  if (*aElement && !nsContentUtils::CanCallerAccess(*aElement)) {
-    // XXX This might want to return null, but we use that return value
-    // to mean "there is no focused element," so to be clear, throw an
-    // exception.
-    NS_RELEASE(*aElement);
-    return NS_ERROR_DOM_SECURITY_ERR;
-  }
-
-  return NS_OK;
+  return mFocusController->GetFocusedElement(aElement);
 }
 
 NS_IMETHODIMP
@@ -168,23 +158,7 @@ nsXULCommandDispatcher::GetFocusedWindow(nsIDOMWindow** aWindow)
   nsresult rv = mFocusController->GetFocusedWindow(getter_AddRefs(window));
   NS_ENSURE_TRUE(NS_SUCCEEDED(rv) && window, rv);
 
-  rv = CallQueryInterface(window, aWindow);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // Make sure the caller can access this window. The caller can access this
-  // window iff it can access the document.
-  nsCOMPtr<nsIDOMDocument> domdoc;
-  rv = (*aWindow)->GetDocument(getter_AddRefs(domdoc));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // Note: If there is no document, then this window has been cleared and
-  // there's nothing left to protect, so let the window pass through.
-  if (domdoc && !nsContentUtils::CanCallerAccess(domdoc)) {
-    NS_RELEASE(*aWindow);
-    return NS_ERROR_DOM_SECURITY_ERR;
-  }
-
-  return NS_OK;
+  return CallQueryInterface(window, aWindow);
 }
 
 NS_IMETHODIMP
@@ -243,7 +217,6 @@ nsXULCommandDispatcher::AddCommandUpdater(nsIDOMElement* aElement,
   if (! aElement)
     return NS_ERROR_NULL_POINTER;
 
-  NS_ENSURE_STATE(mDocument);
   nsCOMPtr<nsIDOMNode> doc(do_QueryInterface(mDocument));
 
   nsresult rv = nsContentUtils::CheckSameOrigin(doc, aElement);
@@ -252,39 +225,25 @@ nsXULCommandDispatcher::AddCommandUpdater(nsIDOMElement* aElement,
     return rv;
   }
 
-  nsCOMPtr<nsIDOMDocument> ownerDomDoc;
-  aElement->GetOwnerDocument(getter_AddRefs(ownerDomDoc));
-  nsCOMPtr<nsIDOMNSDocument> ownerDoc = do_QueryInterface(ownerDomDoc);
-  NS_ENSURE_STATE(ownerDoc);
-
-  // Box object is used as a weak reference to aElement.
-  nsCOMPtr<nsIBoxObject> boxObject;
-  ownerDoc->GetBoxObjectFor(aElement, getter_AddRefs(boxObject));
-  NS_ENSURE_STATE(boxObject);
-
   Updater* updater = mUpdaters;
   Updater** link = &mUpdaters;
 
   while (updater) {
-    nsCOMPtr<nsIDOMElement> element;
-    updater->mWeakElement->GetElement(getter_AddRefs(element));
-    if (element == aElement) {
+    if (updater->mElement == aElement) {
 
 #ifdef NS_DEBUG
-      if (PR_LOG_TEST(gLog, PR_LOG_NOTICE)) {
-        nsCAutoString eventsC, targetsC, aeventsC, atargetsC; 
-        eventsC.AssignWithConversion(updater->mEvents);
-        targetsC.AssignWithConversion(updater->mTargets);
-        CopyUTF16toUTF8(aEvents, aeventsC);
-        CopyUTF16toUTF8(aTargets, atargetsC);
-        PR_LOG(gLog, PR_LOG_NOTICE,
-               ("xulcmd[%p] replace %p(events=%s targets=%s) with (events=%s targets=%s)",
-                this, aElement,
-                eventsC.get(),
-                targetsC.get(),
-                aeventsC.get(),
-                atargetsC.get()));
-      }
+      nsCAutoString eventsC, targetsC, aeventsC, atargetsC; 
+      eventsC.AssignWithConversion(updater->mEvents);
+      targetsC.AssignWithConversion(updater->mTargets);
+      CopyUTF16toUTF8(aEvents, aeventsC);
+      CopyUTF16toUTF8(aTargets, atargetsC);
+      PR_LOG(gLog, PR_LOG_ALWAYS,
+             ("xulcmd[%p] replace %p(events=%s targets=%s) with (events=%s targets=%s)",
+              this, aElement,
+              eventsC.get(),
+              targetsC.get(),
+              aeventsC.get(),
+              atargetsC.get()));
 #endif
 
       // If the updater was already in the list, then replace
@@ -299,21 +258,19 @@ nsXULCommandDispatcher::AddCommandUpdater(nsIDOMElement* aElement,
     updater = updater->mNext;
   }
 #ifdef NS_DEBUG
-  if (PR_LOG_TEST(gLog, PR_LOG_NOTICE)) {
-    nsCAutoString aeventsC, atargetsC; 
-    CopyUTF16toUTF8(aEvents, aeventsC);
-    CopyUTF16toUTF8(aTargets, atargetsC);
+  nsCAutoString aeventsC, atargetsC; 
+  CopyUTF16toUTF8(aEvents, aeventsC);
+  CopyUTF16toUTF8(aTargets, atargetsC);
 
-    PR_LOG(gLog, PR_LOG_NOTICE,
-           ("xulcmd[%p] add     %p(events=%s targets=%s)",
-            this, aElement,
-            aeventsC.get(),
-            atargetsC.get()));
-  }
+  PR_LOG(gLog, PR_LOG_ALWAYS,
+         ("xulcmd[%p] add     %p(events=%s targets=%s)",
+          this, aElement,
+          aeventsC.get(),
+          atargetsC.get()));
 #endif
 
   // If we get here, this is a new updater. Append it to the list.
-  updater = new Updater(boxObject, aEvents, aTargets);
+  updater = new Updater(aElement, aEvents, aTargets);
   if (! updater)
       return NS_ERROR_OUT_OF_MEMORY;
 
@@ -332,20 +289,16 @@ nsXULCommandDispatcher::RemoveCommandUpdater(nsIDOMElement* aElement)
   Updater** link = &mUpdaters;
 
   while (updater) {
-    nsCOMPtr<nsIDOMElement> element;
-    updater->mWeakElement->GetElement(getter_AddRefs(element));
-    if (element == aElement) {
+    if (updater->mElement == aElement) {
 #ifdef NS_DEBUG
-      if (PR_LOG_TEST(gLog, PR_LOG_NOTICE)) {
-        nsCAutoString eventsC, targetsC; 
-        eventsC.AssignWithConversion(updater->mEvents);
-        targetsC.AssignWithConversion(updater->mTargets);
-        PR_LOG(gLog, PR_LOG_NOTICE,
-               ("xulcmd[%p] remove  %p(events=%s targets=%s)",
-                this, aElement,
-                eventsC.get(),
-                targetsC.get()));
-      }
+      nsCAutoString eventsC, targetsC; 
+      eventsC.AssignWithConversion(updater->mEvents);
+      targetsC.AssignWithConversion(updater->mTargets);
+      PR_LOG(gLog, PR_LOG_ALWAYS,
+             ("xulcmd[%p] remove  %p(events=%s targets=%s)",
+              this, aElement,
+              eventsC.get(),
+              targetsC.get()));
 #endif
 
       *link = updater->mNext;
@@ -364,6 +317,8 @@ nsXULCommandDispatcher::RemoveCommandUpdater(nsIDOMElement* aElement)
 NS_IMETHODIMP
 nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
 {
+  nsresult rv;
+
   EnsureFocusController();
   NS_ENSURE_TRUE(mFocusController, NS_ERROR_FAILURE);
 
@@ -371,7 +326,7 @@ nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
   nsCOMPtr<nsIDOMElement> element;
   mFocusController->GetFocusedElement(getter_AddRefs(element));
   if (element) {
-    nsresult rv = element->GetAttribute(NS_LITERAL_STRING("id"), id);
+    rv = element->GetAttribute(NS_LITERAL_STRING("id"), id);
     NS_ASSERTION(NS_SUCCEEDED(rv), "unable to get element's id");
     if (NS_FAILED(rv)) return rv;
   }
@@ -385,10 +340,6 @@ nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
 #endif
   
   for (Updater* updater = mUpdaters; updater != nsnull; updater = updater->mNext) {
-    nsCOMPtr<nsIDOMElement> element;
-    updater->mWeakElement->GetElement(getter_AddRefs(element));
-    if (!element)
-      continue;
     // Skip any nodes that don't match our 'events' or 'targets'
     // filters.
     if (! Matches(updater->mEvents, aEventName))
@@ -397,7 +348,7 @@ nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
     if (! Matches(updater->mTargets, id))
       continue;
 
-    nsCOMPtr<nsIContent> content = do_QueryInterface(element);
+    nsCOMPtr<nsIContent> content = do_QueryInterface(updater->mElement);
     NS_ASSERTION(content != nsnull, "not an nsIContent");
     if (! content)
       return NS_ERROR_UNEXPECTED;
@@ -409,14 +360,12 @@ nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
       continue;
 
 #ifdef NS_DEBUG
-    if (PR_LOG_TEST(gLog, PR_LOG_NOTICE)) {
-      nsCAutoString aeventnameC; 
-      CopyUTF16toUTF8(aEventName, aeventnameC);
-      PR_LOG(gLog, PR_LOG_NOTICE,
-             ("xulcmd[%p] update %p event=%s",
-              this, element.get(),
-              aeventnameC.get()));
-    }
+    nsCAutoString aeventnameC; 
+    CopyUTF16toUTF8(aEventName, aeventnameC);
+    PR_LOG(gLog, PR_LOG_ALWAYS,
+           ("xulcmd[%p] update %p event=%s",
+            this, updater->mElement,
+            aeventnameC.get()));
 #endif
 
     PRUint32 count = document->GetNumberOfShells();
@@ -424,13 +373,13 @@ nsXULCommandDispatcher::UpdateCommands(const nsAString& aEventName)
       nsIPresShell *shell = document->GetShellAt(i);
 
       // Retrieve the context in which our DOM event will fire.
-      nsCOMPtr<nsPresContext> context = shell->GetPresContext();
+      nsCOMPtr<nsIPresContext> context;
+      rv = shell->GetPresContext(getter_AddRefs(context));
+      if (NS_FAILED(rv)) return rv;
 
       // Handle the DOM event
       nsEventStatus status = nsEventStatus_eIgnore;
-
-      nsEvent event(PR_TRUE, NS_XUL_COMMAND_UPDATE);
-
+      nsEvent event(NS_XUL_COMMAND_UPDATE);
       content->HandleDOMEvent(context, &event, nsnull, NS_EVENT_FLAG_INIT, &status);
     }
   }
@@ -441,7 +390,7 @@ PRBool
 nsXULCommandDispatcher::Matches(const nsString& aList, 
                                 const nsAString& aElement)
 {
-  if (aList.EqualsLiteral("*"))
+  if (aList.Equals(NS_LITERAL_STRING("*")))
     return PR_TRUE; // match _everything_!
 
   PRInt32 indx = aList.Find(PromiseFlatString(aElement));

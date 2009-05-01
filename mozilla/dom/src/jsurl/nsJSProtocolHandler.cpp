@@ -1,12 +1,11 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* vim: set ts=4 sw=4 et tw=78: */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsCOMPtr.h"
@@ -59,7 +59,7 @@
 #include "nsIInterfaceRequestorUtils.h"
 #include "nsIStringStream.h"
 #include "nsIWindowMediator.h"
-#include "nsPIDOMWindow.h"
+#include "nsIDOMWindowInternal.h"
 #include "nsIDOMDocument.h"
 #include "nsIJSConsoleService.h"
 #include "nsIConsoleService.h"
@@ -70,11 +70,6 @@
 #include "nsIWebNavigation.h"
 #include "nsIDocShell.h"
 #include "nsIContentViewer.h"
-#include "nsIStringStream.h"
-#include "nsIXPConnect.h"
-#include "nsContentUtils.h"
-#include "nsJSUtils.h"
-
 
 static NS_DEFINE_CID(kSimpleURICID, NS_SIMPLEURI_CID);
 static NS_DEFINE_CID(kWindowMediatorCID, NS_WINDOWMEDIATOR_CID);
@@ -122,16 +117,32 @@ nsresult nsJSThunk::Init(nsIURI* uri)
     return NS_OK;
 }
 
-static PRBool
-IsISO88591(const nsString& aString)
+static void
+GetInterfaceFromChannel(nsIChannel* aChannel,
+                        const nsIID &aIID,
+                        void **aResult)
 {
-    for (nsString::const_char_iterator c = aString.BeginReading(),
-                                   c_end = aString.EndReading();
-         c < c_end; ++c) {
-        if (*c > 255)
-            return PR_FALSE;
+    NS_PRECONDITION(aChannel, "Must have a channel");
+    NS_PRECONDITION(aResult, "Null out param");
+    *aResult = nsnull;
+
+    // Get an interface requestor from the channel callbacks.
+    nsCOMPtr<nsIInterfaceRequestor> callbacks;
+    aChannel->GetNotificationCallbacks(getter_AddRefs(callbacks));
+    if (callbacks) {
+        callbacks->GetInterface(aIID, aResult);
     }
-    return PR_TRUE;
+    if (!*aResult) {
+        // Try the loadgroup
+        nsCOMPtr<nsILoadGroup> loadGroup;
+        aChannel->GetLoadGroup(getter_AddRefs(loadGroup));
+        if (loadGroup) {
+            loadGroup->GetNotificationCallbacks(getter_AddRefs(callbacks));
+            if (callbacks) {
+                callbacks->GetInterface(aIID, aResult);
+            }
+        }
+    }
 }
 
 nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
@@ -147,7 +158,8 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
 
     // The the global object owner from the channel
     nsCOMPtr<nsIScriptGlobalObjectOwner> globalOwner;
-    NS_QueryNotificationCallbacks(aChannel, globalOwner);
+    GetInterfaceFromChannel(aChannel, NS_GET_IID(nsIScriptGlobalObjectOwner),
+                            getter_AddRefs(globalOwner));
     NS_ASSERTION(globalOwner, 
                  "Unable to get an nsIScriptGlobalObjectOwner from the "
                  "channel!");
@@ -156,38 +168,24 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
     }
 
     // So far so good: get the script context from its owner.
-    nsIScriptGlobalObject* global = globalOwner->GetScriptGlobalObject();
+    nsCOMPtr<nsIScriptGlobalObject> global;
+    rv = globalOwner->GetScriptGlobalObject(getter_AddRefs(global));
 
-    NS_ASSERTION(global,
+    NS_ASSERTION(NS_SUCCEEDED(rv) && global,
                  "Unable to get an nsIScriptGlobalObject from the "
                  "ScriptGlobalObjectOwner!");
-    if (!global) {
+    if (NS_FAILED(rv) || !global) {
         return NS_ERROR_FAILURE;
     }
 
-    nsCOMPtr<nsPIDOMWindow> win(do_QueryInterface(global));
-
-    // Get the document out of the window to make sure we create a new
-    // inner window if one doesn't already exist (see bug 306630).
-    nsCOMPtr<nsIDOMDocument> doc;
-    win->GetDocument(getter_AddRefs(doc));
-
-    nsPIDOMWindow *innerWin = win->GetCurrentInnerWindow();
-
-    if (!innerWin) {
-        return NS_ERROR_UNEXPECTED;
-    }
-
-    nsCOMPtr<nsIScriptGlobalObject> innerGlobal = do_QueryInterface(innerWin);
-
-    JSObject *globalJSObject = innerGlobal->GetGlobalJSObject();
+    JSObject *globalJSObject = global->GetGlobalJSObject();
 
     nsCOMPtr<nsIDOMWindow> domWindow(do_QueryInterface(global, &rv));
     if (NS_FAILED(rv)) {
         return NS_ERROR_FAILURE;
     }
 
-    // If mURI is just "javascript:", we bring up the Error console
+    // If mURI is just "javascript:", we bring up the JavaScript console
     // and return NS_ERROR_DOM_RETVAL_UNDEFINED.
     if (script.IsEmpty()) {
         rv = BringUpConsole(domWindow);
@@ -198,13 +196,14 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
     // Now get the DOM Document.  Accessing the document will create one
     // if necessary.  So, basically, this call ensures that a document gets
     // created -- if necessary.
+    nsCOMPtr<nsIDOMDocument> doc;
     rv = domWindow->GetDocument(getter_AddRefs(doc));
     NS_ASSERTION(doc, "No DOMDocument!");
     if (NS_FAILED(rv)) {
         return NS_ERROR_FAILURE;
     }
 
-    nsCOMPtr<nsIScriptContext> scriptContext = global->GetContext();
+    nsIScriptContext *scriptContext = global->GetContext();
     if (!scriptContext)
         return NS_ERROR_FAILURE;
 
@@ -228,16 +227,16 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
     if (NS_FAILED(rv))
         return rv;
 
-    PRBool useSandbox = PR_TRUE;
-
     if (owner) {
         principal = do_QueryInterface(owner, &rv);
         NS_ASSERTION(principal, "Channel's owner is not a principal");
         if (!principal)
             return NS_ERROR_FAILURE;
 
-        //-- Don't run if the script principal is different from the principal
-        //   of the context, unless the script has the system principal.
+        //-- Don't run if the script principal is different from the
+        //   principal of the context, with two exceptions: we allow
+        //   the script to run if the script has the system principal
+        //   or the context is about:blank.
         nsCOMPtr<nsIPrincipal> objectPrincipal;
         rv = securityManager->GetObjectPrincipal(
                                 (JSContext*)scriptContext->GetNativeContext(),
@@ -251,152 +250,52 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel)
         if (principal != systemPrincipal) {
             rv = securityManager->CheckSameOriginPrincipal(principal,
                                                            objectPrincipal);
-            if (NS_SUCCEEDED(rv)) {
-                useSandbox = PR_FALSE;
+            if (NS_FAILED(rv)) {
+                nsCOMPtr<nsIConsoleService> console =
+                    do_GetService("@mozilla.org/consoleservice;1");
+                if (console) {
+                    // XXX Localize me!
+                    console->LogStringMessage(
+                        NS_LITERAL_STRING("Attempt to load a javascript: URL from one host\nin a window displaying content from another host\nwas blocked by the security manager.").get());
+                }
+
+                return NS_ERROR_DOM_RETVAL_UNDEFINED;
             }
-        } else {
-            useSandbox = PR_FALSE;
         }
     }
-
-    nsString result;
-    PRBool isUndefined;
+    else {
+        // No owner from channel, use the current URI to generate a principal
+        rv = securityManager->GetCodebasePrincipal(mURI, 
+                                                   getter_AddRefs(principal));
+        if (NS_FAILED(rv) || !principal) {
+            return NS_ERROR_FAILURE;
+        }
+    }
 
     // Finally, we have everything needed to evaluate the expression.
+    nsString result;
+    PRBool bIsUndefined;
 
-    if (useSandbox) {
-        // No owner from channel, or we have a principal
-        // mismatch. Evaluate the javascript URL in a sandbox to
-        // prevent it from accessing data it doesn't have permissions
-        // to access.
-
-        // First check to make sure it's OK to evaluate this script to
-        // start with.  For example, script could be disabled.
-        nsCOMPtr<nsIPrincipal> enabledCheckPrincipal = principal;
-        if (!enabledCheckPrincipal) {
-            // We just need a principal that's not the system principal and
-            // isn't whitelisted by CanExecuteScripts.  An about:blank
-            // principal will do nicely.
-            nsCOMPtr<nsIURI> uri;
-            rv = NS_NewURI(getter_AddRefs(uri), "about:blank");
-            NS_ENSURE_SUCCESS(rv, rv);
-            rv = securityManager->
-                GetCodebasePrincipal(uri,
-                                     getter_AddRefs(enabledCheckPrincipal));
-            NS_ENSURE_SUCCESS(rv, rv);
-        }
-
-        JSContext *cx = (JSContext*)scriptContext->GetNativeContext();
-
-        PRBool ok;
-        rv = securityManager->CanExecuteScripts(cx, enabledCheckPrincipal,
-                                                &ok);
-        if (NS_FAILED(rv)) {
-            return rv;
-        }
-
-        if (!ok) {
-            // Treat this as returning undefined from the script.  That's what
-            // nsJSContext does.
-            return NS_ERROR_DOM_RETVAL_UNDEFINED;
-        }
-
-        nsIXPConnect *xpc = nsContentUtils::XPConnect();
-        nsCOMPtr<nsIXPConnect_MOZILLA_1_8_BRANCH2> xpc_18 =
-            do_QueryInterface(xpc);
-
-        nsCOMPtr<nsIXPConnectJSObjectHolder> sandbox;
-        rv = xpc_18->CreateSandbox(cx, principal, getter_AddRefs(sandbox));
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        jsval rval = JSVAL_VOID;
-        nsAutoGCRoot root(&rval, &rv);
-        if (NS_FAILED(rv)) {
-            return rv;
-        }
-
-        // Push our JSContext on the context stack so the JS_ValueToString call
-        // (and JS_ReportPendingException, if relevant) will use the principal
-        // of cx.  Note that we do this as late as possible to make popping
-        // simpler.
-        nsCOMPtr<nsIJSContextStack> stack =
-            do_GetService("@mozilla.org/js/xpc/ContextStack;1", &rv);
-        if (NS_SUCCEEDED(rv)) {
-            rv = stack->Push(cx);
-        }
-        if (NS_FAILED(rv)) {
-            return rv;
-        }
-
-        rv = xpc_18->EvalInSandboxObject2(NS_ConvertUTF8toUTF16(script), cx,
-                                          sandbox, PR_TRUE, &rval);
-
-        // Propagate and report exceptions that happened in the
-        // sandbox.
-        if (JS_IsExceptionPending(cx)) {
-            JS_ReportPendingException(cx);
-            isUndefined = PR_TRUE;
-        } else {
-            isUndefined = rval == JSVAL_VOID;
-        }
-
-        if (!isUndefined && NS_SUCCEEDED(rv)) {
-            NS_ASSERTION(JSVAL_IS_STRING(rval), "evalInSandbox is broken");
-            result = nsDependentJSString(JSVAL_TO_STRING(rval));
-        }
-
-        stack->Pop(nsnull);
-    } else {
-        // No need to use the sandbox, evaluate the script directly in
-        // the given scope.
-        rv = scriptContext->EvaluateString(NS_ConvertUTF8toUTF16(script),
-                                           globalJSObject, // obj
-                                           principal,
-                                           url.get(),      // url
-                                           1,              // line no
-                                           nsnull,
-                                           &result,
-                                           &isUndefined);
-    }
+    rv = scriptContext->EvaluateString(NS_ConvertUTF8toUCS2(script),
+                                       globalJSObject, // obj
+                                       principal,
+                                       url.get(),      // url
+                                       1,              // line no
+                                       nsnull,
+                                       result,
+                                       &bIsUndefined);
 
     if (NS_FAILED(rv)) {
         rv = NS_ERROR_MALFORMED_URI;
     }
-    else if (isUndefined) {
+    else if (bIsUndefined) {
         rv = NS_ERROR_DOM_RETVAL_UNDEFINED;
     }
     else {
-        char *bytes;
-        PRUint32 bytesLen;
-        NS_NAMED_LITERAL_CSTRING(isoCharset, "ISO-8859-1");
-        NS_NAMED_LITERAL_CSTRING(utf8Charset, "UTF-8");
-        const nsCString *charset;
-        if (IsISO88591(result)) {
-            // For compatibility, if the result is ISO-8859-1, we use
-            // ISO-8859-1, so that people can compatibly create images
-            // using javascript: URLs.
-            bytes = ToNewCString(result);
-            bytesLen = result.Length();
-            charset = &isoCharset;
-        }
-        else {
-            bytes = ToNewUTF8String(result, &bytesLen);
-            charset = &utf8Charset;
-        }
-        aChannel->SetContentCharset(*charset);
-        if (bytes) {
-            rv = NS_NewByteInputStream(getter_AddRefs(mInnerStream),
-                                       bytes, bytesLen);
-            if (mInnerStream) {
-                nsCOMPtr<nsIStringInputStream> sis
-                    = do_QueryInterface(mInnerStream);
-                sis->AdoptData(bytes, bytesLen); // Previous call was |ShareData|
-            }
-        }
-        else
-            rv = NS_ERROR_OUT_OF_MEMORY;
+        // NS_NewStringInputStream calls ToNewCString
+        // XXXbe this should not decimate! pass back UCS-2 to necko
+        rv = NS_NewStringInputStream(getter_AddRefs(mInnerStream), result);
     }
-
     return rv;
 }
 
@@ -475,7 +374,8 @@ nsresult nsJSChannel::StopAll()
 {
     nsresult rv = NS_ERROR_UNEXPECTED;
     nsCOMPtr<nsIWebNavigation> webNav;
-    NS_QueryNotificationCallbacks(mStreamChannel, webNav);
+    GetInterfaceFromChannel(mStreamChannel, NS_GET_IID(nsIWebNavigation),
+                            getter_AddRefs(webNav));
 
     NS_ASSERTION(webNav, "Can't get nsIWebNavigation from channel!");
     if (webNav) {
@@ -502,7 +402,8 @@ nsresult nsJSChannel::Init(nsIURI *aURI)
     // If the resultant script evaluation actually does return a value, we
     // treat it as html.
     rv = NS_NewInputStreamChannel(getter_AddRefs(channel), aURI, mIOThunk,
-                                  NS_LITERAL_CSTRING("text/html"));
+                                  NS_LITERAL_CSTRING("text/html"),
+                                  EmptyCString());
     if (NS_FAILED(rv)) return rv;
 
     rv = mIOThunk->Init(aURI);
@@ -617,14 +518,6 @@ nsJSChannel::InternalOpen(PRBool aIsAsync, nsIStreamListener *aListener,
 {
     nsCOMPtr<nsILoadGroup> loadGroup;
 
-    // Temporarily set the LOAD_BACKGROUND flag to suppress load group observer
-    // notifications (and hence nsIWebProgressListener notifications) from
-    // being dispatched.  This is required since we suppress LOAD_DOCUMENT_URI,
-    // which means that the DocLoader would not generate document start and
-    // stop notifications (see bug 257875).
-    PRUint32 oldLoadFlags = mLoadFlags;
-    mLoadFlags |= LOAD_BACKGROUND;
-
     // Add the javascript channel to its loadgroup so that we know if
     // network loads were canceled or not...
     mStreamChannel->GetLoadGroup(getter_AddRefs(loadGroup));
@@ -643,9 +536,6 @@ nsJSChannel::InternalOpen(PRBool aIsAsync, nsIStreamListener *aListener,
     if (loadGroup) {
         loadGroup->RemoveRequest(this, aContext, rv);
     }
-
-    // Reset load flags to their original value...
-    mLoadFlags = oldLoadFlags;
 
     // We're no longer active, it's now up to the stream channel to do
     // the loading, if needed.
@@ -666,7 +556,8 @@ nsJSChannel::InternalOpen(PRBool aIsAsync, nsIStreamListener *aListener,
             // ok. If so, stop all pending network loads.
 
             nsCOMPtr<nsIDocShell> docShell;
-            NS_QueryNotificationCallbacks(mStreamChannel, docShell);
+            GetInterfaceFromChannel(mStreamChannel, NS_GET_IID(nsIDocShell),
+                                    getter_AddRefs(docShell));
             if (docShell) {
                 nsCOMPtr<nsIContentViewer> cv;
                 docShell->GetContentViewer(getter_AddRefs(cv));
@@ -908,7 +799,9 @@ nsJSProtocolHandler::NewURI(const nsACString &aSpec,
     // CreateInstance.
 
     nsIURI* url;
-    rv = CallCreateInstance(kSimpleURICID, &url);
+    rv = nsComponentManager::CreateInstance(kSimpleURICID, nsnull,
+                                            NS_GET_IID(nsIURI),
+                                            (void**)&url);
 
     if (NS_FAILED(rv))
         return rv;

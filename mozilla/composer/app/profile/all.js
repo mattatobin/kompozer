@@ -40,28 +40,22 @@
 
 // pref("startup.homepage_override_url","chrome://browser-region/locale/region.properties");
 // pref("general.startup.browser", true);
-pref("browser.chromeURL",             "chrome://editor/content/"); // Gecko 1.7
-pref("toolkit.defaultChromeURI",      "chrome://editor/content/"); // Gecko 1.8
-pref("browser.hiddenWindowChromeURL", "chrome://editor/content/hiddenWindow.xul");
-//pref("toolkit.defaultChromeURI","chrome://editor/content/editor.xul");
 
-pref("xpinstall.dialog.confirm",              "chrome://mozapps/content/xpinstall/xpinstallConfirm.xul");
-//pref("xpinstall.dialog.progress.skin",        "chrome://mozapps/content/extensions/extensions.xul?type=themes");
-//pref("xpinstall.dialog.progress.chrome",      "chrome://mozapps/content/extensions/extensions.xul?type=extensions");
-// changed with Gecko 1.8.1
-pref("xpinstall.dialog.progress.skin",        "chrome://mozapps/content/extensions/extensions.xul");
-pref("xpinstall.dialog.progress.chrome",      "chrome://mozapps/content/extensions/extensions.xul");
-pref("xpinstall.dialog.progress.type.skin",   "Extension:Manager-themes");
+pref("browser.chromeURL","chrome://editor/content/");
+pref("browser.hiddenWindowChromeURL", "chrome://editor/content/hiddenWindow.xul");
+pref("xpinstall.dialog.confirm", "chrome://mozapps/content/xpinstall/xpinstallConfirm.xul");
+pref("xpinstall.dialog.progress.skin", "chrome://mozapps/content/extensions/extensions.xul?type=themes");
+pref("xpinstall.dialog.progress.chrome", "chrome://mozapps/content/extensions/extensions.xul?type=extensions");
+pref("xpinstall.dialog.progress.type.skin", "Extension:Manager-themes");
 pref("xpinstall.dialog.progress.type.chrome", "Extension:Manager-extensions");
 
 // This is this application's unique identifier used by the Extension System to identify
 // this application as an extension target, and by the SmartUpdate system to identify
 // this application to the Update server.
 pref("app.id", "{136c295a-4a5a-41cf-bf24-5cee526720d5}");
-pref("app.version", "0.8a2");
-//pref("app.version", 
-//#expand __APP_VERSION__
-//);
+pref("app.version", 
+#expand __APP_VERSION__
+);
 pref("app.extensions.version", "1.0");
 pref("app.build_id", 
 #expand __BUILD_ID__
@@ -73,7 +67,7 @@ pref("app.update.autoUpdateEnabled", true);     // Whether or not background app
                                                 // are enabled
 pref("app.update.url", "chrome://mozapps/locale/update/update.properties");
 pref("app.update.updatesAvailable", false);
-pref("app.update.interval", 86400000);          // Check for updates every day
+pref("app.update.interval", 86400000);          // Check for updates to Firefox every day
 pref("app.update.lastUpdateDate", 0);           // UTC offset when last App update was 
                                                 // performed. 
 pref("app.update.performed", false);            // Whether or not an update has been 
@@ -98,7 +92,7 @@ pref("extensions.update.lastUpdateDate", 0);    // UTC offset when last Extensio
                                                 // update was performed. 
 // Non-symmetric (not shared by extensions) extension-specific [update] preferences
 pref("extensions.getMoreExtensionsURL", "chrome://mozapps/locale/extensions/extensions.properties");
-pref("extensions.getMoreThemesURL",     "chrome://mozapps/locale/extensions/extensions.properties");
+pref("extensions.getMoreThemesURL", "chrome://mozapps/locale/extensions/extensions.properties");
 pref("extensions.update.severity.threshold", 5);// The number of pending Extension/Theme
                                                 // updates you can have before the update
                                                 // notifier goes from low->medium severity.
@@ -128,16 +122,15 @@ pref("general.skins.selectedSkin", "classic/1.0");
 pref("startup.homepage_override_url","chrome://navigator-region/locale/region.properties");
 pref("network.search.url","http://cgi.netscape.com/cgi-bin/url_search.cgi?search=");
 
-pref("keyword.URL",     "http://keyword.netscape.com/keyword/");
+pref("keyword.URL", "http://keyword.netscape.com/keyword/");
 pref("keyword.enabled", false);
 //pref("general.useragent.locale", "chrome://navigator/locale/navigator.properties");
-pref("general.useragent.locale",        "en-US");
+pref("general.useragent.locale", "en-US");
 pref("general.useragent.contentlocale", "chrome://navigator-region/locale/region.properties");
-pref("general.useragent.vendor",        "kompozer.net");
-pref("general.useragent.vendorSub",     "0.8a2");
-//pref("general.useragent.vendorSub",
-//#expand __APP_VERSION__
-//);
+pref("general.useragent.vendor", "Linspire Inc.");
+pref("general.useragent.vendorSub", 
+#expand __APP_VERSION__
+);
 
 pref("general.startup.browser",             false);
 pref("general.startup.mail",                false);
@@ -145,16 +138,16 @@ pref("general.startup.news",                false);
 pref("general.startup.editor",              false);
 pref("general.startup.compose",             false);
 pref("general.startup.addressbook",         false);
-pref("editor.standalone",                   true);
+pref("editor.standalone", true);
 
-pref("general.open_location.last_url",           "");
+pref("general.open_location.last_url",      "");
 pref("general.open_location.last_window_choice", 0);
 
 pref("backups.number_of_prefs_copies", 1);
 
 // 0 = blank, 1 = home (browser.startup.homepage), 2 = last
 pref("browser.startup.page",                1);
-pref("browser.startup.homepage",            "chrome://navigator-region/locale/region.properties");
+pref("browser.startup.homepage",	   "chrome://navigator-region/locale/region.properties");
 pref("browser.startup.homepage.count", 1);
 // "browser.startup.homepage_override" was for 4.x
 pref("browser.startup.homepage_override.1", true);
@@ -187,10 +180,10 @@ pref("browser.underline_anchors",           true);
 pref("browser.blink_allowed",               true);
 pref("browser.enable_automatic_image_resizing", false);
 
-pref("browser.display.use_focus_colors",       false);
+pref("browser.display.use_focus_colors",    false);
 pref("browser.display.focus_background_color", "#117722");
-pref("browser.display.focus_text_color",       "#ffffff");
-pref("browser.display.focus_ring_width",       1);
+pref("browser.display.focus_text_color",     "#ffffff");
+pref("browser.display.focus_ring_width",     1);
 pref("browser.display.focus_ring_on_anything", false);
 
 pref("browser.urlbar.autoFill", false);
@@ -201,24 +194,24 @@ pref("browser.urlbar.matchOnlyTyped", false);
 pref("browser.chrome.site_icons", true);
 pref("browser.chrome.favicons", false);
 
-pref("browser.chrome.toolbar_tips",            true);
+pref("browser.chrome.toolbar_tips",         true);
 // 0 = Pictures Only, 1 = Text Only, 2 = Pictures and Text
-pref("browser.chrome.toolbar_style",           2);
+pref("browser.chrome.toolbar_style",        2);
 
-pref("browser.toolbars.showbutton.bookmarks",  true);
-pref("browser.toolbars.showbutton.go",         false);
-pref("browser.toolbars.showbutton.home",       true);
-pref("browser.toolbars.showbutton.print",      true);
-pref("browser.toolbars.showbutton.search",     true);
+pref("browser.toolbars.showbutton.bookmarks", true);
+pref("browser.toolbars.showbutton.go",      false);
+pref("browser.toolbars.showbutton.home",    true);
+pref("browser.toolbars.showbutton.print",   true);
+pref("browser.toolbars.showbutton.search",  true);
 
 pref("browser.turbo.enabled", false);
 
-pref("browser.helperApps.alwaysAsk.force",     false);
+pref("browser.helperApps.alwaysAsk.force",  false);
 pref("browser.helperApps.neverAsk.saveToDisk", "");
-pref("browser.helperApps.neverAsk.openFile",   "");
+pref("browser.helperApps.neverAsk.openFile", "");
 
 pref("accessibility.browsewithcaret", false);
-pref("accessibility.warn_on_browsewithcaret",  true);
+pref("accessibility.warn_on_browsewithcaret", true);
 // Tab focus model bit field:
 // 1 focuses text controls, 2 focuses other form elements, 4 adds links.
 // Most users will want 1, 3, or 7.
@@ -228,15 +221,14 @@ pref("accessibility.usebrailledisplay", "");
 pref("accessibility.accesskeycausesactivation", true);
 
 // Type Ahead Find
-pref("accessibility.typeaheadfind",                true);
-pref("accessibility.typeaheadfind.autostart",      true);
-pref("accessibility.typeaheadfind.linksonly",      true);
+pref("accessibility.typeaheadfind", true);
+pref("accessibility.typeaheadfind.autostart", true);
+pref("accessibility.typeaheadfind.linksonly", true);
 pref("accessibility.typeaheadfind.startlinksonly", false);
-pref("accessibility.typeaheadfind.timeout",        4000);
-pref("accessibility.typeaheadfind.enabletimeout",  true);
-pref("accessibility.typeaheadfind.soundURL",       "default");
-pref("accessibility.typeaheadfind.enablesound",    true);
-pref("accessibility.typeaheadfind.flashBar",       1); // Kaze: required for Gecko 1.8.1 (JS console)
+pref("accessibility.typeaheadfind.timeout", 4000);
+pref("accessibility.typeaheadfind.enabletimeout", true);
+pref("accessibility.typeaheadfind.soundURL", "default");
+pref("accessibility.typeaheadfind.enablesound", true);
 
 // Dialog modality issues
 pref("browser.prefWindowModal", true);
@@ -308,23 +300,23 @@ pref("slider.snapMultiplier", 6);
 pref("application.use_ns_plugin_finder", false);
 
 // Smart Browsing prefs
-pref("browser.related.enabled",            true);
-pref("browser.related.autoload",           1);  // 0 = Always, 1 = After first use, 2 = Never
-pref("browser.related.provider",           "http://www-rl.netscape.com/wtgn?");
+pref("browser.related.enabled", true);
+pref("browser.related.autoload", 1);  // 0 = Always, 1 = After first use, 2 = Never
+pref("browser.related.provider", "http://www-rl.netscape.com/wtgn?");
 pref("browser.related.disabledForDomains", "");
-pref("browser.goBrowsing.enabled",         true);
+pref("browser.goBrowsing.enabled", true);
 
 // URI fixup prefs
-pref("browser.fixup.alternate.enabled",    true);
-pref("browser.fixup.alternate.prefix",     "www.");
-pref("browser.fixup.alternate.suffix",     ".com");
+pref("browser.fixup.alternate.enabled", true);
+pref("browser.fixup.alternate.prefix", "www.");
+pref("browser.fixup.alternate.suffix", ".com");
 
 // Default bookmark sorting
-pref("browser.bookmarks.sort.direction",   "descending");
-pref("browser.bookmarks.sort.resource",    "rdf:http://home.netscape.com/NC-rdf#Name");
+pref("browser.bookmarks.sort.direction", "descending");
+pref("browser.bookmarks.sort.resource", "rdf:http://home.netscape.com/NC-rdf#Name");
 
 //Internet Search
-pref("browser.search.defaultenginename",   "chrome://communicator-region/locale/region.properties");
+pref("browser.search.defaultenginename", "chrome://communicator-region/locale/region.properties");
 
 // Print header customization
 // Use the following codes:
@@ -335,12 +327,12 @@ pref("browser.search.defaultenginename",   "chrome://communicator-region/locale/
 // &PT - Page Number "of" Page total
 // Set each header to a string containing zero or one of these codes
 // and the code will be replaced in that string by the corresponding data
-pref("print.print_headerleft",    "&T");
-pref("print.print_headercenter",  "");
-pref("print.print_headerright",   "&U");
-pref("print.print_footerleft",    "&PT");
-pref("print.print_footercenter",  "");
-pref("print.print_footerright",   "&D");
+pref("print.print_headerleft", "&T");
+pref("print.print_headercenter", "");
+pref("print.print_headerright", "&U");
+pref("print.print_footerleft", "&PT");
+pref("print.print_footercenter", "");
+pref("print.print_footerright", "&D");
 pref("print.show_print_progress", true);
 
 // When this is set to false it means each window has its PrintSettings
@@ -365,9 +357,9 @@ pref("print.printer_PostScript/default.print_command", "kprinter --stdin");
 
 // Enables you to specify the gap from the edge of the paper to the margin
 // this is used by both Printing and Print Preview
-pref("print.print_edge_top",    0); // 1/100 of an inch
-pref("print.print_edge_left",   0); // 1/100 of an inch
-pref("print.print_edge_right",  0); // 1/100 of an inch
+pref("print.print_edge_top", 0); // 1/100 of an inch
+pref("print.print_edge_left", 0); // 1/100 of an inch
+pref("print.print_edge_right", 0); // 1/100 of an inch
 pref("print.print_edge_bottom", 0); // 1/100 of an inch
 
 // Default Capability Preferences: Security-Critical! 
@@ -375,153 +367,153 @@ pref("print.print_edge_bottom", 0); // 1/100 of an inch
 //pref("capability.policy.default.barprop.visible.set", "UniversalBrowserWrite");
 
 pref("capability.policy.default_policynames", "mailnews");
-pref("capability.policy.policynames",         "");
+pref("capability.policy.policynames", "");
 
-pref("capability.policy.default.DOMException.code",     "allAccess");
-pref("capability.policy.default.DOMException.message",  "allAccess");
-pref("capability.policy.default.DOMException.name",     "allAccess");
-pref("capability.policy.default.DOMException.result",   "allAccess");
+pref("capability.policy.default.DOMException.code", "allAccess");
+pref("capability.policy.default.DOMException.message", "allAccess");
+pref("capability.policy.default.DOMException.name", "allAccess");
+pref("capability.policy.default.DOMException.result", "allAccess");
 pref("capability.policy.default.DOMException.toString", "allAccess");
 
-pref("capability.policy.default.History.back",          "allAccess");
-pref("capability.policy.default.History.current",       "UniversalBrowserRead");
-pref("capability.policy.default.History.forward",       "allAccess");
-pref("capability.policy.default.History.go",            "allAccess");
-pref("capability.policy.default.History.item",          "UniversalBrowserRead");
-pref("capability.policy.default.History.next",          "UniversalBrowserRead");
-pref("capability.policy.default.History.previous",      "UniversalBrowserRead");
-pref("capability.policy.default.History.toString",      "UniversalBrowserRead");
+pref("capability.policy.default.History.back", "allAccess");
+pref("capability.policy.default.History.current", "UniversalBrowserRead");
+pref("capability.policy.default.History.forward", "allAccess");
+pref("capability.policy.default.History.go", "allAccess");
+pref("capability.policy.default.History.item", "UniversalBrowserRead");
+pref("capability.policy.default.History.next", "UniversalBrowserRead");
+pref("capability.policy.default.History.previous", "UniversalBrowserRead");
+pref("capability.policy.default.History.toString", "UniversalBrowserRead");
 
-pref("capability.policy.default.HTMLDocument.close",    "allAccess");
-pref("capability.policy.default.HTMLDocument.open",     "allAccess");
+pref("capability.policy.default.HTMLDocument.close", "allAccess");
+pref("capability.policy.default.HTMLDocument.open", "allAccess");
 
-pref("capability.policy.default.Location.hash.set",     "allAccess");
-pref("capability.policy.default.Location.href.set",     "allAccess");
-pref("capability.policy.default.Location.reload",       "allAccess");
-pref("capability.policy.default.Location.replace",      "allAccess");
+pref("capability.policy.default.Location.hash.set", "allAccess");
+pref("capability.policy.default.Location.href.set", "allAccess");
+pref("capability.policy.default.Location.reload", "allAccess");
+pref("capability.policy.default.Location.replace", "allAccess");
 
-pref("capability.policy.default.Navigator.preference",  "allAccess");
+pref("capability.policy.default.Navigator.preference", "allAccess");
 pref("capability.policy.default.Navigator.preferenceinternal.get", "UniversalPreferencesRead");
 pref("capability.policy.default.Navigator.preferenceinternal.set", "UniversalPreferencesWrite");
 
-pref("capability.policy.default.Window.blur",           "allAccess");
-pref("capability.policy.default.Window.close",          "allAccess");
-pref("capability.policy.default.Window.closed",         "allAccess");
-pref("capability.policy.default.Window.Components",     "allAccess");
-pref("capability.policy.default.Window.document",       "allAccess");
-pref("capability.policy.default.Window.focus",          "allAccess");
-pref("capability.policy.default.Window.frames",         "allAccess");
-pref("capability.policy.default.Window.history",        "allAccess");
-pref("capability.policy.default.Window.length",         "allAccess");
-pref("capability.policy.default.Window.location",       "allAccess");
-pref("capability.policy.default.Window.opener",         "allAccess");
-pref("capability.policy.default.Window.parent",         "allAccess");
-pref("capability.policy.default.Window.self",           "allAccess");
-pref("capability.policy.default.Window.top",            "allAccess");
-pref("capability.policy.default.Window.window",         "allAccess");
+pref("capability.policy.default.Window.blur", "allAccess");
+pref("capability.policy.default.Window.close", "allAccess");
+pref("capability.policy.default.Window.closed", "allAccess");
+pref("capability.policy.default.Window.Components", "allAccess");
+pref("capability.policy.default.Window.document", "allAccess");
+pref("capability.policy.default.Window.focus", "allAccess");
+pref("capability.policy.default.Window.frames", "allAccess");
+pref("capability.policy.default.Window.history", "allAccess");
+pref("capability.policy.default.Window.length", "allAccess");
+pref("capability.policy.default.Window.location", "allAccess");
+pref("capability.policy.default.Window.opener", "allAccess");
+pref("capability.policy.default.Window.parent", "allAccess");
+pref("capability.policy.default.Window.self", "allAccess");
+pref("capability.policy.default.Window.top", "allAccess");
+pref("capability.policy.default.Window.window", "allAccess");
 
 // Restrictions on the DOM for mail/news - see bugs 66938 and 84545
 pref("capability.policy.mailnews.sites", "mailbox: imap: news:");
 
-pref("capability.policy.mailnews.*.attributes.get",                     "noAccess");
-pref("capability.policy.mailnews.*.baseURI.get",                        "noAccess");
-pref("capability.policy.mailnews.*.data.get",                           "noAccess");
-pref("capability.policy.mailnews.*.getAttribute",                       "noAccess");
-pref("capability.policy.mailnews.*.getNamedItem",                       "noAccess");
-pref("capability.policy.mailnews.*.host.get",                           "noAccess");
-pref("capability.policy.mailnews.*.hostname.get",                       "noAccess");
-pref("capability.policy.mailnews.*.href.get",                           "noAccess");
-pref("capability.policy.mailnews.*.innerHTML.get",                      "noAccess");
-pref("capability.policy.mailnews.*.lowSrc.get",                         "noAccess");
-pref("capability.policy.mailnews.*.nodeValue.get",                      "noAccess");
-pref("capability.policy.mailnews.*.pathname.get",                       "noAccess");
-pref("capability.policy.mailnews.*.protocol.get",                       "noAccess");
-pref("capability.policy.mailnews.*.src.get",                            "noAccess");
-pref("capability.policy.mailnews.*.substringData.get",                  "noAccess");
-pref("capability.policy.mailnews.*.text.get",                           "noAccess");
-pref("capability.policy.mailnews.*.title.get",                          "noAccess");
-pref("capability.policy.mailnews.DOMException.toString",                "noAccess");
-pref("capability.policy.mailnews.HTMLAnchorElement.toString",           "noAccess");
-pref("capability.policy.mailnews.HTMLDocument.domain",                  "noAccess");
-pref("capability.policy.mailnews.HTMLDocument.URL",                     "noAccess");
-pref("capability.policy.mailnews.Location.toString",                    "noAccess");
-pref("capability.policy.mailnews.Range.toString",                       "noAccess");
-pref("capability.policy.mailnews.Window.blur",                          "noAccess");
-pref("capability.policy.mailnews.Window.focus",                         "noAccess");
-pref("capability.policy.mailnews.Window.innerWidth.set",                "noAccess");
-pref("capability.policy.mailnews.Window.innerHeight.set",               "noAccess");
-pref("capability.policy.mailnews.Window.moveBy",                        "noAccess");
-pref("capability.policy.mailnews.Window.moveTo",                        "noAccess");
-pref("capability.policy.mailnews.Window.name.set",                      "noAccess");
-pref("capability.policy.mailnews.Window.outerHeight.set",               "noAccess");
-pref("capability.policy.mailnews.Window.outerWidth.set",                "noAccess");
-pref("capability.policy.mailnews.Window.resizeBy",                      "noAccess");
-pref("capability.policy.mailnews.Window.resizeTo",                      "noAccess");
-pref("capability.policy.mailnews.Window.screenX.set",                   "noAccess");
-pref("capability.policy.mailnews.Window.screenY.set",                   "noAccess");
-pref("capability.policy.mailnews.Window.sizeToContent",                 "noAccess");
-pref("capability.policy.mailnews.document.load",                        "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.channel",               "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.responseXML",           "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.responseText",          "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.status",                "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.statusText",            "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.abort",                 "noAccess");
+pref("capability.policy.mailnews.*.attributes.get", "noAccess");
+pref("capability.policy.mailnews.*.baseURI.get", "noAccess");
+pref("capability.policy.mailnews.*.data.get", "noAccess");
+pref("capability.policy.mailnews.*.getAttribute", "noAccess");
+pref("capability.policy.mailnews.*.getNamedItem", "noAccess");
+pref("capability.policy.mailnews.*.host.get", "noAccess");
+pref("capability.policy.mailnews.*.hostname.get", "noAccess");
+pref("capability.policy.mailnews.*.href.get", "noAccess");
+pref("capability.policy.mailnews.*.innerHTML.get", "noAccess");
+pref("capability.policy.mailnews.*.lowSrc.get", "noAccess");
+pref("capability.policy.mailnews.*.nodeValue.get", "noAccess");
+pref("capability.policy.mailnews.*.pathname.get", "noAccess");
+pref("capability.policy.mailnews.*.protocol.get", "noAccess");
+pref("capability.policy.mailnews.*.src.get", "noAccess");
+pref("capability.policy.mailnews.*.substringData.get", "noAccess");
+pref("capability.policy.mailnews.*.text.get", "noAccess");
+pref("capability.policy.mailnews.*.title.get", "noAccess");
+pref("capability.policy.mailnews.DOMException.toString", "noAccess");
+pref("capability.policy.mailnews.HTMLAnchorElement.toString", "noAccess");
+pref("capability.policy.mailnews.HTMLDocument.domain", "noAccess");
+pref("capability.policy.mailnews.HTMLDocument.URL", "noAccess");
+pref("capability.policy.mailnews.Location.toString", "noAccess");
+pref("capability.policy.mailnews.Range.toString", "noAccess");
+pref("capability.policy.mailnews.Window.blur", "noAccess");
+pref("capability.policy.mailnews.Window.focus", "noAccess");
+pref("capability.policy.mailnews.Window.innerWidth.set", "noAccess");
+pref("capability.policy.mailnews.Window.innerHeight.set", "noAccess");
+pref("capability.policy.mailnews.Window.moveBy", "noAccess");
+pref("capability.policy.mailnews.Window.moveTo", "noAccess");
+pref("capability.policy.mailnews.Window.name.set", "noAccess");
+pref("capability.policy.mailnews.Window.outerHeight.set", "noAccess");
+pref("capability.policy.mailnews.Window.outerWidth.set", "noAccess");
+pref("capability.policy.mailnews.Window.resizeBy", "noAccess");
+pref("capability.policy.mailnews.Window.resizeTo", "noAccess");
+pref("capability.policy.mailnews.Window.screenX.set", "noAccess");
+pref("capability.policy.mailnews.Window.screenY.set", "noAccess");
+pref("capability.policy.mailnews.Window.sizeToContent", "noAccess");
+pref("capability.policy.mailnews.document.load", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.channel", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.responseXML", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.responseText", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.status", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.statusText", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.abort", "noAccess");
 pref("capability.policy.mailnews.XMLHttpRequest.getAllResponseHeaders", "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.getResponseHeader",     "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.open",                  "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.send",                  "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.setRequestHeader",      "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.readyState",            "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.overrideMimeType",      "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.onload",                "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.onerror",               "noAccess");
-pref("capability.policy.mailnews.XMLHttpRequest.onreadystatechange",    "noAccess");
-pref("capability.policy.mailnews.XMLSerializer.serializeToString",      "noAccess");
-pref("capability.policy.mailnews.XMLSerializer.serializeToStream",      "noAccess");
-pref("capability.policy.mailnews.DOMParser,parseFromString",            "noAccess");
-pref("capability.policy.mailnews.DOMParser,parseFromStream",            "noAccess");
-pref("capability.policy.mailnews.SOAPCall.transportURI",                "noAccess");
-pref("capability.policy.mailnews.SOAPCall.verifySourceHeader",          "noAccess");
-pref("capability.policy.mailnews.SOAPCall.invoke",                      "noAccess");
-pref("capability.policy.mailnews.SOAPCall.asyncInvoke",                 "noAccess");
-pref("capability.policy.mailnews.SOAPResponse.fault",                   "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.styleURI",                "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.getAssociatedEncoding",   "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.setEncoder",              "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.getEncoder",              "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.setDecoder",              "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.setDecoder",              "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.getDecoder",              "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.defaultEncoder",          "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.defaultDecoder",          "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.schemaCollection",        "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.encode",                  "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.decode",                  "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.mapSchemaURI",            "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.unmapSchemaURI",          "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.getInternalSchemaURI",    "noAccess");
-pref("capability.policy.mailnews.SOAPEncoding.getExternalSchemaURI",    "noAccess");
-pref("capability.policy.mailnews.SOAPFault.element",                    "noAccess");
-pref("capability.policy.mailnews.SOAPFault.faultNamespaceURI",          "noAccess");
-pref("capability.policy.mailnews.SOAPFault.faultCode",                  "noAccess");
-pref("capability.policy.mailnews.SOAPFault.faultString",                "noAccess");
-pref("capability.policy.mailnews.SOAPFault.faultActor",                 "noAccess");
-pref("capability.policy.mailnews.SOAPFault.detail",                     "noAccess");
-pref("capability.policy.mailnews.SOAPHeaderBlock.actorURI",             "noAccess");
-pref("capability.policy.mailnews.SOAPHeaderBlock.mustUnderstand",       "noAccess");
-pref("capability.policy.mailnews.SOAPParameter",                        "noAccess");
-pref("capability.policy.mailnews.SOAPPropertyBagMutator.propertyBag",   "noAccess");
-pref("capability.policy.mailnews.SOAPPropertyBagMutator.addProperty",   "noAccess");
-pref("capability.policy.mailnews.SchemaLoader.load",                    "noAccess");
-pref("capability.policy.mailnews.SchemaLoader.loadAsync",               "noAccess");
-pref("capability.policy.mailnews.SchemaLoader.processSchemaElement",    "noAccess");
-pref("capability.policy.mailnews.SchemaLoader.onLoad",                  "noAccess");
-pref("capability.policy.mailnews.SchemaLoader.onError",                 "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.getResponseHeader", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.open", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.send", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.setRequestHeader", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.readyState", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.overrideMimeType", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.onload", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.onerror", "noAccess");
+pref("capability.policy.mailnews.XMLHttpRequest.onreadystatechange", "noAccess");
+pref("capability.policy.mailnews.XMLSerializer.serializeToString", "noAccess");
+pref("capability.policy.mailnews.XMLSerializer.serializeToStream", "noAccess");
+pref("capability.policy.mailnews.DOMParser,parseFromString", "noAccess");
+pref("capability.policy.mailnews.DOMParser,parseFromStream", "noAccess");
+pref("capability.policy.mailnews.SOAPCall.transportURI", "noAccess");
+pref("capability.policy.mailnews.SOAPCall.verifySourceHeader", "noAccess");
+pref("capability.policy.mailnews.SOAPCall.invoke", "noAccess");
+pref("capability.policy.mailnews.SOAPCall.asyncInvoke", "noAccess");
+pref("capability.policy.mailnews.SOAPResponse.fault", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.styleURI", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.getAssociatedEncoding", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.setEncoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.getEncoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.setDecoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.setDecoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.getDecoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.defaultEncoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.defaultDecoder", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.schemaCollection", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.encode", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.decode", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.mapSchemaURI", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.unmapSchemaURI", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.getInternalSchemaURI", "noAccess");
+pref("capability.policy.mailnews.SOAPEncoding.getExternalSchemaURI", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.element", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.faultNamespaceURI", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.faultCode", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.faultString", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.faultActor", "noAccess");
+pref("capability.policy.mailnews.SOAPFault.detail", "noAccess");
+pref("capability.policy.mailnews.SOAPHeaderBlock.actorURI", "noAccess");
+pref("capability.policy.mailnews.SOAPHeaderBlock.mustUnderstand", "noAccess");
+pref("capability.policy.mailnews.SOAPParameter", "noAccess");
+pref("capability.policy.mailnews.SOAPPropertyBagMutator.propertyBag", "noAccess");
+pref("capability.policy.mailnews.SOAPPropertyBagMutator.addProperty", "noAccess");
+pref("capability.policy.mailnews.SchemaLoader.load", "noAccess");
+pref("capability.policy.mailnews.SchemaLoader.loadAsync", "noAccess");
+pref("capability.policy.mailnews.SchemaLoader.processSchemaElement", "noAccess");
+pref("capability.policy.mailnews.SchemaLoader.onLoad", "noAccess");
+pref("capability.policy.mailnews.SchemaLoader.onError", "noAccess");
 
 // XMLExtras
-pref("capability.policy.default.XMLHttpRequest.channel",                "noAccess");
-pref("capability.policy.default.DOMParser.parseFromStream",             "noAccess");
+pref("capability.policy.default.XMLHttpRequest.channel", "noAccess");
+pref("capability.policy.default.DOMParser.parseFromStream", "noAccess");
 
 
 // Scripts & Windows prefs
@@ -546,8 +538,7 @@ pref("dom.disable_window_open_feature.status",      false);
 
 pref("dom.allow_scripts_to_close_windows",          false);
 
-//pref("javascript.enabled",                  true);
-pref("javascript.enabled",                  false); // Kaze
+pref("javascript.enabled",                  true);
 pref("javascript.allow.mailnews",           false);
 pref("javascript.options.strict",           false);
 pref("javascript.options.showInConsole",    true);
@@ -558,11 +549,11 @@ pref("security.enable_java",                true);
 pref("advanced.mailftp",                    false);
 pref("image.animation_mode",                "normal");
 
-pref("offline.startup_state",               0);
-pref("offline.send.unsent_messages",        0);
+pref("offline.startup_state",            0);
+pref("offline.send.unsent_messages",            0);
 pref("offline.download.download_messages",  0);
-pref("offline.prompt_synch_on_exit",        true);
-pref("offline.news.download.use_days",      0);
+pref("offline.prompt_synch_on_exit",            true);
+pref("offline.news.download.use_days",          0);
 
 // If there is ever a security firedrill that requires
 // us to block certian ports global, this is the pref 
@@ -585,16 +576,12 @@ pref("offline.news.download.use_days",      0);
 // and it will also defer all link clicks to the user's browser.
 pref("network.protocol-handler.expose-all", false);
 
-// these two lines should ensure the help window works properly
-pref("network.protocol-handler.expose.chrome", true);
-pref("network.protocol-handler.warn-external.http", false);
-
 pref("network.hosts.smtp_server",           "mail");
 pref("network.hosts.pop_server",            "mail");
-pref("network.protocols.useSystemDefaults", true); // set to true if user links should use system default handlers
+pref("network.protocols.useSystemDefaults",   true); // set to true if user links should use system default handlers
 
 // <http>
-pref("network.http.version", "1.1");      // default
+pref("network.http.version", "1.1");	  // default
 // pref("network.http.version", "1.0");   // uncomment this out in case of problems
 // pref("network.http.version", "0.9");   // it'll work too if you're crazy
 // keep-alive option is effectively obsolete. Nevertheless it'll work with
@@ -640,8 +627,8 @@ pref("network.http.max-persistent-connections-per-proxy", 4);
 pref("network.http.request.max-start-delay", 10);
 
 // http specific network timeouts (XXX currently unused)
-pref("network.http.connect.timeout",  30);    // in seconds
-pref("network.http.request.timeout", 120);    // in seconds
+pref("network.http.connect.timeout",  30);	// in seconds
+pref("network.http.request.timeout", 120);	// in seconds
 
 // Headers
 pref("network.http.accept.default", "text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,video/x-mng,image/png,image/jpeg,image/gif;q=0.2,*/*;q=0.1");
@@ -671,7 +658,7 @@ pref("network.http.pipelining.firstrequest", false);
 // Max number of requests in the pipeline
 pref("network.http.pipelining.maxrequests" , 4);
 
-pref("network.http.proxy.ssl.connect", true);
+pref("network.http.proxy.ssl.connect",true);
 // </http>
 
 // This preference controls whether or not internationalized domain names (IDN)
@@ -781,14 +768,14 @@ pref("intl.fallbackCharsetList.ISO-8859-1", "windows-1252");
 pref("font.language.group",                 "chrome://navigator/locale/navigator.properties");
 
 // -- folders (Mac: these are binary aliases.)
-pref("mail.signature_file",     "");
-pref("mail.directory",          "");
+pref("mail.signature_file",             "");
+pref("mail.directory",                  "");
 
-pref("images.dither",           "auto");
-pref("news.directory",          "");
-pref("security.directory",      "");
+pref("images.dither", "auto");
+pref("news.directory",                  "");
+pref("security.directory",              "");
 
-pref("autoupdate.enabled",      true);
+pref("autoupdate.enabled",              true);
 
 pref("browser.editor.disabled", false);
 
@@ -802,42 +789,42 @@ pref("security.xpconnect.plugin.unrestricted", true);
 // menu access key = alt, accelerator key = control.
 // Use 17 for Ctrl, 18 for Alt, 224 for Meta, 0 for none. Mac settings in macprefs.js
 #ifdef XP_MACOSX
-pref("ui.key.menuAccessKey",    0);
-pref("ui.key.accelKey",         224);
+pref("ui.key.menuAccessKey", 0);
+pref("ui.key.accelKey", 224);
 pref("ui.key.generalAccessKey", 17);
 #else
-pref("ui.key.menuAccessKey",    18);
-pref("ui.key.accelKey",         17);
+pref("ui.key.menuAccessKey", 18);
+pref("ui.key.accelKey", 17);
 pref("ui.key.generalAccessKey", 18);
 #endif
 
-pref("ui.key.menuAccessKeyFocuses",   false);
-pref("ui.key.saveLink.shift",         true); // true = shift, false = meta
+pref("ui.key.menuAccessKeyFocuses", false);
+pref("ui.key.saveLink.shift", true); // true = shift, false = meta
 
 // Middle-mouse handling
-pref("middlemouse.paste",             true);
-pref("middlemouse.openNewWindow",     true);
-pref("middlemouse.contentLoadURL",    false);
+pref("middlemouse.paste", true);
+pref("middlemouse.openNewWindow", true);
+pref("middlemouse.contentLoadURL", false);
 pref("middlemouse.scrollbarPosition", false);
 
 // Clipboard behavior
 pref("clipboard.autocopy", true);
 
 // 0=lines, 1=pages, 2=history , 3=text size
-pref("mousewheel.withnokey.action",           0);
-pref("mousewheel.withnokey.numlines",         1);
-pref("mousewheel.withnokey.sysnumlines",      true);
-pref("mousewheel.withcontrolkey.action",      0);
-pref("mousewheel.withcontrolkey.numlines",    1);
-pref("mousewheel.withcontrolkey.sysnumlines", true);
-pref("mousewheel.withshiftkey.action",        0);
-pref("mousewheel.withshiftkey.numlines",      1);
-pref("mousewheel.withshiftkey.sysnumlines",   false);
-pref("mousewheel.withaltkey.action",          2);
-pref("mousewheel.withaltkey.numlines",        1);
-pref("mousewheel.withaltkey.sysnumlines",     false);
+pref("mousewheel.withnokey.action",0);
+pref("mousewheel.withnokey.numlines",1);	
+pref("mousewheel.withnokey.sysnumlines",true);
+pref("mousewheel.withcontrolkey.action",0);
+pref("mousewheel.withcontrolkey.numlines",1);
+pref("mousewheel.withcontrolkey.sysnumlines",true);
+pref("mousewheel.withshiftkey.action",0);
+pref("mousewheel.withshiftkey.numlines",1);
+pref("mousewheel.withshiftkey.sysnumlines",false);
+pref("mousewheel.withaltkey.action",2);
+pref("mousewheel.withaltkey.numlines",1);
+pref("mousewheel.withaltkey.sysnumlines",false);
 
-pref("profile.confirm_automigration", true);
+pref("profile.confirm_automigration",true);
 
 // the amount of time (in seconds) that must elapse
 // before we think your mozilla profile is defunct
@@ -884,7 +871,7 @@ pref("bidi.controlstextmode", 1);
 // ------------------
 //  Clipboard Text Mode
 // ------------------
-// 1 = logicalclipboardtextmodeBidi
+//  1 = logicalclipboardtextmodeBidi
 // 2 = visiualclipboardtextmodeBidi
 // 3 = sourceclipboardtextmodeBidi *
 pref("bidi.clipboardtextmode", 3);
@@ -915,7 +902,7 @@ pref("browser.throbber.url","chrome://navigator-region/locale/region.properties"
 
 // used for double-click word selection behavior. Win will override.
 pref("layout.word_select.eat_space_to_next_word", false);
-pref("layout.word_select.stop_at_punctuation",    true);
+pref("layout.word_select.stop_at_punctuation", true);
 
 // pref to force frames to be resizable
 pref("layout.frames.force_resizability", false);
@@ -924,10 +911,10 @@ pref("layout.frames.force_resizability", false);
 pref("capability.policy.default.SOAPCall.invokeVerifySourceHeader", "allAccess");
 
 // pref to control the alert notification 
-pref("alerts.slideIncrement",     1);
+pref("alerts.slideIncrement", 1);
 pref("alerts.slideIncrementTime", 10);
-pref("alerts.totalOpenTime",      4000);
-pref("alerts.height",             50);
+pref("alerts.totalOpenTime", 4000);
+pref("alerts.height", 50);
 
 // update notifications prefs
 pref("update_notifications.enabled", true);
@@ -951,7 +938,22 @@ pref("browser.popups.showPopupBlocker", true);
 // See http://bugzilla.mozilla.org/show_bug.cgi?id=169483 for further details...
 pref("viewmanager.do_doublebuffering", true);
 
-pref("privacy.popups.sound_enabled",          true);
-pref("privacy.popups.sound_url",              "");
-pref("privacy.popups.statusbar_icon_enabled", true);
+pref("privacy.popups.sound_enabled",              true);
+pref("privacy.popups.sound_url",                  "");
+pref("privacy.popups.statusbar_icon_enabled",     true);
+pref("tipoftheday.openAtStartup",                 true);
+pref("pinger.pinged",                             " ");
+
+// Kaze: use the Debian-sensible browser by default
+pref("network.protocol-handler.app.http",  "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.https", "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.ftp",   "/usr/bin/x-www-browser");
+pref("network.protocol-handler.app.file",  "/usr/bin/x-www-browser");
+
+pref("spellchecker.enablerealtimespell", false);
+pref("spellchecker.realtimespell.warning_color", "orange");
+
+// Kaze: CSS editor
+pref("extensions.CaScadeS.expertMode", true);
+pref("extensions.CaScadeS.dropdownLists", true);
 

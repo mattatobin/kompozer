@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
+ *  Alec Flett <alecf@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 // The history window uses JavaScript in bookmarks.js too.
@@ -61,10 +61,6 @@ function HistoryCommonInit()
     var historyController = new nsHistoryController;
     gHistoryTree.controllers.appendController(historyController);
 
-    gPrefService = Components.classes["@mozilla.org/preferences-service;1"]
-                              .getService(Components.interfaces.nsIPrefBranch);
-    PREF = gPrefService;    // need this for bookmarks.js
-
     if ("arguments" in window && window.arguments[0] && window.arguments.length >= 1) {
         // We have been supplied a resource URI to root the tree on
         var uri = window.arguments[0];
@@ -75,12 +71,14 @@ function HistoryCommonInit()
             // there and the window is not re-used for bookmarks. 
             var windowNode = document.getElementById("history-window");
             windowNode.setAttribute("windowtype", "history:searchresults");
-            document.title = gHistoryBundle.getString("search_results_title");
+            windowNode.setAttribute("title", gHistoryBundle.getString("search_results_title"));
 
         }
         document.getElementById("groupingMenu").setAttribute("hidden", "true");
     }
     else {
+        gPrefService = Components.classes["@mozilla.org/preferences-service;1"]
+                                 .getService(Components.interfaces.nsIPrefBranch);
         try {
             gHistoryGrouping = gPrefService.getCharPref("browser.history.grouping");
         }
@@ -103,7 +101,7 @@ function HistoryCommonInit()
         }
         else {  // must be the sidebar panel
             var pb = Components.classes["@mozilla.org/preferences-service;1"].getService(Components.interfaces.nsIPrefBranch);
-            var pbi = pb.QueryInterface(Components.interfaces.nsIPrefBranch2);
+            var pbi = pb.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
             pbi.addObserver("browser.history.grouping", groupObserver, false);
         }
     } 
@@ -112,17 +110,13 @@ function HistoryCommonInit()
 
     if (gHistoryStatus)
         gHistoryTree.focus();
-
-    if (gHistoryTree.view.rowCount > 0)
-        gHistoryTree.view.selection.select(0);
-    else if (gHistoryStatus)
-        updateHistoryCommands();
+    gHistoryTree.treeBoxObject.view.selection.select(0);
 }
 
 function HistoryPanelUnload()
 {
   var pb = Components.classes["@mozilla.org/preferences-service;1"].getService(Components.interfaces.nsIPrefBranch);
-  var pbi = pb.QueryInterface(Components.interfaces.nsIPrefBranch2);
+  var pbi = pb.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
   pbi.removeObserver("browser.history.grouping", groupObserver, false);
 }
 
@@ -137,22 +131,17 @@ function historyOnClick(aEvent)
   // This is kind of a hack but matches the currently implemented behaviour. 
   // If a status bar is not present, assume we're in sidebar mode, and thus single clicks on containers
   // will open the container. Single clicks on non-containers are handled below in historyOnSelect.
-  if (gHistoryStatus && aEvent.button == 0)
-    return;
-
-  var target = BookmarksUtils.getBrowserTargetFromEvent(aEvent);
-  if (!target)
-    return;
-
-  var row = { };
-  var col = { };
-  var elt = { };
-  gHistoryTree.treeBoxObject.getCellAt(aEvent.clientX, aEvent.clientY, row, col, elt);
-  if (row.value >= 0 && col.value) {
-    if (!isContainer(gHistoryTree, row.value))
-      OpenURL(target);
-    else if (aEvent.button == 0 && elt.value != "twisty")
-      gHistoryTree.treeBoxObject.view.toggleOpenState(row.value);
+  if (!gHistoryStatus && aEvent.button == 0) {
+    var row = { };
+    var col = { };
+    var elt = { };
+    gHistoryTree.treeBoxObject.getCellAt(aEvent.clientX, aEvent.clientY, row, col, elt);
+    if (row.value >= 0 && col.value) {
+      if (!isContainer(gHistoryTree, row.value))
+        OpenURL("current");
+      else if (elt.value != "twisty")
+        gHistoryTree.treeBoxObject.view.toggleOpenState(row.value);
+    }
   }
 }
 
@@ -164,8 +153,7 @@ function historyOnSelect()
     var match;
     var currentIndex = gHistoryTree.currentIndex;
     var rowIsContainer = currentIndex < 0 || (gHistoryGrouping != "none" && isContainer(gHistoryTree, currentIndex));
-    var col = gHistoryTree.columns["URL"];
-    var url = rowIsContainer ? "" : gHistoryTree.view.getCellText(currentIndex, col);
+    var url = rowIsContainer ? "" : gHistoryTree.treeBoxObject.view.getCellText(currentIndex, "URL");
 
     if (url) {
         if (!gIOService)
@@ -206,27 +194,28 @@ nsHistoryController.prototype =
     isCommandEnabled: function(command)
     {
         var enabled = false;
+        var stringId;
         var text;
         switch(command) {
         case "cmd_deleteByHostname":
             if (gLastHostname) {
-                text = gHistoryBundle.getFormattedString("deleteHost", [ gLastHostname ]);
+                stringId = "deleteHost";
                 enabled = true;
             } else {
-                text = gHistoryBundle.getString("deleteHostNoSelection");
+                stringId = "deleteHostNoSelection";
             }
-
-            gDeleteByHostname.label = text;
+            text = gHistoryBundle.getFormattedString(stringId, [ gLastHostname ]);
+            gDeleteByHostname.setAttribute("label", text);
             break;
         case "cmd_deleteByDomain":
             if (gLastDomain) {
-                text = gHistoryBundle.getFormattedString("deleteDomain", [ gLastDomain ]);
+                stringId = "deleteDomain";
                 enabled = true;
             } else {
-                text = gHistoryBundle.getString("deleteDomainNoSelection");
+                stringId = "deleteDomainNoSelection";
             }
-
-            gDeleteByDomain.label = text;
+            text = gHistoryBundle.getFormattedString(stringId, [ gLastDomain ]);
+            gDeleteByDomain.setAttribute("label", text);
         }
         return enabled;
     },
@@ -236,13 +225,13 @@ nsHistoryController.prototype =
         switch(command) {
         case "cmd_deleteByHostname":
             if (!gGlobalHistory)
-                gGlobalHistory = Components.classes["@mozilla.org/browser/global-history;2"].getService(Components.interfaces.nsIBrowserHistory);
+                gGlobalHistory = Components.classes["@mozilla.org/browser/global-history;1"].getService(Components.interfaces.nsIBrowserHistory);
             gGlobalHistory.removePagesFromHost(gLastHostname, false)
             return true;
 
         case "cmd_deleteByDomain":
             if (!gGlobalHistory)
-                gGlobalHistory = Components.classes["@mozilla.org/browser/global-history;2"].getService(Components.interfaces.nsIBrowserHistory);
+                gGlobalHistory = Components.classes["@mozilla.org/browser/global-history;1"].getService(Components.interfaces.nsIBrowserHistory);
             gGlobalHistory.removePagesFromHost(gLastDomain, true)
             return true;
 
@@ -258,10 +247,8 @@ var historyDNDObserver = {
         var currentIndex = gHistoryTree.currentIndex;
         if (isContainer(gHistoryTree, currentIndex))
             return false;
-        var col = gHistoryTree.columns["URL"];
-        var url = gHistoryTree.view.getCellText(currentIndex, col);
-        col = gHistoryTree.columns["Name"];
-        var title = gHistoryTree.view.getCellText(currentIndex, col);
+        var url = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, "URL");
+        var title = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, "Name");
 
         var htmlString = "<A HREF='" + url + "'>" + title + "</A>";
         aXferData.data = new TransferData();
@@ -302,7 +289,7 @@ function OpenURL(aTarget)
       var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
                                     .getService(Components.interfaces.nsIPromptService);
       var historyBundle = strBundleService.createBundle("chrome://communicator/locale/history/history.properties");
-      var brandBundle = strBundleService.createBundle("chrome://branding/locale/brand.properties");      
+      var brandBundle = strBundleService.createBundle("chrome://global/locale/brand.properties");      
       var brandStr = brandBundle.GetStringFromName("brandShortName");
       var errorStr = historyBundle.GetStringFromName("load-js-data-url-error");
       promptService.alert(window, brandStr, errorStr);
@@ -310,7 +297,7 @@ function OpenURL(aTarget)
     }
 
     if (aTarget != "current") {
-      var count = gHistoryTree.view.selection.count;
+      var count = gHistoryTree.treeBoxObject.view.selection.count;
       var URLArray = [];
       if (count == 1) {
         if (isContainer(gHistoryTree, currentIndex))
@@ -320,14 +307,13 @@ function OpenURL(aTarget)
           URLArray.push(url);
       }
       else {
-        var col = gHistoryTree.columns["URL"];
         var min = new Object(); 
         var max = new Object();
-        var rangeCount = gHistoryTree.view.selection.getRangeCount();
+        var rangeCount = gHistoryTree.treeBoxObject.view.selection.getRangeCount();
         for (var i = 0; i < rangeCount; ++i) {
-          gHistoryTree.view.selection.getRangeAt(i, min, max);
+          gHistoryTree.treeBoxObject.view.selection.getRangeAt(i, min, max);
           for (var k = max.value; k >= min.value; --k) {
-            url = gHistoryTree.view.getCellText(k, col);
+            url = gHistoryTree.treeBoxObject.view.getCellText(k, "URL");
             URLArray.push(url);
           }
         }
@@ -338,9 +324,9 @@ function OpenURL(aTarget)
         }
       } else {
         if (URLArray.length > 0)
-          OpenURLArrayInTabs(URLArray, aTarget == "tab_background");
+          OpenURLArrayInTabs(URLArray);
       }
-    }
+    }        
     else if (!isContainer(gHistoryTree, currentIndex))
       openTopWin(url);
     return true;
@@ -348,27 +334,17 @@ function OpenURL(aTarget)
 
 // This opens the URLs contained in the given array in new tabs
 // of the most recent window, creates a new window if necessary.
-function OpenURLArrayInTabs(aURLArray, aBackground)
+function OpenURLArrayInTabs(aURLArray)
 {
   var browserWin = getTopWin();
   if (browserWin) {
     var browser = browserWin.getBrowser();
-    var tab = browser.addTab(aURLArray[0]);
-    if (!aBackground)
-      browser.selectedTab = tab;
+    browser.selectedTab = browser.addTab(aURLArray[0]);
     for (var i = 1; i < aURLArray.length; ++i)
-      browser.addTab(aURLArray[i]);
+      tab = browser.addTab(aURLArray[i]);
   } else {
     openTopWin(aURLArray.join("\n")); // Pretend that we're a home page group
   }
-}
-
-/**
- * Root the tree on a given URI (used for displaying search results)
- */
-function setRoot(root)
-{
-  gHistoryTree.ref = root;
 }
 
 function GroupBy(aGroupingType)
@@ -409,31 +385,28 @@ var groupObserver = {
 
 function historyAddBookmarks()
 {
-  var urlCol = gHistoryTree.columns["URL"];
-  var titleCol = gHistoryTree.columns["Name"];
-
-  var count = gHistoryTree.view.selection.count;
+  var count = gHistoryTree.treeBoxObject.view.selection.count;
   var url;
   var title;
   if (count == 1) {
     var currentIndex = gHistoryTree.currentIndex;
-    url = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, urlCol);
-    title = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, titleCol);
+    url = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, "URL");
+    title = gHistoryTree.treeBoxObject.view.getCellText(currentIndex, "Name");
     BookmarksUtils.addBookmark(url, title, null, true);
   }
   else if (count > 1) {
     var min = new Object(); 
     var max = new Object();
-    var rangeCount = gHistoryTree.view.selection.getRangeCount();
+    var rangeCount = gHistoryTree.treeBoxObject.view.selection.getRangeCount();
     if (!BMSVC) {
       initServices();
       initBMService();
     }
     for (var i = 0; i < rangeCount; ++i) {
-      gHistoryTree.view.selection.getRangeAt(i, min, max);
+      gHistoryTree.treeBoxObject.view.selection.getRangeAt(i, min, max);
       for (var k = max.value; k >= min.value; --k) {
-        url = gHistoryTree.view.getCellText(k, urlCol);
-        title = gHistoryTree.view.getCellText(k, titleCol);
+        url = gHistoryTree.treeBoxObject.view.getCellText(k, "URL");
+        title = gHistoryTree.treeBoxObject.view.getCellText(k, "Name");
         BookmarksUtils.addBookmark(url, title, null, false);
       }
     }
@@ -443,7 +416,7 @@ function historyAddBookmarks()
 
 function updateItems()
 {
-  var count = gHistoryTree.view.selection.count;
+  var count = gHistoryTree.treeBoxObject.view.selection.count;
   var openItem = document.getElementById("miOpen");
   var bookmarkItem = document.getElementById("miAddBookmark");
   var copyLocationItem = document.getElementById("miCopyLinkLocation");
@@ -457,9 +430,9 @@ function updateItems()
     if (gHistoryGrouping != "none") {
       var min = new Object(); 
       var max = new Object();
-      var rangeCount = gHistoryTree.view.selection.getRangeCount();
+      var rangeCount = gHistoryTree.treeBoxObject.view.selection.getRangeCount();
       for (var i = 0; i < rangeCount; ++i) {
-        gHistoryTree.view.selection.getRangeAt(i, min, max);
+        gHistoryTree.treeBoxObject.view.selection.getRangeAt(i, min, max);
         for (var k = max.value; k >= min.value; --k) {
           if (isContainer(gHistoryTree, k)) {
             hasContainer = true;

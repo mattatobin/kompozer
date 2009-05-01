@@ -64,7 +64,6 @@
 #include "nsIWidget.h"
 #include "nsStyleStruct.h"
 #include "nsTextFragment.h"
-#include "nsArray.h"
 
 static NS_DEFINE_IID(kRangeCID, NS_RANGE_CID);
 
@@ -105,8 +104,9 @@ nsresult nsAccessibleText::GetSelections(nsISelectionController **aSelCon, nsISe
   // Get the selection and selection controller
   nsCOMPtr<nsISelectionController> selCon;
   nsCOMPtr<nsISelection> domSel;
-  frame->GetSelectionController(shell->GetPresContext(),
-                                getter_AddRefs(selCon));
+  nsCOMPtr<nsIPresContext> context;
+  shell->GetPresContext(getter_AddRefs(context));
+  frame->GetSelectionController(context, getter_AddRefs(selCon));
   if (selCon)
     selCon->GetSelection(nsISelectionController::SELECTION_NORMAL, getter_AddRefs(domSel));
 
@@ -136,14 +136,14 @@ nsresult nsAccessibleText::DOMPointToOffset(nsISupports *aClosure, nsIDOMNode* a
 
   *aResult = aNodeOffset;
 
-  nsCOMPtr<nsIArray> domNodeArray(do_QueryInterface(aClosure));
+  nsCOMPtr<nsISupportsArray> domNodeArray(do_QueryInterface(aClosure));
   if (domNodeArray) {
     // Static text, calculate the offset from a given set of (text) node
     PRUint32 textLength, totalLength = 0;
     PRUint32 index, count;
-    domNodeArray->GetLength(&count);
+    domNodeArray->Count(&count);
     for (index = 0; index < count; index++) {
-      nsCOMPtr<nsIDOMNode> domNode(do_QueryElementAt(domNodeArray, index));
+      nsIDOMNode* domNode = (nsIDOMNode *)domNodeArray->ElementAt(index);
       if (aNode == domNode) {
         *aResult = aNodeOffset + totalLength;
         break;
@@ -218,7 +218,7 @@ nsresult nsAccessibleText::DOMPointToOffset(nsISupports *aClosure, nsIDOMNode* a
     }
 
     NS_ASSERTION((aNode == rootNode && aNodeOffset == (PRInt32)length),
-                 "Invalid node offset!");
+                 "Invalide node offset!");
 
     *aResult = textOffset;
   }
@@ -318,7 +318,7 @@ nsresult nsAccessibleText::OffsetToDOMPoint(nsISupports *aClosure, PRInt32 aOffs
   return NS_ERROR_FAILURE;
 }
 
-nsresult nsAccessibleText::GetCurrentOffset(nsISupports *aClosure, nsISelection *aDomSel, PRInt32 *aOffset)
+nsresult nsAccessibleText::GetCurrectOffset(nsISupports *aClosure, nsISelection *aDomSel, PRInt32 *aOffset)
 {
   nsCOMPtr<nsIDOMNode> focusNode;
   aDomSel->GetFocusNode(getter_AddRefs(focusNode));
@@ -399,10 +399,10 @@ nsresult nsAccessibleText::GetTextHelperCore(EGetTextType aType, nsAccessibleTex
   case BOUNDARY_CHAR:
     if (aType == eGetAfter) { // We need the character next to current position
       aSelCon->CharacterMove(isStep1Forward, PR_FALSE);
-      GetCurrentOffset(aClosure, aDomSel, aStartOffset);
+      GetCurrectOffset(aClosure, aDomSel, aStartOffset);
     }
     aSelCon->CharacterMove(isStep2Forward, PR_TRUE);
-    GetCurrentOffset(aClosure, aDomSel, aEndOffset);
+    GetCurrectOffset(aClosure, aDomSel, aEndOffset);
     break;
   case BOUNDARY_WORD_START:
     {
@@ -418,10 +418,10 @@ nsresult nsAccessibleText::GetTextHelperCore(EGetTextType aType, nsAccessibleTex
     }
     if (!dontMove) {
       aSelCon->WordMove(isStep1Forward, PR_FALSE); // Move caret to previous/next word start boundary
-      GetCurrentOffset(aClosure, aDomSel, aStartOffset);
+      GetCurrectOffset(aClosure, aDomSel, aStartOffset);
     }
     aSelCon->WordMove(isStep2Forward, PR_TRUE);  // Select previous/next word
-    GetCurrentOffset(aClosure, aDomSel, aEndOffset);
+    GetCurrectOffset(aClosure, aDomSel, aEndOffset);
     }
     break;
   case BOUNDARY_LINE_START:
@@ -430,66 +430,11 @@ nsresult nsAccessibleText::GetTextHelperCore(EGetTextType aType, nsAccessibleTex
       return NS_ERROR_NOT_IMPLEMENTED;
     }
     aSelCon->IntraLineMove(PR_FALSE, PR_FALSE);  // Move caret to the line start
-    GetCurrentOffset(aClosure, aDomSel, aStartOffset);
+    GetCurrectOffset(aClosure, aDomSel, aStartOffset);
     aSelCon->IntraLineMove(PR_TRUE, PR_TRUE);    // Move caret to the line end and select the whole line
-    GetCurrentOffset(aClosure, aDomSel, aEndOffset);
+    GetCurrectOffset(aClosure, aDomSel, aEndOffset);
     break;
   case BOUNDARY_WORD_END:
-    {
-    // please refer to atk implementation (atktext.c)
-    // for specification of ATK_TEXT_BOUNDARY_WORD_END when before/at/after offset
-    // XXX, need to follow exact definition of ATK_TEXT_BOUNDARY_WORD_END
-
-    if (aType != eGetAt) {
-      // XXX, don't support yet
-      return NS_ERROR_NOT_IMPLEMENTED;
-    }
-
-    // Example of current code: _AB_CD_E_ ("_" is space)
-    // offset      return string   startOffset endOffset
-    //      0      AB_             1           4
-    //      1      AB_             1           4
-    //      2      AB_             1           4
-    //      3      AB_             1           4
-    //      4      CD_             4           7
-    //      5      CD_             4           7
-    //      6      CD_             4           7
-    //      7      E_              7           9
-    //      8      E_              7           9
-
-    PRUnichar offsetChar;
-    nsresult rv = GetCharacterAtOffset(aOffset, &offsetChar);
-    NS_ENSURE_SUCCESS(rv, rv);
-    PRBool isOffsetEmpty =  offsetChar == ' ' || offsetChar == '\t' || offsetChar == '\n';
-
-    PRInt32 stepBackwardCount = 0; // Times of move backward to find the word(e.g. "AB_") start boundary
-    if (aOffset == 0) {
-      if (isOffsetEmpty)
-        aSelCon->WordMove(PR_TRUE, PR_FALSE); // Move caret to the first word start boundary
-    }
-    else {
-      PRUnichar prevChar;
-      GetCharacterAtOffset(aOffset - 1, &prevChar);
-      PRBool isPrevEmpty =  prevChar == ' ' || prevChar == '\t' || prevChar == '\n';
-      if (!isPrevEmpty)
-        stepBackwardCount = 1;
-      else if (isOffsetEmpty)
-        stepBackwardCount = 2;
-      else
-        stepBackwardCount = 0;
-
-      PRInt32 step;
-      for (step = 0; step < stepBackwardCount; step++)
-        aSelCon->WordMove(PR_FALSE, PR_FALSE); // Move caret to current word start boundary
-    }
-
-    GetCurrentOffset(aClosure, aDomSel, aStartOffset);
-    // Move twice to select a "word"
-    aSelCon->WordMove(PR_TRUE, PR_TRUE);
-    aSelCon->WordMove(PR_TRUE, PR_TRUE);
-    GetCurrentOffset(aClosure, aDomSel, aEndOffset);
-    }
-    break;
   case BOUNDARY_LINE_END:
   case BOUNDARY_SENTENCE_START:
   case BOUNDARY_SENTENCE_END:
@@ -523,8 +468,6 @@ nsresult nsAccessibleText::GetTextHelper(EGetTextType aType, nsAccessibleTextBou
                                          PRInt32 aOffset, PRInt32 *aStartOffset, PRInt32 *aEndOffset,
                                          nsISupports *aClosure, nsAString &aText)
 {
-  NS_ENSURE_TRUE((aOffset >= 0), NS_ERROR_INVALID_ARG);
-  
   nsCOMPtr<nsISelectionController> selCon;
   nsCOMPtr<nsISelection> domSel;
 
@@ -544,7 +487,7 @@ nsresult nsAccessibleText::GetTextHelper(EGetTextType aType, nsAccessibleTextBou
   //turn off nsCaretAccessible::NotifySelectionChanged
   gSuppressedNotifySelectionChanged = PR_TRUE;
 
-  PRInt32 caretOffset = -1;
+  PRInt32 caretOffset;
   if (NS_SUCCEEDED(GetCaretOffset(&caretOffset))) {
     if (caretOffset != aOffset)
       SetCaretOffset(aOffset);
@@ -552,11 +495,6 @@ nsresult nsAccessibleText::GetTextHelper(EGetTextType aType, nsAccessibleTextBou
 
   *aStartOffset = *aEndOffset = aOffset;
   rv = GetTextHelperCore(aType, aBoundaryType, aOffset, aStartOffset, aEndOffset, selCon, domSel, aClosure, aText);
-
-  //restore caret offset
-  if (caretOffset >= 0) {
-    SetCaretOffset(caretOffset);
-  }
 
   //turn on nsCaretAccessible::NotifySelectionChanged
   gSuppressedNotifySelectionChanged = PR_FALSE;
@@ -615,9 +553,7 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterCount(PRInt32 *aCharacterCount)
   if (!textContent)
     return NS_ERROR_FAILURE;
 
-  *aCharacterCount = textContent->TextLength();
-
-  return NS_OK;
+  return textContent->GetTextLength(aCharacterCount);
 }
 
 /*
@@ -710,7 +646,8 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterExtents(PRInt32 aOffset,
   nsIPresShell *shell = doc->GetShellAt(0);
   NS_ENSURE_TRUE(shell, NS_ERROR_FAILURE);
 
-  nsPresContext *context = shell->GetPresContext();
+  nsCOMPtr<nsIPresContext> context;
+  shell->GetPresContext(getter_AddRefs(context));
   NS_ENSURE_TRUE(context, NS_ERROR_FAILURE);
 
   nsCOMPtr<nsIContent> content(do_QueryInterface(mTextNode));
@@ -720,7 +657,7 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterExtents(PRInt32 aOffset,
   shell->GetPrimaryFrameFor(content, &frame);
   NS_ENSURE_TRUE(frame, NS_ERROR_FAILURE);
 
-  nsIntRect frameScreenRect = frame->GetScreenRectExternal();
+  nsRect frameRect = frame->GetRect();
 
   nsCOMPtr<nsIRenderingContext> rc;
   shell->CreateRenderingContext(frame, getter_AddRefs(rc));
@@ -729,8 +666,12 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterExtents(PRInt32 aOffset,
   const nsStyleFont *font = frame->GetStyleFont();
 
   const nsStyleVisibility *visibility = frame->GetStyleVisibility();
+  nsCOMPtr<nsIAtom> langGroup;
+  if (visibility->mLanguage) {
+    visibility->mLanguage->GetLanguageGroup(getter_AddRefs(langGroup));
+  }
 
-  if (NS_FAILED(rc->SetFont(font->mFont, visibility->mLangGroup))) {
+  if (NS_FAILED(rc->SetFont(font->mFont, langGroup))) {
     return NS_ERROR_FAILURE;
   }
 
@@ -738,36 +679,62 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterExtents(PRInt32 aOffset,
   rc->GetFontMetrics(fm);
   NS_ENSURE_TRUE(fm, NS_ERROR_FAILURE);
 
+  PRUnichar ch;
+  if (NS_FAILED(GetCharacterAtOffset(aOffset, &ch))) {
+    return NS_ERROR_FAILURE;
+  }
+
   float t2p = context->TwipsToPixels();
 
-  PRUnichar ch;
-  if (NS_SUCCEEDED(GetCharacterAtOffset(aOffset, &ch))) {
-    //Getting width
-    nscoord tmpWidth;
-    if (NS_SUCCEEDED(rc->GetWidth(ch, tmpWidth))) {
-      *aWidth = NSTwipsToIntPixels(tmpWidth, t2p);
-    }
+  //Getting width
+  nscoord tmpWidth;
+  if (NS_SUCCEEDED(rc->GetWidth(ch, tmpWidth))) {
+    *aWidth = NSTwipsToIntPixels(tmpWidth, t2p);
+  }
 
-    //Getting height
-    nscoord tmpHeight;
-    if (NS_SUCCEEDED(fm->GetHeight(tmpHeight))) {
-      *aHeight = NSTwipsToIntPixels(tmpHeight, t2p);
-    }
+  //Getting height
+  nscoord tmpHeight;
+  if (NS_SUCCEEDED(fm->GetHeight(tmpHeight))) {
+    *aHeight = NSTwipsToIntPixels(tmpHeight, t2p);
   }
-  else {
-    //GetCharacterAtOffset() will fail when there is no text
-    *aWidth = *aHeight = 0;
-  }
+
+  //Getting x and y
+  PRInt32 tmpX, tmpY;
+  tmpX = frameRect.x;
+  tmpY = frameRect.y;
 
   //add the width of the string before current char
   nsAutoString beforeString;
   nscoord beforeWidth;
   if (NS_SUCCEEDED(GetText(0, aOffset, beforeString)) &&
       NS_SUCCEEDED(rc->GetWidth(beforeString, beforeWidth))) {
-    frameScreenRect.x += NSTwipsToIntPixels(beforeWidth, t2p);
+    tmpX += beforeWidth;
   }
 
-  PRInt32 screenX = 0, screenY = 0;
+  //find the topest frame, add the offset recursively
+  nsIFrame* tmpFrame = frame;
+  nsIFrame* parentFrame = tmpFrame->GetParent();
+  while (parentFrame) {
+    nsPoint origin = parentFrame->GetPosition();
+    tmpX += origin.x;
+    tmpY += origin.y;
+    tmpFrame = parentFrame;
+    parentFrame = tmpFrame->GetParent();
+  }
+
+  tmpX = NSTwipsToIntPixels(tmpX, t2p);
+  tmpY = NSTwipsToIntPixels(tmpY, t2p);
+
+  //change to screen co-ord
+  nsIWidget *frameWidget = tmpFrame->GetWindow();
+  if (frameWidget) {
+    nsRect oldRect(tmpX, tmpY, 0, 0), newRect;
+    if (NS_SUCCEEDED(frameWidget->WidgetToScreen(oldRect, newRect))) {
+      tmpX = newRect.x;
+      tmpY = newRect.y;
+    }
+  }
+
   if (aCoordType == COORD_TYPE_WINDOW) {
     //co-ord type = window
     nsCOMPtr<nsIDOMDocumentView> docView(do_QueryInterface(doc));
@@ -780,15 +747,20 @@ NS_IMETHODIMP nsAccessibleText::GetCharacterExtents(PRInt32 aOffset,
     nsCOMPtr<nsIDOMWindowInternal> windowInter(do_QueryInterface(abstractView));
     NS_ENSURE_TRUE(windowInter, NS_ERROR_FAILURE);
 
+    PRInt32 screenX,screenY;
     if (NS_FAILED(windowInter->GetScreenX(&screenX)) ||
         NS_FAILED(windowInter->GetScreenY(&screenY))) {
       return NS_ERROR_FAILURE;
     }
-  }
-  // else default: co-ord type = screen
 
-  *aX = frameScreenRect.x - screenX;
-  *aY = frameScreenRect.y - screenY;
+    *aX = tmpX - screenX;
+    *aY = tmpY - screenY;
+  }
+  else {
+    //default: co-ord type = screen
+    *aX = tmpX;
+    *aY = tmpY;
+  }
 
   return NS_OK;
 }
@@ -1186,7 +1158,7 @@ NS_IMETHODIMP nsAccessibleEditableText::GetText(PRInt32 aStartOffset, PRInt32 aE
     mPlainEditor->OutputToString(format, nsIDocumentEncoder::OutputFormatted, text);
   }
 
-  PRInt32 length = text.Length();
+  PRUint32 length = text.Length();
   if (aEndOffset == -1) // get all text from aStartOffset
     aEndOffset = length;
 
@@ -1306,7 +1278,7 @@ NS_IMETHODIMP nsAccessibleEditableText::DidInsertNode(nsIDOMNode *aNode, nsIDOMN
   nsCOMPtr<nsITextContent> textContent(do_QueryInterface(aNode));
   if (textContent) {
     textData.add = PR_TRUE;
-    textData.length = textContent->TextLength();
+    textContent->GetTextLength((int *)&textData.length);
     DOMPointToOffset(mPlainEditor, aNode, 0, &textData.start);
     FireTextChangeEvent(&textData);
   }
@@ -1320,7 +1292,7 @@ NS_IMETHODIMP nsAccessibleEditableText::WillDeleteNode(nsIDOMNode *aChild)
   textData.add = PR_FALSE;
   nsCOMPtr<nsITextContent> textContent(do_QueryInterface(aChild));
   if (textContent) {
-    textData.length = textContent->TextLength();
+    textContent->GetTextLength((int *)&textData.length);
   }
   else {
     //XXX, don't fire event for the last br

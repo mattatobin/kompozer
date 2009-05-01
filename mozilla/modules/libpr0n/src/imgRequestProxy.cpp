@@ -1,48 +1,31 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation.
+ * All Rights Reserved.
+ * 
  * Contributor(s):
  *   Stuart Parmenter <pavlov@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "imgRequestProxy.h"
 
 #include "nsIInputStream.h"
 #include "nsIComponentManager.h"
 #include "nsIServiceManager.h"
-#include "nsIMultiPartChannel.h"
 
 #include "nsAutoLock.h"
 #include "nsString.h"
@@ -56,10 +39,7 @@
 #include "nspr.h"
 
 
-NS_IMPL_THREADSAFE_ISUPPORTS4(imgRequestProxy, imgIRequest,
-                              imgIRequest_MOZILLA_1_8_BRANCH,
-                              nsIRequest,
-                              nsISupportsPriority)
+NS_IMPL_THREADSAFE_ISUPPORTS2(imgRequestProxy, imgIRequest, nsIRequest)
 
 imgRequestProxy::imgRequestProxy() :
   mOwner(nsnull),
@@ -78,10 +58,6 @@ imgRequestProxy::~imgRequestProxy()
 {
   /* destructor code */
   NS_PRECONDITION(!mListener, "Someone forgot to properly cancel this request!");
-  // Explicitly set mListener to null to ensure that the RemoveProxy
-  // call below can't send |this| to an arbitrary listener while |this|
-  // is being destroyed.
-  mListener = nsnull;
 
   if (mOwner) {
     if (!mCanceled) {
@@ -89,15 +65,17 @@ imgRequestProxy::~imgRequestProxy()
 
       mCanceled = PR_TRUE;
 
+      /* set mListener to null so that we don't forward any callbacks that
+         RemoveProxy might generate
+       */
+      mListener = nsnull;
+
       PR_Unlock(mLock);
 
       /* Call RemoveProxy with a successful status.  This will keep the
          channel, if still downloading data, from being canceled if 'this' is
          the last observer.  This allows the image to continue to download and
          be cached even if no one is using it currently.
-         
-         Passing false to aNotify means that we will still get
-         OnStopRequest, if needed.
        */
       mOwner->RemoveProxy(this, NS_OK, PR_FALSE);
     }
@@ -141,8 +119,6 @@ nsresult imgRequestProxy::ChangeOwner(imgRequest *aNewOwner)
 
   PR_Lock(mLock);
 
-  // Passing false to aNotify means that mListener will still get
-  // OnStopRequest, if needed.
   mOwner->RemoveProxy(this, NS_IMAGELIB_CHANGING_OWNER, PR_FALSE);
   NS_RELEASE(mOwner);
 
@@ -166,7 +142,7 @@ void imgRequestProxy::AddToLoadGroup()
   }
 }
 
-void imgRequestProxy::RemoveFromLoadGroup(PRBool releaseLoadGroup)
+void imgRequestProxy::RemoveFromLoadGroup()
 {
   if (!mIsInLoadGroup)
     return;
@@ -181,10 +157,8 @@ void imgRequestProxy::RemoveFromLoadGroup(PRBool releaseLoadGroup)
   mLoadGroup->RemoveRequest(this, NS_OK, nsnull);
   mIsInLoadGroup = PR_FALSE;
 
-  if (releaseLoadGroup) {
-    // We're done with the loadgroup, release it.
-    mLoadGroup = nsnull;
-  }
+  // We're done with the loadgroup, release it.
+  mLoadGroup = nsnull;
 }
 
 
@@ -226,14 +200,11 @@ NS_IMETHODIMP imgRequestProxy::Cancel(nsresult status)
   PR_Lock(mLock);
 
   mCanceled = PR_TRUE;
+  mListener = nsnull;
 
   PR_Unlock(mLock);
 
-  // Passing false to aNotify means that mListener will still get
-  // OnStopRequest, if needed.
   mOwner->RemoveProxy(this, status, PR_FALSE);
-
-  mListener = nsnull;
 
   return NS_OK;
 }
@@ -348,10 +319,6 @@ NS_IMETHODIMP imgRequestProxy::Clone(imgIDecoderObserver* aObserver,
 
   // It is important to call |SetLoadFlags()| before calling |Init()| because
   // |Init()| adds the request to the loadgroup.
-  // When a request is added to a loadgroup, its load flags are merged
-  // with the load flags of the loadgroup.
-  // XXXldb That's not true anymore.  Stuff from imgLoader adds the
-  // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
   nsresult rv = clone->Init(mOwner, mLoadGroup, aObserver);
   if (NS_FAILED(rv)) {
@@ -359,43 +326,16 @@ NS_IMETHODIMP imgRequestProxy::Clone(imgIDecoderObserver* aObserver,
     return rv;
   }
 
-  // Assign to *aClone before calling NotifyProxyListener so that if
-  // the caller expects to only be notified for requests it's already
-  // holding pointers to it won't be surprised.
-  *aClone = clone;
-
   // Send the notifications to the clone's observer
   mOwner->NotifyProxyListener(clone);
 
-  return NS_OK;
-}
-
-/** nsISupportsPriority methods **/
-
-NS_IMETHODIMP imgRequestProxy::GetPriority(PRInt32 *priority)
-{
-  NS_ENSURE_STATE(mOwner);
-  *priority = mOwner->Priority();
-  return NS_OK;
-}
-
-NS_IMETHODIMP imgRequestProxy::SetPriority(PRInt32 priority)
-{
-  NS_ENSURE_STATE(mOwner && !mCanceled);
-  mOwner->AdjustPriority(this, priority - mOwner->Priority());
-  return NS_OK;
-}
-
-NS_IMETHODIMP imgRequestProxy::AdjustPriority(PRInt32 priority)
-{
-  NS_ENSURE_STATE(mOwner && !mCanceled);
-  mOwner->AdjustPriority(this, priority);
+  *aClone = clone;
   return NS_OK;
 }
 
 /** imgIContainerObserver methods **/
 
-void imgRequestProxy::FrameChanged(imgIContainer *container, gfxIImageFrame *newframe, nsIntRect * dirtyRect)
+void imgRequestProxy::FrameChanged(imgIContainer *container, gfxIImageFrame *newframe, nsRect * dirtyRect)
 {
   LOG_FUNC(gImgLog, "imgRequestProxy::FrameChanged");
 
@@ -441,7 +381,7 @@ void imgRequestProxy::OnStartFrame(gfxIImageFrame *frame)
   }
 }
 
-void imgRequestProxy::OnDataAvailable(gfxIImageFrame *frame, const nsIntRect * rect)
+void imgRequestProxy::OnDataAvailable(gfxIImageFrame *frame, const nsRect * rect)
 {
   LOG_FUNC(gImgLog, "imgRequestProxy::OnDataAvailable");
 
@@ -494,17 +434,9 @@ void imgRequestProxy::OnStartRequest(nsIRequest *request, nsISupports *ctxt)
   GetName(name);
   LOG_FUNC_WITH_PARAM(gImgLog, "imgRequestProxy::OnStartRequest", "name", name.get());
 #endif
-
-  if (mListener) {
-    // Hold a ref to the listener while we call it, just in case.
-    nsCOMPtr<imgIDecoderObserver_MOZILLA_1_8_BRANCH> listener = do_QueryInterface(mListener);
-    if (listener)
-      listener->OnStartRequest(this);
-  }
 }
 
-void imgRequestProxy::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
-                                    nsresult statusCode, PRBool lastPart)
+void imgRequestProxy::OnStopRequest(nsIRequest *request, nsISupports *ctxt, nsresult statusCode)
 {
 #ifdef PR_LOGGING
   nsCAutoString name;
@@ -512,36 +444,6 @@ void imgRequestProxy::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
   LOG_FUNC_WITH_PARAM(gImgLog, "imgRequestProxy::OnStopRequest", "name", name.get());
 #endif
 
-  if (mListener) {
-    // Hold a ref to the listener while we call it, just in case.
-    nsCOMPtr<imgIDecoderObserver_MOZILLA_1_8_BRANCH> listener = do_QueryInterface(mListener);
-    if (listener)
-      listener->OnStopRequest(this, lastPart);
-  }
-
-  // If we're expecting more data from a multipart channel, re-add ourself
-  // to the loadgroup so that the document doesn't lose track of the load.
-  // If the request is already a background request and there's more data
-  // coming, we can just leave the request in the loadgroup as-is.
-  if (lastPart || (mLoadFlags & nsIRequest::LOAD_BACKGROUND) == 0) {
-    RemoveFromLoadGroup(lastPart);
-    // More data is coming, so change the request to be a background request
-    // and put it back in the loadgroup.
-    if (!lastPart) {
-      mLoadFlags |= nsIRequest::LOAD_BACKGROUND;
-      AddToLoadGroup();
-    }
-  }
+  RemoveFromLoadGroup();
 }
 
-/* imgIRequest_MOZILLA_1_8_BRANCH interface */
-
-/* readonly attribute nsIURI currentURI; */
-NS_IMETHODIMP imgRequestProxy::GetCurrentURI(nsIURI **aURI)
-{
-  if (!mOwner)
-    return NS_ERROR_FAILURE;
-
-  nsAutoLock lock(mLock);
-  return mOwner->GetCurrentURI(aURI);
-}

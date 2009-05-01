@@ -44,6 +44,7 @@
 #include "nsDirectoryServiceUtils.h"
 #include "nsIRequest.h"
 #include "netCore.h"
+#include "nsIObserver.h"
 
 #include "UDownloadDisplay.h"
 #include "UMacUnicode.h"
@@ -69,24 +70,25 @@ CDownload::~CDownload()
 {
 }
 
-NS_IMPL_ISUPPORTS4(CDownload, nsIDownload, nsITransfer,
-                   nsIWebProgressListener, nsIWebProgressListener2)
+NS_IMPL_ISUPPORTS2(CDownload, nsIDownload, nsIWebProgressListener)
 
 #pragma mark -
 #pragma mark [CDownload::nsIDownload]
 
-/* void init (in nsIURI aSource, in nsILocalFile aTarget, in wstring aDisplayName, in nsIMIMEInfo aMIMEInfo, in long long startTime, in nsILocalFile aTempFile, in nsICancelable aCancelable); */
-NS_IMETHODIMP CDownload::Init(nsIURI *aSource, nsILocalFile *aTarget,
-    const PRUnichar *aDisplayName, nsIMIMEInfo *aMIMEInfo, PRInt64 startTime,
-    nsILocalFile* aTempFile, nsICancelable* aCancelable)
+/* void init (in nsIURI aSource, in nsILocalFile aTarget, in wstring aDisplayName, in nsIMIMEInfo aMIMEInfo, in long long startTime, in nsIWebBrowserPersist aPersist); */
+NS_IMETHODIMP CDownload::Init(nsIURI *aSource, nsILocalFile *aTarget, const PRUnichar *aDisplayName, nsIMIMEInfo *aMIMEInfo, PRInt64 startTime, nsIWebBrowserPersist *aPersist)
 {
     try {
         mSource = aSource;
         mDestination = aTarget;
         mStartTime = startTime;
         mPercentComplete = 0;
-        // We have to break this circular ref when the download is done
-        mCancelable = aCancelable;
+        if (aPersist) {
+            mWebPersist = aPersist;
+            // We have to break this circular ref when the download is done -
+            // until nsIWebBrowserPersist supports weak refs - bug #163889.
+            aPersist->SetProgressListener(this);
+        }
         EnsureProgressView();
         sProgressView->AddDownloadItem(this);
     }
@@ -112,11 +114,11 @@ NS_IMETHODIMP CDownload::GetTarget(nsILocalFile * *aTarget)
     return NS_OK;
 }
 
-/* readonly attribute nsICancelable cancelable; */
-NS_IMETHODIMP CDownload::GetCancelable(nsIWebBrowserCancelable * *aCancelable)
+/* readonly attribute nsIWebBrowserPersist persist; */
+NS_IMETHODIMP CDownload::GetPersist(nsIWebBrowserPersist * *aPersist)
 {
-    NS_ENSURE_ARG_POINTER(aCancelable);
-    NS_IF_ADDREF(*aCancelable = mCancelable);
+    NS_ENSURE_ARG_POINTER(aPersist);
+    NS_IF_ADDREF(*aPersist = mWebPersist);
     return NS_OK;
 }
 
@@ -134,6 +136,11 @@ NS_IMETHODIMP CDownload::GetDisplayName(PRUnichar * *aDisplayName)
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
+NS_IMETHODIMP CDownload::SetDisplayName(const PRUnichar * aDisplayName)
+{
+    return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 /* readonly attribute long long startTime; */
 NS_IMETHODIMP CDownload::GetStartTime(PRInt64 *aStartTime)
 {
@@ -146,6 +153,32 @@ NS_IMETHODIMP CDownload::GetStartTime(PRInt64 *aStartTime)
 NS_IMETHODIMP CDownload::GetMIMEInfo(nsIMIMEInfo * *aMIMEInfo)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+/* attribute nsIWebProgressListener listener; */
+NS_IMETHODIMP CDownload::GetListener(nsIWebProgressListener * *aListener)
+{
+    NS_ENSURE_ARG_POINTER(aListener);
+    NS_IF_ADDREF(*aListener = (nsIWebProgressListener *)this);
+    return NS_OK;
+}
+
+NS_IMETHODIMP CDownload::SetListener(nsIWebProgressListener * aListener)
+{
+    return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+/* attribute nsIObserver observer; */
+NS_IMETHODIMP CDownload::GetObserver(nsIObserver * *aObserver)
+{
+    return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+NS_IMETHODIMP CDownload::SetObserver(nsIObserver * aObserver)
+{
+    if (aObserver)
+        aObserver->QueryInterface(NS_GET_IID(nsIHelperAppLauncher), getter_AddRefs(mHelperAppLauncher));
+    return NS_OK;
 }
 
 #pragma mark -
@@ -167,7 +200,11 @@ NS_IMETHODIMP CDownload::OnStateChange(nsIWebProgress *aWebProgress, nsIRequest 
   
     // We will get this even in the event of a cancel,
     if ((aStateFlags & STATE_STOP) && (!mIsNetworkTransfer || (aStateFlags & STATE_IS_NETWORK))) {
-        mCancelable = nsnull;
+        if (mWebPersist) {
+            mWebPersist->SetProgressListener(nsnull);
+            mWebPersist = nsnull;
+        }
+        mHelperAppLauncher = nsnull;
         BroadcastMessage(msg_OnDLComplete, this);
     }
         
@@ -178,7 +215,10 @@ NS_IMETHODIMP CDownload::OnStateChange(nsIWebProgress *aWebProgress, nsIRequest 
 NS_IMETHODIMP CDownload::OnProgressChange(nsIWebProgress *aWebProgress, nsIRequest *aRequest, PRInt32 aCurSelfProgress, PRInt32 aMaxSelfProgress, PRInt32 aCurTotalProgress, PRInt32 aMaxTotalProgress)
 {
     if (mUserCanceled) {
-        mCancelable->Cancel(NS_BINDING_ABORTED);
+        if (mHelperAppLauncher)
+            mHelperAppLauncher->Cancel();
+        else if (aRequest)
+            aRequest->Cancel(NS_BINDING_ABORTED);
         mUserCanceled = false;
     }
     if (aMaxTotalProgress == -1)
@@ -191,16 +231,6 @@ NS_IMETHODIMP CDownload::OnProgressChange(nsIWebProgress *aWebProgress, nsIReque
 
     return NS_OK;
 }
-
-/* void onProgressChange64 (in nsIWebProgress aWebProgress, in nsIRequest aRequest, in long long aCurSelfProgress, in long long aMaxSelfProgress, in long long aCurTotalProgress, in long long aMaxTotalProgress); */
-NS_IMETHODIMP CDownload::OnProgressChange64(nsIWebProgress *aWebProgress, nsIRequest *aRequest, PRInt64 aCurSelfProgress, PRInt64 aMaxSelfProgress, PRInt64 aCurTotalProgress, PRInt64 aMaxTotalProgress)
-{
-  // XXX truncates 64-bit to 32-bit
-  return OnProgressChange(aProgress, aRequest,
-                          PRInt32(curSelfProgress), PRInt32(maxSelfProgress),
-                          PRInt32(curTotalProgress), PRInt32(maxTotalProgress));
-}
-
 
 /* void onLocationChange (in nsIWebProgress aWebProgress, in nsIRequest aRequest, in nsIURI location); */
 NS_IMETHODIMP CDownload::OnLocationChange(nsIWebProgress *aWebProgress, nsIRequest *aRequest, nsIURI *location)
@@ -228,7 +258,8 @@ void CDownload::Cancel()
     mUserCanceled = true;
     // nsWebBrowserPersist does the right thing: After canceling, next time through
     // OnStateChange(), aStatus != NS_OK. This isn't the case with nsExternalHelperAppService.
-    mStatus = NS_ERROR_ABORT;
+    if (!mWebPersist)
+        mStatus = NS_ERROR_ABORT;
 }
 
 void CDownload::CreateProgressView()
@@ -254,8 +285,8 @@ CHelperAppLauncherDialog::~CHelperAppLauncherDialog()
 
 NS_IMPL_ISUPPORTS1(CHelperAppLauncherDialog, nsIHelperAppLauncherDialog)
 
-/* void show (in nsIHelperAppLauncher aLauncher, in nsISupports aContext, in unsigned long aReason); */
-NS_IMETHODIMP CHelperAppLauncherDialog::Show(nsIHelperAppLauncher *aLauncher, nsISupports *aContext, PRUint32 aReason)
+/* void show (in nsIHelperAppLauncher aLauncher, in nsISupports aContext, in boolean aForced); */
+NS_IMETHODIMP CHelperAppLauncherDialog::Show(nsIHelperAppLauncher *aLauncher, nsISupports *aContext, PRBool aForced)
 {
     return aLauncher->SaveToDisk(nsnull, PR_FALSE);
 }

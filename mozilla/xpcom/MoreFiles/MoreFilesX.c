@@ -2315,7 +2315,7 @@ BadParameter:
 /*****************************************************************************/
 
 OSErr
-MFX_FSVolumeMount(
+FSVolumeMount(
 	const void *volMountInfo,
 	FSVolumeRefNum *volRefNum)
 {

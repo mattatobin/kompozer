@@ -16,10 +16,9 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Christopher Blizzard <blizzard@mozilla.org>.  
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code Christopher Blizzard
+ * <blizzard@mozilla.org>.  Portions created by the Initial Developer
+ * are Copyright (C) 2002 the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
@@ -71,6 +70,7 @@ public:
     NS_IMETHOD  Init                 (const nsFont& aFont, nsIAtom* aLangGroup,
                                       nsIDeviceContext *aContext);
     NS_IMETHOD  Destroy();
+    NS_IMETHOD  GetFont              (const nsFont *&aFont);
     NS_IMETHOD  GetLangGroup         (nsIAtom** aLangGroup);
     NS_IMETHOD  GetFontHandle        (nsFontHandle &aHandle);
 
@@ -143,8 +143,6 @@ public:
                                      { aAveCharWidth = mAveCharWidth;
                                        return NS_OK; };
 
-    PRInt32 GetMaxStringLength() { return mMaxStringLength; }
-
     // nsIFontMetricsGTK (calls from the font rendering layer)
     virtual nsresult GetWidth(const char* aString, PRUint32 aLength,
                               nscoord& aWidth,
@@ -204,29 +202,6 @@ public:
 
     virtual GdkFont* GetCurrentGDKFont(void);
 
-    virtual nsresult SetRightToLeftText(PRBool aIsRTL);
-    virtual PRBool GetRightToLeftText();
-
-    virtual nsresult GetClusterInfo(const PRUnichar *aText,
-                                    PRUint32 aLength,
-                                    PRUint8 *aClusterStarts);
-
-    virtual PRInt32 GetPosition(const PRUnichar *aText,
-                                PRUint32 aLength,
-                                nsPoint aPt);
-
-    virtual nsresult GetRangeWidth(const PRUnichar *aText,
-                                   PRUint32 aLength,
-                                   PRUint32 aStart,
-                                   PRUint32 aEnd,
-                                   PRUint32 &aWidth);
-
-    virtual nsresult GetRangeWidth(const char *aText,
-                                   PRUint32 aLength,
-                                   PRUint32 aStart,
-                                   PRUint32 aEnd,
-                                   PRUint32 &aWidth);
-
     // get hints for the font
     static PRUint32    GetHints  (void);
 
@@ -255,8 +230,6 @@ private:
     // local methods
     nsresult    RealizeFont        (void);
     nsresult    CacheFontMetrics   (void);
-    // Guaranteed to return either null or a font on which |GetXftFont|
-    // returns non-null.
     nsFontXft  *FindFont           (PRUint32);
     void        SetupFCPattern     (void);
     void        DoMatch            (PRBool aMatchAll);
@@ -297,13 +270,11 @@ private:
     nsIDeviceContext    *mDeviceContext;
     nsCOMPtr<nsIAtom>    mLangGroup;
     nsCString           *mGenericFont;
+    nsFont              *mFont;
     float                mPixelSize;
 
     nsCAutoString        mDefaultFont;
 
-    // private to DoMatch and FindFont; this array may contain fonts
-    // for which |GetXftFont| returns null (which are not allowed outside
-    // of those two functions).
     nsVoidArray          mLoadedFonts;
 
     // Xft-related items
@@ -338,7 +309,6 @@ private:
     nscoord                  mMaxAdvance;
     nscoord                  mSpaceWidth;
     nscoord                  mAveCharWidth;
-    PRInt32                  mMaxStringLength;
 };
 
 class nsFontEnumeratorXft : public nsIFontEnumerator

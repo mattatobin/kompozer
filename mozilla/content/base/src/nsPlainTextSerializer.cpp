@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,32 +14,35 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Daniel Bratell <bratell@lysator.liu.se>
- *   Ben Bucksch <mozilla@bucksch.org>
+ *     Daniel Bratell <bratell@lysator.liu.se>
+ *     Ben Bucksch <mozilla@bucksch.org>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsPlainTextSerializer.h"
 #include "nsILineBreakerFactory.h"
 #include "nsLWBrkCIID.h"
+#include "nsIPrefBranch.h"
+#include "nsIPrefService.h"
 #include "nsIServiceManager.h"
 #include "nsHTMLAtoms.h"
 #include "nsIDOMText.h"
@@ -53,6 +56,8 @@
 #include "nsUnicharUtils.h"
 #include "nsCRT.h"
 #include "nsIParserService.h"
+#include "nsIDOMHTMLDocument.h"
+#include "nsIDOMHTMLElement.h"
 
 static NS_DEFINE_CID(kLWBrkCID, NS_LWBRK_CID);
 
@@ -104,7 +109,6 @@ nsPlainTextSerializer::nsPlainTextSerializer()
   mHeaderStrategy = 1 /*indent increasingly*/;   // ditto
   mQuotesPreformatted = PR_FALSE;                // ditto
   mDontWrapAnyQuotes = PR_FALSE;                 // ditto
-  mHasWrittenCiteBlockquote = PR_FALSE;
   mSpanLevel = 0;
   for (PRInt32 i = 0; i <= 6; i++) {
     mHeaderCounter[i] = 0;
@@ -185,7 +189,7 @@ nsPlainTextSerializer::Init(PRUint32 aFlags, PRUint32 aWrapColumn,
   if ((mFlags & nsIDocumentEncoder::OutputCRLineBreak)
       && (mFlags & nsIDocumentEncoder::OutputLFLineBreak)) {
     // Windows
-    mLineBreak.AssignLiteral("\r\n");
+    mLineBreak.Assign(NS_LITERAL_STRING("\r\n"));
   }
   else if (mFlags & nsIDocumentEncoder::OutputCRLineBreak) {
     // Mac
@@ -197,36 +201,39 @@ nsPlainTextSerializer::Init(PRUint32 aFlags, PRUint32 aWrapColumn,
   }
   else {
     // Platform/default
-    mLineBreak.AssignLiteral(NS_LINEBREAK);
+    mLineBreak.AssignWithConversion(NS_LINEBREAK);
   }
 
   mLineBreakDue = PR_FALSE;
   mFloatingLines = -1;
 
+  nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID));
+  if (!prefBranch) {
+    NS_WARNING("Could not get a pref branch!");
+    return NS_OK;
+  }
+
+  PRBool tempBool = PR_FALSE;
   if (mFlags & nsIDocumentEncoder::OutputFormatted) {
     // Get some prefs that controls how we do formatted output
-    mStructs = nsContentUtils::GetBoolPref(PREF_STRUCTS, mStructs);
-
-    mHeaderStrategy =
-      nsContentUtils::GetIntPref(PREF_HEADER_STRATEGY, mHeaderStrategy);
-
+    prefBranch->GetBoolPref(PREF_STRUCTS, &tempBool);
+    mStructs = tempBool;
+    prefBranch->GetIntPref(PREF_HEADER_STRATEGY, &mHeaderStrategy);
     // The quotesPreformatted pref is a temporary measure. See bug 69638.
-    mQuotesPreformatted =
-      nsContentUtils::GetBoolPref("editor.quotesPreformatted",
-                                  mQuotesPreformatted);
-
+    prefBranch->GetBoolPref("editor.quotesPreformatted", &tempBool);
+    mQuotesPreformatted = tempBool;
     // DontWrapAnyQuotes is set according to whether plaintext mail
     // is wrapping to window width -- see bug 134439.
     // We'll only want this if we're wrapping and formatted.
     if (mFlags & nsIDocumentEncoder::OutputWrap || mWrapColumn > 0) {
-      mDontWrapAnyQuotes =
-        nsContentUtils::GetBoolPref("mail.compose.wrap_to_window_width",
-                                    mDontWrapAnyQuotes);
+      prefBranch->GetBoolPref("mail.compose.wrap_to_window_width", &tempBool);
+      mDontWrapAnyQuotes = tempBool;
     }
   }
 
   // XXX We should let the caller pass this in.
-  if (nsContentUtils::GetBoolPref("browser.frames.enabled")) {
+  prefBranch->GetBoolPref("browser.frames.enabled", &tempBool);
+  if (tempBool) {
     mFlags &= ~nsIDocumentEncoder::OutputNoFramesContent;
   }
   else {
@@ -314,7 +321,8 @@ nsPlainTextSerializer::AppendText(nsIDOMText* aText,
   nsCOMPtr<nsITextContent> content = do_QueryInterface(aText);
   if (!content) return NS_ERROR_FAILURE;
   
-  const nsTextFragment* frag = content->Text();
+  const nsTextFragment* frag;
+  content->GetText(&frag);
 
   if (frag) {
     PRInt32 endoffset = (aEndOffset == -1) ? frag->GetLength() : aEndOffset;
@@ -458,8 +466,32 @@ nsPlainTextSerializer::Flush(nsAString& aStr)
 
 NS_IMETHODIMP
 nsPlainTextSerializer::AppendDocumentStart(nsIDOMDocument *aDocument,
-                                             nsAString& aStr)
+                                           nsAString& aStr)
 {
+#ifdef MOZ_STANDALONE_COMPOSER
+  NS_ENSURE_ARG(aDocument);
+
+  nsCOMPtr<nsIDOMHTMLDocument> htmldoc = do_QueryInterface(aDocument);
+  nsCOMPtr<nsIDOMElement> bodyElt;
+  nsresult res;
+  if (htmldoc)
+  {
+    nsCOMPtr<nsIDOMHTMLElement> bodyElement;
+    res = htmldoc->GetBody(getter_AddRefs(bodyElement));
+    if (NS_FAILED(res) || !bodyElement)
+      return res;
+
+    bodyElt = do_QueryInterface(bodyElement);
+  }
+
+  nsAutoString sourceViewAttr;
+  res = bodyElt->GetAttribute(NS_LITERAL_STRING("_moz_sourceview"), sourceViewAttr);
+  if (NS_FAILED(res))
+    return res;
+
+  if (sourceViewAttr.Equals(NS_LITERAL_STRING("true"), nsCaseInsensitiveStringComparator()))
+    mFlags |= nsIDocumentEncoder::OutputRaw;
+#endif
   return NS_OK;
 }
 
@@ -480,10 +512,6 @@ nsPlainTextSerializer::CloseContainer(const nsHTMLTag aTag)
 NS_IMETHODIMP 
 nsPlainTextSerializer::AddHeadContent(const nsIParserNode& aNode)
 {
-  if (eHTMLTag_title == aNode.GetNodeType()) {
-    // XXX collect the skipped content
-    return NS_OK;
-  }
   OpenHead(aNode);
   nsresult rv = AddLeaf(aNode);
   CloseHead();
@@ -635,21 +663,7 @@ nsPlainTextSerializer::DoOpenContainer(const nsIParserNode* aNode, PRInt32 aTag)
     return NS_OK;
   }
 
-  // Reset this so that <blockquote type=cite> doesn't affect the whitespace
-  // above random <pre>s below it.
-  mHasWrittenCiteBlockquote = mHasWrittenCiteBlockquote && aTag == eHTMLTag_pre;
-
-  PRBool isInCiteBlockquote = PR_FALSE;
-
-  // XXX special-case <blockquote type=cite> so that we don't add additional
-  // newlines before the text.
-  if (aTag == eHTMLTag_blockquote) {
-    nsAutoString value;
-    nsresult rv = GetAttributeValue(aNode, nsHTMLAtoms::type, value);
-    isInCiteBlockquote = NS_SUCCEEDED(rv) && value.EqualsIgnoreCase("cite");
-  }
-
-  if (mLineBreakDue && !isInCiteBlockquote)
+  if (mLineBreakDue)
     EnsureVerticalSpace(mFloatingLines);
 
   // Check if this tag's content that should not be output
@@ -724,17 +738,8 @@ nsPlainTextSerializer::DoOpenContainer(const nsIParserNode* aNode, PRInt32 aTag)
     return NS_OK;
   }
 
-  if (type == eHTMLTag_p)
-    EnsureVerticalSpace(1);
-  else if (type == eHTMLTag_pre) {
-    if (GetLastBool(mIsInCiteBlockquote))
-      EnsureVerticalSpace(0);
-    else if (mHasWrittenCiteBlockquote) {
-      EnsureVerticalSpace(0);
-      mHasWrittenCiteBlockquote = PR_FALSE;
-    }
-    else
-      EnsureVerticalSpace(1);
+  if (type == eHTMLTag_p || type == eHTMLTag_pre) {
+    EnsureVerticalSpace(1); // Should this be 0 in unformatted case?
   }
   else if (type == eHTMLTag_tr) {
     PushBool(mHasWrittenCellsForRow, PR_FALSE);
@@ -804,8 +809,8 @@ nsPlainTextSerializer::DoOpenContainer(const nsIParserNode* aNode, PRInt32 aTag)
     }
     else {
       static char bulletCharArray[] = "*o+#";
-      PRUint32 index = mULCount > 0 ? (mULCount - 1) : 3;
-      char bulletChar = bulletCharArray[index % 4];
+      NS_ASSERTION(mULCount > 0, "mULCount should be greater than 0 here");
+      char bulletChar = bulletCharArray[(mULCount - 1) % 4];
       mInIndentString.Append(PRUnichar(bulletChar));
     }
     
@@ -825,14 +830,19 @@ nsPlainTextSerializer::DoOpenContainer(const nsIParserNode* aNode, PRInt32 aTag)
     ++mSpanLevel;
   }
   else if (type == eHTMLTag_blockquote) {
+    EnsureVerticalSpace(1);
+
+    nsAutoString value;
+    nsresult rv = GetAttributeValue(aNode, nsHTMLAtoms::type, value);
+
+    PRBool isInCiteBlockquote =
+      NS_SUCCEEDED(rv) && value.EqualsIgnoreCase("cite");
     // Push
     PushBool(mIsInCiteBlockquote, isInCiteBlockquote);
     if (isInCiteBlockquote) {
-      EnsureVerticalSpace(0);
       mCiteQuoteLevel++;
     }
     else {
-      EnsureVerticalSpace(1);
       mIndent += kTabSize; // Check for some maximum value?
     }
   }
@@ -928,6 +938,14 @@ nsPlainTextSerializer::DoOpenContainer(const nsIParserNode* aNode, PRInt32 aTag)
 nsresult
 nsPlainTextSerializer::DoCloseContainer(PRInt32 aTag)
 {
+  eHTMLTags type = (eHTMLTags)aTag;
+  if (mFlags & nsIDocumentEncoder::OutputLineBreaksWhenClosingLI) {
+    if (type == eHTMLTag_li)
+    {
+      Write(mLineBreak);
+    }
+  }
+
   if (mFlags & nsIDocumentEncoder::OutputRaw) {
     // Raw means raw.  Don't even think about doing anything fancy
     // here like indenting, adding line breaks or any other
@@ -951,7 +969,6 @@ nsPlainTextSerializer::DoCloseContainer(PRInt32 aTag)
     return NS_OK;
   }
 
-  eHTMLTags type = (eHTMLTags)aTag;
   // End current line if we're ending a block level tag
   if((type == eHTMLTag_body) || (type == eHTMLTag_html)) {
     // We want the output to end with a new line,
@@ -983,7 +1000,7 @@ nsPlainTextSerializer::DoCloseContainer(PRInt32 aTag)
     mLineBreakDue = PR_TRUE;
   } 
   else if (type == eHTMLTag_pre) {
-    mFloatingLines = GetLastBool(mIsInCiteBlockquote) ? 0 : 1;
+    mFloatingLines = 1;
     mLineBreakDue = PR_TRUE;
   }
   else if (type == eHTMLTag_ul) {
@@ -1027,13 +1044,12 @@ nsPlainTextSerializer::DoCloseContainer(PRInt32 aTag)
 
     if (isInCiteBlockquote) {
       mCiteQuoteLevel--;
-      mFloatingLines = 0;
-      mHasWrittenCiteBlockquote = PR_TRUE;
     }
     else {
       mIndent -= kTabSize;
-      mFloatingLines = 1;
     }
+
+    mFloatingLines = 1;
     mLineBreakDue = PR_TRUE;
   }
   else if (IsBlockLevel(aTag)
@@ -1082,7 +1098,7 @@ nsPlainTextSerializer::DoCloseContainer(PRInt32 aTag)
   }
   else if (type == eHTMLTag_a && !currentNodeIsConverted && !mURL.IsEmpty()) {
     nsAutoString temp; 
-    temp.AssignLiteral(" <");
+    temp.Assign(NS_LITERAL_STRING(" <"));
     temp += mURL;
     temp.Append(PRUnichar('>'));
     Write(temp);
@@ -1124,11 +1140,6 @@ nsPlainTextSerializer::DoAddLeaf(const nsIParserNode *aNode, PRInt32 aTag,
   // If we don't want any output, just return
   if (!DoOutput()) {
     return NS_OK;
-  }
-
-  if (aTag != eHTMLTag_whitespace && aTag != eHTMLTag_newline) {
-    // Make sure to reset this, since it's no longer true.
-    mHasWrittenCiteBlockquote = PR_FALSE;
   }
   
   if (mLineBreakDue)
@@ -1181,7 +1192,7 @@ nsPlainTextSerializer::DoAddLeaf(const nsIParserNode *aNode, PRInt32 aTag,
     // ignore the bogus br tags that the editor sticks here and there.
     nsAutoString typeAttr;
     if (NS_FAILED(GetAttributeValue(aNode, nsHTMLAtoms::type, typeAttr))
-        || !typeAttr.EqualsLiteral("_moz")) {
+        || !typeAttr.Equals(NS_LITERAL_STRING("_moz"))) {
       EnsureVerticalSpace(mEmptyLines+1);
     }
   }
@@ -1536,7 +1547,7 @@ nsPlainTextSerializer::EndLine(PRBool aSoftlinebreak)
   // (see RFC 2646). We only check for "-- " when it's a hard line
   // break for obvious reasons.
   if(!(mFlags & nsIDocumentEncoder::OutputPreformatted) &&
-     (aSoftlinebreak || !mCurrentLine.EqualsLiteral("-- "))) {
+     (aSoftlinebreak || !mCurrentLine.Equals(NS_LITERAL_STRING("-- ")))) {
     // Remove SPACE:s from the end of the line.
     while(currentlinelength > 0 &&
           mCurrentLine[currentlinelength-1] == ' ') {
@@ -1683,13 +1694,13 @@ nsPlainTextSerializer::Write(const nsAString& aString)
     if (!mCurrentLine.IsEmpty()) {
       FlushLine();
     }
-
+    
     // Put the mail quote "> " chars in, if appropriate.
     // Have to put it in before every line.
     while(bol<totLen) {
-      PRBool outputQuotes = mAtFirstColumn;
-      PRBool atFirstColumn = mAtFirstColumn;
-      PRBool outputLineBreak = PR_FALSE;
+      if(mAtFirstColumn) {
+        OutputQuotesAndIndent();
+      }
 
       // Find one of '\n' or '\r' using iterators since nsAString
       // doesn't have the old FindCharInSet function.
@@ -1721,19 +1732,20 @@ nsPlainTextSerializer::Write(const nsAString& aString)
             mInWhitespace = PR_FALSE;
           }
         }
-        mCurrentLine.Assign(stringpart);
+        Output(stringpart);
         mEmptyLines=-1;
-        atFirstColumn = mAtFirstColumn && (totLen-bol)==0;
+        mAtFirstColumn = mAtFirstColumn && (totLen-bol)==0;
         bol = totLen;
       } 
       else {
         // There is a newline
         nsAutoString stringpart(Substring(aString, bol, newline-bol));
         mInWhitespace = PR_TRUE;
-        mCurrentLine.Assign(stringpart);
-        outputLineBreak = PR_TRUE;
+        Output(stringpart);
+        // and write the newline
+        Output(mLineBreak);
         mEmptyLines=0;
-        atFirstColumn = PR_TRUE;
+        mAtFirstColumn = PR_TRUE;
         bol = newline+1;
         if('\r' == *iter && bol < totLen && '\n' == *++iter) {
           // There was a CRLF in the input. This used to be illegal and
@@ -1742,21 +1754,7 @@ nsPlainTextSerializer::Write(const nsAString& aString)
           bol++;
         }
       }
-
-      if(outputQuotes) {
-        // Note: this call messes with mAtFirstColumn
-        OutputQuotesAndIndent();
-      }
-
-      Output(mCurrentLine);
-      if (outputLineBreak) {
-        Output(mLineBreak);
-      }
-      mAtFirstColumn = atFirstColumn;
     }
-
-    // Reset mCurrentLine.
-    mCurrentLine.Truncate();
 
 #ifdef DEBUG_wrapping
     printf("No wrapping: newline is %d, totLen is %d\n",
@@ -1901,8 +1899,11 @@ nsPlainTextSerializer::GetIdForContent(nsIContent* aContent)
 
   nsIParserService* parserService = nsContentUtils::GetParserServiceWeakRef();
 
-  return parserService ? parserService->HTMLAtomTagToId(aContent->Tag()) :
-                         eHTMLTag_unknown;
+  PRInt32 id;
+  nsresult rv = parserService->HTMLAtomTagToId(aContent->Tag(), &id);
+  NS_ASSERTION(NS_SUCCEEDED(rv), "Can't map HTML tag to id!");
+
+  return id;
 }
 
 /**
@@ -2138,5 +2139,15 @@ PRInt32 GetUnicharStringWidth(const PRUnichar* pwcs, PRInt32 n)
       width += w;
 
   return width;
+}
+
+NS_IMETHODIMP
+nsPlainTextSerializer::PreserveSelection(nsIDOMNode * aStartContainer,
+                                         PRInt32 aStartOffset,
+                                         nsIDOMNode * aEndContainer,
+                                         PRInt32 aEndOffset)
+
+{
+  return NS_OK;
 }
 

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -122,11 +122,6 @@
 #include "prlog.h"
 #include "nsNameSpaceMap.h"
 #include "nsCRT.h"
-#include "nsIScriptSecurityManager.h"
-#include "nsIChannelEventSink.h"
-#include "nsNetUtil.h"
-
-#include "rdfIDataSource.h"
 
 //----------------------------------------------------------------------
 
@@ -220,10 +215,7 @@ class RDFXMLDataSourceImpl : public nsIRDFDataSource,
                              public nsIRDFRemoteDataSource,
                              public nsIRDFXMLSink,
                              public nsIRDFXMLSource,
-                             public nsIStreamListener,
-                             public rdfIDataSource,
-                             public nsIInterfaceRequestor,
-                             public nsIChannelEventSink
+                             public nsIStreamListener
 {
 protected:
     enum LoadState {
@@ -394,27 +386,6 @@ public:
     // nsIStreamListener
     NS_DECL_NSISTREAMLISTENER
 
-    // nsIInterfaceRequestor
-    NS_DECL_NSIINTERFACEREQUESTOR
-
-    // nsIChannelEventSink
-    NS_DECL_NSICHANNELEVENTSINK
-
-    // rdfIDataSource
-    NS_IMETHOD VisitAllSubjects(rdfITripleVisitor *aVisitor) {
-        nsresult rv;
-        nsCOMPtr<rdfIDataSource> rdfds = do_QueryInterface(mInner, &rv);
-        if (NS_FAILED(rv)) return rv;
-        return rdfds->VisitAllSubjects(aVisitor);
-    } 
-
-    NS_IMETHOD VisitAllTriples(rdfITripleVisitor *aVisitor) {
-        nsresult rv;
-        nsCOMPtr<rdfIDataSource> rdfds = do_QueryInterface(mInner, &rv);
-        if (NS_FAILED(rv)) return rv;
-        return rdfds->VisitAllTriples(aVisitor);
-    } 
-
     // Implementation methods
     PRBool
     MakeQName(nsIRDFResource* aResource,
@@ -514,11 +485,16 @@ nsresult
 RDFXMLDataSourceImpl::Init()
 {
     nsresult rv;
-    rv = CallCreateInstance(kRDFInMemoryDataSourceCID, &mInner);
+    rv = nsComponentManager::CreateInstance(kRDFInMemoryDataSourceCID,
+                                            nsnull,
+                                            NS_GET_IID(nsIRDFDataSource),
+                                            (void**) &mInner);
     if (NS_FAILED(rv)) return rv;
 
     if (gRefCnt++ == 0) {
-        rv = CallGetService(kRDFServiceCID, &gRDFService);
+        rv = nsServiceManager::GetService(kRDFServiceCID,
+                                          NS_GET_IID(nsIRDFService),
+                                          NS_REINTERPRET_CAST(nsISupports**, &gRDFService));
 
         NS_ASSERTION(NS_SUCCEEDED(rv), "unable to get RDF service");
         if (NS_FAILED(rv)) return rv;
@@ -543,28 +519,23 @@ RDFXMLDataSourceImpl::~RDFXMLDataSourceImpl(void)
 
     NS_RELEASE(mInner);
 
-    if (--gRefCnt == 0)
-        NS_IF_RELEASE(gRDFService);
+    if (--gRefCnt == 0) {
+        if (gRDFService) {
+            nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
+            gRDFService = nsnull;
+        }
+    }
 }
 
 
-NS_IMPL_ISUPPORTS9(RDFXMLDataSourceImpl,
+NS_IMPL_ISUPPORTS6(RDFXMLDataSourceImpl,
                    nsIRDFDataSource,
                    nsIRDFRemoteDataSource,
                    nsIRDFXMLSink,
                    nsIRDFXMLSource,
                    nsIRequestObserver,
-                   nsIStreamListener,
-                   rdfIDataSource,
-                   nsIInterfaceRequestor,
-                   nsIChannelEventSink)
+                   nsIStreamListener)
 
-// nsIInterfaceRequestor
-NS_IMETHODIMP
-RDFXMLDataSourceImpl::GetInterface(const nsIID& aIID, void** aSink)
-{
-  return QueryInterface(aIID, aSink);
-}
 
 nsresult
 RDFXMLDataSourceImpl::BlockingParse(nsIURI* aURL, nsIStreamListener* aConsumer)
@@ -849,32 +820,17 @@ RDFXMLDataSourceImpl::rdfXMLFlush(nsIURI *aURI)
         nsCOMPtr<nsIFile> file;
         fileURL->GetFile(getter_AddRefs(file));
         if (file) {
-            // get a safe output stream, so we don't clobber the datasource file unless
-            // all the writes succeeded.
+            // if file doesn't exist, create it
+            (void)file->Create(nsIFile::NORMAL_FILE_TYPE, 0666);
+
             nsCOMPtr<nsIOutputStream> out;
-            rv = NS_NewSafeLocalFileOutputStream(getter_AddRefs(out),
-                                                 file,
-                                                 PR_WRONLY | PR_CREATE_FILE,
-                                                 /*octal*/ 0666,
-                                                 0);
-            if (NS_FAILED(rv)) return rv;
-
+            rv = NS_NewLocalFileOutputStream(getter_AddRefs(out), file);
             nsCOMPtr<nsIOutputStream> bufferedOut;
-            rv = NS_NewBufferedOutputStream(getter_AddRefs(bufferedOut), out, 4096);
-            if (NS_FAILED(rv)) return rv;
-
-            rv = Serialize(bufferedOut);
-            if (NS_FAILED(rv)) return rv;
-            
-            // All went ok. Maybe except for problems in Write(), but the stream detects
-            // that for us
-            nsCOMPtr<nsISafeOutputStream> safeStream = do_QueryInterface(bufferedOut, &rv);
-            if (NS_FAILED(rv)) return rv;
-
-            rv = safeStream->Finish();
-            if (NS_FAILED(rv)) {
-                NS_WARNING("failed to save datasource file! possible dataloss");
-                return rv;
+            if (out)
+                NS_NewBufferedOutputStream(getter_AddRefs(bufferedOut), out, 4096);
+            if (bufferedOut) {
+                rv = Serialize(bufferedOut);
+                if (NS_FAILED(rv)) return rv;
             }
         }
     }
@@ -921,7 +877,7 @@ RDFXMLDataSourceImpl::Flush(void)
 #ifdef PR_LOGGING
     nsCAutoString spec;
     mURL->GetSpec(spec);
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] flush(%s)", this, spec.get()));
 #endif
 
@@ -958,31 +914,6 @@ RDFXMLDataSourceImpl::SetReadOnly(PRBool aIsReadOnly)
 
 #include "nsITimelineService.h"
 
-// nsIChannelEventSink
-
-NS_IMETHODIMP
-RDFXMLDataSourceImpl::OnChannelRedirect(nsIChannel *aOldChannel,
-                                        nsIChannel *aNewChannel,
-                                        PRUint32 aFlags)
-{
-  NS_PRECONDITION(aNewChannel, "Redirecting to null channel?");
-
-  nsresult rv;
-  nsCOMPtr<nsIScriptSecurityManager> secMan =
-      do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsIURI> oldURI;
-  rv = aOldChannel->GetURI(getter_AddRefs(oldURI));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsIURI> newURI;
-  rv = aNewChannel->GetURI(getter_AddRefs(newURI));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  return secMan->CheckSameOriginURI(oldURI, newURI);
-}
-
 NS_IMETHODIMP
 RDFXMLDataSourceImpl::Refresh(PRBool aBlocking)
 {
@@ -991,14 +922,14 @@ RDFXMLDataSourceImpl::Refresh(PRBool aBlocking)
     if (mURL) {
         mURL->GetSpec(spec);
     }
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] refresh(%s) %sblocking", this, spec.get(), (aBlocking ? "" : "non")));
 #endif
     
     // If an asynchronous load is already pending, then just let it do
     // the honors.
     if (IsLoading()) {
-        PR_LOG(gLog, PR_LOG_NOTICE,
+        PR_LOG(gLog, PR_LOG_ALWAYS,
                ("rdfxml[%p] refresh(%s) a load was pending", this, spec.get()));
 
         if (aBlocking) {
@@ -1031,7 +962,7 @@ RDFXMLDataSourceImpl::Refresh(PRBool aBlocking)
     }
     else {
         // Null LoadGroup ?
-        rv = NS_OpenURI(this, nsnull, mURL, nsnull, nsnull, this);
+        rv = NS_OpenURI(this, nsnull, mURL, nsnull);
         if (NS_FAILED(rv)) return rv;
 
         // So we don't try to issue two asynchronous loads at once.
@@ -1049,7 +980,7 @@ RDFXMLDataSourceImpl::BeginLoad(void)
     if (mURL) {
         mURL->GetSpec(spec);
     }
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] begin-load(%s)", this, spec.get()));
 #endif
     
@@ -1075,7 +1006,7 @@ RDFXMLDataSourceImpl::Interrupt(void)
     if (mURL) {
         mURL->GetSpec(spec);
     }
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] interrupt(%s)", this, spec.get()));
 #endif
     
@@ -1100,7 +1031,7 @@ RDFXMLDataSourceImpl::Resume(void)
     if (mURL) {
         mURL->GetSpec(spec);
     }
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] resume(%s)", this, spec.get()));
 #endif
     
@@ -1125,7 +1056,7 @@ RDFXMLDataSourceImpl::EndLoad(void)
     if (mURL) {
         mURL->GetSpec(spec);
     }
-    PR_LOG(gLog, PR_LOG_NOTICE,
+    PR_LOG(gLog, PR_LOG_ALWAYS,
            ("rdfxml[%p] end-load(%s)", this, spec.get()));
 #endif
     
@@ -1254,13 +1185,8 @@ RDFXMLDataSourceImpl::Serialize(nsIOutputStream* aStream)
     // Add any namespace information that we picked up when reading
     // the RDF/XML
     nsNameSpaceMap::const_iterator last = mNameSpaces.last();
-    for (nsNameSpaceMap::const_iterator iter = mNameSpaces.first();
-         iter != last; ++iter) {
-        // We might wanna change nsIRDFXMLSerializer to nsACString and
-        // use a heap allocated buffer here in the future.
-        NS_ConvertUTF8toUTF16 uri(iter->mURI);
-        serializer->AddNameSpace(iter->mPrefix, uri);
-    }
+    for (nsNameSpaceMap::const_iterator iter = mNameSpaces.first(); iter != last; ++iter)
+        serializer->AddNameSpace(iter->mPrefix, iter->mURI);
 
     // Serialize!
     nsCOMPtr<nsIRDFXMLSource> source = do_QueryInterface(serializer);

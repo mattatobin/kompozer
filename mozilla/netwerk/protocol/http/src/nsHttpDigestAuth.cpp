@@ -1,50 +1,33 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * Contributor(s):
+ * Contributor(s): 
  *   Justin Bradford <jab@atdot.org> (original author of nsDigestAuth.cpp)
  *   An-Cheng Huang <pach@cs.cmu.edu>
  *   Darin Fisher <darin@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include <stdlib.h>
 #include "nsHttp.h"
 #include "nsHttpDigestAuth.h"
 #include "nsIHttpChannel.h"
 #include "nsIServiceManager.h"
-#include "nsISignatureVerifier.h"
 #include "nsXPCOM.h"
 #include "nsISupportsPrimitives.h"
 #include "nsIURI.h"
@@ -63,7 +46,7 @@
 
 nsHttpDigestAuth::nsHttpDigestAuth()
 {
-  mVerifier = do_GetService("@mozilla.org/security/hash;1");
+  mVerifier = do_GetService(SIGNATURE_VERIFIER_CONTRACTID);
   mGotVerifier = (mVerifier != nsnull);
 
 #if defined(PR_LOGGING)
@@ -74,9 +57,6 @@ nsHttpDigestAuth::nsHttpDigestAuth()
   }
 #endif
 }
-
-nsHttpDigestAuth::~nsHttpDigestAuth()
-{}
 
 //-----------------------------------------------------------------------------
 // nsHttpDigestAuth::nsISupports
@@ -96,19 +76,18 @@ nsHttpDigestAuth::MD5Hash(const char *buf, PRUint32 len)
 
   nsresult rv;
 
-
-  rv = mVerifier->Init(nsICryptoHash::MD5);
+  HASHContextStr *hid;
+  rv = mVerifier->HashBegin(nsISignatureVerifier::MD5, &hid);
   if (NS_FAILED(rv)) return rv;
 
-  rv = mVerifier->Update((unsigned char*)buf, len);
-  if (NS_FAILED(rv)) return rv;
+  // must call HashEnd to destroy |hid|
+  unsigned char cbuf[DIGEST_LENGTH], *chash = cbuf;
+  PRUint32 clen;
 
-  nsCAutoString hashString;
-  rv = mVerifier->Finish(PR_FALSE, hashString);
-  if (NS_FAILED(rv)) return rv;
-  
+  rv  = mVerifier->HashUpdate(hid, buf, len);
+  rv |= mVerifier->HashEnd(hid, &chash, &clen, DIGEST_LENGTH);
   if (NS_SUCCEEDED(rv))
-    memcpy(mHashBuf, hashString.get(), hashString.Length());
+    memcpy(mHashBuf, chash, DIGEST_LENGTH);
   return rv;
 }
 
@@ -130,7 +109,7 @@ nsHttpDigestAuth::GetMethodAndPath(nsIHttpChannel *httpChannel,
       // is HTTPS, then we are really using a CONNECT method.
       //
       if (isSecure && isProxyAuth) {
-        httpMethod.AssignLiteral("CONNECT");
+        httpMethod = NS_LITERAL_CSTRING("CONNECT");
         //
         // generate hostname:port string. (unfortunately uri->GetHostPort
         // leaves out the port if it matches the default value, so we can't
@@ -342,68 +321,48 @@ nsHttpDigestAuth::GenerateCredentials(nsIHttpChannel *httpChannel,
                          cnonce, response_digest);
   if (NS_FAILED(rv)) return rv;
 
-  //
-  // Values that need to match the quoted-string production from RFC 2616:
-  //
-  //    username
-  //    realm
-  //    nonce
-  //    opaque
-  //    cnonce
-  //
-
-  nsCAutoString authString;
-
-  authString.AssignLiteral("Digest username=");
-  rv = AppendQuotedString(cUser, authString);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  authString.AppendLiteral(", realm=");
-  rv = AppendQuotedString(realm, authString);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  authString.AppendLiteral(", nonce=");
-  rv = AppendQuotedString(nonce, authString);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  authString.AppendLiteral(", uri=\"");
+  nsCAutoString authString("Digest ");
+  authString += "username=\"";
+  authString += cUser;
+  authString += NS_LITERAL_CSTRING("\", realm=\"");
+  authString += realm;
+  authString += NS_LITERAL_CSTRING("\", nonce=\"");
+  authString += nonce;
+  authString += NS_LITERAL_CSTRING("\", uri=\"");
   authString += path;
   if (algorithm & ALGO_SPECIFIED) {
-    authString.AppendLiteral("\", algorithm=");
+    authString += "\", algorithm=";
     if (algorithm & ALGO_MD5_SESS)
-      authString.AppendLiteral("MD5-sess");
+      authString += "MD5-sess";
     else
-      authString.AppendLiteral("MD5");
+      authString += "MD5";
   } else {
-    authString += '\"';
+    authString += "\"";
   }
-  authString.AppendLiteral(", response=\"");
+  authString += ", response=\"";
   authString += response_digest;
-  authString += '\"';
 
   if (!opaque.IsEmpty()) {
-    authString.AppendLiteral(", opaque=");
-    rv = AppendQuotedString(opaque, authString);
-    NS_ENSURE_SUCCESS(rv, rv);
+    authString += "\", opaque=\"";
+    authString += opaque;
   }
 
   if (qop) {
-    authString.AppendLiteral(", qop=");
+    authString += "\", qop=";
     if (requireExtraQuotes)
-      authString += '\"';
-    authString.AppendLiteral("auth");
+      authString += "\"";
     if (qop & QOP_AUTH_INT)
-      authString.AppendLiteral("-int");
+      authString += "auth-int";
+    else
+      authString += "auth";
     if (requireExtraQuotes)
-      authString += '\"';
-    authString.AppendLiteral(", nc=");
+      authString += "\"";
+    authString += ", nc=";
     authString += nonce_count;
-
-    authString.AppendLiteral(", cnonce=");
-    rv = AppendQuotedString(cnonce, authString);
-    NS_ENSURE_SUCCESS(rv, rv);
+    authString += ", cnonce=\"";
+    authString += cnonce;
   }
-
+  authString += "\"";
 
   *creds = ToNewCString(authString);
   return NS_OK;
@@ -453,9 +412,9 @@ nsHttpDigestAuth::CalculateResponse(const char * ha1_digest,
     contents.Append(cnonce);
     contents.Append(':');
     if (qop & QOP_AUTH_INT)
-      contents.AppendLiteral("auth-int:");
+      contents.Append(NS_LITERAL_CSTRING("auth-int:"));
     else
-      contents.AppendLiteral("auth:");
+      contents.Append(NS_LITERAL_CSTRING("auth:"));
   }
 
   contents.Append(ha2_digest, EXPANDED_DIGEST_LENGTH);
@@ -691,41 +650,6 @@ nsHttpDigestAuth::ParseChallenge(const char * challenge,
       }
     }
   }
-  return NS_OK;
-}
-
-nsresult
-nsHttpDigestAuth::AppendQuotedString(const nsACString & value,
-                                     nsACString & aHeaderLine)
-{
-  nsCAutoString quoted;
-  nsACString::const_iterator s, e;
-  value.BeginReading(s);
-  value.EndReading(e);
-
-  //
-  // Encode string according to RFC 2616 quoted-string production
-  //
-  quoted.Append('"');
-  for ( ; s != e; ++s) {
-    //
-    // CTL = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
-    //
-    if (*s <= 31 || *s == 127) {
-      return NS_ERROR_FAILURE;
-    }
-
-    // Escape two syntactically significant characters
-    if (*s == '"' || *s == '\\') {
-      quoted.Append('\\');
-    }
-
-    quoted.Append(*s);
-  }
-  // FIXME: bug 41489
-  // We should RFC2047-encode non-Latin-1 values according to spec
-  quoted.Append('"');
-  aHeaderLine.Append(quoted);
   return NS_OK;
 }
 

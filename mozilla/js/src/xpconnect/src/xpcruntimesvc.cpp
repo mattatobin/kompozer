@@ -41,39 +41,6 @@
 
 #include "xpcprivate.h"
 
-#ifndef XPCONNECT_STANDALONE
-NS_IMPL_THREADSAFE_ISUPPORTS2(BackstagePass, nsIScriptObjectPrincipal, nsIXPCScriptable)
-#else
-NS_IMPL_THREADSAFE_ISUPPORTS1(BackstagePass, nsIXPCScriptable)
-#endif
-
-// The nsIXPCScriptable map declaration that will generate stubs for us...
-#define XPC_MAP_CLASSNAME           BackstagePass
-#define XPC_MAP_QUOTED_CLASSNAME   "BackstagePass"
-#define                             XPC_MAP_WANT_NEWRESOLVE
-#define XPC_MAP_FLAGS       nsIXPCScriptable::USE_JSSTUB_FOR_ADDPROPERTY   | \
-                            nsIXPCScriptable::USE_JSSTUB_FOR_DELPROPERTY   | \
-                            nsIXPCScriptable::USE_JSSTUB_FOR_SETPROPERTY   | \
-                            nsIXPCScriptable::DONT_ENUM_STATIC_PROPS       | \
-                            nsIXPCScriptable::DONT_ENUM_QUERY_INTERFACE    | \
-                            nsIXPCScriptable::DONT_REFLECT_INTERFACE_NAMES
-#include "xpc_map_end.h" /* This will #undef the above */
-
-/* PRBool newResolve (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in JSVal id, in PRUint32 flags, out JSObjectPtr objp); */
-NS_IMETHODIMP
-BackstagePass::NewResolve(nsIXPConnectWrappedNative *wrapper,
-                          JSContext * cx, JSObject * obj,
-                          jsval id, PRUint32 flags, 
-                          JSObject * *objp, PRBool *_retval)
-{
-    JSBool resolved;
-
-    *_retval = JS_ResolveStandardClass(cx, obj, id, &resolved);
-    if(*_retval && resolved)
-        *objp = obj;
-    return NS_OK;
-}
-
 /*
  * This object holds state that we don't want to lose!
  *
@@ -92,7 +59,7 @@ nsJSRuntimeServiceImpl::~nsJSRuntimeServiceImpl() {
     {
         JS_DestroyRuntime(mRuntime);
         JS_ShutDown();
-#ifdef DEBUG_shaver_off
+#ifdef DEBUG_shaver
         fprintf(stderr, "nJRSI: destroyed runtime %p\n", (void *)mRuntime);
 #endif
     }
@@ -102,8 +69,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsJSRuntimeServiceImpl,
                               nsIJSRuntimeService,
                               nsISupportsWeakReference)
 
-nsJSRuntimeServiceImpl*
-nsJSRuntimeServiceImpl::gJSRuntimeService = nsnull;
+static nsJSRuntimeServiceImpl* gJSRuntimeService = nsnull;
 
 nsJSRuntimeServiceImpl*
 nsJSRuntimeServiceImpl::GetSingleton()
@@ -113,7 +79,6 @@ nsJSRuntimeServiceImpl::GetSingleton()
         gJSRuntimeService = new nsJSRuntimeServiceImpl();
         // hold an extra reference to lock it down
         NS_IF_ADDREF(gJSRuntimeService);
-
     }
     NS_IF_ADDREF(gJSRuntimeService);
 
@@ -137,60 +102,13 @@ nsJSRuntimeServiceImpl::GetRuntime(JSRuntime **runtime)
 
     if(!mRuntime)
     {
-        // Call XPCPerThreadData::GetData to initialize 
-        // XPCPerThreadData::gTLSIndex before initializing 
-        // JSRuntime::threadTPIndex in JS_NewRuntime.
-        //
-        // XPConnect uses a thread local storage (XPCPerThreadData) indexed by
-        // XPCPerThreadData::gTLSIndex, and SpiderMonkey GC uses a thread local 
-        // storage indexed by JSRuntime::threadTPIndex.
-        //
-        // The destructor for XPCPerThreadData::gTLSIndex may access 
-        // thread local storage indexed by JSRuntime::threadTPIndex. 
-        // Thus, the destructor for JSRuntime::threadTPIndex must be called 
-        // later than the one for XPCPerThreadData::gTLSIndex.
-        //
-        // We rely on the implementation of NSPR that calls destructors at 
-        // the same order of calling PR_NewThreadPrivateIndex.
-        XPCPerThreadData::GetData();
-        
         mRuntime = JS_NewRuntime(gGCSize);
         if(!mRuntime)
             return NS_ERROR_OUT_OF_MEMORY;
-
-        // Unconstrain the runtime's threshold on nominal heap size, to avoid
-        // triggering GC too often if operating continuously near an arbitrary
-        // finite threshold (0xffffffff is infinity for uint32 parameters).
-        // This leaves the maximum-JS_malloc-bytes threshold still in effect
-        // to cause period, and we hope hygienic, last-ditch GCs from within
-        // the GC's allocator.
-        JS_SetGCParameter(mRuntime, JSGC_MAX_BYTES, 0xffffffff);
     }
     *runtime = mRuntime;
-    return NS_OK;
-}
-
-/* attribute nsIXPCScriptable backstagePass; */
-NS_IMETHODIMP
-nsJSRuntimeServiceImpl::GetBackstagePass(nsIXPCScriptable **bsp)
-{
-    if(!mBackstagePass) {
-#ifndef XPCONNECT_STANDALONE
-        nsCOMPtr<nsIPrincipal> sysprin;
-        nsCOMPtr<nsIScriptSecurityManager> secman = 
-            do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID);
-        if(!secman)
-            return NS_ERROR_NOT_AVAILABLE;
-        if(NS_FAILED(secman->GetSystemPrincipal(getter_AddRefs(sysprin))))
-            return NS_ERROR_NOT_AVAILABLE;
-        
-        mBackstagePass = new BackstagePass(sysprin);
-#else
-        mBackstagePass = new BackstagePass();
+#ifdef DEBUG_shaver
+    fprintf(stderr, "nJRSI: returning %p\n", (void *)mRuntime);
 #endif
-        if(!mBackstagePass)
-            return NS_ERROR_OUT_OF_MEMORY;
-    }
-    NS_ADDREF(*bsp = mBackstagePass);
     return NS_OK;
 }

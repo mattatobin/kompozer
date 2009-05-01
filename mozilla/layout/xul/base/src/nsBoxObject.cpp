@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,7 +41,7 @@
 #include "nsIBoxPaintManager.h"
 #include "nsIDocument.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIDocument.h"
 #include "nsIContent.h"
 #include "nsIFrame.h"
@@ -55,7 +55,7 @@
 #include "nsIView.h"
 #include "nsIWidget.h"
 #include "nsIDOMXULElement.h"
-#include "nsIFrame.h"
+#include "nsIBox.h"
 
 // Static IIDs/CIDs. Try to minimize these.
 static NS_DEFINE_CID(kLookAndFeelCID, NS_LOOKANDFEEL_CID);
@@ -135,7 +135,7 @@ NS_IMETHODIMP
 nsBoxObject::Init(nsIContent* aContent, nsIPresShell* aShell)
 {
   mContent = aContent;
-  mPresShell = do_GetWeakReference(aShell);
+  mPresShell = aShell;
   return NS_OK;
 }
 
@@ -144,11 +144,10 @@ nsBoxObject::SetDocument(nsIDocument* aDocument)
 {
   mPresState = nsnull;
   if (aDocument) {
-    mPresShell = do_GetWeakReference(aDocument->GetShellAt(0));
+    mPresShell = aDocument->GetShellAt(0);
   }
   else {
     mPresShell = nsnull;
-    mContent = nsnull;
   }
   return NS_OK;
 }
@@ -165,24 +164,9 @@ nsIFrame*
 nsBoxObject::GetFrame()
 {
   nsIFrame* frame = nsnull;
-  nsCOMPtr<nsIPresShell> shell = GetPresShell();
-  if (shell) {
-    shell->FlushPendingNotifications(Flush_Frames);
-    shell->GetPrimaryFrameFor(mContent, &frame);
-  }
+  if (mPresShell)
+    mPresShell->GetPrimaryFrameFor(mContent, &frame);
   return frame;
-}
-
-already_AddRefed<nsIPresShell>
-nsBoxObject::GetPresShell()
-{
-  if (!mPresShell) {
-    return nsnull;
-  }
-
-  nsIPresShell* shell = nsnull;
-  CallQueryReferent(mPresShell.get(), &shell);
-  return shell;
 }
 
 nsresult 
@@ -198,14 +182,13 @@ nsBoxObject::GetOffsetRect(nsRect& aRect)
   nsCOMPtr<nsIDocument> doc = mContent->GetDocument();
 
   if (doc) {
-    // Flush all pending notifications so that our frames are uptodate.  Must
-    // do this before we get the presshell, since this can destroy presshells.
-    doc->FlushPendingNotifications(Flush_Layout);
-
     // Get Presentation shell 0
     nsIPresShell *presShell = doc->GetShellAt(0);
 
     if(presShell) {
+      // Flush all pending notifications so that our frames are uptodate
+      presShell->FlushPendingNotifications(PR_FALSE);
+
       // Get the Frame for our content
       nsIFrame* frame = nsnull;
       presShell->GetPrimaryFrameFor(mContent, &frame);
@@ -218,7 +201,7 @@ nsBoxObject::GetOffsetRect(nsRect& aRect)
         nsIFrame* next = frame;
         do {
           rcFrame.UnionRect(rcFrame, next->GetRect());
-          next = next->GetNextInFlow();
+          next->GetNextInFlow(&next);
         } while (nsnull != next);
         
 
@@ -240,20 +223,31 @@ nsBoxObject::GetOffsetRect(nsRect& aRect)
         }
   
         // For the origin, add in the border for the frame
+        nsStyleCoord coord;
         const nsStyleBorder* border = frame->GetStyleBorder();
-        origin.x += border->GetBorderWidth(NS_SIDE_LEFT);
-        origin.y += border->GetBorderWidth(NS_SIDE_TOP);
+        if (eStyleUnit_Coord == border->mBorder.GetLeftUnit()) {
+          origin.x += border->mBorder.GetLeft(coord).GetCoordValue();
+        }
+        if (eStyleUnit_Coord == border->mBorder.GetTopUnit()) {
+          origin.y += border->mBorder.GetTop(coord).GetCoordValue();
+        }
 
         // And subtract out the border for the parent
         if (parent) {
           const nsStyleBorder* parentBorder = parent->GetStyleBorder();
-          origin.x -= parentBorder->GetBorderWidth(NS_SIDE_LEFT);
-          origin.y -= parentBorder->GetBorderWidth(NS_SIDE_TOP);
+          if (eStyleUnit_Coord == parentBorder->mBorder.GetLeftUnit()) {
+            origin.x -= parentBorder->mBorder.GetLeft(coord).GetCoordValue();
+          }
+          if (eStyleUnit_Coord == parentBorder->mBorder.GetTopUnit()) {
+            origin.y -= parentBorder->mBorder.GetTop(coord).GetCoordValue();
+          }
         }
 
         // Get the Presentation Context from the Shell
-        nsPresContext *context = presShell->GetPresContext();
-        if (context) {
+        nsCOMPtr<nsIPresContext> context;
+        presShell->GetPresContext(getter_AddRefs(context));
+       
+        if(context) {
           // Get the scale from that Presentation Context
           float scale;
           scale = context->TwipsToPixels();
@@ -272,10 +266,11 @@ nsBoxObject::GetOffsetRect(nsRect& aRect)
 }
 
 nsresult
-nsBoxObject::GetScreenPosition(nsIntPoint& aPoint)
+nsBoxObject::GetScreenRect(nsRect& aRect)
 {
-  aPoint.x = aPoint.y = 0;
-  
+  aRect.x = aRect.y = 0;
+  aRect.Empty();
+ 
   if (!mContent)
     return NS_ERROR_NOT_INITIALIZED;
 
@@ -287,17 +282,49 @@ nsBoxObject::GetScreenPosition(nsIntPoint& aPoint)
 
     if (presShell) {
       // Flush all pending notifications so that our frames are uptodate
-      doc->FlushPendingNotifications(Flush_Layout);
+      presShell->FlushPendingNotifications(PR_FALSE);
 
-      nsPresContext *presContext = presShell->GetPresContext();
+      nsCOMPtr<nsIPresContext> presContext;
+      presShell->GetPresContext(getter_AddRefs(presContext));
+      
       if (presContext) {
         nsIFrame* frame;
         presShell->GetPrimaryFrameFor(mContent, &frame);
         
-        if (frame) {
-          nsIntRect rect = frame->GetScreenRect();
-          aPoint.x = rect.x;
-          aPoint.y = rect.y;
+        PRInt32 offsetX = 0;
+        PRInt32 offsetY = 0;
+        nsIWidget* widget = nsnull;
+        
+        while (frame) {
+          // Look for a widget so we can get screen coordinates
+          if (frame->HasView()) {
+            widget = frame->GetView()->GetWidget();
+            if (widget)
+              break;
+          }
+          
+          // No widget yet, so count up the coordinates of the frame 
+          nsPoint origin = frame->GetPosition();
+          offsetX += origin.x;
+          offsetY += origin.y;
+      
+          frame = frame->GetParent();
+        }
+        
+        if (widget) {
+          // Get the scale from that Presentation Context
+          float scale;
+          scale = presContext->TwipsToPixels();
+          
+          // Convert to pixels using that scale
+          offsetX = NSTwipsToIntPixels(offsetX, scale);
+          offsetY = NSTwipsToIntPixels(offsetY, scale);
+          
+          // Add the widget's screen coordinates to the offset we've counted
+          nsRect oldBox(0,0,0,0);
+          widget->WidgetToScreen(oldBox, aRect);
+          aRect.x += offsetX;
+          aRect.y += offsetY;
         }
       }
     }
@@ -345,11 +372,11 @@ nsBoxObject::GetHeight(PRInt32* aResult)
 NS_IMETHODIMP
 nsBoxObject::GetScreenX(PRInt32 *_retval)
 {
-  nsIntPoint position;
-  nsresult rv = GetScreenPosition(position);
+  nsRect rect;
+  nsresult rv = GetScreenRect(rect);
   if (NS_FAILED(rv)) return rv;
   
-  *_retval = position.x;
+  *_retval = rect.x;
   
   return NS_OK;
 }
@@ -357,11 +384,11 @@ nsBoxObject::GetScreenX(PRInt32 *_retval)
 NS_IMETHODIMP
 nsBoxObject::GetScreenY(PRInt32 *_retval)
 {
-  nsIntPoint position;
-  nsresult rv = GetScreenPosition(position);
+  nsRect rect;
+  nsresult rv = GetScreenRect(rect);
   if (NS_FAILED(rv)) return rv;
   
-  *_retval = position.y;
+  *_retval = rect.y;
   
   return NS_OK;
 }
@@ -375,7 +402,7 @@ nsBoxObject::GetLookAndFeelMetric(const PRUnichar* aPropertyName,
     return NS_ERROR_FAILURE;
     
   nsAutoString property(aPropertyName);
-  if (property.LowerCaseEqualsLiteral("scrollbarstyle")) {
+  if (property.EqualsIgnoreCase("scrollbarStyle")) {
     PRInt32 metricResult;
     lookAndFeel->GetMetric(nsILookAndFeel::eMetric_ScrollArrowStyle, metricResult);
     switch (metricResult) {
@@ -393,7 +420,7 @@ nsBoxObject::GetLookAndFeelMetric(const PRUnichar* aPropertyName,
         break;   
     } 
   }
-  else if (property.LowerCaseEqualsLiteral("thumbstyle")) {
+  else if (property.EqualsIgnoreCase("thumbStyle")) {
     PRInt32 metricResult;
     lookAndFeel->GetMetric(nsILookAndFeel::eMetric_ScrollSliderStyle, metricResult);
     if ( metricResult == nsILookAndFeel::eMetric_ScrollThumbStyleNormal )
@@ -419,23 +446,8 @@ nsBoxObject::GetPropertyAsSupports(const PRUnichar* aPropertyName, nsISupports**
 NS_IMETHODIMP
 nsBoxObject::SetPropertyAsSupports(const PRUnichar* aPropertyName, nsISupports* aValue)
 {
-#ifdef DEBUG
-  if (aValue) {
-    nsIFrame* frame;
-    CallQueryInterface(aValue, &frame);
-    NS_ASSERTION(!frame,
-                 "Calling SetPropertyAsSupports on a frame.  Prepare to crash "
-                 "and be exploited any time some random website decides to "
-                 "exploit you");
-  }
-#endif
-
-  NS_ENSURE_ARG(aPropertyName && *aPropertyName);
-  
-  if (!mPresState) {
-    NS_NewPresState(getter_Transfers(mPresState));
-    NS_ENSURE_TRUE(mPresState, NS_ERROR_OUT_OF_MEMORY);
-  }
+  if (!mPresState)
+    NS_NewPresState(getter_AddRefs(mPresState));
 
   nsDependentString propertyName(aPropertyName);
   return mPresState->SetStatePropertyAsSupports(propertyName, aValue);
@@ -444,8 +456,6 @@ nsBoxObject::SetPropertyAsSupports(const PRUnichar* aPropertyName, nsISupports* 
 NS_IMETHODIMP
 nsBoxObject::GetProperty(const PRUnichar* aPropertyName, PRUnichar** aResult)
 {
-  NS_ENSURE_ARG(aPropertyName && *aPropertyName);
-  
   if (!mPresState) {
     *aResult = nsnull;
     return NS_OK;
@@ -464,7 +474,7 @@ NS_IMETHODIMP
 nsBoxObject::SetProperty(const PRUnichar* aPropertyName, const PRUnichar* aPropertyValue)
 {
   if (!mPresState)
-    NS_NewPresState(getter_Transfers(mPresState));
+    NS_NewPresState(getter_AddRefs(mPresState));
 
   nsDependentString propertyName(aPropertyName);
   nsDependentString propertyValue(aPropertyValue);
@@ -498,59 +508,61 @@ nsBoxObject::GetParentBox(nsIDOMElement * *aParentBox)
 NS_IMETHODIMP 
 nsBoxObject::GetFirstChild(nsIDOMElement * *aFirstVisibleChild)
 {
-  *aFirstVisibleChild = nsnull;
-  nsIFrame* frame = GetFrame();
-  if (!frame) return NS_OK;
-  nsIFrame* firstFrame = frame->GetFirstChild(nsnull);
-  if (!firstFrame) return NS_OK;
-  // get the content for the box and query to a dom element
-  nsCOMPtr<nsIDOMElement> el = do_QueryInterface(firstFrame->GetContent());
-  el.swap(*aFirstVisibleChild);
+  if (!mContent) {
+    *aFirstVisibleChild = nsnull;
+    return NS_ERROR_NOT_INITIALIZED;
+  }
+  *aFirstVisibleChild = GetChildByOrdinalAt(0);
+  NS_IF_ADDREF(*aFirstVisibleChild);
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsBoxObject::GetLastChild(nsIDOMElement * *aLastVisibleChild)
 {
-  *aLastVisibleChild = nsnull;
-  nsIFrame* frame = GetFrame();
-  if (!frame) return NS_OK;
-  return GetPreviousSibling(frame, nsnull, aLastVisibleChild);
+  if (!mContent) {
+    *aLastVisibleChild = nsnull;
+    return NS_ERROR_NOT_INITIALIZED;
+  }
+
+  PRUint32 count = mContent->GetChildCount();
+
+  if (count > 0) {
+    NS_IF_ADDREF(*aLastVisibleChild = GetChildByOrdinalAt(count-1));
+  } else {
+    *aLastVisibleChild = nsnull;
+  }
+
+  return NS_OK;
 }
 
 NS_IMETHODIMP
 nsBoxObject::GetNextSibling(nsIDOMElement **aNextOrdinalSibling)
 {
-  *aNextOrdinalSibling = nsnull;
   nsIFrame* frame = GetFrame();
   if (!frame) return NS_OK;
   nsIFrame* nextFrame = frame->GetNextSibling();
   if (!nextFrame) return NS_OK;
   // get the content for the box and query to a dom element
   nsCOMPtr<nsIDOMElement> el = do_QueryInterface(nextFrame->GetContent());
-  el.swap(*aNextOrdinalSibling);
+  *aNextOrdinalSibling = el;
+  NS_IF_ADDREF(*aNextOrdinalSibling);
+
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsBoxObject::GetPreviousSibling(nsIDOMElement **aPreviousOrdinalSibling)
 {
-  *aPreviousOrdinalSibling = nsnull;
   nsIFrame* frame = GetFrame();
   if (!frame) return NS_OK;
   nsIFrame* parentFrame = frame->GetParent();
   if (!parentFrame) return NS_OK;
-  return GetPreviousSibling(parentFrame, frame, aPreviousOrdinalSibling);
-}
-
-nsresult
-nsBoxObject::GetPreviousSibling(nsIFrame* aParentFrame, nsIFrame* aFrame,
-                                nsIDOMElement** aResult)
-{
-  nsIFrame* nextFrame = aParentFrame->GetFirstChild(nsnull);
+  
+  nsIFrame* nextFrame = parentFrame->GetFirstChild(nsnull);
   nsIFrame* prevFrame = nsnull;
   while (nextFrame) {
-    if (nextFrame == aFrame)
+    if (nextFrame == frame)
       break;
     prevFrame = nextFrame;
     nextFrame = nextFrame->GetNextSibling();
@@ -559,14 +571,44 @@ nsBoxObject::GetPreviousSibling(nsIFrame* aParentFrame, nsIFrame* aFrame,
   if (!prevFrame) return NS_OK;
   // get the content for the box and query to a dom element
   nsCOMPtr<nsIDOMElement> el = do_QueryInterface(prevFrame->GetContent());
-  el.swap(*aResult);
+  *aPreviousOrdinalSibling = el;
+  NS_IF_ADDREF(*aPreviousOrdinalSibling);
+
   return NS_OK;
+}
+
+nsIDOMElement*
+nsBoxObject::GetChildByOrdinalAt(PRUint32 aIndex)
+{
+  // cast our way down to our nsContainerBox interface
+  nsIFrame* frame = GetFrame();
+  if (!frame) return nsnull;
+  
+  // get the first child box
+  nsIFrame* childFrame = frame->GetFirstChild(nsnull);
+  
+  PRUint32 i = 0;
+  while (childFrame && i < aIndex) {
+    childFrame = childFrame->GetNextSibling();
+    ++i;
+  }
+
+  if (!childFrame) return nsnull;
+
+  // get the content for the box and query to a dom element
+  nsCOMPtr<nsIDOMElement> el = do_QueryInterface(childFrame->GetContent());
+  
+  return el;
 }
 
 nsresult
 nsBoxObject::GetDocShell(nsIDocShell** aResult)
 {
   *aResult = nsnull;
+
+  if (!mPresShell) {
+    return NS_OK;
+  }
 
   nsIFrame *frame = GetFrame();
 
@@ -585,17 +627,9 @@ nsBoxObject::GetDocShell(nsIDocShell** aResult)
   // No nsIFrameFrame available for mContent, try if there's a mapping
   // between mContent's document to mContent's subdocument.
 
-  if (!mContent) {
-    return NS_OK;
-  }
+  nsCOMPtr<nsIDocument> doc;
+  mPresShell->GetDocument(getter_AddRefs(doc));
 
-  // XXXbz sXBL/XBL2 issue -- ownerDocument or currentDocument?
-  nsIDocument *doc = mContent->GetDocument();
-
-  if (!doc) {
-    return NS_OK;
-  }
-  
   nsIDocument *sub_doc = doc->GetSubDocumentFor(mContent);
 
   if (!sub_doc) {

@@ -581,7 +581,6 @@ XPCNativeScriptableSharedMap::~XPCNativeScriptableSharedMap()
 JSBool
 XPCNativeScriptableSharedMap::GetNewOrUsed(JSUint32 flags,
                                            char* name,
-                                           JSBool isGlobal,
                                            XPCNativeScriptableInfo* si)
 {
     NS_PRECONDITION(name,"bad param");
@@ -602,7 +601,7 @@ XPCNativeScriptableSharedMap::GetNewOrUsed(JSUint32 flags,
             new XPCNativeScriptableShared(flags, key.TransferNameOwnership());
         if(!shared)
             return JS_FALSE;
-        shared->PopulateJSClass(isGlobal);
+        shared->PopulateJSClass();
     }
     si->SetScriptableShared(shared);
     return JS_TRUE;
@@ -629,32 +628,6 @@ XPCWrappedNativeProtoMap::XPCWrappedNativeProtoMap(int size)
 }
 
 XPCWrappedNativeProtoMap::~XPCWrappedNativeProtoMap()
-{
-    if(mTable)
-        JS_DHashTableDestroy(mTable);
-}
-
-/***************************************************************************/
-// implement XPCNativeWrapperMap...
-
-// static
-XPCNativeWrapperMap*
-XPCNativeWrapperMap::newMap(int size)
-{
-    XPCNativeWrapperMap* map = new XPCNativeWrapperMap(size);
-    if(map && map->mTable)
-        return map;
-    delete map;
-    return nsnull;
-}
-
-XPCNativeWrapperMap::XPCNativeWrapperMap(int size)
-{
-    mTable = JS_NewDHashTable(JS_DHashGetStubOps(), nsnull,
-                              sizeof(JSDHashEntryStub), size);
-}
-
-XPCNativeWrapperMap::~XPCNativeWrapperMap()
 {
     if(mTable)
         JS_DHashTableDestroy(mTable);

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -50,20 +51,7 @@
 #include "nsCRT.h"
 #include "nsCompressedCharMap.h"
 #include "nsPostScriptObj.h"
-#ifdef MOZ_ENABLE_XFT
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_GLYPH_H
-#include FT_CACHE_H
-#include FT_CACHE_IMAGE_H
-#include FT_OUTLINE_H
-#include FT_OUTLINE_H
-#include FT_TRUETYPE_TABLES_H
-#else
-#ifdef MOZ_ENABLE_FREETYPE2
 #include "nsIFontCatalogService.h"
-#endif
-#endif
 #include "nsVoidArray.h"
 #include "nsHashtable.h"
 
@@ -104,6 +92,7 @@ public:
   NS_IMETHOD  GetMaxAdvance(nscoord &aAdvance);
   NS_IMETHOD  GetAveCharWidth(nscoord &aAveCharWidth);
   NS_IMETHOD  GetSpaceWidth(nscoord& aAveCharWidth);
+  NS_IMETHOD  GetFont(const nsFont *&aFont);
   NS_IMETHOD  GetLangGroup(nsIAtom** aLangGroup);
   NS_IMETHOD  GetFontHandle(nsFontHandle &aHandle);
   NS_IMETHOD  GetStringWidth(const char *String,nscoord &aWidth,nscoord aLength);
@@ -129,6 +118,7 @@ public:
   inline void SetSpaceWidth(nscoord aSpaceWidth) { mSpaceWidth = aSpaceWidth; };
 
   inline nsDeviceContextPS* GetDeviceContext() { return mDeviceContext; }
+  inline nsFont* GetFont() { return mFont; };
   inline nsVoidArray* GetFontsPS() { return mFontsPS; };
   inline nsHashtable *GetFontsAlreadyLoadedList() {return mFontsAlreadyLoaded;};
   inline int GetFontPSState() { return mFontPSState; };
@@ -152,6 +142,7 @@ protected:
   void RealizeFont();
 
   nsDeviceContextPS   *mDeviceContext;
+  nsFont              *mFont;
   nscoord             mHeight;
   nscoord             mAscent;
   nscoord             mDescent;
@@ -190,6 +181,8 @@ public:
                             nsFontMetricsPS* aFontMetrics);
   static nsFontPS* FindFont(PRUnichar aChar, const nsFont& aFont, 
                             nsFontMetricsPS* aFontMetrics);
+  static nsPSFontGenerator* GetPSFontGenerator(nsFontMetricsPS* aFontMetrics,
+                                               nsCStringKey& aKey);
   inline PRInt32 SupportsChar(PRUnichar aChar)
     { return mCCMap && CCMAP_HAS_CHAR(mCCMap, aChar); };
 
@@ -258,112 +251,15 @@ public:
   nsString     mFamilyName;
 };
 
-
-#ifdef MOZ_ENABLE_XFT
-
-#include <X11/Xlib.h>
-#include <X11/Xft/Xft.h>
-
-class nsXftEntry
-{
-public:
-  nsXftEntry(FcPattern *aFontPattern);
-  ~nsXftEntry() {}; 
-
-  FT_Face       mFace;
-  int           mFaceIndex;
-  nsCString     mFontFileName;
-  nsCString     mFamilyName;
-  nsCString     mStyleName;
-
-protected:
-  nsXftEntry() {};
-};
-
-struct fontps {
-  nsXftEntry *entry;
-  nsFontPS   *fontps;
-  FcCharSet  *charset;
-};
-
-struct fontPSInfo {
-  nsVoidArray     *fontps;
-  const nsFont*    nsfont;
-  nsCAutoString    lang;
-  nsHashtable     *alreadyLoaded;
-  nsCStringArray   mFontList;
-  nsAutoVoidArray  mFontIsGeneric;
-  nsCString       *mGenericFont;
-};
-
-class nsFontPSXft : public nsFontPS
-{
-public:
-  static nsFontPS* FindFont(PRUnichar aChar, const nsFont& aFont,
-                            nsFontMetricsPS* aFontMetrics);
-  nsresult         Init(nsXftEntry* aEntry,
-                        nsPSFontGenerator* aPSFontGen);
-  static PRBool CSSFontEnumCallback(const nsString& aFamily, PRBool aGeneric,
-                                    void* aFpi);
-
-  nsFontPSXft(const nsFont& aFont, nsFontMetricsPS* aFontMetrics);
-  virtual ~nsFontPSXft();
-  NS_DECL_AND_IMPL_ZEROING_OPERATOR_NEW
-
-  nscoord GetWidth(const char* aString, PRUint32 aLength);
-  nscoord GetWidth(const PRUnichar* aString, PRUint32 aLength);
-  nscoord DrawString(nsRenderingContextPS* aContext,
-                     nscoord aX, nscoord aY,
-                     const char* aString, PRUint32 aLength);
-  nscoord DrawString(nsRenderingContextPS* aContext,
-                     nscoord aX, nscoord aY,
-                     const PRUnichar* aString, PRUint32 aLength);
-  nsresult RealizeFont(nsFontMetricsPS* aFontMetrics, float dev2app);
-  nsresult SetupFont(nsRenderingContextPS* aContext);
-
-#ifdef MOZ_MATHML
-  nsresult
-  GetBoundingMetrics(const char*        aString,
-                     PRUint32           aLength,
-                     nsBoundingMetrics& aBoundingMetrics);
-  nsresult
-  GetBoundingMetrics(const PRUnichar*   aString,
-                     PRUint32           aLength,
-                     nsBoundingMetrics& aBoundingMetrics);
-#endif
-
-  nsXftEntry *mEntry;
-  FT_Face getFTFace();
-
-protected:
-  PRUint16        mPixelSize;
-  FT_Library      mFreeTypeLibrary;
-  nsCString       mFontNameBase;   // the base name of type 1 (sub) fonts
-  nscoord         mHeight; 
-
-  int     ascent();
-  int     descent();
-  PRBool  getXHeight(unsigned long &aVal);
-  int     max_ascent();
-  int     max_descent();
-  int     max_width();
-  PRBool  superscript_y(long &aVal);
-  PRBool  subscript_y(long &aVal);
-  PRBool  underlinePosition(long &aVal);
-  PRBool  underline_thickness(unsigned long &aVal);
-  nsPSFontGenerator*  mPSFontGenerator;
-};
-
-#else
-
-#ifdef MOZ_ENABLE_FREETYPE2
-#include "nsIFreeType2.h"
-
 typedef struct {
   nsITrueTypeFontCatalogEntry *entry;
   nsFontPS *fontps;
   unsigned short *ccmap;
 } fontps;
+
+#ifdef MOZ_ENABLE_FREETYPE2
+
+#include "nsIFreeType2.h"
 
 typedef struct {
   nsVoidArray *fontps;
@@ -425,8 +321,7 @@ protected:
   nsCOMPtr<nsIFreeType2> mFt2;
   PRUint16        mPixelSize;
   FTC_Image_Desc  mImageDesc;
-  nsCString       mFontNameBase;   // the base name of type 1 (sub) fonts
-  nscoord         mHeight; 
+
 
   static PRBool AddUserPref(nsIAtom *aLang, const nsFont& aFont,
                             fontPSInfo *aFpi);
@@ -443,50 +338,25 @@ protected:
   nsPSFontGenerator*  mPSFontGenerator;
 };
 
-#else // !FREETYPE2 && !XFT
-typedef struct {
-  nsFontPS   *fontps;
-} fontps;
-#endif // MOZ_ENABLE_FREETYPE2
-#endif   // MOZ_ENABLE_XFT
+#endif
 
 class nsPSFontGenerator {
 public:
   nsPSFontGenerator();
   virtual ~nsPSFontGenerator();
   virtual void  GeneratePSFont(FILE* aFile);
-  PRInt32  AddToSubset(PRUnichar aChar);
-  nsString *GetSubset();
-
-  // 256 (PS type 1 encoding vector size) - 1 (1 is for mandatory /.notdef)
-  const static PRUint16 kSubFontSize; 
+  void  AddToSubset(const PRUnichar* aString, PRUint32 aLength);
+  void  AddToSubset(const char* aString, PRUint32 aLength);
 
 protected:
-  // XXX To support non-BMP characters, we may have to use 
-  // nsValueArray with PRUint32
   nsString mSubset;
 };
 
-
-#ifdef MOZ_ENABLE_XFT
-
-class nsXftType1Generator : public nsPSFontGenerator {
-public:
-  nsXftType1Generator();
-  ~nsXftType1Generator();
-  nsresult Init(nsXftEntry* aFce);
-  void  GeneratePSFont(FILE* aFile);
-
-protected:
-  nsXftEntry *mEntry;
-  FT_Library      mFreeTypeLibrary;
-};
-#else
 #ifdef MOZ_ENABLE_FREETYPE2
-class nsFT2Type1Generator : public nsPSFontGenerator {
+class nsFT2Type8Generator : public nsPSFontGenerator {
 public:
-  nsFT2Type1Generator();
-  ~nsFT2Type1Generator();
+  nsFT2Type8Generator();
+  ~nsFT2Type8Generator();
   nsresult Init(nsITrueTypeFontCatalogEntry* aFce);
   void  GeneratePSFont(FILE* aFile);
 
@@ -495,8 +365,7 @@ protected:
   nsCOMPtr<nsIFreeType2> mFt2;
   FTC_Image_Desc  mImageDesc;
 };
-#endif   // MOZ_ENABLE_FREETYPE2
-#endif   // MOZ_ENABLE_XFT
+#endif
 
 #endif
 

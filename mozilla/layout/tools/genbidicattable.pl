@@ -1,40 +1,24 @@
 #!/usr/local/bin/perl
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
+# The contents of this file are subject to the Mozilla Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/MPL/
 #
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
 #
 # The Original Code is mozilla.org code.
 #
-# The Initial Developer of the Original Code is
-# IBM Corporation.
-# Portions created by the Initial Developer are Copyright (C) 2000
-# the Initial Developer. All Rights Reserved.
+# The Initial Developer of the Original Code is IBM
+# Corporation.  Portions created by IBM are
+# Copyright (C) 2000 IBM Corporation. All
+# Rights Reserved.
 #
-# Contributor(s):
+# Contributor(s): 
 #
-# Alternatively, the contents of this file may be used under the terms of
-# either of the GNU General Public License Version 2 or later (the "GPL"),
-# or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
 
 ######################################################################
 #
@@ -82,7 +66,7 @@ open ( UNICODATA , "< UnicodeData-Latest.txt")
 # Open the output file
 #
 ######################################################################
-open ( OUT , "> ../base/bidicattable.h") 
+open ( OUT , "> ../base/src/bidicattable.h") 
   || die "cannot open output ../base/src/bidicattable.h file";
 
 ######################################################################
@@ -93,41 +77,21 @@ open ( OUT , "> ../base/bidicattable.h")
 $npl = <<END_OF_NPL;
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "MPL"); you may not use this file except in
+ * compliance with the MPL.  You may obtain a copy of the MPL at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * Software distributed under the MPL is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the MPL
  * for the specific language governing rights and limitations under the
- * License.
+ * MPL.
  *
- * The Original Code is mozilla.org Code.
- *
- * The Initial Developer of the Original Code is
- * IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * The Initial Developer of the Original Code is IBM
+ * Corporation.  Portions created by IBM are
+ * Copyright (C) 2000 IBM Corporation. All
+ * Rights Reserved.
+ */
 /* 
     DO NOT EDIT THIS DOCUMENT !!! THIS DOCUMENT IS GENERATED BY
     mozilla/layout/tools/genbidicattable.pl
@@ -193,21 +157,12 @@ while(<UNICODATA>) {
 # XXX - How can this be made more flexible as new blocks are added to the UCDB?
 
 @range = (
-  0x0000,   0x07ff, 
-  0x0900,   0x1b7f,
-  0x1d00,   0x2ddf,
-  0x2e00,   0x33ff,
-  0x4dc0,   0x4dff,
-  0xa000,   0xa87f,
-  0xf900,  0x1018f,
-  0x10300, 0x104ff,
-  0x10800, 0x1083f,
-  0x10900, 0x1091f,
-  0x10a00, 0x10a5f,
-  0x12000, 0x1247f,
-  0x1d000, 0x1d7ff,
-  0x2f800, 0x2fa1f,
-  0xe0000, 0xe01ff  
+  0x0000, 0x07ff, 
+  0x0900, 0x18ff,
+  0x1e00, 0x28ff,
+  0x2e80, 0x33ff,
+  0xa000, 0xa4ff,	  
+  0xf900, 0xffff
 );
 
 
@@ -240,19 +195,15 @@ for($t = 1; $t <= $tt; $t++)
 		      
 		for($j = 0; $j < 8 ; $j++)
 		{
-			#defaults for unassigned characters
-		        #see http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt
-		        #and http://www.unicode.org/Public/UNIDATA/Blocks.txt
+			#defaults for unassigned characters -- see table 3.7 in the Unicode Bidi Algorithm
 			$test = ($i << 3) + $j;
-			if ((($test >= 0x0590) && ($test <= 0x5FF)) ||
-			    (($test >= 0x07C0) && ($test <= 0x8FF)) ||
-			    (($test >= 0xFB1D) && ($test <= 0xFB4F)) ||
-			    (($test >= 0x10800) && ($test <=0x10FFF)))
+			if ((($test >= 0x0590) && ($test <= 0x5FF))
+				  || (($test >= 0xFB1D) && ($test <= 0xFB4F)))
 			{
 				$default = $map{"R"};
-			} elsif ((($test >= 0x0600) && ($test <= 0x7BF)) ||
-				 (($test >= 0xFB50) && ($test <= 0xFDFF)) ||
-				 (($test >= 0xFE70) && ($test <= 0xFEFE)))
+			} elsif ((($test >= 0x0600) && ($test <= 0x7BF))
+					   || (($test >= 0xFB50) && ($test <= 0xFDFF))
+					   || (($test >= 0xFE70) && ($test <= 0xFEFF)))
 			{
 				$default = $map{"AL"};
 			} else
@@ -329,9 +280,35 @@ for($i = 0 ; $i < $newidx; $i++)
 printf OUT "};\n\n";
 $totaldata += $newidx * 4;
 
-printf OUT "static eBidiCategory GetBidiCat(PRUint32 u)\n{\n";
+printf OUT "static eBidiCategory GetBidiCat(PRUnichar u)\n{\n";
 printf OUT "    PRUint32 pat;\n";
 printf OUT "    PRUint16 patidx;\n\n";
+printf OUT "    /*  Handle blocks which use index table mapping */   \n\n";
+for($t = 1; $t <= $tt; $t++)
+{
+   $tl = $range[($t-1) * 2];
+   $th = $range[($t-1) * 2 + 1];
+   if ($tl == 0) {
+	   printf OUT "    /* Handle U+%04X to U+%04X */\n", $tl, $th;
+	   printf OUT "    if (u<=((PRUnichar)0x%04X)) {\n", $th;
+	   printf OUT "        patidx = gBidiCatIdx%d [( u  >> 3 )];\n", $t;
+   } elsif ($th == 0xFFFF) {
+	   printf OUT "    /* Handle U+%04X to U+%04X */\n", $tl, $th;
+	   printf OUT "    if (((PRUnichar)0x%04X)<=u) {\n", $tl;
+	   printf OUT "        patidx = gBidiCatIdx%d [( (u -(PRUnichar) 0x%04X) >> 3 )];\n", $t, $tl;
+   } else {
+	   printf OUT "    /* Handle U+%04X to U+%04X */\n", $tl, $th;
+	   printf OUT "    if ((((PRUnichar)0x%04X)<=u)&&(u<=((PRUnichar)0x%04X))) {\n", $tl, $th;
+	   printf OUT "        patidx = gBidiCatIdx%d [( (u -(PRUnichar) 0x%04X) >> 3 )];\n", $t, $tl;
+   }
+   printf OUT "        if (patidx < 0x10)\n";
+   printf OUT "            return (eBidiCategory)patidx;\n";
+   printf OUT "        else {\n";
+   printf OUT "            pat = gBidiCatPat[patidx];\n";
+   printf OUT "            return (eBidiCategory)((pat  >> ((u % 8) * 4)) & 0x0F);\n";
+   printf OUT "        }\n";
+   printf OUT "    }\n\n";
+}
 
 @special = keys(%sh);
 $sp = 0;
@@ -344,51 +321,14 @@ foreach $s ( sort(@special) ) {
 			printf OUT "    /*  Handle blocks which share the same category */\n\n";
 		}
 		printf OUT "    /* Handle %s block */\n", substr($s, 1);
-		printf OUT "    if((((PRUint32)0x%s)<=u)&&(u<=((PRUint32)0x%s))) \n", $sl{$s}, $sh{$s};
+		printf OUT "    if((((PRUnichar)0x%s)<=u)&&(u<=((PRUnichar)0x%s))) \n", $sl{$s}, $sh{$s};
 		printf OUT "        return eBidiCat_$by_value{$sc{$s}}; \n\n";
 	}
 }
 
-printf OUT "    /*  Handle blocks which use index table mapping */   \n\n";
-for($t = 1; $t <= $tt; $t++)
-{
-   $tl = $range[($t-1) * 2];
-   $th = $range[($t-1) * 2 + 1];
-   if ($tl == 0) {
-	   printf OUT "    /* Handle U+%04X to U+%04X */\n", $tl, $th;
-	   printf OUT "    if (u<=((PRUint32)0x%04X)) {\n", $th;
-	   printf OUT "        patidx = gBidiCatIdx%d [( u  >> 3 )];\n", $t;
-   } else {
-	   printf OUT "    /* Handle U+%04X to U+%04X */\n", $tl, $th;
-	   printf OUT "    else if ((((PRUint32)0x%04X)<=u)&&(u<=((PRUint32)0x%04X))) {\n", $tl, $th;
-	   printf OUT "        patidx = gBidiCatIdx%d [( (u -(PRUint32) 0x%04X) >> 3 )];\n", $t, $tl;
-   }
-   printf OUT "    }\n\n";
-}
-printf OUT "    else {\n";
-printf OUT "      /* defaults for unassigned characters\n";
-printf OUT "       * see http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt\n";
-printf OUT "       * and http://www.unicode.org/Public/UNIDATA/Blocks.txt\n";
-printf OUT "       */\n";
-printf OUT "      if (((u >= 0x0590) && (u <= 0x05FF)) ||\n";
-printf OUT "          ((u >= 0x07C0) && (u <= 0x08FF)) ||\n";
-printf OUT "          ((u >= 0xFB1D) && (u <= 0xFB4F)) ||\n";
-printf OUT "          ((u >= 0x10800) && (u <=0x10FFF)))\n";
-printf OUT "         return eBidiCat_R;\n";
-printf OUT "      else if (((u >= 0x0600) && (u <= 0x07BF)) ||\n";
-printf OUT "               ((u >= 0xFB50) && (u <= 0xFDFF)) ||\n";
-printf OUT "               ((u >= 0xFE70) && (u <= 0xFEFE)))\n";
-printf OUT "         return eBidiCat_AL;\n";
-printf OUT "      else\n";
-printf OUT "        return eBidiCat_L;\n";
-printf OUT "    }\n\n";
 
-printf OUT "    if (patidx < 0x10)\n";
-printf OUT "        return (eBidiCategory)patidx;\n";
-printf OUT "    else {\n";
-printf OUT "        pat = gBidiCatPat[patidx];\n";
-printf OUT "        return (eBidiCategory)((pat  >> ((u % 8) * 4)) & 0x0F);\n";
-printf OUT "    }\n}\n\n";
+
+printf OUT "    return eBidiCat_L; /* UNDEFINE = L */\n}\n";
 
 printf OUT "/* total data size = $totaldata */\n";
 print "total = $totaldata\n";

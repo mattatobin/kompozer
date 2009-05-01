@@ -1,12 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ts=2 sw=2 et tw=80: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,7 +41,6 @@
 #include "nsIDocument.h"
 #include "nsXBLPrototypeBinding.h"
 #include "nsIScriptObjectPrincipal.h"
-#include "nsIScriptGlobalObject.h"
 #include "nsIScriptContext.h"
 #include "nsIDOMScriptObjectFactory.h"
 #include "jsapi.h"
@@ -50,8 +49,7 @@
 #include "nsIScriptError.h"
 #include "nsIChromeRegistry.h"
 #include "nsIPrincipal.h"
-#include "nsIScriptSecurityManager.h"
-#include "nsContentUtils.h"
+#include "nsIPrincipalObsolete.h"
 
 static NS_DEFINE_CID(kDOMScriptObjectFactoryCID, NS_DOM_SCRIPT_OBJECT_FACTORY_CID);
 
@@ -70,7 +68,6 @@ public:
   virtual void SetContext(nsIScriptContext *aContext);
   virtual nsIScriptContext *GetContext();
   virtual nsresult SetNewDocument(nsIDOMDocument *aDocument,
-                                  nsISupports *aState,
                                   PRBool aRemoveEventListeners,
                                   PRBool aClearScope);
   virtual void SetDocShell(nsIDocShell *aDocShell);
@@ -78,7 +75,7 @@ public:
   virtual void SetOpenerWindow(nsIDOMWindowInternal *aOpener);
   virtual void SetGlobalObjectOwner(nsIScriptGlobalObjectOwner* aOwner);
   virtual nsIScriptGlobalObjectOwner *GetGlobalObjectOwner();
-  virtual nsresult HandleDOMEvent(nsPresContext* aPresContext, 
+  virtual nsresult HandleDOMEvent(nsIPresContext* aPresContext, 
                                   nsEvent* aEvent, 
                                   nsIDOMEvent** aDOMEvent,
                                   PRUint32 aFlags,
@@ -86,14 +83,11 @@ public:
   virtual JSObject *GetGlobalJSObject();
   virtual void OnFinalize(JSObject *aObject);
   virtual void SetScriptsEnabled(PRBool aEnabled, PRBool aFireTimeouts);
-  virtual nsresult SetNewArguments(PRUint32 aArgc, void* aArgv);
 
   // nsIScriptObjectPrincipal methods
-  virtual nsIPrincipal* GetPrincipal();
-
-  static JSBool doCheckAccess(JSContext *cx, JSObject *obj, jsval id,
-                              PRUint32 accessType);
-
+  NS_IMETHOD GetPrincipalObsolete(nsIPrincipalObsolete** aPrincipal);
+  NS_IMETHOD GetPrincipal(nsIPrincipal** aPrincipal);
+    
 protected:
   virtual ~nsXBLDocGlobalObject();
 
@@ -104,63 +98,7 @@ protected:
   static JSClass gSharedGlobalClass;
 };
 
-JSBool
-nsXBLDocGlobalObject::doCheckAccess(JSContext *cx, JSObject *obj, jsval id, PRUint32 accessType)
-{
-  nsIScriptSecurityManager *ssm = nsContentUtils::GetSecurityManager();
-  if (!ssm) {
-    ::JS_ReportError(cx, "Unable to verify access to a global object property.");
-    return JS_FALSE;
-  }
-
-  // Make sure to actually operate on our object, and not some object further
-  // down on the proto chain.
-  while (JS_GET_CLASS(cx, obj) != &nsXBLDocGlobalObject::gSharedGlobalClass) {
-    obj = ::JS_GetPrototype(cx, obj);
-    if (!obj) {
-      ::JS_ReportError(cx, "Invalid access to a global object property.");
-      return JS_FALSE;
-    }
-  }
-
-  nsresult rv = ssm->CheckPropertyAccess(cx, obj, JS_GET_CLASS(cx, obj)->name,
-                                         id, accessType);
-  return NS_SUCCEEDED(rv);
-}
-
-PR_STATIC_CALLBACK(JSBool)
-nsXBLDocGlobalObject_getProperty(JSContext *cx, JSObject *obj,
-                                 jsval id, jsval *vp)
-{
-  return nsXBLDocGlobalObject::
-    doCheckAccess(cx, obj, id, nsIXPCSecurityManager::ACCESS_GET_PROPERTY);
-}
-
-PR_STATIC_CALLBACK(JSBool)
-nsXBLDocGlobalObject_setProperty(JSContext *cx, JSObject *obj,
-                                 jsval id, jsval *vp)
-{
-  return nsXBLDocGlobalObject::
-    doCheckAccess(cx, obj, id, nsIXPCSecurityManager::ACCESS_SET_PROPERTY);
-}
-
-PR_STATIC_CALLBACK(JSBool)
-nsXBLDocGlobalObject_checkAccess(JSContext *cx, JSObject *obj, jsval id,
-                                 JSAccessMode mode, jsval *vp)
-{
-  PRUint32 translated;
-  if (mode & JSACC_WRITE) {
-    translated = nsIXPCSecurityManager::ACCESS_SET_PROPERTY;
-  } else {
-    translated = nsIXPCSecurityManager::ACCESS_GET_PROPERTY;
-  }
-
-  return nsXBLDocGlobalObject::
-    doCheckAccess(cx, obj, id, translated);
-}
-
-PR_STATIC_CALLBACK(void)
-nsXBLDocGlobalObject_finalize(JSContext *cx, JSObject *obj)
+void PR_CALLBACK nsXBLDocGlobalObject_finalize(JSContext *cx, JSObject *obj)
 {
   nsISupports *nativeThis = (nsISupports*)JS_GetPrivate(cx, obj);
 
@@ -173,8 +111,8 @@ nsXBLDocGlobalObject_finalize(JSContext *cx, JSObject *obj)
   NS_RELEASE(nativeThis);
 }
 
-PR_STATIC_CALLBACK(JSBool)
-nsXBLDocGlobalObject_resolve(JSContext *cx, JSObject *obj, jsval id)
+
+JSBool PR_CALLBACK nsXBLDocGlobalObject_resolve(JSContext *cx, JSObject *obj, jsval id)
 {
   JSBool did_resolve = JS_FALSE;
   return JS_ResolveStandardClass(cx, obj, id, &did_resolve);
@@ -183,12 +121,10 @@ nsXBLDocGlobalObject_resolve(JSContext *cx, JSObject *obj, jsval id)
 
 JSClass nsXBLDocGlobalObject::gSharedGlobalClass = {
     "nsXBLPrototypeScript compilation scope",
-    JSCLASS_HAS_PRIVATE | JSCLASS_PRIVATE_IS_NSISUPPORTS | JSCLASS_GLOBAL_FLAGS,
-    JS_PropertyStub,  JS_PropertyStub,
-    nsXBLDocGlobalObject_getProperty, nsXBLDocGlobalObject_setProperty,
-    JS_EnumerateStub, nsXBLDocGlobalObject_resolve,
-    JS_ConvertStub, nsXBLDocGlobalObject_finalize,
-    NULL, nsXBLDocGlobalObject_checkAccess
+    JSCLASS_HAS_PRIVATE | JSCLASS_PRIVATE_IS_NSISUPPORTS,
+    JS_PropertyStub,  JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
+    JS_EnumerateStub, nsXBLDocGlobalObject_resolve,  JS_ConvertStub,
+    nsXBLDocGlobalObject_finalize
 };
 
 //----------------------------------------------------------------------
@@ -285,7 +221,6 @@ nsXBLDocGlobalObject::GetContext()
 
 nsresult
 nsXBLDocGlobalObject::SetNewDocument(nsIDOMDocument *aDocument,
-                                     nsISupports *aState,
                                      PRBool aRemoveEventListeners,
                                      PRBool aClearScope)
 {
@@ -331,7 +266,7 @@ nsXBLDocGlobalObject::GetGlobalObjectOwner()
 
 
 nsresult
-nsXBLDocGlobalObject::HandleDOMEvent(nsPresContext* aPresContext, 
+nsXBLDocGlobalObject::HandleDOMEvent(nsIPresContext* aPresContext, 
                                        nsEvent* aEvent, 
                                        nsIDOMEvent** aDOMEvent,
                                        PRUint32 aFlags,
@@ -372,41 +307,56 @@ nsXBLDocGlobalObject::SetScriptsEnabled(PRBool aEnabled, PRBool aFireTimeouts)
     // We don't care...
 }
 
-nsresult
-nsXBLDocGlobalObject::SetNewArguments(PRUint32 aArgc, void* aArgv)
-{
-  NS_NOTREACHED("waaah!");
-  return NS_ERROR_UNEXPECTED;
-}
 
 //----------------------------------------------------------------------
 //
 // nsIScriptObjectPrincipal methods
 //
 
-nsIPrincipal*
-nsXBLDocGlobalObject::GetPrincipal()
+NS_IMETHODIMP
+nsXBLDocGlobalObject::GetPrincipalObsolete(nsIPrincipalObsolete** aPrincipal)
+{
+  nsCOMPtr<nsIPrincipal> principal;
+  nsresult rv = nsXBLDocGlobalObject::GetPrincipal(getter_AddRefs(principal));
+  if (principal)
+    CallQueryInterface(principal, aPrincipal);
+  else
+    *aPrincipal = nsnull;
+
+  return rv;
+}
+
+NS_IMETHODIMP
+nsXBLDocGlobalObject::GetPrincipal(nsIPrincipal** aPrincipal)
 {
   nsresult rv = NS_OK;
   if (!mGlobalObjectOwner) {
-    return nsnull;
+    *aPrincipal = nsnull;
+    return NS_ERROR_FAILURE;
   }
 
   nsCOMPtr<nsIXBLDocumentInfo> docInfo = do_QueryInterface(mGlobalObjectOwner, &rv);
-  NS_ENSURE_SUCCESS(rv, nsnull);
+  NS_ENSURE_SUCCESS(rv, NS_ERROR_FAILURE);
 
   nsCOMPtr<nsIDocument> document;
   rv = docInfo->GetDocument(getter_AddRefs(document));
-  NS_ENSURE_SUCCESS(rv, nsnull);
+  NS_ENSURE_SUCCESS(rv, NS_ERROR_FAILURE);
 
-  return document->GetPrincipal();
+  *aPrincipal = document->GetPrincipal();
+  if (!*aPrincipal)
+    return NS_ERROR_FAILURE;
+
+  NS_ADDREF(*aPrincipal);
+  return NS_OK;
 }
 
-static PRBool IsChromeURI(nsIURI* aURI)
+static PRBool IsChromeOrResourceURI(nsIURI* aURI)
 {
   PRBool isChrome = PR_FALSE;
-  if (NS_SUCCEEDED(aURI->SchemeIs("chrome", &isChrome)))
-      return isChrome;
+  PRBool isResource = PR_FALSE;
+  if (NS_SUCCEEDED(aURI->SchemeIs("chrome", &isChrome)) && 
+      NS_SUCCEEDED(aURI->SchemeIs("resource", &isResource)))
+      return (isChrome || isResource);
   return PR_FALSE;
 }
 
@@ -416,19 +366,17 @@ NS_IMPL_ISUPPORTS3(nsXBLDocumentInfo, nsIXBLDocumentInfo, nsIScriptGlobalObjectO
 nsXBLDocumentInfo::nsXBLDocumentInfo(nsIDocument* aDocument)
   : mDocument(aDocument),
     mScriptAccess(PR_TRUE),
-    mIsChrome(PR_FALSE),
     mBindingTable(nsnull)
 {
   nsIURI* uri = aDocument->GetDocumentURI();
-  if (IsChromeURI(uri)) {
+  if (IsChromeOrResourceURI(uri)) {
     // Cache whether or not this chrome XBL can execute scripts.
     nsCOMPtr<nsIXULChromeRegistry> reg(do_GetService(NS_CHROMEREGISTRY_CONTRACTID));
     if (reg) {
       PRBool allow = PR_TRUE;
-      reg->AllowScriptsForPackage(uri, &allow);
-      mScriptAccess = allow;
+      reg->AllowScriptsForSkin(uri, &allow);
+      SetScriptAccess(allow);
     }
-    mIsChrome = PR_TRUE;
   }
 }
 
@@ -498,20 +446,38 @@ nsXBLDocumentInfo::FlushSkinStylesheets()
 // nsIScriptGlobalObjectOwner methods
 //
 
-nsIScriptGlobalObject*
-nsXBLDocumentInfo::GetScriptGlobalObject()
+NS_IMETHODIMP
+nsXBLDocumentInfo::GetScriptGlobalObject(nsIScriptGlobalObject** _result)
 {
   if (!mGlobalObject) {
     
     mGlobalObject = new nsXBLDocGlobalObject();
     
-    if (!mGlobalObject)
-      return nsnull;
-
+    if (!mGlobalObject) {
+      *_result = nsnull;
+      return NS_ERROR_OUT_OF_MEMORY;
+    }
+   
     mGlobalObject->SetGlobalObjectOwner(this); // does not refcount
   }
 
-  return mGlobalObject;
+  *_result = mGlobalObject;
+  NS_ADDREF(*_result);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsXBLDocumentInfo::ReportScriptError(nsIScriptError *errorObject)
+{
+  if (errorObject == nsnull)
+    return NS_ERROR_NULL_POINTER;
+
+  // Get the console service, where we're going to register the error.
+  nsCOMPtr<nsIConsoleService> consoleService  (do_GetService("@mozilla.org/consoleservice;1"));
+
+  if (!consoleService)
+    return NS_ERROR_NOT_AVAILABLE;
+  return consoleService->LogMessage(errorObject);
 }
 
 nsresult NS_NewXBLDocumentInfo(nsIDocument* aDocument, nsIXBLDocumentInfo** aResult)
@@ -526,3 +492,4 @@ nsresult NS_NewXBLDocumentInfo(nsIDocument* aDocument, nsIXBLDocumentInfo** aRes
   NS_ADDREF(*aResult);
   return NS_OK;
 }
+

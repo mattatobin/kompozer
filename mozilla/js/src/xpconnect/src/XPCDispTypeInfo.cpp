@@ -122,7 +122,7 @@ XPCDispJSPropertyInfo::XPCDispJSPropertyInfo(JSContext* cx, PRUint32 memid,
     if(!chars)
         return;
 
-    mName = nsString(NS_REINTERPRET_CAST(const PRUnichar *, chars), len);
+    mName = nsString(chars, len);
     JSBool found;
     uintN attr;
     // Get the property's attributes, and make sure it's found and enumerable 

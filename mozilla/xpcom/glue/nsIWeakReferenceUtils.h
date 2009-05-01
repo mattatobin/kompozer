@@ -1,11 +1,11 @@
 /* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Scott Collins <scc@mozilla.org> (Original Author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -64,7 +64,7 @@ CallQueryReferent( T* aSource, DestinationType** aDestination )
   }
 
 
-class NS_COM_GLUE nsQueryReferent : public nsCOMPtr_helper
+class NS_COM nsQueryReferent : public nsCOMPtr_helper
   {
     public:
       nsQueryReferent( nsIWeakReference* aWeakPtr, nsresult* error )
@@ -74,7 +74,7 @@ class NS_COM_GLUE nsQueryReferent : public nsCOMPtr_helper
           // nothing else to do here
         }
 
-      virtual nsresult NS_FASTCALL operator()( const nsIID& aIID, void** ) const;
+      virtual nsresult operator()( const nsIID& aIID, void** ) const;
 
     private:
       nsIWeakReference*  mWeakPtr;
@@ -89,12 +89,23 @@ do_QueryReferent( nsIWeakReference* aRawPtr, nsresult* error = 0 )
   }
 
 
-  /**
-   * Deprecated, use |do_GetWeakReference| instead.
-   */
-extern NS_COM_GLUE
-nsIWeakReference*
-NS_GetWeakReference( nsISupports* , nsresult* aResult=0 );
+
+class NS_COM nsGetWeakReference : public nsCOMPtr_helper
+  {
+    public:
+      nsGetWeakReference( nsISupports* aRawPtr, nsresult* error )
+          : mRawPtr(aRawPtr),
+            mErrorPtr(error)
+        {
+          // nothing else to do here
+        }
+
+      virtual nsresult operator()( const nsIID&, void** ) const;
+
+    private:
+      nsISupports*  mRawPtr;
+      nsresult*     mErrorPtr;
+  };
 
   /**
    * |do_GetWeakReference| is a convenience function that bundles up all the work needed
@@ -104,10 +115,10 @@ NS_GetWeakReference( nsISupports* , nsresult* aResult=0 );
    * |nsWeakPtr myWeakPtr = do_GetWeakReference(aPtr);|.
    */
 inline
-already_AddRefed<nsIWeakReference>
+const nsGetWeakReference
 do_GetWeakReference( nsISupports* aRawPtr, nsresult* error = 0 )
   {
-    return NS_GetWeakReference(aRawPtr, error);
+    return nsGetWeakReference(aRawPtr, error);
   }
 
 inline
@@ -138,5 +149,14 @@ do_GetWeakReference( already_AddRefed<T>&, nsresult* )
     //  Saying |do_GetWeakReference()| on a pointer that is not otherwise owned by
     //  someone else is an automatic leak.  See <http://bugzilla.mozilla.org/show_bug.cgi?id=8221>.
   }
+
+
+
+  /**
+   * Deprecated, use |do_GetWeakReference| instead.
+   */
+extern NS_COM
+nsIWeakReference*
+NS_GetWeakReference( nsISupports* , nsresult* aResult=0 );
 
 #endif

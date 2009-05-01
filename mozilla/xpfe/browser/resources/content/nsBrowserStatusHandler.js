@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Peter Annema <disttsc@bart.nl>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -66,7 +66,6 @@ nsBrowserStatusHandler.prototype =
     this.urlBar          = document.getElementById("urlbar");
     this.throbberElement = document.getElementById("navigator-throbber");
     this.statusMeter     = document.getElementById("statusbar-icon");
-    this.statusPanel     = document.getElementById("progress-panel");
     this.stopButton      = document.getElementById("stop-button");
     this.stopMenu        = document.getElementById("menuitem-stop");
     this.stopContext     = document.getElementById("context-stop");
@@ -85,7 +84,6 @@ nsBrowserStatusHandler.prototype =
     this.urlBar          = null;
     this.throbberElement = null;
     this.statusMeter     = null;
-    this.statusPanel     = null;
     this.stopButton      = null;
     this.stopMenu        = null;
     this.stopContext     = null;
@@ -149,6 +147,12 @@ nsBrowserStatusHandler.prototype =
       var browser = getBrowser();
       if (browser.userTypedValue === null)
         gProxyFavIcon.setAttribute("src", aHref);
+
+      // update any bookmarks with new icon reference
+      if (!gBookmarksService)
+        gBookmarksService = Components.classes["@mozilla.org/browser/bookmarks-service;1"]
+                                      .getService(Components.interfaces.nsIBookmarksService);
+      gBookmarksService.updateBookmarkIcon(browser.currentURI.spec, aHref);
     }
   },
 
@@ -180,8 +184,6 @@ nsBrowserStatusHandler.prototype =
           aRequest && aWebProgress.DOMWindow == content)
         this.startDocumentLoad(aRequest);
 
-      // Show the progress meter
-      this.statusPanel.hidden = false;
       // Turn the throbber on.
       this.throbberElement.setAttribute("busy", "true");
 
@@ -204,8 +206,14 @@ nsBrowserStatusHandler.prototype =
       if (aRequest) {
         var msg = "";
         // Get the channel if the request is a channel
-        if (aRequest instanceof nsIChannel) {
-          var location = aRequest.URI.spec;
+        var channel;
+        try {
+          channel = aRequest.QueryInterface(nsIChannel);
+        }
+        catch(e) { };
+
+        if (channel) {
+          var location = channel.URI.spec;
           if (location != "about:blank") {
             const kErrorBindingAborted = 0x804B0002;
             const kErrorNetTimeout = 0x804B000E;
@@ -235,7 +243,6 @@ nsBrowserStatusHandler.prototype =
       }
 
       // Turn the progress meter and throbber off.
-      this.statusPanel.hidden = true;
       this.statusMeter.value = 0;  // be sure to clear the progress bar
       this.throbberElement.removeAttribute("busy");
 
@@ -249,22 +256,6 @@ nsBrowserStatusHandler.prototype =
 
   onLocationChange : function(aWebProgress, aRequest, aLocation)
   {
-    if (gContextMenu) {
-      // Optimise for the common case
-      if (aWebProgress.DOMWindow == content)
-        gContextMenu.menu.hidePopup();
-      else {
-        for (var contextWindow = gContextMenu.target.ownerDocument.defaultView;
-             contextWindow != contextWindow.parent;
-             contextWindow = contextWindow.parent) {
-          if (contextWindow == aWebProgress.DOMWindow) {
-            gContextMenu.menu.hidePopup();
-            break;
-          }
-        }
-      }
-    }
-
     // XXX temporary hack for bug 104532.
     // Depends heavily on setOverLink implementation
     if (!aRequest)
@@ -291,7 +282,7 @@ nsBrowserStatusHandler.prototype =
       }
     }
 
-    if (!getWebNavigation().canGoBack && location == "about:blank" && !content.opener)
+    if (!getWebNavigation().canGoBack && location == "about:blank")
       location = "";
 
     // Disable menu entries for images, enable otherwise
@@ -314,6 +305,10 @@ nsBrowserStatusHandler.prototype =
       var userTypedValue = browser.userTypedValue;
       if (userTypedValue === null) {
         this.urlBar.value = location;
+        if (this.urlBar.value != location) {
+          this.urlBar.value = ""; // hack for bug 249322
+          this.urlBar.value = location;
+        }
         SetPageProxyState("valid", aLocation);
 
         // Setting the urlBar value in some cases causes userTypedValue to
@@ -335,7 +330,6 @@ nsBrowserStatusHandler.prototype =
     if (blank ||
         !("popupDomain" in browser)) {
       browser.popupDomain = null;
-      browser.popups = [];
     }
     else {
       var hostPort = "";
@@ -343,10 +337,8 @@ nsBrowserStatusHandler.prototype =
         hostPort = locationURI.hostPort;
       }
       catch(ex) { }
-      if (hostPort != browser.popupDomain) {
+      if (hostPort != browser.popupDomain)
         browser.popupDomain = null;
-        browser.popups = [];
-      }
     }
 
     var popupIcon = document.getElementById("popupIcon");
@@ -366,20 +358,16 @@ nsBrowserStatusHandler.prototype =
     switch (aState) {
       case wpl.STATE_IS_SECURE | wpl.STATE_SECURE_HIGH:
         this.securityButton.setAttribute("level", "high");
-        this.urlBar.setAttribute("level", "high");
         break;
       case wpl.STATE_IS_SECURE | wpl.STATE_SECURE_LOW:
         this.securityButton.setAttribute("level", "low");
-        this.urlBar.setAttribute("level", "low");
         break;
       case wpl.STATE_IS_BROKEN:
         this.securityButton.setAttribute("level", "broken");
-        this.urlBar.setAttribute("level", "broken");
         break;
       case wpl.STATE_IS_INSECURE:
       default:
         this.securityButton.removeAttribute("level");
-        this.urlBar.removeAttribute("level");
         break;
     }
 
@@ -404,7 +392,7 @@ nsBrowserStatusHandler.prototype =
     var observerService = Components.classes["@mozilla.org/observer-service;1"]
                                     .getService(Components.interfaces.nsIObserverService);
     try {
-      observerService.notifyObservers(content, "StartDocumentLoad", urlStr);
+      observerService.notifyObservers(_content, "StartDocumentLoad", urlStr);
     } catch (e) {
     }
   },
@@ -437,7 +425,7 @@ nsBrowserStatusHandler.prototype =
 
     var notification = Components.isSuccessCode(aStatus) ? "EndDocumentLoad" : "FailDocumentLoad";
     try {
-      observerService.notifyObservers(content, notification, urlStr);
+      observerService.notifyObservers(_content, notification, urlStr);
     } catch (e) {
     }
   }

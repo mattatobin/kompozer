@@ -1,57 +1,42 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  * Contributor(s):
- *   Ian Oeschger <oeschger@brownhen.com> (Original Author)
- *   Peter Wilson (added sidebar tabs)
- *   R.J. Keller <rlk@trfenv.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *    Ian Oeschger <oeschger@brownhen.com> (Original Author)
+ *    Peter Wilson (added sidebar tabs)
+ *    R.J. Keller <rlk@trfenv.com>
+ */
 
 //-------- global variables
 var helpBrowser;
-var helpExternal;
+var helpWindow;
 var helpSearchPanel;
 var emptySearch;
-var emptySearchText = "No search items found.";
-var emptySearchLink = "about:blank";
+var emptySearchText
+var emptySearchLink
 var helpTocPanel;
 var helpIndexPanel;
 var helpGlossaryPanel;
 
 // Namespaces
 const NC = "http://home.netscape.com/NC-rdf#";
+const SN = "rdf:http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+const XML = "http://www.w3.org/XML/1998/namespace#"
 const MAX_LEVEL = 40; // maximum depth of recursion in search datasources.
 
 // Resources
@@ -59,7 +44,6 @@ const RDF = Components.classes["@mozilla.org/rdf/rdf-service;1"].getService(Comp
 const RDF_ROOT = RDF.GetResource("urn:root");
 const NC_PANELLIST = RDF.GetResource(NC + "panellist");
 const NC_PANELID = RDF.GetResource(NC + "panelid");
-const NC_PLATFORM = RDF.GetResource(NC + "platform");
 const NC_EMPTY_SEARCH_TEXT = RDF.GetResource(NC + "emptysearchtext");
 const NC_EMPTY_SEARCH_LINK = RDF.GetResource(NC + "emptysearchlink");
 const NC_DATASOURCES = RDF.GetResource(NC + "datasources");
@@ -72,9 +56,10 @@ const NC_BASE = RDF.GetResource(NC + "base");
 const NC_DEFAULTTOPIC = RDF.GetResource(NC + "defaulttopic"); 
 
 const RDFCUtils = Components.classes["@mozilla.org/rdf/container-utils;1"].getService(Components.interfaces.nsIRDFContainerUtils);
-var RDFContainer = Components.classes["@mozilla.org/rdf/container;1"].createInstance(Components.interfaces.nsIRDFContainer);
+const RDFContainer = Components.classes["@mozilla.org/rdf/container;1"].getService(Components.interfaces.nsIRDFContainer);
 const CONSOLE_SERVICE = Components.classes['@mozilla.org/consoleservice;1'].getService(Components.interfaces.nsIConsoleService);
             
+var urnID = 0;
 var RE;
 
 var helpFileURI;
@@ -88,9 +73,6 @@ const defaultHelpFile = "chrome://help/locale/mozillahelp.rdf";
 var defaultTopic = "welcome"; 
 var searchDatasources = "rdf:null";
 var searchDS = null;
-var platform = /mac/i.test(navigator.platform) ? "mac" :
-               /win/i.test(navigator.platform) ? "win" :
-               /os\/2/i.test(navigator.platform) ? "os/2" : "unix";
 
 const NSRESULT_RDF_SYNTAX_ERROR = 0x804e03f7; 
 
@@ -110,46 +92,15 @@ function displayTopic(topic) {
   loadURI(uri);
 }
 
-var helpContentListener = {
-  onStartURIOpen: function(aURI) {
-    return false;
-  },
-  doContent: function(aContentType, aIsContentPreferred, aRequest, aContentHandler) {
-    throw Components.results.NS_ERROR_UNEXPECTED;
-  },
-  isPreferred: function(aContentType, aDesiredContentType) {
-    return false;
-  },
-  canHandleContent: function(aContentType, aIsContentPreferred, aDesiredContentType) {
-    return false;
-  },
-  loadCookie: null,
-  parentContentListener: null,
-  QueryInterface: function (aIID) {
-    if (aIID.equals(Components.interfaces.nsIURIContentListener) ||
-        aIID.equals(Components.interfaces.nsISupportsWeakReference) ||
-        aIID.equals(Components.interfaces.nsISupports))
-      return this;
-    Components.returnCode = Components.results.NS_ERROR_NO_INTERFACE;
-    return null;
-  }
-};
-
 // Initialize the Help window
 function init() {
   //cache panel references.
+  helpWindow = document.getElementById("help");
   helpSearchPanel = document.getElementById("help-search-panel");
   helpTocPanel = document.getElementById("help-toc-panel");
   helpIndexPanel = document.getElementById("help-index-panel");
   helpGlossaryPanel = document.getElementById("help-glossary-panel");
   helpBrowser = document.getElementById("help-content");
-  helpExternal = document.getElementById("help-external");
-  helpExternal.docShell.useErrorPages = false;
-  helpExternal
-    .docShell
-    .QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-    .getInterface(Components.interfaces.nsIURIContentListener)
-    .parentContentListener = helpContentListener;
 
   // Get the help content pack, base URL, and help topic
   var helpTopic = defaultTopic;
@@ -163,47 +114,22 @@ function init() {
 
   displayTopic(helpTopic);
 
+  // Initalize History.
+  var sessionHistory =  Components.classes["@mozilla.org/browser/shistory;1"]
+                                  .createInstance(Components.interfaces.nsISHistory);
+
   window.XULBrowserWindow = new nsHelpStatusHandler();
 
   //Start the status handler.
   window.XULBrowserWindow.init();
 
   // Hook up UI through Progress Listener
-  helpBrowser.addProgressListener(window.XULBrowserWindow, Components.interfaces.nsIWebProgress.NOTIFY_ALL);
-  helpExternal.addProgressListener(window.XULBrowserWindow, Components.interfaces.nsIWebProgress.NOTIFY_ALL);
+  const interfaceRequestor = helpBrowser.docShell.QueryInterface(Components.interfaces.nsIInterfaceRequestor);
+  const webProgress = interfaceRequestor.getInterface(Components.interfaces.nsIWebProgress);
+  webProgress.addProgressListener(window.XULBrowserWindow, Components.interfaces.nsIWebProgress.NOTIFY_ALL);
 
   //Always show the Table of Contents sidebar at startup.
   showPanel('help-toc');
-
-  // alwaysRaised only works on Mac & Win.
-  if (!/Win|Mac/.test(navigator.platform)) {
-    var toggleSeparator = document.getElementById("context-sep-selectall");
-    var toggleOnTop = document.getElementById("context-zlevel");
-    toggleOnTop.hidden = true;
-    toggleSeparator.hidden = true;
-  }
-}
-
-function contentClick(event) {
-  // is this a left click on a link?
-  if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || event.button != 0)
-    return true;
-
-  // is this a link?
-  var target = event.target;
-  while (!(target instanceof HTMLAnchorElement))
-    if (!(target = target.parentNode))
-      return true;
-
-  // is this an internal link?
-  if (target.href.lastIndexOf("chrome:", 0) == 0)
-    return true;
-
-  const loadFlags = Components.interfaces.nsIWebNavigation.LOAD_FLAGS_IS_LINK;
-  try {
-    helpExternal.webNavigation.loadURI(target.href, loadFlags, null, null, null);
-  } catch (e) {}
-  return false;
 }
 
 function loadHelpRDF() {
@@ -218,38 +144,31 @@ function loadHelpRDF() {
       log("Help file: " + helpFileURI + " was not found.");
     }
     try {
-      document.title = getAttribute(helpFileDS, RDF_ROOT, NC_TITLE, "");
+      helpWindow.setAttribute("title", getAttribute(helpFileDS, RDF_ROOT, NC_TITLE, ""));
       helpBaseURI = getAttribute(helpFileDS, RDF_ROOT, NC_BASE, helpBaseURI);
       defaultTopic = getAttribute(helpFileDS, RDF_ROOT, NC_DEFAULTTOPIC, "welcome");
 
       var panelDefs = helpFileDS.GetTarget(RDF_ROOT, NC_PANELLIST, true);      
       RDFContainer.Init(helpFileDS, panelDefs);
       var iterator = RDFContainer.GetElements();
-      while (iterator.hasMoreElements()) {
+        while (iterator.hasMoreElements()) {
         var panelDef = iterator.getNext();
+        var panelID = getAttribute(helpFileDS, panelDef, NC_PANELID, null);        
 
-        var panelPlatforms = getAttribute(helpFileDS, panelDef, NC_PLATFORM, platform);
-        panelPlatforms = panelPlatforms.split(/\s+/);
-
-        if (panelPlatforms.indexOf(platform) == -1)
-          continue; // ignore datasources for other platforms.
-
-        var panelID = getAttribute(helpFileDS, panelDef, NC_PANELID, null);
-
-        var datasources = getAttribute(helpFileDS, panelDef, NC_DATASOURCES, "rdf:null");
+        var datasources = getAttribute(helpFileDS, panelDef, NC_DATASOURCES, "rdf:none");
         datasources = normalizeLinks(helpBaseURI, datasources);
         // cache additional datsources to augment search datasources.
         if (panelID == "search") {
-          emptySearchText = getAttribute(helpFileDS, panelDef, NC_EMPTY_SEARCH_TEXT, emptySearchText);
-          emptySearchLink = getAttribute(helpFileDS, panelDef, NC_EMPTY_SEARCH_LINK, emptySearchLink);
-          searchDatasources += " " + datasources;
-          continue; // but don't try to display them yet!
+	       emptySearchText = getAttribute(helpFileDS, panelDef, NC_EMPTY_SEARCH_TEXT, null) || "No search items found." ;        
+	       emptySearchLink = getAttribute(helpFileDS, panelDef, NC_EMPTY_SEARCH_LINK, null) || "about:blank";        
+          searchDatasources = datasources;
+          datasources = "rdf:null"; // but don't try to display them yet!
         }  
 
         // cache toc datasources for use by ID lookup.
         var tree = document.getElementById("help-" + panelID + "-panel");
         loadDatabasesBlocking(datasources);
-        tree.setAttribute("datasources", tree.getAttribute("datasources") + " " + datasources);
+        tree.setAttribute("datasources", datasources);
       }  
     }
     catch (e) {
@@ -364,7 +283,7 @@ function goHome() {
 function print()
 {
   try {
-    content.print();
+    _content.print();
   } catch (e) {
   }
 }
@@ -507,17 +426,30 @@ function showPanel(panelId) {
   //add the selected style to the correct panel.
   var theButton = document.getElementById(panelId + "-btn");
   theButton.setAttribute("selected", "true");
-  document.commandDispatcher.advanceFocusIntoSubtree(theButton);
 }
 
-function onselect_loadURI(tree) {
-  var row = tree.currentIndex;
-  if (row >= 0) {
-    var resource = tree.view.getResourceAtIndex(row);
-    var link = tree.database.GetTarget(resource, NC_LINK, true);
-    if (link instanceof Components.interfaces.nsIRDFLiteral && link.Value)
-      loadURI(link.Value);
+function onselect_loadURI(tree, columnName) {
+  try {
+    var row = tree.treeBoxObject.view.selection.currentIndex;
+    var properties = Components.classes["@mozilla.org/supports-array;1"].createInstance(Components.interfaces.nsISupportsArray);
+    tree.treeBoxObject.view.getCellProperties(row, columnName, properties);
+    if (!properties) return;
+    var uri = getPropertyValue(properties, "link-");
+    if (uri)
+      loadURI(uri);
   }
+  catch (e) {}// when switching between tabs a spurious row number is returned.
+}
+
+/** Search properties nsISupportsArray for an nsIAtom which starts with the given property name. **/
+function getPropertyValue(properties, propName) {
+  for (var i=0; i< properties.Count(); ++i) {
+    var atom = properties.GetElementAt(i).QueryInterface(Components.interfaces.nsIAtom);
+    var atomValue = atom.toString();
+    if (atomValue.substr(0, propName.length) == propName)
+      return atomValue.substr(propName.length);
+  }
+  return null;
 }
 
 function doFind() {
@@ -527,19 +459,14 @@ function doFind() {
   // clear any previous results.
   clearDatabases(searchTree.database);
 
-    // if the search string is empty or contains only whitespace, purge the results tree and return
-    RE = findText.value.match(/\S+/g);
-    if (!RE) {
-      searchTree.builder.rebuild();
-      return;
-    }
-
-    // compile the search string, which has already been split up above, into regexps
-    for (var i=0; i < RE.length; ++i) {
-      RE[i] = new RegExp(RE[i], "i");
+  // split search string into separate terms and compile into regexp's
+  RE = findText.value.split(/\s+/);
+  for (var i=0; i < RE.length; ++i) {
+    if (RE[i] == "")
+      continue;
+    RE[i] = new RegExp(RE[i], "i");
   }
-  emptySearch = true;
-
+ emptySearch = true;
   // search TOC
   var resultsDS =  Components.classes["@mozilla.org/rdf/datasource;1?name=in-memory-datasource"].createInstance(Components.interfaces.nsIRDFDataSource);
   var tree = document.getElementById("help-toc-panel");
@@ -574,6 +501,12 @@ function doFind() {
   searchTree.builder.rebuild();
 }
 
+function doEnabling() {
+  var findButton = document.getElementById("findButton");
+  var findTextbox = document.getElementById("findText");
+  findButton.disabled = !findTextbox.value;
+}
+
 function clearDatabases(compositeDataSource) {
   var enumDS = compositeDataSource.GetDataSources()
   while (enumDS.hasMoreElements()) {
@@ -605,24 +538,40 @@ function doFindOnDatasource(resultsDS, sourceDS, resource, level) {
 
 function doFindOnSeq(resultsDS, sourceDS, resource, level) {
   // load up an RDFContainer so we can access the contents of the current rdf:seq.    
-  RDFContainer.Init(sourceDS, resource);
-  var targets = RDFContainer.GetElements();
-  while (targets.hasMoreElements()) {
+    RDFContainer.Init(sourceDS, resource);
+    var targets = RDFContainer.GetElements();
+    while (targets.hasMoreElements()) {
     var target = targets.getNext();
-    var link = sourceDS.GetTarget(target, NC_LINK, true);
-    var name = sourceDS.GetTarget(target, NC_NAME, true);
-    name = name.QueryInterface(Components.interfaces.nsIRDFLiteral);
-    if (link && isMatch(name.Value)) {
-      // we have found a search entry - add it to the results datasource.
-      var urn = RDF.GetAnonymousResource();
-      resultsDS.Assert(urn, NC_NAME, name, true);
-      resultsDS.Assert(urn, NC_LINK, link, true);
-      resultsDS.Assert(RDF_ROOT, NC_CHILD, urn, true);
-      emptySearch = false; 	
+        target = target.QueryInterface(Components.interfaces.nsIRDFResource);
+        var name = sourceDS.GetTarget(target, NC_NAME, true);
+        name = name.QueryInterface(Components.interfaces.nsIRDFLiteral);
+        
+        if (isMatch(name.Value)) {
+          // we have found a search entry - add it to the results datasource.
+          
+          // Get URL of html for this entry.
+      var link = sourceDS.GetTarget(target, NC_LINK, true);
+      link = link.QueryInterface(Components.interfaces.nsIRDFLiteral);        
+
+      urnID++;
+      resultsDS.Assert(RDF_ROOT,
+             RDF.GetResource("http://home.netscape.com/NC-rdf#child"),
+             RDF.GetResource("urn:" + urnID),
+             true);
+      resultsDS.Assert(RDF.GetResource("urn:" + urnID),
+             RDF.GetResource("http://home.netscape.com/NC-rdf#name"),
+             name,
+             true);
+      resultsDS.Assert(RDF.GetResource("urn:" + urnID),
+             RDF.GetResource("http://home.netscape.com/NC-rdf#link"),
+             link,
+             true);
+  		emptySearch = false; 	
+             
     }
     // process any nested rdf:seq elements.
-    doFindOnDatasource(resultsDS, sourceDS, target, level+1);
-  }
+    doFindOnDatasource(resultsDS, sourceDS, target, level+1);       
+    }  
 }
 
 function assertSearchEmpty(resultsDS) {
@@ -673,9 +622,22 @@ function loadCompositeDS(datasources) {
 
 function getAttribute(datasource, resource, attributeResourceName, defaultValue) {
   var literal = datasource.GetTarget(resource, attributeResourceName, true);
-  return literal instanceof Components.interfaces.nsIRDFLiteral ? literal.Value : defaultValue;
+  if (!literal)
+    return defaultValue;
+  return getLiteralValue(literal, defaultValue);  
 }
-// Write debug string to error console.
+
+function getLiteralValue(literal, defaultValue) {
+  if (literal) {
+      literal = literal.QueryInterface(Components.interfaces.nsIRDFLiteral);
+      if (literal)
+        return literal.Value;
+  }
+  if (defaultValue)
+    return defaultValue;
+  return null;
+}
+// Write debug string to javascript console.
 function log(aText) {
   CONSOLE_SERVICE.logStringMessage(aText);
 }
@@ -702,7 +664,7 @@ function showRelativePanel(goForward) {
   var sidebarButtons = new Array();
   for (var i = 0; i < sidebarBox.childNodes.length; i++) {
     var btn = sidebarBox.childNodes[i];
-    if (btn.nodeName == "toolbarbutton") {
+    if (btn.nodeName == "button") {
       if (btn.getAttribute("selected") == "true")
         selectedIndex = sidebarButtons.length;
       sidebarButtons.push(btn);
@@ -716,30 +678,4 @@ function showRelativePanel(goForward) {
   else if (selectedIndex < 0)
     selectedIndex = sidebarButtons.length - 1;
   sidebarButtons[selectedIndex].doCommand();
-}
-
-// getXulWin - Returns the current Help window as a nsIXULWindow.
-function getXulWin() {
-  window.QueryInterface(Components.interfaces.nsIInterfaceRequestor);
-  var webnav = window.getInterface(Components.interfaces.nsIWebNavigation);
-  var dsti = webnav.QueryInterface(Components.interfaces.nsIDocShellTreeItem);
-  var treeowner = dsti.treeOwner;
-  var ifreq = treeowner.QueryInterface(Components.interfaces.nsIInterfaceRequestor);
-
-  return ifreq.getInterface(Components.interfaces.nsIXULWindow);
-}
-
-// toggleZLevel - Toggles whether or not the window will always appear on top.
-// element is the DOM node that persists the checked state
-function toggleZLevel(element) {
-  var xulwin = getXulWin();
-
-  // Now we can flip the zLevel, and set the attribute so that it persists correctly
-  if (xulwin.zLevel > xulwin.normalZ) {
-    xulwin.zLevel = xulwin.normalZ;
-    element.setAttribute("checked", "false");
-  } else {
-    xulwin.zLevel = xulwin.raisedZ;
-    element.setAttribute("checked", "true");
-  }
 }

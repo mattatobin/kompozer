@@ -46,12 +46,16 @@
 #include "nsNSSCleaner.h"
 #include "nsICertPickDialogs.h"
 #include "nsNSSShutDown.h"
-#include "nsNSSCertHelper.h"
 
 NSSCleanupAutoPtrClass(CERTCertNicknames, CERT_FreeNicknames)
 NSSCleanupAutoPtrClass(CERTCertList, CERT_DestroyCertList)
 
 #include "cert.h"
+
+/* strings for marking invalid user cert nicknames */
+#define NICKNAME_EXPIRED_STRING " (expired)"
+#define NICKNAME_NOT_YET_VALID_STRING " (not yet valid)"
+
 
 NS_IMPL_ISUPPORTS1(nsCertPicker, nsIUserCertPicker)
 
@@ -102,8 +106,10 @@ NS_IMETHODIMP nsCertPicker::PickByUsage(nsIInterfaceRequestor *ctx,
     return NS_ERROR_NOT_AVAILABLE;
   }
 
-  CERTCertNicknames *nicknames = getNSSCertNicknamesFromCertList(certList);
-
+  CERTCertNicknames *nicknames = 
+    CERT_NicknameStringsFromCertList(certList,
+                                     NICKNAME_EXPIRED_STRING,
+                                     NICKNAME_NOT_YET_VALID_STRING);
   CERTCertNicknamesCleaner cnc(nicknames);
 
   if (!nicknames) {

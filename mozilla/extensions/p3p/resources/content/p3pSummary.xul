@@ -36,7 +36,6 @@
    -
    - ***** END LICENSE BLOCK ***** -->
 
-<?xml-stylesheet href="chrome://navigator/skin/" type="text/css"?>
 <?xul-overlay href="chrome://navigator/content/navigatorOverlay.xul"?>
 
 <!DOCTYPE window [
@@ -58,9 +57,12 @@
 
   <script type="application/x-javascript" src="chrome://p3p/content/p3pSummary.js"/>
   <script type="application/x-javascript" src="chrome://communicator/content/p3p/nsPolicyViewer.js"/>
-  <script type="application/x-javascript" src="chrome://communicator/content/printing.js"/>
+  <script type="application/x-javascript" src="chrome://global/content/nsDragAndDrop.js"/>
+  <script type="application/x-javascript" src="chrome://communicator/content/contentAreaDD.js"/>
   <script type="application/x-javascript" src="chrome://navigator/content/browser.js"/>
   <script type="application/x-javascript" src="chrome://communicator/content/findUtils.js"/>
+  <script type="application/x-javascript" src="chrome://communicator/content/contentAreaUtils.js"/>
+  <script type="application/x-javascript" src="chrome://communicator/content/contentAreaClick.js"/>
 
   <commandset id="commands">
     <commandset id="globalEditMenuItems"/>
@@ -96,26 +98,27 @@
 
   <!-- context menu -->
   <popupset id="p3pSummaryContextSet">
+    <popup id="contentAreaContextMenu"/><!-- XXX Silly hack to quiet mailNavigatorOverlay.xul warning -->
   </popupset>
 
   <!-- Menu --> 
   <toolbox>
     <menubar id="nav-bar">
       <menu id="menu_File">
-        <menupopup id="filemenu-popup" onpopupshowing="updateSavePageItems();">
+        <menupopup id="filemenu-popup">
+          <menuitem label="&browserCmd.label;" accesskey="&browserCmd.accesskey;" key="key_newNavigator" command="cmd_newNavigator"/>
           <menu id="menu_New">
             <menupopup id="menu_NewPopup">
               <menuitem id="menu_newNavigator" command="cmd_newNavigator"/>
               <menuitem id="menu_newEditor" command="cmd_newEditor"/>
             </menupopup>
           </menu>
-          <menuitem id="menu_close"/>
           <menuseparator/>
-          <menuitem id="savepage" valueSaveAs="&savePageAsCmd.label;" valueSave="&savePageCmd.label;"
-                    accesskey="&savePageCmd.accesskey;" key="key_savePage" command="cmd_savePage"/>
+          <menuitem label="&savePageCmd.label;" accesskey="&savePageCmd.accesskey;" key="key_savePage" command="cmd_savePage"/>
           <menuseparator/>
-          <menuitem id="printSetupMenuItem" label="&printSetupCmd.label;" accesskey="&printSetupCmd.accesskey;" command="cmd_printSetup"/>
           <menuitem label="&printCmd.label;" accesskey="&printCmd.accesskey;" key="printKb" command="Browser:Print"/>     
+          <menuseparator/>
+          <menuitem id="menu_close"/>
         </menupopup>
       </menu>
 
@@ -146,7 +149,7 @@
     </menubar>  
   </toolbox>
   
-  <vbox id="appcontent" flex="1">
+  <vbox id="appcontent" flex="1" ondragdrop="nsDragAndDrop.drop(event, contentAreaDNDObserver);">
     <browser type="content-primary" id="content" flex="1"
              onclick="captureContentClick(event);"/>
   </vbox>

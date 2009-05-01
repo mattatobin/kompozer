@@ -1,43 +1,43 @@
 /*
  * Verification stuff.
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved. 
  *
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: secvfy.c,v 1.16.2.5 2006/09/09 22:14:56 wtchang%redhat.com Exp $ */
+ * $Id: secvfy.c,v 1.10 2003/12/23 21:24:01 wchang0222%aol.com Exp $
+ */
 
 #include <stdio.h>
 #include "cryptohi.h"
@@ -48,21 +48,17 @@
 #include "pk11func.h"
 #include "secdig.h"
 #include "secerr.h"
-#include "secport.h"
 
 /*
-** Decrypt signature block using public key
-** Store the hash algorithm oid tag in *tagp
-** Store the digest in the digest buffer
-** Store the digest length in *digestlen
+** Decrypt signature block using public key (in place)
 ** XXX this is assuming that the signature algorithm has WITH_RSA_ENCRYPTION
 */
 static SECStatus
-DecryptSigBlock(SECOidTag *tagp, unsigned char *digest,
-		unsigned int *digestlen, unsigned int maxdigestlen,
-		SECKEYPublicKey *key, const SECItem *sig, char *wincx)
+DecryptSigBlock(int *tagp, unsigned char *digest, SECKEYPublicKey *key,
+		SECItem *sig, char *wincx)
 {
     SGNDigestInfo *di   = NULL;
+    unsigned char *dsig = NULL;
     unsigned char *buf  = NULL;
     SECStatus      rv;
     SECOidTag      tag;
@@ -75,8 +71,12 @@ DecryptSigBlock(SECOidTag *tagp, unsigned char *digest,
     it.data = buf = (unsigned char *)PORT_Alloc(it.len);
     if (!buf) goto loser;
 
+    /* Decrypt signature block */
+    dsig = (unsigned char*) PORT_Alloc(sig->len);
+    if (dsig == NULL) goto loser;
+
     /* decrypt the block */
-    rv = PK11_VerifyRecover(key, (SECItem *)sig, &it, wincx);
+    rv = PK11_VerifyRecover(key, sig, &it, wincx);
     if (rv != SECSuccess) goto loser;
 
     di = SGN_DecodeDigestInfo(&it);
@@ -87,21 +87,13 @@ DecryptSigBlock(SECOidTag *tagp, unsigned char *digest,
     ** ID and the signature block
     */
     tag = SECOID_GetAlgorithmTag(&di->digestAlgorithm);
-    /* Check that tag is an appropriate algorithm */
-    if (tag == SEC_OID_UNKNOWN) {
-	goto sigloser;
-    }
-    /* make sure the "parameters" are not too bogus. */
-    if (di->digestAlgorithm.parameters.len > 2) {
-	goto sigloser;
-    }
-    if (di->digest.len > maxdigestlen) {
+    /* XXX Check that tag is an appropriate algorithm? */
+    if (di->digest.len > 32) {
 	PORT_SetError(SEC_ERROR_OUTPUT_LEN);
 	goto loser;
     }
     PORT_Memcpy(digest, di->digest.data, di->digest.len);
     *tagp = tag;
-    *digestlen = di->digest.len;
     goto done;
 
   sigloser:
@@ -112,6 +104,7 @@ DecryptSigBlock(SECOidTag *tagp, unsigned char *digest,
 
   done:
     if (di   != NULL) SGN_DestroyDigestInfo(di);
+    if (dsig != NULL) PORT_Free(dsig);
     if (buf  != NULL) PORT_Free(buf);
     
     return rv;
@@ -120,78 +113,56 @@ DecryptSigBlock(SECOidTag *tagp, unsigned char *digest,
 typedef enum { VFY_RSA, VFY_DSA, VFY_ECDSA } VerifyType;
 
 struct VFYContextStr {
-    SECOidTag alg;  /* the hash algorithm */
+    SECOidTag alg;
     VerifyType type;
     SECKEYPublicKey *key;
-    /*
-     * This buffer holds either the digest or the full signature
-     * depending on the type of the signature.  It is defined as a
-     * union to make sure it always has enough space.
-     *
-     * Use the "buffer" union member to reference the buffer.
-     * Note: do not take the size of the "buffer" union member.  Take
-     * the size of the union or some other union member instead.
-     */
-    union {
-	unsigned char buffer[1];
-
-	/* the digest in the decrypted RSA signature */
-	unsigned char rsadigest[HASH_LENGTH_MAX];
-	/* the full DSA signature... 40 bytes */
-	unsigned char dsasig[DSA_SIGNATURE_LEN];
-	/* the full ECDSA signature */
-	unsigned char ecdsasig[2 * MAX_ECKEY_LEN];
-    } u;
-    unsigned int rsadigestlen;
+    /* digest holds the full dsa signature... 40 bytes */
+    unsigned char digest[DSA_SIGNATURE_LEN];
     void * wincx;
     void *hashcx;
     const SECHashObject *hashobj;
-    SECOidTag sigAlg;  /* the (composite) signature algorithm */
-    PRBool hasSignature;  /* true if the signature was provided in the
-                           * VFY_CreateContext call.  If false, the
-                           * signature must be provided with a
-                           * VFY_EndWithSignature call. */
+    SECOidTag sigAlg;
+    PRBool hasSignature;
+    unsigned char ecdsadigest[2 * MAX_ECKEY_LEN];
 };
 
 /*
  * decode the ECDSA or DSA signature from it's DER wrapping.
  * The unwrapped/raw signature is placed in the buffer pointed
- * to by dsig and has enough room for len bytes.
+ * to by digest and has enough room for len bytes.
  */
 static SECStatus
-decodeECorDSASignature(SECOidTag algid, SECItem *sig, unsigned char *dsig,
+decodeECorDSASignature(SECOidTag algid, SECItem *sig, unsigned char *digest,
 		       unsigned int len) {
     SECItem *dsasig = NULL; /* also used for ECDSA */
     SECStatus rv=SECSuccess;
 
     switch (algid) {
-    case SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE:
-    case SEC_OID_ANSIX962_ECDSA_SHA256_SIGNATURE:
-    case SEC_OID_ANSIX962_ECDSA_SHA384_SIGNATURE:
-    case SEC_OID_ANSIX962_ECDSA_SHA512_SIGNATURE:
-    case SEC_OID_ANSIX962_ECDSA_SIGNATURE_RECOMMENDED_DIGEST:
-    case SEC_OID_ANSIX962_ECDSA_SIGNATURE_SPECIFIED_DIGEST:
-	if (len > MAX_ECKEY_LEN * 2) {
-	    PORT_SetError(SEC_ERROR_BAD_DER);
-	    return SECFailure;
-	}
-	/* fall through */
     case SEC_OID_ANSIX9_DSA_SIGNATURE_WITH_SHA1_DIGEST:
     case SEC_OID_BOGUS_DSA_SIGNATURE_WITH_SHA1_DIGEST:
     case SEC_OID_ANSIX9_DSA_SIGNATURE:
-	dsasig = DSAU_DecodeDerSigToLen(sig, len);
+    case SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST:
+        if (algid == SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST) {
+	    if (len > MAX_ECKEY_LEN * 2) {
+	        PORT_SetError(SEC_ERROR_BAD_DER);
+		return SECFailure;
+	    }
+	    dsasig = DSAU_DecodeDerSigToLen(sig, len);
+	} else {
+	    dsasig = DSAU_DecodeDerSig(sig);
+	}
 
 	if ((dsasig == NULL) || (dsasig->len != len)) {
 	    rv = SECFailure;
 	} else {
-	    PORT_Memcpy(dsig, dsasig->data, dsasig->len);
+	    PORT_Memcpy(digest, dsasig->data, dsasig->len);
 	}
 	break;
     default:
         if (sig->len != len) {
 	    rv = SECFailure;
 	} else {
-	    PORT_Memcpy(dsig, sig->data, sig->len);
+	    PORT_Memcpy(digest, sig->data, sig->len);
 	}
 	break;
     }
@@ -201,32 +172,20 @@ decodeECorDSASignature(SECOidTag algid, SECItem *sig, unsigned char *dsig,
     return rv;
 }
 
-const static SEC_ASN1Template hashParameterTemplate[] =
-{
-    { SEC_ASN1_SEQUENCE, 0, NULL, sizeof(SECItem) },
-    { SEC_ASN1_OBJECT_ID, 0 },
-    { SEC_ASN1_SKIP_REST },
-    { 0, }
-};
 /*
  * Pulls the hash algorithm, signing algorithm, and key type out of a
  * composite algorithm.
  *
  * alg: the composite algorithm to dissect.
  * hashalg: address of a SECOidTag which will be set with the hash algorithm.
- * params:  specific signature parameter (from the signature AlgorithmID).
- * key:     public key to verify against.
- * Returns: SECSuccess if the alg algorithm was acceptable, SECFailure if the
+ * signalg: address of a SECOidTag which will be set with the signing alg.
+ * keyType: address of a KeyType which will be set with the key type.
+ * Returns: SECSuccess if the algorithm was acceptable, SECFailure if the
  *	algorithm was not found or was not a signing algorithm.
  */
 static SECStatus
-decodeSigAlg(SECOidTag alg, const SECItem *params, const SECKEYPublicKey *key, 
-	     SECOidTag *hashalg)
+decodeSigAlg(SECOidTag alg, SECOidTag *hashalg)
 {
-    PRArenaPool *arena;
-    SECStatus rv;
-    SECItem oid;
-    unsigned int len;
     PR_ASSERT(hashalg!=NULL);
 
     switch (alg) {
@@ -242,67 +201,20 @@ decodeSigAlg(SECOidTag alg, const SECItem *params, const SECKEYPublicKey *key,
         *hashalg = SEC_OID_SHA1;
 	break;
 
-      case SEC_OID_ANSIX962_ECDSA_SHA256_SIGNATURE:
       case SEC_OID_PKCS1_SHA256_WITH_RSA_ENCRYPTION:
 	*hashalg = SEC_OID_SHA256;
 	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA384_SIGNATURE:
       case SEC_OID_PKCS1_SHA384_WITH_RSA_ENCRYPTION:
 	*hashalg = SEC_OID_SHA384;
 	break;
-      case SEC_OID_ANSIX962_ECDSA_SHA512_SIGNATURE:
       case SEC_OID_PKCS1_SHA512_WITH_RSA_ENCRYPTION:
 	*hashalg = SEC_OID_SHA512;
-	break;
-      case SEC_OID_ANSIX962_ECDSA_SIGNATURE_RECOMMENDED_DIGEST:
-	/* This is an EC algorithm. Recommended means the largest
-	 * hash algorithm that is not truncated by the keysize of 
-	 * the EC algorithm. Note that key strength is in bytes and
-	 * algorithms are specified in bits. Never use an algorithm
-	 * weaker than sha1. */
-	len = SECKEY_PublicKeyStrength((SECKEYPublicKey *)key);
-	if (len < 28) { /* 28 bytes == 244 bits */
-	    *hashalg = SEC_OID_SHA1;
-	} else if (len < 32) { /* 32 bytes == 256 bits */
-	    /* we don't support 244 bit hash algorithms */
-	    PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
-	    return SECFailure;
-	} else if (len < 48) { /* 48 bytes == 384 bits */
-	    *hashalg = SEC_OID_SHA256;
-	} else if (len < 64) { /* 48 bytes == 512 bits */
-	    *hashalg = SEC_OID_SHA384;
-	} else {
-	    /* use the largest in this case */
-	    *hashalg = SEC_OID_SHA512;
-	}
-	break;
-      case SEC_OID_ANSIX962_ECDSA_SIGNATURE_SPECIFIED_DIGEST:
-	if (params == NULL) {
-	    PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
-	    return SECFailure;
-	}
-	arena = PORT_NewArena(DER_DEFAULT_CHUNKSIZE);
-	if (arena == NULL) {
-	    return SECFailure;
-	}
-	rv = SEC_QuickDERDecodeItem(arena, &oid, hashParameterTemplate, params);
-	if (rv != SECSuccess) {
-	    PORT_FreeArena(arena, PR_FALSE);
-	    return rv;
-	}
-
-	*hashalg = SECOID_FindOIDTag(&oid);
-	PORT_FreeArena(arena, PR_FALSE);
-	if (*hashalg == SEC_OID_UNKNOWN) {
-	    PORT_SetError(SEC_ERROR_INVALID_ALGORITHM);
-	    return SECFailure;
-	}
 	break;
 
       /* what about normal DSA? */
       case SEC_OID_ANSIX9_DSA_SIGNATURE_WITH_SHA1_DIGEST:
       case SEC_OID_BOGUS_DSA_SIGNATURE_WITH_SHA1_DIGEST:
-      case SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE:
+      case SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST:
         *hashalg = SEC_OID_SHA1;
 	break;
       case SEC_OID_MISSI_DSS:
@@ -319,12 +231,13 @@ decodeSigAlg(SECOidTag alg, const SECItem *params, const SECKEYPublicKey *key,
     return SECSuccess;
 }
 
-static VFYContext *
-vfy_CreateContextPrivate(const SECKEYPublicKey *key, const SECItem *sig, 
-		  SECOidTag algid, const SECItem *params, void *wincx)
+VFYContext *
+VFY_CreateContext(SECKEYPublicKey *key, SECItem *sig, SECOidTag algid,
+		  void *wincx)
 {
     VFYContext *cx;
     SECStatus rv;
+    unsigned char *tmp;
     unsigned int sigLen;
 
     cx = (VFYContext*) PORT_ZAlloc(sizeof(VFYContext));
@@ -336,17 +249,14 @@ vfy_CreateContextPrivate(const SECKEYPublicKey *key, const SECItem *sig,
 	switch (key->keyType) {
 	case rsaKey:
 	    cx->type = VFY_RSA;
-	    /* keep our own copy */
-	    cx->key = SECKEY_CopyPublicKey((SECKEYPublicKey *)key); 
+	    cx->key = SECKEY_CopyPublicKey(key); /* extra safety precautions */
 	    if (sig) {
-		SECOidTag hashid = SEC_OID_UNKNOWN;
-		unsigned int digestlen = 0;
-	    	rv = DecryptSigBlock(&hashid, cx->u.buffer, &digestlen,
-			HASH_LENGTH_MAX, cx->key, sig, (char*)wincx);
+		int hashid;
+	    	rv = DecryptSigBlock(&hashid, &cx->digest[0], 
+						key, sig, (char*)wincx);
 		cx->alg = hashid;
-		cx->rsadigestlen = digestlen;
 	    } else {
-		rv = decodeSigAlg(algid, params, key, &cx->alg);
+		rv = decodeSigAlg(algid,&cx->alg);
 	    }
 	    break;
 	case fortezzaKey:
@@ -354,25 +264,20 @@ vfy_CreateContextPrivate(const SECKEYPublicKey *key, const SECItem *sig,
 	case ecKey:
 	    if (key->keyType == ecKey) {
 	        cx->type = VFY_ECDSA;
-		/* Unlike DSA, ECDSA does not have a fixed signature length
+		/* Unlike DSA, EDSA does not have a fixed signature length
 		 * (it depends on the key size)
 		 */
-		sigLen = SECKEY_SignatureLen(key);
+		sigLen = SECKEY_PublicKeyStrength(key) * 2;
+		tmp = cx->ecdsadigest;
 	    } else {
 	        cx->type = VFY_DSA;
 		sigLen = DSA_SIGNATURE_LEN;
+		tmp = cx->digest;
 	    }
-	    if (sigLen == 0) {
-		rv = SECFailure;
-		break;
-	    }
-	    rv = decodeSigAlg(algid, params, key, &cx->alg);
-	    if (rv != SECSuccess) {
-		break;
-	    }
-  	    cx->key = SECKEY_CopyPublicKey((SECKEYPublicKey *)key);
+  	    cx->alg = SEC_OID_SHA1;
+  	    cx->key = SECKEY_CopyPublicKey(key);
   	    if (sig) {
-	        rv = decodeECorDSASignature(algid,sig,cx->u.buffer,sigLen);
+	        rv = decodeECorDSASignature(algid,sig,tmp,sigLen);
   	    }
   	    break;
 	default:
@@ -398,13 +303,6 @@ vfy_CreateContextPrivate(const SECKEYPublicKey *key, const SECItem *sig,
   loser:
     VFY_DestroyContext(cx, PR_TRUE);
     return 0;
-}
-
-VFYContext *
-VFY_CreateContext(SECKEYPublicKey *key, SECItem *sig, SECOidTag algid,
-		  void *wincx)
-{
-   return vfy_CreateContextPrivate(key, sig, algid, NULL, wincx);
 }
 
 void
@@ -458,7 +356,7 @@ VFY_Update(VFYContext *cx, unsigned char *input, unsigned inputLen)
 SECStatus
 VFY_EndWithSignature(VFYContext *cx, SECItem *sig)
 {
-    unsigned char final[HASH_LENGTH_MAX];
+    unsigned char final[32];
     unsigned part;
     SECItem hash,dsasig; /* dsasig is also used for ECDSA */
     SECStatus rv;
@@ -476,14 +374,12 @@ VFY_EndWithSignature(VFYContext *cx, SECItem *sig)
     switch (cx->type) {
       case VFY_DSA:
       case VFY_ECDSA:
-	dsasig.data = cx->u.buffer;
 	if (cx->type == VFY_DSA) {
+	    dsasig.data = cx->digest;
 	    dsasig.len = DSA_SIGNATURE_LEN;
 	} else {
-	    dsasig.len = SECKEY_SignatureLen(cx->key);
-	}
-	if (dsasig.len == 0) {
-	    return SECFailure;
+	    dsasig.data = cx->ecdsadigest;
+	    dsasig.len = SECKEY_PublicKeyStrength(cx->key) * 2;
 	}
 	if (sig) {
 	    rv = decodeECorDSASignature(cx->sigAlg,sig,dsasig.data,
@@ -502,16 +398,15 @@ VFY_EndWithSignature(VFYContext *cx, SECItem *sig)
 	break;
       case VFY_RSA:
 	if (sig) {
-	    SECOidTag hashid = SEC_OID_UNKNOWN;
-	    rv = DecryptSigBlock(&hashid, cx->u.buffer, &cx->rsadigestlen,
-		    HASH_LENGTH_MAX, cx->key, sig, (char*)cx->wincx);
+	    int hashid;
+	    rv = DecryptSigBlock(&hashid, &cx->digest[0], 
+					    cx->key, sig, (char*)cx->wincx);
 	    if ((rv != SECSuccess) || (hashid != cx->alg)) {
 		PORT_SetError(SEC_ERROR_BAD_SIGNATURE);
 		return SECFailure;
 	    }
 	}
-	if ((part != cx->rsadigestlen) ||
-		PORT_Memcmp(final, cx->u.buffer, part)) {
+	if (PORT_Memcmp(final, cx->digest, part)) {
 	    PORT_SetError(SEC_ERROR_BAD_SIGNATURE);
 	    return SECFailure;
 	}
@@ -542,7 +437,10 @@ VFY_VerifyDigest(SECItem *digest, SECKEYPublicKey *key, SECItem *sig,
 {
     SECStatus rv;
     VFYContext *cx;
-    SECItem dsasig; /* also used for ECDSA */
+    SECItem dsasig;
+#ifdef NSS_ENABLE_ECC
+    SECItem ecdsasig;
+#endif /* NSS_ENABLE_ECC */
 
     rv = SECFailure;
 
@@ -550,8 +448,7 @@ VFY_VerifyDigest(SECItem *digest, SECKEYPublicKey *key, SECItem *sig,
     if (cx != NULL) {
 	switch (key->keyType) {
 	case rsaKey:
-	    if ((digest->len != cx->rsadigestlen) ||
-		PORT_Memcmp(digest->data, cx->u.buffer, digest->len)) {
+	    if (PORT_Memcmp(digest->data, cx->digest, digest->len)) {
 		PORT_SetError(SEC_ERROR_BAD_SIGNATURE);
 	    } else {
 		rv = SECSuccess;
@@ -559,24 +456,26 @@ VFY_VerifyDigest(SECItem *digest, SECKEYPublicKey *key, SECItem *sig,
 	    break;
 	case fortezzaKey:
 	case dsaKey:
-	case ecKey:
-	    dsasig.data = cx->u.buffer;
-	    if (key->keyType == ecKey) {
-		dsasig.len = SECKEY_SignatureLen(cx->key);
-	    } else {
-		/* magic size of dsa signature */
-		dsasig.len = DSA_SIGNATURE_LEN;
-	    }
-	    if (dsasig.len == 0) {
-		break;
-	    }
-	    if (PK11_Verify(cx->key, &dsasig, digest, cx->wincx)
-		!= SECSuccess) {
+	    dsasig.data = &cx->digest[0];
+	    dsasig.len = DSA_SIGNATURE_LEN; /* magic size of dsa signature */
+	    if (PK11_Verify(cx->key, &dsasig, digest, cx->wincx) != SECSuccess) {
 		PORT_SetError(SEC_ERROR_BAD_SIGNATURE);
 	    } else {
 		rv = SECSuccess;
 	    }
 	    break;
+#ifdef NSS_ENABLE_ECC
+	case ecKey:
+	    ecdsasig.data = &cx->ecdsadigest[0];
+	    ecdsasig.len = SECKEY_PublicKeyStrength(cx->key) * 2;
+	    if (PK11_Verify(cx->key, &ecdsasig, digest, cx->wincx) 
+		!= SECSuccess) {
+	        PORT_SetError(SEC_ERROR_BAD_SIGNATURE);
+	    } else {
+		rv = SECSuccess;
+	    }
+	    break;
+#endif /* NSS_ENABLE_ECC */
 	default:
 	    break;
 	}
@@ -585,21 +484,20 @@ VFY_VerifyDigest(SECItem *digest, SECKEYPublicKey *key, SECItem *sig,
     return rv;
 }
 
-static SECStatus
-vfy_VerifyDataPrivate(const unsigned char *buf, int len, 
-		const SECKEYPublicKey *key, const SECItem *sig, 
-		SECOidTag algid, const SECItem *params, void *wincx)
+SECStatus
+VFY_VerifyData(unsigned char *buf, int len, SECKEYPublicKey *key,
+	       SECItem *sig, SECOidTag algid, void *wincx)
 {
     SECStatus rv;
     VFYContext *cx;
 
-    cx = vfy_CreateContextPrivate(key, sig, algid, params, wincx);
+    cx = VFY_CreateContext(key, sig, algid, wincx);
     if (cx == NULL)
 	return SECFailure;
 
     rv = VFY_Begin(cx);
     if (rv == SECSuccess) {
-	rv = VFY_Update(cx, (unsigned char *)buf, len);
+	rv = VFY_Update(cx, buf, len);
 	if (rv == SECSuccess)
 	    rv = VFY_End(cx);
     }
@@ -609,32 +507,47 @@ vfy_VerifyDataPrivate(const unsigned char *buf, int len,
 }
 
 SECStatus
-VFY_VerifyData(unsigned char *buf, int len, SECKEYPublicKey *key,
-	       SECItem *sig, SECOidTag algid, void *wincx)
+SEC_VerifyFile(FILE *input, SECKEYPublicKey *key, SECItem *sig,
+	       SECOidTag algid, void *wincx)
 {
-    return vfy_VerifyDataPrivate(buf, len, key, sig, algid, NULL, wincx);
-}
+    unsigned char buf[1024];
+    SECStatus rv;
+    int nb;
+    VFYContext *cx;
 
-/*
- * this function is private to nss3.dll in NSS 3.11
- */
-SECStatus
-VFY_VerifyDataWithAlgorithmID(const unsigned char *buf, int len,
-                              const SECKEYPublicKey *key,
-                              const SECItem *sig,
-                              const SECAlgorithmID *sigAlgorithm,
-                              SECOidTag *reserved, void *wincx)
-{
-    /* the hash parameter is only provided to match the NSS 3.12 signature */
-    PORT_Assert(reserved == NULL);
-    if (reserved) {
-	/* shouldn't happen, This function is not exported, and the only
-	 * NSS callers pass 'NULL' */
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
-	return SECFailure;
+    cx = VFY_CreateContext(key, sig, algid, wincx);
+    if (cx == NULL)
+	rv = SECFailure;
+
+    rv = VFY_Begin(cx);
+    if (rv == SECSuccess) {
+	/*
+	 * Now feed the contents of the input file into the digest algorithm,
+	 * one chunk at a time, until we have exhausted the input.
+	 */
+	for (;;) {
+	    if (feof(input))
+		break;
+	    nb = fread(buf, 1, sizeof(buf), input);
+	    if (nb == 0) {
+		if (ferror(input)) {
+		    PORT_SetError(SEC_ERROR_IO);
+		    VFY_DestroyContext(cx, PR_TRUE);
+		    return SECFailure;
+		}
+		break;
+	    }
+	    rv = VFY_Update(cx, buf, nb);
+	    if (rv != SECSuccess)
+		goto loser;
+	}
     }
-    return vfy_VerifyDataPrivate(buf, len, key, sig, 
-           SECOID_GetAlgorithmTag((SECAlgorithmID *)sigAlgorithm),
-           &sigAlgorithm->parameters, wincx);
-}
 
+    /* Verify the digest */
+    rv = VFY_End(cx);
+    /* FALL THROUGH */
+
+  loser:
+    VFY_DestroyContext(cx, PR_TRUE);
+    return rv;
+}

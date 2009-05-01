@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Mitesh Shah <mitesh@netscape.com>
- *   Chip Clark  <chipc@netscape.com>
+ * Mitesh Shah <mitesh@netscape.com>
+ * Chip Clark  <chipc@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +43,7 @@
 #endif
 #include "nsReadConfig.h"
 #include "nsAppDirectoryServiceDefs.h"
-#include "nsIAppStartup.h"
+#include "nsIAppShellService.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsIAutoConfig.h"
 #include "nsIComponentManager.h"
@@ -54,7 +54,6 @@
 #include "nsIPromptService.h"
 #include "nsIServiceManager.h"
 #include "nsIStringBundle.h"
-#include "nsXPFEComponentsCID.h"
 #include "nsXPIDLString.h"
 #include "nsNetUtil.h"
 #include "prmem.h"
@@ -142,10 +141,10 @@ NS_IMETHODIMP nsReadConfig::Observe(nsISupports *aSubject, const char *aTopic, c
         if (NS_FAILED(rv)) {
             DisplayError();
 
-            nsCOMPtr<nsIAppStartup> appStartup =
-                do_GetService(NS_APPSTARTUP_CONTRACTID);
-            if (appStartup)
-                appStartup->Quit(nsIAppStartup::eAttemptQuit);
+            nsCOMPtr<nsIAppShellService> appShellService =
+                do_GetService("@mozilla.org/appshell/appShellService;1");
+            if (appShellService)
+                appShellService->Quit(nsIAppShellService::eAttemptQuit);
         }
     }
     return rv;
@@ -159,20 +158,20 @@ nsresult nsReadConfig::readConfigFile()
     nsXPIDLCString lockVendor;
     PRUint32 fileNameLen = 0;
     
-    nsCOMPtr<nsIPrefBranch> defaultPrefBranch;
+    nsCOMPtr<nsIPrefBranch> prefBranch;
     nsCOMPtr<nsIPrefService> prefService = 
         do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
     if (NS_FAILED(rv))
         return rv;
 
-    rv = prefService->GetDefaultBranch(nsnull, getter_AddRefs(defaultPrefBranch));
+    rv = prefService->GetBranch(nsnull, getter_AddRefs(prefBranch));
     if (NS_FAILED(rv))
         return rv;
         
     // This preference is set in the all.js or all-ns.js (depending whether 
     // running mozilla or netscp6)
 
-    rv = defaultPrefBranch->GetCharPref("general.config.filename", 
+    rv = prefBranch->GetCharPref("general.config.filename", 
                                   getter_Copies(lockFileName));
 
 
@@ -209,12 +208,8 @@ nsresult nsReadConfig::readConfigFile()
     // file we allow for the preference to be set (and locked) by the creator 
     // of the cfg file meaning the file can not be renamed (successfully).
 
-    nsCOMPtr<nsIPrefBranch> prefBranch;
-    rv = prefService->GetBranch(nsnull, getter_AddRefs(prefBranch));
-    NS_ENSURE_SUCCESS(rv, rv);
-
     PRInt32 obscureValue = 0;
-    (void) defaultPrefBranch->GetIntPref("general.config.obscure_value", &obscureValue);
+    (void) prefBranch->GetIntPref("general.config.obscure_value", &obscureValue);
     PR_LOG(MCD, PR_LOG_DEBUG, ("evaluating .cfg file %s with obscureValue %d\n", lockFileName.get(), obscureValue));
     rv = openAndEvaluateJSFile(lockFileName.get(), PR_TRUE, obscureValue, PR_TRUE);
     if (NS_FAILED(rv))
@@ -250,8 +245,8 @@ nsresult nsReadConfig::readConfigFile()
     nsXPIDLCString urlName;
     rv = prefBranch->GetCharPref("autoadmin.global_config_url",
                                   getter_Copies(urlName));
-    if (NS_SUCCEEDED(rv) && !urlName.IsEmpty()) {
-
+    if (NS_SUCCEEDED(rv) && *urlName != '\0' ) {  
+    
         // Instantiating nsAutoConfig object if the pref is present
         mAutoConfig = do_CreateInstance(NS_AUTOCONFIG_CONTRACTID, &rv);
         if (NS_FAILED(rv))

@@ -18,9 +18,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Daniel Glazman  <glazman@disruptive-innovations.com>, Original author
- *   Fabien Cazenave <kaze@kompozer.net>
- *   John Deal       <bassdeal@yahoo.com>
+ *   Daniel Glazman (glazman@disruptive-innovations.com), Original author
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -37,28 +35,6 @@
  * ***** END LICENSE BLOCK ***** */
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
-
-// <Kaze>  The ruler management relies on 4 specific properties:
-//   * realXPosition
-//   * realYPosition
-//   * realWidth
-//   * realHeight
-//
-// These properties are implemented with a patch on the Gecko core, see:
-//   * mozilla/dom/public/idl/html/nsIDOMNSHTMLElement.idl
-//   * mozilla/content/html/content/src/nsGenericHTMLElement.h
-//   * mozilla/content/html/content/src/nsGenericHTMLElement.cpp
-//
-// This patch used to work properly on Gecko 1.7;
-// it has caused some crashes Gecko 1.8.1, though it seems to work well now.
-//
-// However, it should be possible to implement these properties with pure JavaScript
-// so let's use this USE_CORE_PATCH constant to test both behaviors.
-
-const USE_CORE_PATCH = true;
-
-// TODO: replace this constant by a preprocessor definition to spare a few cycles.
-// </Kaze>
 
 var gRulerRow = null;
 var gFiringElement = null;
@@ -190,12 +166,7 @@ function FillVerticalRuler(ruler, elt)
     gFiringElement = elt;
 
     gColumnIndex = colObj.value;
-    if (USE_CORE_PATCH) {
-      var bottom = editor.getCellAt(tableElt, 0, gColumnIndex).realYPosition - 2;
-    } else {
-      // JRD: getBoxObjectFor() should be replaced by getBoundingClientRect() in future Gecko releases.
-      bottom = doc.getBoxObjectFor(tableElt).y;
-    }
+    var bottom = editor.getCellAt(tableElt, 0, gColumnIndex).realYPosition - 2;
 
     var minWidthEm = 2;
     for (var i = 0; i < rowCount.value; i++)
@@ -207,14 +178,8 @@ function FillVerticalRuler(ruler, elt)
         i += cell.getAttribute("rowspan") - 1;  // Kaze
       // </Kaze>
 
-      if (USE_CORE_PATCH) {
-        var y = cell.realYPosition;
-        var h = cell.realHeight;
-      } else {
-        //y = cell.offsetTop;
-        y = cell.offsetTop - GetBodyElement().parentNode.scrollTop; // Kaze
-        h = cell.offsetHeight;
-      }
+      var y = cell.realYPosition;
+      var h = cell.realHeight;
 
       var newSeparator = document.createElementNS(XUL_NS, "vbox");
       newSeparator.setAttribute("class", "rowSeparator");
@@ -235,12 +200,7 @@ function FillVerticalRuler(ruler, elt)
                                    "cursor: w-resize;");
       AddVerticalLength(document, newBox, hh + "px");
       ruler.appendChild(newBox);
-
-      if (USE_CORE_PATCH) {
-        bottom = y + h;
-      } else {
-        bottom += h;
-      }
+      bottom = y + h;
     }
 
     newSeparator = document.createElementNS(XUL_NS, "vbox");
@@ -253,14 +213,8 @@ function FillVerticalRuler(ruler, elt)
   else
   {
     gFiringElement = elt;
-    if (USE_CORE_PATCH) {
-      y = elt.realYPosition;
-      h = elt.realHeight;
-    } else {
-      //y = elt.offsetTop;
-      y = elt.offsetTop - GetBodyElement().parentNode.scrollTop; // Kaze
-      h = elt.offsetHeight;
-    }
+    y = elt.realYPosition;
+    h = elt.realHeight;
 
     var t = elt.style.getPropertyValue("top");
     if (t && t != "auto")
@@ -321,7 +275,7 @@ function FillHorizontalRuler(ruler, elt)
   var editor = GetCurrentEditor();
   while(elt && !editor.nodeIsBlock(elt))
     elt = elt.parentNode;
- 
+
   // table cells are handled differently
   if (elt.nodeName.toLowerCase() == "td" ||
       elt.nodeName.toLowerCase() == "th")
@@ -330,13 +284,7 @@ function FillHorizontalRuler(ruler, elt)
     gRulerRow = row;
     gFiringElement = elt;
     var cell = GetNextElement(row.firstChild);
-    var cellNumber = 0;
-    if (USE_CORE_PATCH) {
-      var right = cell.realXPosition - 2;
-    } else {
-      right = cell.offsetLeft;
-    }
-
+    var cellNumber = 0, right = cell.realXPosition - 2;
     while (cell)
     {
       // Kaze: this won't work if some cells have colspan attributes
@@ -344,13 +292,8 @@ function FillHorizontalRuler(ruler, elt)
       var tagName = cell.nodeName.toLowerCase();
       if (tagName == "td" || tagName == "th")
       {
-        if (USE_CORE_PATCH) {
-          var x = cell.realXPosition;
-          var w = cell.realWidth;
-        } else {
-          x = cell.offsetLeft;
-          w = cell.clientWidth;
-        }
+        var x     = cell.realXPosition;
+        var w     = cell.realWidth;
 
         var newSeparator = document.createElementNS(XUL_NS, "hbox");
         newSeparator.setAttribute("class", "columnSeparator");
@@ -386,13 +329,8 @@ function FillHorizontalRuler(ruler, elt)
     editor instanceof Components.interfaces.nsITableEditor;
 
     gTable.obj = editor.getElementOrParentByTagName("table", null);
-    if (USE_CORE_PATCH) {
-      gTable.realWidth = gTable.obj.realWidth;
-      gTable.realHeight = gTable.obj.realHeight;
-    } else {
-      gTable.realWidth = gTable.obj.clientWidth;
-      gTable.realHeight = gTable.obj.clientHeight;
-    }
+    gTable.realWidth = gTable.obj.realWidth;
+    gTable.realHeight = gTable.obj.realHeight;
   }
   else
   {
@@ -400,38 +338,24 @@ function FillHorizontalRuler(ruler, elt)
 
     // BEGIN HACK!!!!
     var tbody = null;
-
     if (gFiringElement.nodeName.toLowerCase() == "table")
     {
       tbody = gFiringElement.firstChild;
       while (tbody.nodeName.toLowerCase() != "tbody")
         tbody = tbody.nextSibling;
     }
-
     if (tbody)
     {
-      if (USE_CORE_PATCH) {
-        x = tbody.realXPosition;
-        w = tbody.realWidth;
-      } else {
-        //x = tbody.offsetLeft;
-        x = tbody.offsetLeft - GetBodyElement().parentNode.scrollLeft; // Kaze
-        w = tbody.clientWidth;
-      }
+      x = tbody.realXPosition;
+      w = tbody.realWidth;
     }
     else
     {
-      if (USE_CORE_PATCH) {
-        x = elt.realXPosition;
-        w = elt.realWidth;
-      } else {
-        //x = elt.offsetLeft;
-        x = elt.offsetLeft - GetBodyElement().parentNode.scrollLeft; // Kaze
-        w = elt.clientWidth;
-      }
+      x = elt.realXPosition;
+      w = elt.realWidth;
     }
     // END HACK!!!!
- 
+
     var l = elt.style.getPropertyValue("left");
     if (l && l != "auto")
     {
@@ -478,7 +402,6 @@ function FillHorizontalRuler(ruler, elt)
       ruler.appendChild(rightGlue);
     }
   }
-
 }
 
 function SelectRowFromVRuler(label)
@@ -929,11 +852,7 @@ function GetComputedStyle(elt)
 
 function GetObjectWidth(elt)
 {
-  if (USE_CORE_PATCH) {
-    var w = elt.realWidth;
-  } else {
-    w = elt.clientWidth;
-  }
+  var w = elt.realWidth;
   var computedStyle = GetComputedStyle(elt);
   var computedWidth = computedStyle.getPropertyCSSValue("width");
   if (computedWidth.cssValueType  == CSSValue.CSS_PRIMITIVE_VALUE &&
@@ -956,21 +875,13 @@ function GetObjectWidth(elt)
 
 function GetObjectHeight(elt)
 {
-  if (USE_CORE_PATCH) {
-    var h = elt.realHeight;
-  } else {
-    h = elt.offsetHeight;
-  }
+  var h = elt.realHeight;
   return h;
 }
 
 function GetObjectLeft(elt)
 {
-  if (USE_CORE_PATCH) {
-    var x = elt.realXPosition;
-  } else {
-    x = elt.offsetLeft;
-  }
+  var x = elt.realXPosition;
   var computedStyle = GetComputedStyle(elt);
   var computedLeft = document.defaultView.getComputedStyle(elt, "").getPropertyCSSValue("left");
   if (computedLeft.cssValueType  == CSSValue.CSS_PRIMITIVE_VALUE &&
@@ -988,11 +899,7 @@ function GetObjectLeft(elt)
 
 function GetObjectTop(elt)
 {
-  if (USE_CORE_PATCH) {
-    var y = elt.realYPosition;
-  } else {
-    y = elt.offsetTop;
-  }
+  var y = elt.realYPosition;
   var computedStyle = GetComputedStyle(elt);
   var computedTop = document.defaultView.getComputedStyle(elt, "").getPropertyCSSValue("top");
   if (computedTop.cssValueType  == CSSValue.CSS_PRIMITIVE_VALUE &&

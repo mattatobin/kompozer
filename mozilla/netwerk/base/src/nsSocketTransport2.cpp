@@ -21,8 +21,6 @@
  *
  * Contributor(s):
  *   Darin Fisher <darin@netscape.com>
- *   Malcolm Smith <malsmith@cs.rmit.edu.au>
- *   Andreas Otte <andreas.otte@debitel.net>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -47,12 +45,10 @@
 #include "nsStreamUtils.h"
 #include "nsNetSegmentUtils.h"
 #include "nsTransportUtils.h"
-#include "nsProxyInfo.h"
 #include "nsNetCID.h"
 #include "nsAutoLock.h"
 #include "nsCOMPtr.h"
 #include "netCore.h"
-#include "nsInt64.h"
 #include "prmem.h"
 #include "pratom.h"
 #include "plstr.h"
@@ -65,6 +61,7 @@
 #include "nsISocketProviderService.h"
 #include "nsISocketProvider.h"
 #include "nsISSLSocketControl.h"
+#include "nsIProxyInfo.h"
 #include "nsIPipe.h"
 
 #if defined(XP_WIN)
@@ -174,10 +171,6 @@ ErrorAccordingToNSPR(PRErrorCode errorCode)
     case PR_NETWORK_UNREACHABLE_ERROR: // XXX need new nsresult for this!
     case PR_HOST_UNREACHABLE_ERROR:    // XXX and this!
     case PR_ADDRESS_NOT_AVAILABLE_ERROR:
-    // Treat EACCES as a soft error since (at least on Linux) connect() returns
-    // EACCES when an IPv6 connection is blocked by a firewall. See bug 270784.
-    case PR_ADDRESS_NOT_SUPPORTED_ERROR:
-    case PR_NO_ACCESS_RIGHTS_ERROR:
         rv = NS_ERROR_CONNECTION_REFUSED;
         break;
     case PR_IO_TIMEOUT_ERROR:
@@ -342,11 +335,6 @@ nsSocketInputStream::Read(char *buf, PRUint32 count, PRUint32 *countRead)
     nsresult rv;
     {
         nsAutoLock lock(mTransport->mLock);
-
-#ifdef ENABLE_SOCKET_TRACING
-        if (n > 0)
-            mTransport->TraceInBuf(buf, n);
-#endif
 
         mTransport->ReleaseFD_Locked(fd);
 
@@ -556,11 +544,6 @@ nsSocketOutputStream::Write(const char *buf, PRUint32 count, PRUint32 *countWrit
     {
         nsAutoLock lock(mTransport->mLock);
 
-#ifdef ENABLE_SOCKET_TRACING
-    if (n > 0)
-        mTransport->TraceOutBuf(buf, n);
-#endif
-
         mTransport->ReleaseFD_Locked(fd);
 
         if (n > 0)
@@ -680,7 +663,6 @@ nsSocketTransport::nsSocketTransport()
     , mPort(0)
     , mProxyPort(0)
     , mProxyTransparent(PR_FALSE)
-    , mProxyTransparentResolvesHost(PR_FALSE)
     , mState(STATE_CLOSED)
     , mAttached(PR_FALSE)
     , mInputClosed(PR_TRUE)
@@ -696,9 +678,6 @@ nsSocketTransport::nsSocketTransport()
     LOG(("creating nsSocketTransport @%x\n", this));
 
     NS_ADDREF(gSocketTransportService);
-
-    mTimeouts[TIMEOUT_CONNECT]    = PR_UINT16_MAX; // no timeout
-    mTimeouts[TIMEOUT_READ_WRITE] = PR_UINT16_MAX; // no timeout
 }
 
 nsSocketTransport::~nsSocketTransport()
@@ -723,17 +702,8 @@ nsSocketTransport::~nsSocketTransport()
 nsresult
 nsSocketTransport::Init(const char **types, PRUint32 typeCount,
                         const nsACString &host, PRUint16 port,
-                        nsIProxyInfo *givenProxyInfo)
+                        nsIProxyInfo *proxyInfo)
 {
-    if (!mLock)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-    nsCOMPtr<nsProxyInfo> proxyInfo;
-    if (givenProxyInfo) {
-        proxyInfo = do_QueryInterface(givenProxyInfo);
-        NS_ENSURE_ARG(proxyInfo);
-    }
-
     // init socket type info
 
     mPort = port;
@@ -746,8 +716,7 @@ nsSocketTransport::Init(const char **types, PRUint32 typeCount,
         // grab proxy type (looking for "socks" for example)
         proxyType = proxyInfo->Type();
         if (proxyType && (strcmp(proxyType, "http") == 0 ||
-                          strcmp(proxyType, "direct") == 0 ||
-                          strcmp(proxyType, "unknown") == 0))
+                          strcmp(proxyType, "direct") == 0))
             proxyType = nsnull;
     }
 
@@ -756,50 +725,38 @@ nsSocketTransport::Init(const char **types, PRUint32 typeCount,
 
     // include proxy type as a socket type if proxy type is not "http"
     mTypeCount = typeCount + (proxyType != nsnull);
-    if (!mTypeCount)
-        return NS_OK;
-
-    // if we have socket types, then the socket provider service had
-    // better exist!
-    nsresult rv;
-    nsCOMPtr<nsISocketProviderService> spserv =
-        do_GetService(kSocketProviderServiceCID, &rv);
-    if (NS_FAILED(rv)) return rv;
-
-    mTypes = (char **) malloc(mTypeCount * sizeof(char *));
-    if (!mTypes)
-        return NS_ERROR_OUT_OF_MEMORY;
-
-    // now verify that each socket type has a registered socket provider.
-    for (PRUint32 i = 0, type = 0; i < mTypeCount; ++i) {
-        // store socket types
-        if (i == 0 && proxyType)
-            mTypes[i] = PL_strdup(proxyType);
-        else
-            mTypes[i] = PL_strdup(types[type++]);
-
-        if (!mTypes[i]) {
-            mTypeCount = i;
+    if (mTypeCount) {
+        mTypes = (char **) malloc(mTypeCount * sizeof(char *));
+        if (!mTypes)
             return NS_ERROR_OUT_OF_MEMORY;
-        }
-        nsCOMPtr<nsISocketProvider> provider;
-        rv = spserv->GetSocketProvider(mTypes[i], getter_AddRefs(provider));
-        if (NS_FAILED(rv)) {
-            NS_WARNING("no registered socket provider");
-            return rv;
-        }
 
-        // note if socket type corresponds to a transparent proxy
-        // XXX don't hardcode SOCKS here (use proxy info's flags instead).
-        if ((strcmp(mTypes[i], "socks") == 0) ||
-            (strcmp(mTypes[i], "socks4") == 0)) {
-            mProxyTransparent = PR_TRUE;
+        // store socket types
+        PRUint32 i, type = 0;
+        if (proxyType)
+            mTypes[type++] = PL_strdup(proxyType);
+        for (i=0; i<typeCount; ++i)
+            mTypes[type++] = PL_strdup(types[i]);
 
-            if (proxyInfo->Flags() & nsIProxyInfo::TRANSPARENT_PROXY_RESOLVES_HOST) {
-                // we want the SOCKS layer to send the hostname
-                // and port to the proxy and let it do the DNS.
-                mProxyTransparentResolvesHost = PR_TRUE;
+        // if we have socket types, then the socket provider service had
+        // better exist!
+        nsresult rv;
+        nsCOMPtr<nsISocketProviderService> spserv =
+            do_GetService(kSocketProviderServiceCID, &rv);
+        if (NS_FAILED(rv)) return rv;
+
+        // now verify that each socket type has a registered socket provider.
+        for (i=0; i<mTypeCount; ++i) {
+            nsCOMPtr<nsISocketProvider> provider;
+            rv = spserv->GetSocketProvider(mTypes[i], getter_AddRefs(provider));
+            if (NS_FAILED(rv)) {
+                NS_WARNING("no registered socket provider");
+                return rv;
             }
+
+            // note if socket type corresponds to a transparent proxy
+            if ((strcmp(mTypes[i], "socks") == 0) ||
+                (strcmp(mTypes[i], "socks4") == 0))
+                mProxyTransparent = PR_TRUE;
         }
     }
 
@@ -809,9 +766,6 @@ nsSocketTransport::Init(const char **types, PRUint32 typeCount,
 nsresult
 nsSocketTransport::InitWithConnectedSocket(PRFileDesc *fd, const PRNetAddr *addr)
 {
-    if (!mLock)
-        return NS_ERROR_OUT_OF_MEMORY;
-
     NS_ASSERTION(!mFD, "already initialized");
 
     char buf[64];
@@ -828,7 +782,6 @@ nsSocketTransport::InitWithConnectedSocket(PRFileDesc *fd, const PRNetAddr *addr
     memcpy(&mNetAddr, addr, sizeof(PRNetAddr));
 
     mPollFlags = (PR_POLL_READ | PR_POLL_WRITE | PR_POLL_EXCEPT);
-    mPollTimeout = mTimeouts[TIMEOUT_READ_WRITE];
     mState = STATE_TRANSFERRING;
 
     mFD = fd;
@@ -871,7 +824,7 @@ nsSocketTransport::SendStatus(nsresult status)
     LOG(("nsSocketTransport::SendStatus [this=%x status=%x]\n", this, status));
 
     nsCOMPtr<nsITransportEventSink> sink;
-    PRUint64 progress;
+    PRUint32 progress;
     {
         nsAutoLock lock(mLock);
         sink = mEventSink;
@@ -888,7 +841,7 @@ nsSocketTransport::SendStatus(nsresult status)
         }
     }
     if (sink)
-        sink->OnTransportStatus(this, status, progress, LL_MAXUINT);
+        sink->OnTransportStatus(this, status, progress, PR_UINT32_MAX);
 }
 
 nsresult
@@ -897,27 +850,6 @@ nsSocketTransport::ResolveHost()
     LOG(("nsSocketTransport::ResolveHost [this=%x]\n", this));
 
     nsresult rv;
-
-    if (!mProxyHost.IsEmpty()) {
-        if (!mProxyTransparent || mProxyTransparentResolvesHost) {
-            // When not resolving mHost locally, we still want to ensure that
-            // it only contains valid characters.  See bug 304904 for details.
-            if (!net_IsValidHostName(mHost))
-                return NS_ERROR_UNKNOWN_HOST;
-        }
-        if (mProxyTransparentResolvesHost) {
-            // Name resolution is done on the server side.  Just pretend
-            // client resolution is complete, this will get picked up later.
-            // since we don't need to do DNS now, we bypass the resolving
-            // step by initializing mNetAddr to an empty address, but we
-            // must keep the port. The SOCKS IO layer will use the hostname
-            // we send it when it's created, rather than the empty address
-            // we send with the connect call.
-            mState = STATE_RESOLVING;
-            PR_SetNetAddr(PR_IpAddrAny, PR_AF_INET, SocketPort(), &mNetAddr);
-            return PostEvent(MSG_DNS_LOOKUP_COMPLETE, NS_OK, nsnull);
-        }
-    }
 
     nsCOMPtr<nsIDNSService> dns = do_GetService(kDNSServiceCID, &rv);
     if (NS_FAILED(rv)) return rv;
@@ -957,12 +889,11 @@ nsSocketTransport::BuildSocket(PRFileDesc *&fd, PRBool &proxyTransparent, PRBool
             do_GetService(kSocketProviderServiceCID, &rv);
         if (NS_FAILED(rv)) return rv;
 
-        const char *host       = mHost.get();
-        PRInt32     port       = (PRInt32) mPort;
-        const char *proxyHost  = mProxyHost.IsEmpty() ? nsnull : mProxyHost.get();
-        PRInt32     proxyPort  = (PRInt32) mProxyPort;
-        PRUint32    proxyFlags = 0;
-
+        const char *host      = mHost.get();
+        PRInt32     port      = (PRInt32) mPort;
+        const char *proxyHost = mProxyHost.IsEmpty() ? nsnull : mProxyHost.get();
+        PRInt32     proxyPort = (PRInt32) mProxyPort;
+        
         PRUint32 i;
         for (i=0; i<mTypeCount; ++i) {
             nsCOMPtr<nsISocketProvider> provider;
@@ -973,17 +904,13 @@ nsSocketTransport::BuildSocket(PRFileDesc *&fd, PRBool &proxyTransparent, PRBool
             if (NS_FAILED(rv))
                 break;
 
-            if (mProxyTransparentResolvesHost)
-                proxyFlags |= nsISocketProvider::PROXY_RESOLVES_HOST;
-
             nsCOMPtr<nsISupports> secinfo;
             if (i == 0) {
                 // if this is the first type, we'll want the 
                 // service to allocate a new socket
                 rv = provider->NewSocket(mNetAddr.raw.family,
                                          host, port, proxyHost, proxyPort,
-                                         proxyFlags, &fd,
-                                         getter_AddRefs(secinfo));
+                                         &fd, getter_AddRefs(secinfo));
 
                 if (NS_SUCCEEDED(rv) && !fd) {
                     NS_NOTREACHED("NewSocket succeeded but failed to create a PRFileDesc");
@@ -996,10 +923,8 @@ nsSocketTransport::BuildSocket(PRFileDesc *&fd, PRBool &proxyTransparent, PRBool
                 // to the stack (such as pushing an io layer)
                 rv = provider->AddToSocket(mNetAddr.raw.family,
                                            host, port, proxyHost, proxyPort,
-                                           proxyFlags, fd,
-                                           getter_AddRefs(secinfo));
+                                           fd, getter_AddRefs(secinfo));
             }
-            proxyFlags = 0;
             if (NS_FAILED(rv))
                 break;
 
@@ -1121,7 +1046,6 @@ nsSocketTransport::InitiateSocket()
 
     LOG(("  advancing to STATE_CONNECTING\n"));
     mState = STATE_CONNECTING;
-    mPollTimeout = mTimeouts[TIMEOUT_CONNECT];
     SendStatus(STATUS_CONNECTING_TO);
 
 #if defined(PR_LOGGING)
@@ -1309,7 +1233,6 @@ nsSocketTransport::OnSocketConnected()
     LOG(("  advancing to STATE_TRANSFERRING\n"));
 
     mPollFlags = (PR_POLL_READ | PR_POLL_WRITE | PR_POLL_EXCEPT);
-    mPollTimeout = mTimeouts[TIMEOUT_READ_WRITE];
     mState = STATE_TRANSFERRING;
 
     SendStatus(STATUS_CONNECTED_TO);
@@ -1391,13 +1314,8 @@ nsSocketTransport::OnSocketEvent(PRUint32 type, nsresult status, nsISupports *pa
         }
         // status contains DNS lookup status
         if (NS_FAILED(status)) {
-            // When using a HTTP proxy, NS_ERROR_UNKNOWN_HOST means the HTTP 
-            // proxy host is not found, so we fixup the error code.
-            // For SOCKS proxies (mProxyTransparent == true), the socket 
-            // transport resolves the real host here, so there's no fixup 
-            // (see bug 226943).
-            if ((status == NS_ERROR_UNKNOWN_HOST) && !mProxyTransparent &&
-                !mProxyHost.IsEmpty())
+            // fixup error code if proxy was not found
+            if ((status == NS_ERROR_UNKNOWN_HOST) && !mProxyHost.IsEmpty())
                 mCondition = NS_ERROR_UNKNOWN_PROXY_HOST;
             else
                 mCondition = status;
@@ -1429,11 +1347,7 @@ nsSocketTransport::OnSocketEvent(PRUint32 type, nsresult status, nsISupports *pa
         LOG(("  MSG_OUTPUT_PENDING\n"));
         OnMsgOutputPending();
         break;
-    case MSG_TIMEOUT_CHANGED:
-        LOG(("  MSG_TIMEOUT_CHANGED\n"));
-        mPollTimeout = mTimeouts[(mState == STATE_TRANSFERRING)
-          ? TIMEOUT_READ_WRITE : TIMEOUT_CONNECT];
-        break;
+
     default:
         LOG(("  unhandled event!\n"));
     }
@@ -1456,12 +1370,6 @@ nsSocketTransport::OnSocketReady(PRFileDesc *fd, PRInt16 outFlags)
     LOG(("nsSocketTransport::OnSocketReady [this=%x outFlags=%hd]\n",
         this, outFlags));
 
-    if (outFlags == -1) {
-        LOG(("socket timeout expired\n"));
-        mCondition = NS_ERROR_NET_TIMEOUT;
-        return;
-    }
-
     if (mState == STATE_TRANSFERRING) {
         // if waiting to write and socket is writable or hit an exception.
         if ((mPollFlags & PR_POLL_WRITE) && (outFlags & ~PR_POLL_READ)) {
@@ -1477,8 +1385,6 @@ nsSocketTransport::OnSocketReady(PRFileDesc *fd, PRInt16 outFlags)
             mPollFlags &= ~PR_POLL_READ;
             mInput.OnSocketReady(NS_OK);
         }
-        // Update poll timeout in case it was changed
-        mPollTimeout = mTimeouts[TIMEOUT_READ_WRITE];
     }
     else if (mState == STATE_CONNECTING) {
         PRStatus status = PR_ConnectContinue(fd, outFlags);
@@ -1499,8 +1405,6 @@ nsSocketTransport::OnSocketReady(PRFileDesc *fd, PRInt16 outFlags)
             if ((PR_WOULD_BLOCK_ERROR == code) || (PR_IN_PROGRESS_ERROR == code)) {
                 // Set up the select flags for connect...
                 mPollFlags = (PR_POLL_EXCEPT | PR_POLL_WRITE);
-                // Update poll timeout in case it was changed
-                mPollTimeout = mTimeouts[TIMEOUT_CONNECT];
             } 
             else {
                 //
@@ -1535,15 +1439,14 @@ nsSocketTransport::OnSocketDetached(PRFileDesc *fd)
     // condition up to our consumers.  (e.g., STS is shutting down.)
     if (NS_SUCCEEDED(mCondition))
         mCondition = NS_ERROR_ABORT;
-
-    if (RecoverFromError())
+    else if (RecoverFromError())
         mCondition = NS_OK;
     else {
         mState = STATE_CLOSED;
 
         // make sure there isn't any pending DNS request
         if (mDNSRequest) {
-            mDNSRequest->Cancel(NS_ERROR_ABORT);
+            mDNSRequest->Cancel();
             mDNSRequest = 0;
         }
 
@@ -1553,13 +1456,6 @@ nsSocketTransport::OnSocketDetached(PRFileDesc *fd)
         mInput.OnSocketReady(mCondition);
         mOutput.OnSocketReady(mCondition);
     }
-
-    // break any potential reference cycle between the security info object
-    // and ourselves by resetting its notification callbacks object.  see
-    // bug 285991 for details.
-    nsCOMPtr<nsISSLSocketControl> secCtrl = do_QueryInterface(mSecInfo);
-    if (secCtrl)
-        secCtrl->SetNotificationCallbacks(nsnull);
 
     // finally, release our reference to the socket (must do this within
     // the transport lock) possibly closing the socket.
@@ -1817,25 +1713,7 @@ nsSocketTransport::GetSelfAddr(PRNetAddr *addr)
 }
 
 NS_IMETHODIMP
-nsSocketTransport::GetTimeout(PRUint32 type, PRUint32 *value)
-{
-    NS_ENSURE_ARG_MAX(type, nsISocketTransport::TIMEOUT_READ_WRITE);
-    *value = (PRUint32) mTimeouts[type];
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-nsSocketTransport::SetTimeout(PRUint32 type, PRUint32 value)
-{
-    NS_ENSURE_ARG_MAX(type, nsISocketTransport::TIMEOUT_READ_WRITE);
-    // truncate overly large timeout values.
-    mTimeouts[type] = (PRUint16) PR_MIN(value, PR_UINT16_MAX);
-    PostEvent(MSG_TIMEOUT_CHANGED);
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-nsSocketTransport::OnLookupComplete(nsICancelable *request,
+nsSocketTransport::OnLookupComplete(nsIDNSRequest *request,
                                     nsIDNSRecord  *rec,
                                     nsresult       status)
 {
@@ -1853,76 +1731,3 @@ nsSocketTransport::OnLookupComplete(nsICancelable *request,
 
     return NS_OK;
 }
-
-#ifdef ENABLE_SOCKET_TRACING
-
-#include <stdio.h>
-#include <ctype.h>
-#include "prenv.h"
-
-static void
-DumpBytesToFile(const char *path, const char *header, const char *buf, PRInt32 n)
-{
-    FILE *fp = fopen(path, "a");
-
-    fprintf(fp, "\n%s [%d bytes]\n", header, n);
-
-    const unsigned char *p;
-    while (n) {
-        p = (const unsigned char *) buf;
-
-        PRInt32 i, row_max = PR_MIN(16, n);
-
-        for (i = 0; i < row_max; ++i)
-            fprintf(fp, "%02x  ", *p++);
-        for (i = row_max; i < 16; ++i)
-            fprintf(fp, "    ");
-
-        p = (const unsigned char *) buf;
-        for (i = 0; i < row_max; ++i, ++p) {
-            if (isprint(*p))
-                fprintf(fp, "%c", *p);
-            else
-                fprintf(fp, ".");
-        }
-
-        fprintf(fp, "\n");
-        buf += row_max;
-        n -= row_max;
-    }
-
-    fprintf(fp, "\n");
-    fclose(fp);
-}
-
-void
-nsSocketTransport::TraceInBuf(const char *buf, PRInt32 n)
-{
-    char *val = PR_GetEnv("NECKO_SOCKET_TRACE_LOG");
-    if (!val || !*val)
-        return;
-
-    nsCAutoString header;
-    header.Assign(NS_LITERAL_CSTRING("Reading from: ") + mHost);
-    header.Append(':');
-    header.AppendInt(mPort);
-
-    DumpBytesToFile(val, header.get(), buf, n);
-}
-
-void
-nsSocketTransport::TraceOutBuf(const char *buf, PRInt32 n)
-{
-    char *val = PR_GetEnv("NECKO_SOCKET_TRACE_LOG");
-    if (!val || !*val)
-        return;
-
-    nsCAutoString header;
-    header.Assign(NS_LITERAL_CSTRING("Writing to: ") + mHost);
-    header.Append(':');
-    header.AppendInt(mPort);
-
-    DumpBytesToFile(val, header.get(), buf, n);
-}
-
-#endif

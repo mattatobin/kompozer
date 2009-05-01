@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -46,6 +46,10 @@
 #include "TxLog.h"
 #include "txURIUtils.h"
 #include "txXMLParser.h"
+
+#ifndef TX_EXE
+#include "nsIDOMDocument.h"
+#endif
 
 const PRInt32 txExecutionState::kMaxRecursionDepth = 20000;
 
@@ -84,8 +88,7 @@ txLoadedDocumentsHash::~txLoadedDocumentsHash()
     }
 }
 
-txExecutionState::txExecutionState(txStylesheet* aStylesheet,
-                                   PRBool aDisableLoads)
+txExecutionState::txExecutionState(txStylesheet* aStylesheet)
     : mStylesheet(aStylesheet),
       mNextInstruction(nsnull),
       mLocalVariables(nsnull),
@@ -97,8 +100,7 @@ txExecutionState::txExecutionState(txStylesheet* aStylesheet,
       mInitialEvalContext(nsnull),
 //      mRTFDocument(nsnull),
       mGlobalParams(nsnull),
-      mKeyHash(aStylesheet->getKeyMap()),
-      mDisableLoads(aDisableLoads)
+      mKeyHash(aStylesheet->getKeyMap())
 {
 }
 
@@ -201,10 +203,10 @@ txExecutionState::init(const txXPathNode& aNode,
 }
 
 nsresult
-txExecutionState::end(nsresult aResult)
+txExecutionState::end()
 {
     popTemplateRule();
-    mOutputHandler->endDocument(aResult);
+    mOutputHandler->endDocument();
     
     return NS_OK;
 }
@@ -465,10 +467,6 @@ txExecutionState::retrieveDocument(const nsAString& aUri)
     NS_ASSERTION(aUri.FindChar(PRUnichar('#')) == kNotFound,
                  "Remove the fragment.");
 
-    if (mDisableLoads) {
-        return nsnull;
-    }
-
     PR_LOG(txLog::xslt, PR_LOG_DEBUG,
            ("Retrieve Document %s", NS_LossyConvertUCS2toASCII(aUri).get()));
 
@@ -480,12 +478,13 @@ txExecutionState::retrieveDocument(const nsAString& aUri)
 
     if (!entry->mDocument) {
         // open URI
-        nsAutoString errMsg;
-        // XXX we should get the loader from the actual node
+        nsAutoString errMsg, refUri;
+        // XXX we should get the referrer from the actual node
         // triggering the load, but this will do for the time being
+        txXPathNodeUtils::getBaseURI(*mLoadedDocuments.mSourceDocument, refUri);
         nsresult rv;
-        rv = txParseDocumentFromURI(aUri, *mLoadedDocuments.mSourceDocument,
-                                    errMsg,
+        rv = txParseDocumentFromURI(aUri, refUri,
+                                    *mLoadedDocuments.mSourceDocument, errMsg,
                                     getter_Transfers(entry->mDocument));
 
         if (NS_FAILED(rv) || !entry->mDocument) {

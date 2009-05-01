@@ -439,7 +439,7 @@ TestArgFormatter(JSContext* jscontext, JSObject* glob, nsIXPConnect* xpc)
     const char*                  a_in = "some string";
     nsCOMPtr<nsITestXPCFoo>      b_in = new nsTestXPCFoo();
     nsCOMPtr<nsIWritableVariant> c_in = do_CreateInstance("@mozilla.org/variant;1"); 
-    static NS_NAMED_LITERAL_STRING(d_in, "foo bar");
+    static const NS_NAMED_LITERAL_STRING(d_in, "foo bar");
     const char*                  e_in = "another meaningless chunck of text";
     
 
@@ -622,11 +622,13 @@ static void ShowXPCException()
                         nsCOMPtr<nsIScriptError> report = do_QueryInterface(data);
                         if(report)
                         {
-                            nsCAutoString str2;
-                            rv = report->ToString(str2);
-                            if(NS_SUCCEEDED(rv))
+                            char* str2;
+                            rv = report->ToString(&str2);
+                            if(NS_SUCCEEDED(rv) && str2)
                             {
-                                printf("%s\n", str2.get());
+                                printf(str2);
+                                printf("\n");
+                                nsMemory::Free(str2);
                             }                            
                         }                            
                     }                            

@@ -1,5 +1,4 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=8 sw=4 et tw=78:
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
@@ -51,8 +50,8 @@ JS_BEGIN_EXTERN_C
 /*
  * Exception handling runtime information.
  *
- * All fields except length are code offsets relative to the main entry point
- * of the script.  If script->trynotes is not null, it points to a vector of
+ * All fields except length are code offsets, relative to the beginning of
+ * the script.  If script->trynotes is not null, it points to a vector of
  * these structs terminated by one with catchStart == 0.
  */
 struct JSTryNote {
@@ -68,8 +67,7 @@ struct JSScript {
     jsbytecode   *code;         /* bytecodes and their immediate operands */
     uint32       length;        /* length of code vector */
     jsbytecode   *main;         /* main entry point, after predef'ing prolog */
-    uint16       version;       /* JS version under which script was compiled */
-    uint16       numGlobalVars; /* declared global var/const/function count */
+    JSVersion    version;       /* JS version under which script was compiled */
     JSAtomMap    atomMap;       /* maps immediate index to literal struct */
     const char   *filename;     /* source filename or null */
     uintN        lineno;        /* base line number of script */
@@ -98,57 +96,22 @@ struct JSScript {
         catchpc = catchpc_;                                                   \
     JS_END_MACRO
 
-/*
- * Find the innermost finally block that handles the given pc. This is a
- * version of SCRIPT_FIND_CATCH_START that ignore catch blocks and is used
- * to implement generator.close().
- */
-jsbytecode *
-js_FindFinallyHandler(JSScript *script, jsbytecode *pc);
-
 extern JS_FRIEND_DATA(JSClass) js_ScriptClass;
 
 extern JSObject *
 js_InitScriptClass(JSContext *cx, JSObject *obj);
 
-/*
- * On first new context in rt, initialize script runtime state, specifically
- * the script filename table and its lock.
- */
 extern JSBool
-js_InitRuntimeScriptState(JSRuntime *rt);
+js_InitRuntimeScriptState(JSContext *cx);
 
-/*
- * On last context destroy for rt, if script filenames are all GC'd, free the
- * script filename table and its lock.
- */
 extern void
-js_FinishRuntimeScriptState(JSRuntime *rt);
-
-/*
- * On JS_DestroyRuntime(rt), forcibly free script filename prefixes and any
- * script filename table entries that have not been GC'd, the latter using
- * js_FinishRuntimeScriptState.
- *
- * This allows script filename prefixes to outlive any context in rt.
- */
-extern void
-js_FreeRuntimeScriptState(JSRuntime *rt);
+js_FinishRuntimeScriptState(JSContext *cx);
 
 extern const char *
 js_SaveScriptFilename(JSContext *cx, const char *filename);
 
-extern const char *
-js_SaveScriptFilenameRT(JSRuntime *rt, const char *filename, uint32 flags);
-
-extern uint32
-js_GetScriptFilenameFlags(const char *filename);
-
 extern void
 js_MarkScriptFilename(const char *filename);
-
-extern void
-js_MarkScriptFilenames(JSRuntime *rt, JSBool keepAtoms);
 
 extern void
 js_SweepScriptFilenames(JSRuntime *rt);
@@ -179,24 +142,14 @@ js_NewScriptFromCG(JSContext *cx, JSCodeGenerator *cg, JSFunction *fun);
 extern JS_FRIEND_API(void)
 js_CallNewScriptHook(JSContext *cx, JSScript *script, JSFunction *fun);
 
-extern JS_FRIEND_API(void)
-js_CallDestroyScriptHook(JSContext *cx, JSScript *script);
-
 extern void
 js_DestroyScript(JSContext *cx, JSScript *script);
 
 extern void
-js_MarkScript(JSContext *cx, JSScript *script);
-
-/*
- * To perturb as little code as possible, we introduce a js_GetSrcNote lookup
- * cache without adding an explicit cx parameter.  Thus js_GetSrcNote becomes
- * a macro that uses cx from its calls' lexical environments.
- */
-#define js_GetSrcNote(script,pc) js_GetSrcNoteCached(cx, script, pc)
+js_MarkScript(JSContext *cx, JSScript *script, void *arg);
 
 extern jssrcnote *
-js_GetSrcNoteCached(JSContext *cx, JSScript *script, jsbytecode *pc);
+js_GetSrcNote(JSScript *script, jsbytecode *pc);
 
 /* XXX need cx to lock function objects declared by prolog bytecodes. */
 extern uintN
@@ -205,7 +158,7 @@ js_PCToLineNumber(JSContext *cx, JSScript *script, jsbytecode *pc);
 extern jsbytecode *
 js_LineNumberToPC(JSScript *script, uintN lineno);
 
-extern JS_FRIEND_API(uintN)
+extern uintN
 js_GetScriptLineExtent(JSScript *script);
 
 /*

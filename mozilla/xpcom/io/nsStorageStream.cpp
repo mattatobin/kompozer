@@ -1,41 +1,25 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
+ *  
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ *  
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
+ * Contributor(s): 
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 /*
  * The storage stream provides an internal buffer that can be filled by a
@@ -52,7 +36,7 @@
 #include "nsIInputStream.h"
 #include "nsISeekableStream.h"
 #include "prlog.h"
-#include "nsInt64.h"
+
 #if defined(PR_LOGGING)
 //
 // Log module for StorageStream logging...
@@ -120,8 +104,6 @@ nsStorageStream::GetOutputStream(PRInt32 aStartingOffset,
                                  nsIOutputStream * *aOutputStream)
 {
     NS_ENSURE_ARG(aOutputStream);
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     if (mWriteInProgress)
         return NS_ERROR_NOT_AVAILABLE;
 
@@ -147,8 +129,6 @@ nsStorageStream::GetOutputStream(PRInt32 aStartingOffset,
 NS_IMETHODIMP
 nsStorageStream::Close()
 {
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     mWriteInProgress = PR_FALSE;
     
     PRInt32 segmentOffset = SegOffset(mLogicalLength);
@@ -177,8 +157,6 @@ nsStorageStream::Flush()
 NS_IMETHODIMP
 nsStorageStream::Write(const char *aBuffer, PRUint32 aCount, PRUint32 *aNumWritten)
 {
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     const char* readCursor;
     PRUint32 count, availableInSegment, remaining;
     nsresult rv = NS_OK;
@@ -192,15 +170,7 @@ nsStorageStream::Write(const char *aBuffer, PRUint32 aCount, PRUint32 *aNumWritt
 
     remaining = aCount;
     readCursor = aBuffer;
-    // If no segments have been created yet, create one even if we don't have
-    // to write any data; this enables creating an input stream which reads from
-    // the very end of the data for any amount of data in the stream (i.e.
-    // this stream contains N bytes of data and newInputStream(N) is called),
-    // even for N=0 (with the caveat that we require .write("", 0) be called to
-    // initialize internal buffers).
-    PRBool firstTime = mSegmentedBuffer->GetSegmentCount() == 0;
-    while (remaining || NS_UNLIKELY(firstTime)) {
-        firstTime = PR_FALSE;
+    while (remaining) {
         availableInSegment = mSegmentEnd - mWriteCursor;
         if (!availableInSegment) {
             mWriteCursor = mSegmentedBuffer->AppendNewSegment();
@@ -270,8 +240,6 @@ nsStorageStream::GetLength(PRUint32 *aLength)
 NS_IMETHODIMP
 nsStorageStream::SetLength(PRUint32 aLength)
 {
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     if (mWriteInProgress)
         return NS_ERROR_NOT_AVAILABLE;
 
@@ -304,8 +272,6 @@ nsStorageStream::GetWriteInProgress(PRBool *aWriteInProgress)
 NS_METHOD
 nsStorageStream::Seek(PRInt32 aPosition)
 {
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     // An argument of -1 means "seek to end of stream"
     if (aPosition == -1)
         aPosition = mLogicalLength;
@@ -396,8 +362,6 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsStorageInputStream,
 NS_IMETHODIMP
 nsStorageStream::NewInputStream(PRInt32 aStartingOffset, nsIInputStream* *aInputStream)
 {
-    NS_ENSURE_TRUE(mSegmentedBuffer, NS_ERROR_NOT_INITIALIZED);
-    
     nsStorageInputStream *inputStream = new nsStorageInputStream(this, mSegmentSize);
     if (!inputStream)
         return NS_ERROR_OUT_OF_MEMORY;
@@ -516,34 +480,35 @@ nsStorageInputStream::IsNonBlocking(PRBool *aNonBlocking)
 }
 
 NS_IMETHODIMP
-nsStorageInputStream::Seek(PRInt32 aWhence, PRInt64 aOffset)
+nsStorageInputStream::Seek(PRInt32 aWhence, PRInt32 aOffset)
 {
-    nsInt64 pos = aOffset;
+    PRUint32 pos;
 
     switch (aWhence) {
     case NS_SEEK_SET:
+        pos = aOffset;
         break;
     case NS_SEEK_CUR:
-        pos += mLogicalCursor;
+        pos = mLogicalCursor + aOffset;
         break;
     case NS_SEEK_END:
-        pos += mStorageStream->mLogicalLength;
+        pos = mStorageStream->mLogicalLength + aOffset;
         break;
     default:
         NS_NOTREACHED("unexpected whence value");
         return NS_ERROR_UNEXPECTED;
     }
-    nsInt64 logicalCursor(mLogicalCursor);
-    if (pos == logicalCursor)
+
+    if (pos == mLogicalCursor)
         return NS_OK;
 
     return Seek(pos);
 }
 
 NS_IMETHODIMP
-nsStorageInputStream::Tell(PRInt64 *aResult)
+nsStorageInputStream::Tell(PRUint32 *aResult)
 {
-    LL_UI2L(*aResult, mLogicalCursor);
+    *aResult = mLogicalCursor;
     return NS_OK;
 }
 
@@ -558,11 +523,8 @@ NS_METHOD
 nsStorageInputStream::Seek(PRUint32 aPosition)
 {
     PRUint32 length = mStorageStream->mLogicalLength;
-    if (aPosition > length)
+    if (aPosition >= length)
         return NS_ERROR_INVALID_ARG;
-
-    if (length == 0)
-        return NS_OK;
 
     mSegmentNum = SegNum(aPosition);
     PRUint32 segmentOffset = SegOffset(aPosition);
@@ -583,7 +545,7 @@ NS_NewStorageStream(PRUint32 segmentSize, PRUint32 maxSize, nsIStorageStream **r
     if (!storageStream) return NS_ERROR_OUT_OF_MEMORY;
     
     NS_ADDREF(storageStream);
-    nsresult rv = storageStream->Init(segmentSize, maxSize, nsnull);
+    nsresult rv = storageStream->Init(segmentSize, maxSize);
     if (NS_FAILED(rv)) {
         NS_RELEASE(storageStream);
         return rv;

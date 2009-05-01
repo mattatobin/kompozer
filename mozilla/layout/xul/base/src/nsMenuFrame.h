@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -62,44 +62,14 @@ nsresult NS_NewMenuFrame(nsIPresShell* aPresShell, nsIFrame** aResult, PRUint32 
 
 class nsMenuBarFrame;
 class nsMenuPopupFrame;
+class nsCSSFrameConstructor;
 class nsIScrollableView;
 
 #define NS_STATE_ACCELTEXT_IS_DERIVED  NS_STATE_BOX_CHILD_RESERVED
 
-class nsMenuFrame;
-
-/**
- * nsMenuTimerMediator is a wrapper around an nsMenuFrame which can be safely
- * passed to timers. The class is reference counted unlike the underlying
- * nsMenuFrame, so that it will exist as long as the timer holds a reference
- * to it. The callback is delegated to the contained nsMenuFrame as long as
- * the contained nsMenuFrame has not been destroyed.
- */
-class nsMenuTimerMediator : public nsITimerCallback
-{
-public:
-  nsMenuTimerMediator(nsMenuFrame* aFrame);
-  ~nsMenuTimerMediator();
-
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSITIMERCALLBACK
-
-  void ClearFrame();
-
-private:
-
-  // Pointer to the wrapped frame.
-  nsMenuFrame* mFrame;
-};
-
-/**
- * @note *** Methods marked with '@see comment ***' may cause the frame to be
- *           deleted during the method call. Be careful whenever using those
- *           methods.
- */
-
 class nsMenuFrame : public nsBoxFrame, 
                     public nsIMenuFrame,
+                    public nsITimerCallback,
                     public nsIScrollableViewProvider
 {
 public:
@@ -112,15 +82,16 @@ public:
   NS_IMETHOD GetMinSize(nsBoxLayoutState& aBoxLayoutState, nsSize& aSize);
   NS_IMETHOD GetPrefSize(nsBoxLayoutState& aBoxLayoutState, nsSize& aSize);
 
-  NS_IMETHOD Init(nsPresContext*  aPresContext,
+  // The nsITimerCallback interface
+  NS_DECL_NSITIMERCALLBACK
+
+  NS_IMETHOD Init(nsIPresContext*  aPresContext,
                   nsIContent*      aContent,
                   nsIFrame*        aParent,
                   nsStyleContext*  aContext,
                   nsIFrame*        aPrevInFlow);
 
-#ifdef DEBUG_LAYOUT
   NS_IMETHOD SetDebug(nsBoxLayoutState& aState, PRBool aDebug);
-#endif
 
   NS_IMETHOD IsActive(PRBool& aResult) { aResult = PR_TRUE; return NS_OK; };
 
@@ -128,36 +99,43 @@ public:
   // can be stored in a separate list (so that they don't impact reflow of the
   // actual menu item at all).
   virtual nsIFrame* GetFirstChild(nsIAtom* aListName) const;
-  NS_IMETHOD SetInitialChildList(nsPresContext* aPresContext,
+  NS_IMETHOD SetInitialChildList(nsIPresContext* aPresContext,
                                  nsIAtom*        aListName,
                                  nsIFrame*       aChildList);
   virtual nsIAtom* GetAdditionalChildListName(PRInt32 aIndex) const;
-  NS_IMETHOD Destroy(nsPresContext* aPresContext); // @see comment ***
+  NS_IMETHOD Destroy(nsIPresContext* aPresContext);
 
   // Overridden to prevent events from ever going to children of the menu.
-  NS_IMETHOD GetFrameForPoint(const nsPoint& aPoint,
+  NS_IMETHOD GetFrameForPoint(nsIPresContext* aPresContext,
+                              const nsPoint& aPoint,
                               nsFramePaintLayer aWhichLayer,    
                               nsIFrame**     aFrame);
 
-  NS_IMETHOD HandleEvent(nsPresContext* aPresContext, 
+  NS_IMETHOD HandleEvent(nsIPresContext* aPresContext, 
                          nsGUIEvent*     aEvent,
-                         nsEventStatus*  aEventStatus); // @see comment ***
+                         nsEventStatus*  aEventStatus);
 
-  NS_IMETHOD  AppendFrames(nsIAtom*        aListName,
+  NS_IMETHOD  AppendFrames(nsIPresContext* aPresContext,
+                           nsIPresShell&   aPresShell,
+                           nsIAtom*        aListName,
                            nsIFrame*       aFrameList);
 
-  NS_IMETHOD  InsertFrames(nsIAtom*        aListName,
+  NS_IMETHOD  InsertFrames(nsIPresContext* aPresContext,
+                           nsIPresShell&   aPresShell,
+                           nsIAtom*        aListName,
                            nsIFrame*       aPrevFrame,
                            nsIFrame*       aFrameList);
 
-  NS_IMETHOD  RemoveFrame(nsIAtom*        aListName,
+  NS_IMETHOD  RemoveFrame(nsIPresContext* aPresContext,
+                          nsIPresShell&   aPresShell,
+                          nsIAtom*        aListName,
                           nsIFrame*       aOldFrame);
 
   // nsIMenuFrame Interface
 
-  NS_IMETHOD ActivateMenu(PRBool aActivateFlag); // @see comment **
-  NS_IMETHOD SelectMenu(PRBool aActivateFlag); // @see comment ***
-  NS_IMETHOD OpenMenu(PRBool aActivateFlag); // @see comment ***
+  NS_IMETHOD ActivateMenu(PRBool aActivateFlag);
+  NS_IMETHOD SelectMenu(PRBool aActivateFlag);
+  NS_IMETHOD OpenMenu(PRBool aActivateFlag);
 
   NS_IMETHOD MenuIsOpen(PRBool& aResult) { aResult = IsOpen(); return NS_OK; }
   NS_IMETHOD MenuIsContainer(PRBool& aResult) { aResult = IsMenu(); return NS_OK; }
@@ -165,21 +143,21 @@ public:
   NS_IMETHOD MenuIsDisabled(PRBool& aResult) { aResult = IsDisabled(); return NS_OK; }
   
   NS_IMETHOD GetActiveChild(nsIDOMElement** aResult);
-  NS_IMETHOD SetActiveChild(nsIDOMElement* aChild); // @see comment ***
+  NS_IMETHOD SetActiveChild(nsIDOMElement* aChild);
 
-  NS_IMETHOD UngenerateMenu(); // @see comment ***
+  NS_IMETHOD UngenerateMenu();
 
-  NS_IMETHOD SelectFirstItem(); // @see comment ***
+  NS_IMETHOD SelectFirstItem();
 
-  NS_IMETHOD Escape(PRBool& aHandledFlag); // @see comment ***
-  NS_IMETHOD Enter(); // @see comment ***
-  NS_IMETHOD ShortcutNavigation(nsIDOMKeyEvent* aKeyEvent, PRBool& aHandledFlag); // @see comment ***
-  NS_IMETHOD KeyboardNavigation(PRUint32 aKeyCode, PRBool& aHandledFlag); // @see comment ***
+  NS_IMETHOD Escape(PRBool& aHandledFlag);
+  NS_IMETHOD Enter();
+  NS_IMETHOD ShortcutNavigation(nsIDOMKeyEvent* aKeyEvent, PRBool& aHandledFlag);
+  NS_IMETHOD KeyboardNavigation(PRUint32 aKeyCode, PRBool& aHandledFlag);
 
   NS_IMETHOD SetParent(const nsIFrame* aParent);
 
-  virtual nsIMenuParent *GetMenuParent() { return mMenuParent; };
-  virtual nsIFrame *GetMenuChild() { return mPopupFrames.FirstChild(); }
+  NS_IMETHOD GetMenuParent(nsIMenuParent** aResult) { *aResult = mMenuParent; return NS_OK; };
+  NS_IMETHOD GetMenuChild(nsIFrame** aResult) { *aResult = mPopupFrames.FirstChild(); return NS_OK; }
   NS_IMETHOD GetRadioGroupName(nsString &aName) { aName = mGroupName; return NS_OK; };
   NS_IMETHOD GetMenuType(nsMenuType &aType) { aType = mType; return NS_OK; };
   NS_IMETHOD MarkChildrenStyleChange();
@@ -187,17 +165,17 @@ public:
 
   // nsIScrollableViewProvider methods
 
-  virtual nsIScrollableView* GetScrollableView();
+  NS_IMETHOD GetScrollableView(nsIPresContext* aPresContext, nsIScrollableView** aView);
 
   // nsMenuFrame methods 
 
-  nsresult DestroyPopupFrames(nsPresContext* aPresContext);
+  nsresult DestroyPopupFrames(nsIPresContext* aPresContext);
 
   PRBool IsOpen() { return mMenuOpen; };
   PRBool IsMenu();
   PRBool IsDisabled();
   PRBool IsGenerated();
-  NS_IMETHOD ToggleMenuState(); // @see comment ***
+  NS_IMETHOD ToggleMenuState();
 
   void SetIsMenu(PRBool aIsMenu) { mIsMenu = aIsMenu; };
 
@@ -208,56 +186,53 @@ public:
   }
 #endif
 
+  void SetFrameConstructor(nsCSSFrameConstructor* aFC) {
+    mFrameConstructor = aFC;
+  }
+
+  static void GetContextMenu(nsIMenuParent** aContextMenu);
+  static PRBool IsContextMenuActive();
+
   static PRBool IsSizedToPopup(nsIContent* aContent, PRBool aRequireAlways);
 
-  static nsIMenuParent *GetContextMenu();
-
 protected:
-  friend class nsMenuTimerMediator;
-  
+
   virtual void RePositionPopup(nsBoxLayoutState& aState);
 
-  void  ConvertPosition(nsIContent* aPopupElt, nsString& aAnchor, nsString& aAlign);
-
   static void UpdateDismissalListener(nsIMenuParent* aMenuParent);
-  friend class nsASyncMenuInitialization;
-  void UpdateMenuType(nsPresContext* aPresContext); // @see comment ***
-  void UpdateMenuSpecialState(nsPresContext* aPresContext); // @see comment ***
+  void UpdateMenuType(nsIPresContext* aPresContext);
+  void UpdateMenuSpecialState(nsIPresContext* aPresContext);
 
-  void OpenMenuInternal(PRBool aActivateFlag); // @see comment ***
+  void OpenMenuInternal(PRBool aActivateFlag);
   void GetMenuChildrenElement(nsIContent** aResult);
 
   // Examines the key node and builds the accelerator.
-  void BuildAcceleratorText(); // @see comment ***
+  void BuildAcceleratorText();
 
   // Called to execute our command handler.
-  void Execute(nsGUIEvent *aEvent); // @see comment ***
+  void Execute(nsGUIEvent *aEvent);
 
   // Called as a hook just before the menu gets opened.
-  PRBool OnCreate(); // @see comment ***
+  PRBool OnCreate();
 
   // Called as a hook just after the menu gets opened.
-  PRBool OnCreated(); // @see comment ***
+  PRBool OnCreated();
 
   // Called as a hook just before the menu goes away.
-  PRBool OnDestroy(); // @see comment ***
+  PRBool OnDestroy();
 
   // Called as a hook just after the menu goes away.
-  PRBool OnDestroyed(); // @see comment ***
+  PRBool OnDestroyed();
 
-  NS_IMETHOD AttributeChanged(nsIContent* aChild,
+  NS_IMETHOD AttributeChanged(nsIPresContext* aPresContext,
+                              nsIContent* aChild,
                               PRInt32 aNameSpaceID,
                               nsIAtom* aAttribute,
-                              PRInt32 aModType); // @see comment ***
+                              PRInt32 aModType);
   virtual ~nsMenuFrame();
 
-  PRBool SizeToPopup(nsBoxLayoutState& aState, nsSize& aSize);
-
 protected:
-#ifdef DEBUG_LAYOUT
   nsresult SetDebug(nsBoxLayoutState& aState, nsIFrame* aList, PRBool aDebug);
-#endif
-  NS_HIDDEN_(nsresult) Notify(nsITimer* aTimer);
 
   nsFrameList mPopupFrames;
   PRPackedBool mIsMenu; // Whether or not we can even have children or not.
@@ -267,13 +242,8 @@ protected:
   nsMenuType mType;
 
   nsIMenuParent* mMenuParent; // Our parent menu.
-
-  // Reference to the mediator which wraps this frame.
-  nsRefPtr<nsMenuTimerMediator> mTimerMediator;
-
   nsCOMPtr<nsITimer> mOpenTimer;
-
-  nsPresContext* mPresContext; // Our pres context.
+  nsIPresContext* mPresContext; // Our pres context.
   nsString mGroupName;
   nsSize mLastPref;
   
@@ -287,6 +257,8 @@ protected:
 
 public:
   static nsMenuDismissalListener* sDismissalListener; // The listener that dismisses menus.
+private:
+  nsCSSFrameConstructor* mFrameConstructor;
 }; // class nsMenuFrame
 
 #endif

@@ -34,7 +34,6 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "TestCommon.h"
 #include "nsIServiceManager.h"
 #include "nsIEventTarget.h"
 #include "nsCOMPtr.h"
@@ -51,7 +50,7 @@ static PRLogModuleInfo *gTestLog = nsnull;
 
 PR_STATIC_CALLBACK(void *) HandleEvent(PLEvent *event)
 {
-    LOG(("HandleEvent:%d\n", NS_PTR_TO_INT32(event->owner)));
+    LOG(("HandleEvent:%d\n", (int) event->owner));
     return nsnull;
 }
 
@@ -78,11 +77,8 @@ static nsresult RunTest()
     return rv;
 }
 
-int main(int argc, char **argv)
+int main()
 {
-    if (test_common_init(&argc, &argv) != 0)
-        return -1;
-
     nsresult rv;
 
 #if defined(PR_LOGGING)

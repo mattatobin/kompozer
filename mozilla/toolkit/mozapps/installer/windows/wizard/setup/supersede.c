@@ -91,8 +91,8 @@ HRESULT GetGreSupersedeVersionList(siC *siCObject, grever **aGreSupersedeList)
 
   index = 0;
   wsprintf(key, "SupersedeVersion%d", index);        
-  GetConfigIniProfileString(siCObject->szReferenceName, key, "",
-			    versionString, sizeof(versionString));
+  GetPrivateProfileString(siCObject->szReferenceName, key, "", versionString,
+                          sizeof(versionString), szFileIniConfig);
   while(*versionString != '\0')
   {
     gverTmp = CreateGVerNode();
@@ -115,8 +115,8 @@ HRESULT GetGreSupersedeVersionList(siC *siCObject, grever **aGreSupersedeList)
     }
     
     wsprintf(key, "SupersedeVersion%d", ++index);        
-    GetConfigIniProfileString(siCObject->szReferenceName, key, "",
-			      versionString,  sizeof(versionString));
+    GetPrivateProfileString(siCObject->szReferenceName, key, "", versionString,
+                            sizeof(versionString), szFileIniConfig);
   }
   return(WIZ_OK);
 }
@@ -152,8 +152,8 @@ HRESULT GetGreInstalledVersionList(siC *siCObject, grever **aGreInstalledList)
 
   index = 0;
   wsprintf(key, "SupersedeWinReg%d", index);        
-  GetConfigIniProfileString(siCObject->szReferenceName, key, "",
-			    szSupersedeWinRegPath, sizeof(szSupersedeWinRegPath));
+  GetPrivateProfileString(siCObject->szReferenceName, key, "", szSupersedeWinRegPath,
+                          sizeof(szSupersedeWinRegPath), szFileIniConfig);
   while(*szSupersedeWinRegPath != '\0')
   {
     BOOL skip = FALSE;
@@ -262,7 +262,7 @@ HRESULT GetGreInstalledVersionList(siC *siCObject, grever **aGreInstalledList)
 
     ++index;
     wsprintf(key, "SupersedeWinReg%d", index);        
-    GetConfigIniProfileString(siCObject->szReferenceName, key, "", szSupersedeWinRegPath, sizeof(szSupersedeWinRegPath));
+    GetPrivateProfileString(siCObject->szReferenceName, key, "", szSupersedeWinRegPath, sizeof(szSupersedeWinRegPath), szFileIniConfig);
   }
   return(WIZ_OK);
 }
@@ -293,16 +293,16 @@ void ResolveSupersedeGre(siC *siCObject, greInfo *aGre)
     // nothing to compare, return
     return;
 
-  GetConfigIniProfileString(siCObject->szReferenceName, "SupersedeMinVersion", "",
-			    versionStr, sizeof(versionStr));
+  GetPrivateProfileString(siCObject->szReferenceName, "SupersedeMinVersion", "",
+                          versionStr, sizeof(versionStr), szFileIniConfig);
   if(*versionStr != '\0')
   {
     TranslateVersionStr(versionStr, &aGre->minVersion);
     minVerRead = TRUE;
   }
 
-  GetConfigIniProfileString(siCObject->szReferenceName, "SupersedeMaxVersion", "",
-			    versionStr, sizeof(versionStr));
+  GetPrivateProfileString(siCObject->szReferenceName, "SupersedeMaxVersion", "",
+                          versionStr, sizeof(versionStr), szFileIniConfig);
   if(*versionStr != '\0')
   {
     TranslateVersionStr(versionStr, &aGre->maxVersion);
@@ -385,20 +385,20 @@ BOOL ResolveSupersede(siC *siCObject, greInfo *aGre)
   if(siCObject->dwAttributes & SIC_SUPERSEDE)
   {
     dwIndex = 0;
-    GetConfigIniProfileString(siCObject->szReferenceName, "SupersedeType", "", szType, sizeof(szType));
+    GetPrivateProfileString(siCObject->szReferenceName, "SupersedeType", "", szType, sizeof(szType), szFileIniConfig);
     if(*szType !='\0')
     {
       if(lstrcmpi(szType, "File Exists") == 0)
       {
         wsprintf(szKey, "SupersedeFile%d", dwIndex);        
-        GetConfigIniProfileString(siCObject->szReferenceName, szKey, "", szSupersedeFile, sizeof(szSupersedeFile));
+        GetPrivateProfileString(siCObject->szReferenceName, szKey, "", szSupersedeFile, sizeof(szSupersedeFile), szFileIniConfig);
         while(*szSupersedeFile != '\0')
         {
           DecryptString(szFilePath, szSupersedeFile);
           if(FileExists(szFilePath))
           {
             wsprintf(szKey, "SupersedeMinVersion%d",dwIndex);
-            GetConfigIniProfileString(siCObject->szReferenceName, szKey, "", szSupersedeVersion, sizeof(szSupersedeVersion));
+            GetPrivateProfileString(siCObject->szReferenceName, szKey, "", szSupersedeVersion, sizeof(szSupersedeVersion), szFileIniConfig);
             if(*szSupersedeVersion != '\0')
             {
               if(GetFileVersion(szFilePath,&vbFileVersion))
@@ -420,7 +420,7 @@ BOOL ResolveSupersede(siC *siCObject, greInfo *aGre)
             }
           }
           wsprintf(szKey, "SupersedeFile%d", ++dwIndex);        
-          GetConfigIniProfileString(siCObject->szReferenceName, szKey, "", szSupersedeFile, sizeof(szSupersedeFile));
+          GetPrivateProfileString(siCObject->szReferenceName, szKey, "", szSupersedeFile, sizeof(szSupersedeFile), szFileIniConfig);
         }
       }
       else if(lstrcmpi(szType, "GRE") == 0)

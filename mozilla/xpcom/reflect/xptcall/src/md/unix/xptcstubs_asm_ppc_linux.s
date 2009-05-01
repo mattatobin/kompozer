@@ -87,5 +87,3 @@ SharedStub:
 	la	sp,112(sp)			// clean up the stack
 	blr
 
-/* Magic indicating no need for an executable stack */
-.section .note.GNU-stack, "", @progbits ; .previous

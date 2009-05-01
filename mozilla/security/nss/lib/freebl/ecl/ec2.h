@@ -1,5 +1,4 @@
 /* 
- * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -12,15 +11,15 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is the elliptic curve math library for binary polynomial field curves.
+ * The Original Code is the elliptic curve math library for binary polynomial
+ * field curves.
  *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Sun Microsystems, Inc.
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Douglas Stebila <douglas@stebila.ca>, Sun Microsystems Laboratories
+ *      Douglas Stebila <douglas@stebila.ca>, Sun Microsystems Laboratories
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -34,7 +33,7 @@
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #ifndef __ec2_h_
 #define __ec2_h_
@@ -61,9 +60,6 @@ mp_err ec_GF2m_pt_sub_aff(const mp_int *px, const mp_int *py,
 /* Computes R = 2P.  Uses affine coordinates. */
 mp_err ec_GF2m_pt_dbl_aff(const mp_int *px, const mp_int *py, mp_int *rx,
 						  mp_int *ry, const ECGroup *group);
-
-/* Validates a point on a GF2m curve. */
-mp_err ec_GF2m_validate_point(const mp_int *px, const mp_int *py, const ECGroup *group);
 
 /* by default, this routine is unused and thus doesn't need to be compiled */
 #ifdef ECL_ENABLE_GF2M_PT_MUL_AFF

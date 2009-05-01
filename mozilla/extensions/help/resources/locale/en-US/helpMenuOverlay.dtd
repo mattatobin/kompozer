@@ -1,4 +1,5 @@
-<!-- Platform-specific entities are in platformCommunicatorOverlay.dtd -->
+<!ENTITY helpContents.label       "Help Contents">
+<!ENTITY helpContents.accesskey   "h">
 
 <!ENTITY helpForIEUsers.label     "For Internet Explorer Users">
-<!ENTITY helpForIEUsers.accesskey "I">
+<!ENTITY helpForIEUsers.accesskey  "i">

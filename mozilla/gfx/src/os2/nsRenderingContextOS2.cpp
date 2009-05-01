@@ -1,39 +1,23 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+/*
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+ * License for the specific language governing rights and limitations
+ * under the License.
  *
  * The Original Code is the Mozilla OS/2 libraries.
  *
- * The Initial Developer of the Original Code is
- * John Fairhurst, <john_fairhurst@iname.com>.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is John Fairhurst,
+ * <john_fairhurst@iname.com>.  Portions created by John Fairhurst are
+ * Copyright (C) 1999 John Fairhurst. All Rights Reserved.
  *
  * Contributor(s):
- *   Henry Sobotka <sobotka@axess.com> Jan. 2000 review and update
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * Henry Sobotka <sobotka@axess.com> Jan. 2000 review and update
+ * Pierre Phaneuf <pp@ludusdesign.com>
  *
  * This Original Code has been modified by IBM Corporation.
  * Modifications made by IBM described herein are
@@ -156,7 +140,8 @@ nsRenderingContextOS2::~nsRenderingContextOS2()
   NS_IF_RELEASE(mFontMetrics);
 
   //destroy the initial GraphicsState
-  PopState ();
+  PRBool clipState;
+  PopState (clipState);
 
   if (nsnull != mStateCache)
   {
@@ -240,7 +225,7 @@ nsRenderingContextOS2::Init( nsIDeviceContext *aContext,
 
 NS_IMETHODIMP
 nsRenderingContextOS2::Init( nsIDeviceContext *aContext,
-                             nsIDrawingSurface* aSurface)
+                             nsDrawingSurface aSurface)
 {
    mContext = aContext;
    NS_IF_ADDREF(mContext);
@@ -326,13 +311,14 @@ NS_IMETHODIMP nsRenderingContextOS2::UnlockDrawingSurface()
 {
   mSurface->Unlock();
 
-  PopState();
+  PRBool clipstate;
+  PopState(clipstate);
 
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsRenderingContextOS2::SelectOffScreenDrawingSurface( nsIDrawingSurface* aSurface)
+nsRenderingContextOS2::SelectOffScreenDrawingSurface( nsDrawingSurface aSurface)
 {
    if (aSurface != mSurface)
    {
@@ -359,8 +345,10 @@ nsRenderingContextOS2::SelectOffScreenDrawingSurface( nsIDrawingSurface* aSurfac
    return NS_OK;
 }
 
+// !! This is a bit dodgy; nsDrawingSurface *really* needs to be XP-comified
+// !! properly...
 NS_IMETHODIMP
-nsRenderingContextOS2::GetDrawingSurface( nsIDrawingSurface* *aSurface)
+nsRenderingContextOS2::GetDrawingSurface( nsDrawingSurface *aSurface)
 {
    *aSurface = mSurface;
    return NS_OK;
@@ -433,8 +421,10 @@ NS_IMETHODIMP nsRenderingContextOS2 :: PushState(void)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextOS2 :: PopState(void)
+NS_IMETHODIMP nsRenderingContextOS2 :: PopState(PRBool &aClipEmpty)
 {
+  PRBool  retval = PR_FALSE;
+
   if (nsnull == mStates)
   {
     NS_ASSERTION(!(nsnull == mStates), "state underflow");
@@ -468,7 +458,10 @@ NS_IMETHODIMP nsRenderingContextOS2 :: PopState(void)
           // set copy of pstate->mClipRegion as current clip region
           HRGN hrgn = GFX (::GpiCreateRegion (mPS, 0, NULL), RGN_ERROR);
           GFX (::GpiCombineRegion (mPS, hrgn, pstate->mClipRegion, 0, CRGN_COPY), RGN_ERROR);
-          OS2_SetClipRegion (mPS, hrgn);
+          int cliptype = OS2_SetClipRegion (mPS, hrgn);
+
+          if (cliptype == RGN_NULL)
+            retval = PR_TRUE;
         }
       }
 
@@ -484,6 +477,8 @@ NS_IMETHODIMP nsRenderingContextOS2 :: PopState(void)
     else
       mTranMatrix = nsnull;
   }
+
+  aClipEmpty = retval;
 
   return NS_OK;
 }
@@ -506,13 +501,14 @@ NS_IMETHODIMP nsRenderingContextOS2::IsVisibleRect( const nsRect &aRect,
 }
 
 // Return PR_TRUE if clip region is now empty
-NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCombine aCombine)
+NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
   nsRect  trect = aRect;
   RECTL   rcl;
+  int     cliptype = RGN_ERROR;
 
-  mTranMatrix->TransformCoord(&trect.x, &trect.y,
-			      &trect.width, &trect.height);
+	mTranMatrix->TransformCoord(&trect.x, &trect.y,
+                           &trect.width, &trect.height);
 
   mStates->mLocalClip = aRect;
   mStates->mFlags |= FLAG_LOCAL_CLIP_VALID;
@@ -536,6 +532,8 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCom
 
       HRGN hrgn = GFX (::GpiCreateRegion( mPS, 1, &rcl), RGN_ERROR);
       OS2_SetClipRegion (mPS, hrgn);
+
+      cliptype = RGN_NULL;      // Should pretend that clipping region is empty
     }
     else if( aCombine == nsClipCombine_kUnion || aCombine == nsClipCombine_kSubtract)
     {
@@ -544,7 +542,7 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCom
       // Clipping region is already correct. Just need to obtain it's complexity
       POINTL Offset = { 0, 0 };
 
-      GFX (::GpiOffsetClipRegion (mPS, &Offset), RGN_ERROR);
+      cliptype = GFX (::GpiOffsetClipRegion (mPS, &Offset), RGN_ERROR);
     }
     else
       NS_ASSERTION(PR_FALSE, "illegal clip combination");
@@ -556,7 +554,7 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCom
       PushClipState();
 
       mSurface->NS2PM_ININ (trect, rcl);
-      GFX (::GpiIntersectClipRectangle(mPS, &rcl), RGN_ERROR);
+      cliptype = GFX (::GpiIntersectClipRectangle(mPS, &rcl), RGN_ERROR);
     }
     else if (aCombine == nsClipCombine_kUnion)
     {
@@ -566,14 +564,14 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCom
       HRGN hrgn = GFX (::GpiCreateRegion(mPS, 1, &rcl), RGN_ERROR);
 
       if( hrgn )
-        OS2_CombineClipRegion(mPS, hrgn, CRGN_OR);
+        cliptype = OS2_CombineClipRegion(mPS, hrgn, CRGN_OR);
     }
     else if (aCombine == nsClipCombine_kSubtract)
     {
       PushClipState();
 
       mSurface->NS2PM_ININ (trect, rcl);
-      GFX (::GpiExcludeClipRectangle(mPS, &rcl), RGN_ERROR);
+      cliptype = GFX (::GpiExcludeClipRectangle(mPS, &rcl), RGN_ERROR);
     }
     else if (aCombine == nsClipCombine_kReplace)
     {
@@ -583,11 +581,16 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRect( const nsRect& aRect, nsClipCom
       HRGN hrgn = GFX (::GpiCreateRegion(mPS, 1, &rcl), RGN_ERROR);
 
       if( hrgn )
-	OS2_SetClipRegion(mPS, hrgn);
+        cliptype = OS2_SetClipRegion(mPS, hrgn);
     }
     else
       NS_ASSERTION(PR_FALSE, "illegal clip combination");
   }
+
+  if (cliptype == RGN_NULL)
+    aClipEmpty = PR_TRUE;
+  else
+    aClipEmpty = PR_FALSE;
 
   return NS_OK;
 }
@@ -607,13 +610,13 @@ NS_IMETHODIMP nsRenderingContextOS2::GetClipRect( nsRect &aRect, PRBool &aClipVa
 }
 
 // Return PR_TRUE if clip region is now empty
-NS_IMETHODIMP nsRenderingContextOS2::SetClipRegion( const nsIRegion &aRegion, nsClipCombine aCombine)
+NS_IMETHODIMP nsRenderingContextOS2::SetClipRegion( const nsIRegion &aRegion, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
    nsRegionOS2 *pRegion = (nsRegionOS2 *) &aRegion;
    PRUint32     ulHeight = mSurface->GetHeight ();
 
    HRGN hrgn = pRegion->GetHRGN( ulHeight, mPS);
-   LONG cmode = 0L;
+  int cmode, cliptype;
 
    switch( aCombine)
    {
@@ -633,18 +636,23 @@ NS_IMETHODIMP nsRenderingContextOS2::SetClipRegion( const nsIRegion &aRegion, ns
          // Compiler informational...
          NS_ASSERTION( 0, "illegal clip combination");
          break;
-  }
+   }
 
   if (NULL != hrgn)
   {
     mStates->mFlags &= ~FLAG_LOCAL_CLIP_VALID;
     PushClipState();
-    OS2_CombineClipRegion( mPS, hrgn, cmode);
+    cliptype = OS2_CombineClipRegion( mPS, hrgn, cmode);
   }
   else
     return PR_FALSE;
 
-  return NS_OK;
+  if (cliptype == RGN_NULL)
+    aClipEmpty = PR_TRUE;
+  else
+    aClipEmpty = PR_FALSE;
+
+   return NS_OK;
 }
 
 /**
@@ -782,7 +790,7 @@ NS_IMETHODIMP nsRenderingContextOS2::GetCurrentTransform( nsTransform2D *&aTrans
 // position oughtn't to be ignored, but for all intents & purposes can be.
 //
 NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(const nsRect& aBounds,
-                             PRUint32 aSurfFlags, nsIDrawingSurface* &aSurface)
+                             PRUint32 aSurfFlags, nsDrawingSurface &aSurface)
 {
    nsresult rc = NS_ERROR_FAILURE;
 
@@ -796,7 +804,7 @@ NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(const nsRect& aBounds,
    if(NS_SUCCEEDED(rc))
    {
       NS_ADDREF(surf);
-      aSurface = surf;
+      aSurface = (void*)((nsDrawingSurfaceOS2 *) surf);
    }
    else
       delete surf;
@@ -804,7 +812,7 @@ NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(const nsRect& aBounds,
    return rc;
 }
 
-NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(HPS aPS, nsIDrawingSurface* &aSurface, nsIWidget *aWidget)
+NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(HPS aPS, nsDrawingSurface &aSurface, nsIWidget *aWidget)
 {
   nsWindowSurface *surf = new nsWindowSurface();
 
@@ -814,12 +822,12 @@ NS_IMETHODIMP nsRenderingContextOS2::CreateDrawingSurface(HPS aPS, nsIDrawingSur
     surf->Init(aPS, aWidget);
   }
 
-  aSurface = surf;
+  aSurface = (nsDrawingSurface)surf;
 
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextOS2::DestroyDrawingSurface( nsIDrawingSurface* aDS)
+NS_IMETHODIMP nsRenderingContextOS2::DestroyDrawingSurface( nsDrawingSurface aDS)
 {
    nsDrawingSurfaceOS2 *surf = (nsDrawingSurfaceOS2 *) aDS;
    nsresult rc = NS_ERROR_NULL_POINTER;
@@ -915,6 +923,30 @@ NS_IMETHODIMP nsRenderingContextOS2::DrawLine( nscoord aX0, nscoord aY0, nscoord
    return NS_OK;
 }
 
+NS_IMETHODIMP nsRenderingContextOS2::DrawStdLine( nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1)
+{
+   POINTL ptls[] = { { (long) aX0, (long) aY0 },
+                     { (long) aX1, (long) aY1 } };
+   mSurface->NS2PM (ptls, 2);
+
+   if (ptls[0].x > ptls[1].x)
+      ptls[0].x--;
+   else if (ptls[1].x > ptls[0].x)
+      ptls[1].x--;
+
+   if (ptls[0].y < ptls[1].y)
+      ptls[0].y++;
+   else if (ptls[1].y < ptls[0].y)
+      ptls[1].y++;
+
+   SetupLineColorAndStyle ();
+
+   GFX (::GpiMove (mPS, ptls), FALSE);
+   GFX (::GpiLine (mPS, ptls + 1), GPI_ERROR);
+
+   return NS_OK;
+}
+
 NS_IMETHODIMP nsRenderingContextOS2::DrawPolyline(const nsPoint aPoints[], PRInt32 aNumPoints)
 {
    PMDrawPoly( aPoints, aNumPoints, PR_FALSE);
@@ -930,6 +962,12 @@ NS_IMETHODIMP nsRenderingContextOS2::DrawPolygon( const nsPoint aPoints[], PRInt
 NS_IMETHODIMP nsRenderingContextOS2::FillPolygon( const nsPoint aPoints[], PRInt32 aNumPoints)
 {
    PMDrawPoly( aPoints, aNumPoints, PR_TRUE );
+   return NS_OK;
+}
+
+NS_IMETHODIMP nsRenderingContextOS2::FillStdPolygon( const nsPoint aPoints[], PRInt32 aNumPoints)
+{
+   PMDrawPoly( aPoints, aNumPoints, PR_TRUE, PR_FALSE );
    return NS_OK;
 }
 
@@ -1464,7 +1502,7 @@ struct BreakGetTextDimensionsData {
   // Remember the fonts that we use so that we can deal with
   // line-breaking in-between fonts later. mOffsets[0] is also used
   // to initialize the current offset from where to start measuring
-  nsVoidArray* mFonts;   // IN/OUT
+  nsVoidArray* mFonts;   // OUT
   nsVoidArray* mOffsets; // IN/OUT
 };
 
@@ -1500,10 +1538,10 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
   PRInt32 numCharsFit = data->mNumCharsFit;
   nscoord width = data->mWidth;
   PRInt32 start = (PRInt32)(aSubstring - pstr);
-  PRInt32 end = start + aSubstringLength;
+  PRInt32 i = start + aSubstringLength;
   PRBool allDone = PR_FALSE;
 
-  while (start < end) {
+  while (start < i) {
     // Estimate how many characters will fit. Do that by dividing the
     // available space by the average character width
     PRInt32 estimatedNumChars = data->mEstimatedNumChars;
@@ -1523,9 +1561,9 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
 
     // Avoid scanning the break array in the case where we think all
     // the text should fit
-    if (end <= estimatedBreakOffset) {
+    if (i <= estimatedBreakOffset) {
       // Everything should fit
-      numChars = end - start;
+      numChars = i - start;
     }
     else {
       // Find the nearest place to break that is less than or equal to
@@ -1545,20 +1583,20 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
       if (start < data->mBreaks[breakIndex]) {
         // The text crosses at least one segment boundary so measure to the
         // break point just before the estimated break offset
-        numChars = PR_MIN(data->mBreaks[breakIndex], end) - start;
+        numChars = PR_MIN(data->mBreaks[breakIndex] - start, (PRInt32)aSubstringLength);
       } 
       else {
         // See whether there is another segment boundary between this one
         // and the end of the text
-        if ((breakIndex < (data->mNumBreaks - 1)) && (data->mBreaks[breakIndex] < end)) {
+        if ((breakIndex < (data->mNumBreaks - 1)) && (data->mBreaks[breakIndex] < i)) {
           ++breakIndex;
-          numChars = PR_MIN(data->mBreaks[breakIndex], end) - start;
+          numChars = PR_MIN(data->mBreaks[breakIndex] - start, (PRInt32)aSubstringLength);
         }
         else {
-          NS_ASSERTION(end != data->mBreaks[breakIndex], "don't expect to be at segment boundary");
+          NS_ASSERTION(i != data->mBreaks[breakIndex], "don't expect to be at segment boundary");
 
           // The text is all within the same segment
-          numChars = end - start;
+          numChars = i - start;
 
           // Remember we're in the middle of a segment and not between
           // two segments
@@ -1622,15 +1660,17 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
 
       // We can't just revert to the previous break state. Find the break
       // index just before the end of the text
-      end = start + numChars;
-      breakIndex = 0;
-      if (data->mBreaks[breakIndex] < end) {
-        while ((breakIndex + 1 < data->mNumBreaks) && (data->mBreaks[breakIndex + 1] < end)) {
-          ++breakIndex;
+      i = start + numChars;
+      if (breakIndex == -1) {
+        breakIndex = 0;
+        if (data->mBreaks[breakIndex] < i) {
+          while ((breakIndex + 1 < data->mNumBreaks) && (data->mBreaks[breakIndex + 1] < i)) {
+            ++breakIndex;
+          }
         }
       }
 
-      if ((0 == breakIndex) && (end <= data->mBreaks[0])) {
+      if ((0 == breakIndex) && (i <= data->mBreaks[0])) {
         // There's no place to back up to, so even though the text doesn't fit
         // return it anyway
         numCharsFit += numChars;
@@ -1659,54 +1699,21 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
       // all the way back to the first word
       width += twWidth;
       while ((breakIndex >= 0) && (width > data->mAvailWidth)) {
+        twWidth = 0;
         start = data->mBreaks[breakIndex];
-        numChars = end - start;
-        numCharsFit = start;
+        numChars = i - start;
         if ((1 == numChars) && (pstr[start] == ' ')) {
-          width -= data->mSpaceWidth;
+          twWidth = data->mSpaceWidth;
         }
-        else if (pstr + start >= aSubstring) {
-          // The entire fragment to chop is within the current font.
+        else if (numChars > 0) {
           pxWidth = font->GetWidth(data->mPS, &pstr[start], numChars);
-          width -= NSToCoordRound(float(pxWidth) * data->mP2T);
-        }
-        else {
-          // The fragment that we want to chop extends back into previous fonts.
-          // We need to reverse into previous fonts. Fortunately,
-          // data->mFonts[] and data->mOffsets[] tell us which fonts are used
-          // and when. 
-          end = data->mNumCharsFit; // same as aSubstring - pstr
-          data->mNumCharsFit = numCharsFit; // has got shorter...
-          PRInt32 k = data->mFonts->Count() - 1;
-          for ( ; k >= 0 && start < end; --k, end -= numChars) {
-            font = (nsFontOS2*)data->mFonts->ElementAt(k);
-            const PRUnichar* ps = (const PRUnichar*)data->mOffsets->ElementAt(k);
-            if (ps < pstr + start)
-              ps = pstr + start;
-
-            numChars = pstr + end - ps;
-            NS_ASSERTION(numChars > 0, "empty string");
-
-            data->mFont = font;
-            data->mSurface->SelectFont(data->mFont);
-            pxWidth = font->GetWidth(data->mPS, ps, numChars);
-            data->mWidth -= NSToCoordRound(float(pxWidth) * data->mP2T);
-
-            // By construction, mFonts[k] is the last font, and
-            // mOffsets[k+1] is the last offset.
-            data->mFonts->RemoveElementAt(k);
-            data->mOffsets->RemoveElementAt(k+1);
-          }
-
-          // We are done, update the data now because we won't do it later.
-          // The |if (data->mNumCharsFit != numCharsFit)| won't apply below
-          data->mFonts->AppendElement(font);
-          data->mOffsets->AppendElement((void*)&pstr[numCharsFit]);
-          break;
+          twWidth = NSToCoordRound(float(pxWidth) * data->mP2T);
         }
 
+        width -= twWidth;
+        numCharsFit = start;
         --breakIndex;
-        end = start;
+        i = start;
       }
     }
 
@@ -1714,7 +1721,7 @@ do_BreakGetTextDimensions(const nsFontSwitch* aFontSwitch,
   }
 
 #ifdef DEBUG_rbs
-  NS_ASSERTION(allDone || start == end, "internal error");
+  NS_ASSERTION(allDone || start == i, "internal error");
   NS_ASSERTION(allDone || data->mNumCharsFit != numCharsFit, "internal error");
 #endif /* DEBUG_rbs */
 
@@ -2283,7 +2290,7 @@ nsRenderingContextOS2::GetBoundingMetrics(const PRUnichar*   aString,
 #endif // MOZ_MATHML
 
 NS_IMETHODIMP nsRenderingContextOS2::CopyOffScreenBits(
-                     nsIDrawingSurface* aSrcSurf, PRInt32 aSrcX, PRInt32 aSrcY,
+                     nsDrawingSurface aSrcSurf, PRInt32 aSrcX, PRInt32 aSrcY,
                      const nsRect &aDestBounds, PRUint32 aCopyFlags)
 {
    NS_ASSERTION( aSrcSurf && mSurface && mMainSurface, "bad surfaces");
@@ -2346,10 +2353,10 @@ NS_IMETHODIMP nsRenderingContextOS2::CopyOffScreenBits(
    return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextOS2::RetrieveCurrentNativeGraphicData(void** ngd)
+NS_IMETHODIMP nsRenderingContextOS2::RetrieveCurrentNativeGraphicData(PRUint32* ngd)
 {
   if(ngd != nsnull)
-    *ngd = (void*)mPS;
+    *ngd = (PRUint32)mPS;
   return NS_OK;
 }
 

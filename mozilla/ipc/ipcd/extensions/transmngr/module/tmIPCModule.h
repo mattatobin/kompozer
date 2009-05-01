@@ -68,7 +68,7 @@ public:
   static void Shutdown();
 
   /**
-    * Check the TM, create it if necessary.
+    * Check the TM, create it if neccessary.
     */
   static void Init();
 

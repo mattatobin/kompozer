@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,33 +14,35 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsIDOMHTMLMapElement.h"
 #include "nsIDOMEventReceiver.h"
+#include "nsIHTMLContent.h"
 #include "nsGenericHTMLElement.h"
 #include "nsHTMLAtoms.h"
 #include "nsStyleConsts.h"
-#include "nsPresContext.h"
-#include "nsContentList.h"
+#include "nsIPresContext.h"
+#include "GenericElementCollection.h"
 #include "nsIDocument.h"
 #include "nsIHTMLDocument.h"
 #include "nsCOMPtr.h"
@@ -50,7 +52,7 @@ class nsHTMLMapElement : public nsGenericHTMLElement,
                          public nsIDOMHTMLMapElement
 {
 public:
-  nsHTMLMapElement(nsINodeInfo *aNodeInfo);
+  nsHTMLMapElement();
   virtual ~nsHTMLMapElement();
 
   // nsISupports
@@ -68,28 +70,51 @@ public:
   // nsIDOMHTMLMapElement
   NS_DECL_NSIDOMHTMLMAPELEMENT
 
-  virtual nsresult BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                              nsIContent* aBindingParent,
-                              PRBool aCompileEventHandlers);
-  virtual void UnbindFromTree(PRBool aDeep = PR_TRUE,
-                              PRBool aNullParent = PR_TRUE);
+  virtual void SetDocument(nsIDocument* aDocument, PRBool aDeep,
+                           PRBool aCompileEventHandlers);
+
 protected:
-  nsRefPtr<nsContentList> mAreas;
+  GenericElementCollection* mAreas;
 };
 
 
-NS_IMPL_NS_NEW_HTML_ELEMENT(Map)
-
-
-nsHTMLMapElement::nsHTMLMapElement(nsINodeInfo *aNodeInfo)
-  : nsGenericHTMLElement(aNodeInfo)
+nsresult
+NS_NewHTMLMapElement(nsIHTMLContent** aInstancePtrResult,
+                     nsINodeInfo *aNodeInfo, PRBool aFromParser)
 {
+  NS_ENSURE_ARG_POINTER(aInstancePtrResult);
+
+  nsHTMLMapElement* it = new nsHTMLMapElement();
+
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsresult rv = it->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    delete it;
+
+    return rv;
+  }
+
+  *aInstancePtrResult = NS_STATIC_CAST(nsIHTMLContent *, it);
+  NS_ADDREF(*aInstancePtrResult);
+
+  return NS_OK;
+}
+
+
+nsHTMLMapElement::nsHTMLMapElement()
+{
+  mAreas = nsnull;
 }
 
 nsHTMLMapElement::~nsHTMLMapElement()
 {
   if (mAreas) {
-    mAreas->RootDestroyed();
+    mAreas->ParentDestroyed();
+    NS_RELEASE(mAreas);
   }
 }
 
@@ -105,39 +130,59 @@ NS_HTML_CONTENT_INTERFACE_MAP_BEGIN(nsHTMLMapElement, nsGenericHTMLElement)
 NS_HTML_CONTENT_INTERFACE_MAP_END
 
 
-nsresult
-nsHTMLMapElement::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                             nsIContent* aBindingParent,
-                             PRBool aCompileEventHandlers)
-{
-  nsresult rv = nsGenericHTMLElement::BindToTree(aDocument, aParent,
-                                                 aBindingParent,
-                                                 aCompileEventHandlers);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsIHTMLDocument> htmlDoc = do_QueryInterface(aDocument);
-
-  if (htmlDoc) {
-    htmlDoc->AddImageMap(this);
-  }
-
-  return rv;
-}
-
 void
-nsHTMLMapElement::UnbindFromTree(PRBool aDeep, PRBool aNullParent)
+nsHTMLMapElement::SetDocument(nsIDocument* aDocument, PRBool aDeep,
+                              PRBool aCompileEventHandlers)
 {
-  nsCOMPtr<nsIHTMLDocument> htmlDoc = do_QueryInterface(GetCurrentDoc());
+  PRBool documentChanging = (aDocument != mDocument);
+  
+  if (documentChanging) {
+    nsCOMPtr<nsIHTMLDocument> htmlDoc(do_QueryInterface(mDocument));
 
-  if (htmlDoc) {
-    htmlDoc->RemoveImageMap(this);
+    if (htmlDoc) {
+      htmlDoc->RemoveImageMap(this);
+    }
   }
 
-  nsGenericHTMLElement::UnbindFromTree(aDeep, aNullParent);
+  nsGenericHTMLElement::SetDocument(aDocument, aDeep, aCompileEventHandlers);
+  
+  if (documentChanging) {
+    // Since we changed the document, gotta re-QI
+    nsCOMPtr<nsIHTMLDocument> htmlDoc(do_QueryInterface(mDocument));
+
+    if (htmlDoc) {
+      htmlDoc->AddImageMap(this);
+    }
+  }
 }
 
-NS_IMPL_DOM_CLONENODE(nsHTMLMapElement)
+NS_IMETHODIMP
+nsHTMLMapElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  NS_ENSURE_ARG_POINTER(aReturn);
+  *aReturn = nsnull;
 
+  nsHTMLMapElement* it = new nsHTMLMapElement();
+
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsCOMPtr<nsIDOMNode> kungFuDeathGrip(it);
+
+  nsresult rv = it->Init(mNodeInfo);
+
+  if (NS_FAILED(rv))
+    return rv;
+
+  CopyInnerTo(it, aDeep);
+
+  *aReturn = NS_STATIC_CAST(nsIDOMNode *, it);
+
+  NS_ADDREF(*aReturn);
+
+  return NS_OK;
+}
 
 NS_IMETHODIMP
 nsHTMLMapElement::GetAreas(nsIDOMHTMLCollection** aAreas)
@@ -145,19 +190,19 @@ nsHTMLMapElement::GetAreas(nsIDOMHTMLCollection** aAreas)
   NS_ENSURE_ARG_POINTER(aAreas);
 
   if (!mAreas) {
-    // Not using NS_GetContentList because this should not be cached
-    mAreas = new nsContentList(GetDocument(),
-                               nsHTMLAtoms::area,
-                               mNodeInfo->NamespaceID(),
-                               this,
-                               PR_FALSE);
+    mAreas = new GenericElementCollection(NS_STATIC_CAST(nsIContent*, this),
+                                          nsHTMLAtoms::area);
 
     if (!mAreas) {
       return NS_ERROR_OUT_OF_MEMORY;
     }
+
+    NS_ADDREF(mAreas);
   }
 
-  NS_ADDREF(*aAreas = mAreas);
+  *aAreas = NS_STATIC_CAST(nsIDOMHTMLCollection*, mAreas);
+  NS_ADDREF(*aAreas);
+
   return NS_OK;
 }
 

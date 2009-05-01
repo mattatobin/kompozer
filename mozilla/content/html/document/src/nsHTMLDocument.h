@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #ifndef nsHTMLDocument_h___
@@ -44,13 +45,15 @@
 #include "nsIDOMHTMLBodyElement.h"
 #include "nsIDOMHTMLMapElement.h"
 #include "nsIDOMHTMLCollection.h"
+#include "nsIParser.h"
 #include "jsapi.h"
 #include "rdf.h"
 #include "nsRDFCID.h"
 #include "nsIRDFService.h"
 #include "pldhash.h"
 #include "nsIHttpChannel.h"
-#include "nsHTMLStyleSheet.h"
+#include "nsIHTMLCSSStyleSheet.h"
+#include "nsIHTMLStyleSheet.h"
 
 // Document.Write() related
 #include "nsIWyciwygChannel.h"
@@ -60,6 +63,7 @@
 #include "nsICommandManager.h"
 
 class nsIParser;
+class nsICSSLoader;
 class nsIURI;
 class nsIMarkupDocumentViewer;
 class nsIDocumentCharsetInfo;
@@ -74,8 +78,7 @@ public:
   nsHTMLDocument();
   virtual ~nsHTMLDocument();
   virtual nsresult Init();
-  virtual NS_HIDDEN_(void) Destroy();
- 
+
   NS_IMETHOD QueryInterface(REFNSIID aIID, void** aInstancePtr);
 
   NS_IMETHOD_(nsrefcnt) AddRef(void);
@@ -83,9 +86,8 @@ public:
 
   virtual void Reset(nsIChannel* aChannel, nsILoadGroup* aLoadGroup);
   virtual void ResetToURI(nsIURI* aURI, nsILoadGroup* aLoadGroup);
-  virtual nsStyleSet::sheetType GetAttrSheetType();
 
-  virtual nsresult CreateShell(nsPresContext* aContext,
+  virtual nsresult CreateShell(nsIPresContext* aContext,
                                nsIViewManager* aViewManager,
                                nsStyleSet* aStyleSet,
                                nsIPresShell** aInstancePtrResult);
@@ -98,6 +100,8 @@ public:
                                      PRBool aReset = PR_TRUE,
                                      nsIContentSink* aSink = nsnull);
 
+  virtual void StopDocumentLoad();
+
   virtual void EndLoad();
 
   virtual nsresult AddImageMap(nsIDOMHTMLMapElement* aMap);
@@ -105,6 +109,8 @@ public:
   virtual void RemoveImageMap(nsIDOMHTMLMapElement* aMap);
 
   virtual nsIDOMHTMLMapElement *GetImageMap(const nsAString& aMapName);
+
+  virtual nsICSSLoader* GetCSSLoader();
 
   virtual nsCompatibility GetCompatibilityMode();
   virtual void SetCompatibilityMode(nsCompatibility aMode);
@@ -114,15 +120,14 @@ public:
     return mWriteLevel != PRUint32(0);
   }
 
-  virtual PRBool GetIsFrameset() { return mIsFrameset; }
-  virtual void SetIsFrameset(PRBool aFrameset) { mIsFrameset = aFrameset; }
-
-  virtual NS_HIDDEN_(nsContentList*) GetForms();
- 
   virtual void ContentAppended(nsIContent* aContainer,
                                PRInt32 aNewIndexInContainer);
   virtual void ContentInserted(nsIContent* aContainer,
                                nsIContent* aChild,
+                               PRInt32 aIndexInContainer);
+  virtual void ContentReplaced(nsIContent* aContainer,
+                               nsIContent* aOldChild,
+                               nsIContent* aNewChild,
                                PRInt32 aIndexInContainer);
   virtual void ContentRemoved(nsIContent* aContainer,
                               nsIContent* aChild,
@@ -135,7 +140,8 @@ public:
                                    PRInt32 aNameSpaceID,
                                    nsIAtom* aAttribute);
 
-  virtual void FlushPendingNotifications(mozFlushType aType);
+  virtual void FlushPendingNotifications(PRBool aFlushReflows = PR_TRUE,
+                                         PRBool aUpdateViews = PR_FALSE);
 
   virtual PRBool IsCaseSensitive();
 
@@ -188,6 +194,7 @@ public:
                          nsIDOMHTMLFormElement *aForm,
                          nsISupports **aResult);
 
+  virtual already_AddRefed<nsIDOMNodeList> GetFormControlElements();
   virtual void AddedForm();
   virtual void RemovedForm();
   virtual PRInt32 GetNumFormsSynchronous();
@@ -196,13 +203,6 @@ public:
   {
     return mDefaultNamespaceID == kNameSpaceID_XHTML;
   }
-
-#ifdef DEBUG
-  virtual nsresult CreateElem(nsIAtom *aName, nsIAtom *aPrefix,
-                              PRInt32 aNamespaceID,
-                              PRBool aDocumentDefaultType,
-                              nsIContent** aResult);
-#endif
 
 protected:
   nsresult GetPixelDimensions(nsIPresShell* aShell,
@@ -223,12 +223,20 @@ protected:
 
   nsIContent *MatchId(nsIContent *aContent, const nsAString& aId);
 
-  static PRBool MatchLinks(nsIContent *aContent, PRInt32 aNamespaceID,
-                           nsIAtom* aAtom, const nsAString& aData);
-  static PRBool MatchAnchors(nsIContent *aContent, PRInt32 aNamespaceID,
-                             nsIAtom* aAtom, const nsAString& aData);
-  static PRBool MatchNameAttribute(nsIContent* aContent, PRInt32 aNamespaceID,
-                                   nsIAtom* aAtom, const nsAString& aData);
+  virtual void InternalAddStyleSheet(nsIStyleSheet* aSheet,
+                                     PRUint32 aFlags);
+  virtual void InternalInsertStyleSheetAt(nsIStyleSheet* aSheet,
+                                          PRInt32 aIndex);
+  virtual nsIStyleSheet* InternalGetStyleSheetAt(PRInt32 aIndex) const;
+  virtual PRInt32 InternalGetNumberOfStyleSheets() const;
+
+  static PRBool MatchLinks(nsIContent *aContent, nsString* aData);
+  static PRBool MatchAnchors(nsIContent *aContent, nsString* aData);
+  static PRBool MatchLayers(nsIContent *aContent, nsString* aData);
+  static PRBool MatchNameAttribute(nsIContent* aContent, nsString* aData);
+  static PRBool MatchFormControls(nsIContent* aContent, nsString* aData);
+
+  static nsresult GetSourceCodebaseURI(nsIURI** sourceURI);
 
   static void DocumentWriteTerminationFunc(nsISupports *aRef);
 
@@ -240,17 +248,17 @@ protected:
   nsresult WriteCommon(const nsAString& aText,
                        PRBool aNewlineTerminate);
   nsresult ScriptWriteCommon(PRBool aNewlineTerminate);
-  nsresult OpenCommon(const nsACString& aContentType, PRBool aReplace);
+  nsresult OpenCommon(nsIURI* aUrl);
 
   nsresult CreateAndAddWyciwygChannel(void);
   nsresult RemoveWyciwygChannel(void);
-
-  void *GenerateParserKey(void);
 
   PRInt32 GetDefaultNamespaceID() const
   {
     return mDefaultNamespaceID;
   };
+
+  nsCOMPtr<nsIChannel>     mChannel;
 
   nsCompatibility mCompatMode;
 
@@ -261,7 +269,9 @@ protected:
   nsCOMPtr<nsIDOMHTMLCollection> mEmbeds;
   nsCOMPtr<nsIDOMHTMLCollection> mLinks;
   nsCOMPtr<nsIDOMHTMLCollection> mAnchors;
-  nsRefPtr<nsContentList> mForms;
+  nsCOMPtr<nsIDOMHTMLCollection> mForms;
+
+  nsCOMPtr<nsIParser> mParser;
 
   /** # of forms in the document, synchronously set */
   PRInt32 mNumForms;
@@ -269,6 +279,8 @@ protected:
   // ahmed 12-2
   PRInt32  mTexttype;
 
+  static nsrefcnt gRefCntRDFService;
+  static nsIRDFService* gRDF;
   static PRUint32 gWyciwygSessionCnt;
 
   static PRBool TryHintCharset(nsIMarkupDocumentViewer* aMarkupDV,
@@ -285,10 +297,8 @@ protected:
                                    nsIChannel* aChannel,
                                    PRInt32& aCharsetSource,
                                    nsACString& aCharset);
-  // aParentDocument could be null.
-  PRBool TryParentCharset(nsIDocumentCharsetInfo*  aDocInfo,
-                          nsIDocument* aParentDocument,
-                          PRInt32& charsetSource, nsACString& aCharset);
+  static PRBool TryParentCharset(nsIDocumentCharsetInfo*  aDocInfo,
+                                 PRInt32& charsetSource, nsACString& aCharset);
   static PRBool UseWeakDocTypeDefault(PRInt32& aCharsetSource,
                                       nsACString& aCharset);
   static PRBool TryDefaultCharset(nsIMarkupDocumentViewer* aMarkupDV,
@@ -311,10 +321,6 @@ protected:
    */
   PRPackedBool mDomainWasSet;
 
-  PRPackedBool mIsFrameset;
-
-  PRPackedBool mTooDeepWriteRecursion;
-
   PLDHashTable mIdAndNameHashTable;
 
   nsCOMPtr<nsIWyciwygChannel> mWyciwygChannel;
@@ -336,8 +342,6 @@ protected:
 
   // kNameSpaceID_None for good ol' HTML documents, and
   // kNameSpaceID_XHTML for spiffy new XHTML documents.
-  // XXXbz should this be reset if someone manually calls
-  // SetContentType() on this document?
   PRInt32 mDefaultNamespaceID;
 };
 

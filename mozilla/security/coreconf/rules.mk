@@ -1,39 +1,35 @@
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
+# The contents of this file are subject to the Mozilla Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/MPL/
+# 
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
+# 
 # The Original Code is the Netscape security libraries.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1994-2000
-# the Initial Developer. All Rights Reserved.
-#
+# 
+# The Initial Developer of the Original Code is Netscape
+# Communications Corporation.  Portions created by Netscape are 
+# Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+# Rights Reserved.
+# 
 # Contributor(s):
+# 
+# Alternatively, the contents of this file may be used under the
+# terms of the GNU General Public License Version 2 or later (the
+# "GPL"), in which case the provisions of the GPL are applicable 
+# instead of those above.  If you wish to allow use of your 
+# version of this file only under the terms of the GPL and not to
+# allow others to use your version of this file under the MPL,
+# indicate your decision by deleting the provisions above and
+# replace them with the notice and other provisions required by
+# the GPL.  If you do not delete the provisions above, a recipient
+# may use your version of this file under either the MPL or the
+# GPL.
 #
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
 
 #######################################################################
 ###                                                                 ###
@@ -75,7 +71,7 @@ endif
 
 import::
 	@echo "== import.pl =="
-	@$(PERL) -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/import.pl \
+	@perl -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/import.pl \
 		"RELEASE_TREE=$(RELEASE_TREE)"   \
 		"IMPORTS=$(IMPORTS)"             \
 		"VERSION=$(VERSION)" \
@@ -114,22 +110,12 @@ ifdef LIBRARY
 endif
 ifdef SHARED_LIBRARY
 	$(INSTALL) -m 775 $(SHARED_LIBRARY) $(SOURCE_LIB_DIR)
-ifdef MOZ_DEBUG_SYMBOLS
-ifeq (,$(filter-out _WIN%,$(NS_USE_GCC)_$(OS_TARGET)))
-	$(INSTALL) -m 644 $(SHARED_LIBRARY:$(DLL_SUFFIX)=pdb) $(SOURCE_LIB_DIR)
-endif
-endif
 endif
 ifdef IMPORT_LIBRARY
 	$(INSTALL) -m 775 $(IMPORT_LIBRARY) $(SOURCE_LIB_DIR)
 endif
 ifdef PROGRAM
 	$(INSTALL) -m 775 $(PROGRAM) $(SOURCE_BIN_DIR)
-ifdef MOZ_DEBUG_SYMBOLS
-ifeq (,$(filter-out _WIN%,$(NS_USE_GCC)_$(OS_TARGET)))
-	$(INSTALL) -m 644 $(PROGRAM:$(PROG_SUFFIX)=.pdb) $(SOURCE_BIN_DIR)
-endif
-endif
 endif
 ifdef PROGRAMS
 	$(INSTALL) -m 775 $(PROGRAMS) $(SOURCE_BIN_DIR)
@@ -147,6 +133,22 @@ realclean clobber_all::
 	rm -rf $(wildcard *.OBJ) dist $(ALL_TRASH)
 	+$(LOOP_OVER_DIRS)
 
+#ifdef ALL_PLATFORMS
+#all_platforms:: $(NFSPWD)
+#	@d=`$(NFSPWD)`;							\
+#	if test ! -d LOGS; then rm -rf LOGS; mkdir LOGS; fi;		\
+#	for h in $(PLATFORM_HOSTS); do					\
+#		echo "On $$h: $(MAKE) $(ALL_PLATFORMS) >& LOGS/$$h.log";\
+#		rsh $$h -n "(chdir $$d;					\
+#			     $(MAKE) $(ALL_PLATFORMS) >& LOGS/$$h.log;	\
+#			     echo DONE) &" 2>&1 > LOGS/$$h.pid &	\
+#		sleep 1;						\
+#	done
+#
+#$(NFSPWD):
+#	cd $(@D); $(MAKE) $(@F)
+#endif
+
 #######################################################################
 # Double-Colon rules for populating the binary release model.         #
 #######################################################################
@@ -159,7 +161,7 @@ release:: release_clean release_export release_classes release_policy release_md
 
 release_cpdistdir::
 	@echo "== cpdist.pl =="
-	@$(PERL) -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/cpdist.pl \
+	@perl -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/cpdist.pl \
 		"RELEASE_TREE=$(RELEASE_TREE)" \
 		"CORE_DEPTH=$(CORE_DEPTH)" \
 		"MODULE=${MODULE}" \
@@ -185,7 +187,7 @@ release_cpdistdir::
 
 release_jars::
 	@echo "== release.pl =="
-	@$(PERL) -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/release.pl \
+	@perl -I$(CORE_DEPTH)/coreconf $(CORE_DEPTH)/coreconf/release.pl \
 		"RELEASE_TREE=$(RELEASE_TREE)" \
 		"PLATFORM=$(PLATFORM)" \
 		"OS_ARCH=$(OS_ARCH)" \
@@ -285,12 +287,6 @@ $(PROGRAM): $(OBJS) $(EXTRA_LIBS)
 	@$(MAKE_OBJDIR)
 ifeq (,$(filter-out _WIN%,$(NS_USE_GCC)_$(OS_TARGET)))
 	$(MKPROG) $(subst /,\\,$(OBJS)) -Fe$@ -link $(LDFLAGS) $(subst /,\\,$(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS))
-ifdef MT
-	if test -f $@.manifest; then \
-		$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
-		rm -f $@.manifest; \
-	fi
-endif	# MSVC with manifest tool
 else
 ifdef XP_OS2_VACPP
 	$(MKPROG) -Fe$@ $(CFLAGS) $(OBJS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS)
@@ -316,7 +312,7 @@ endif
 ifeq ($(OS_TARGET),OS2)
 $(IMPORT_LIBRARY): $(MAPFILE)
 	rm -f $@
-	$(IMPLIB) $@ $<
+	$(IMPLIB) $@ $(MAPFILE)
 	$(RANLIB) $@
 endif
 
@@ -345,18 +341,12 @@ ifdef NS_USE_GCC
 	$(LINK_DLL) $(OBJS) $(SUB_SHLOBJS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS) $(LD_LIBS) $(RES)
 else
 	$(LINK_DLL) -MAP $(DLLBASE) $(subst /,\\,$(OBJS) $(SUB_SHLOBJS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS) $(LD_LIBS) $(RES))
-ifdef MT
-	if test -f $@.manifest; then \
-		$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;2; \
-		rm -f $@.manifest; \
-	fi
-endif	# MSVC with manifest tool
 endif
 else
 ifdef XP_OS2_VACPP
-	$(MKSHLIB) $(DLLFLAGS) $(LDFLAGS) $(OBJS) $(SUB_SHLOBJS) $(LD_LIBS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS)
+	$(MKSHLIB) $(DLLFLAGS) $(LDFLAGS) $(OBJS) $(SUB_SHLOBJS) $(LD_LIBS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS)
 else
-	$(MKSHLIB) -o $@ $(OBJS) $(SUB_SHLOBJS) $(LD_LIBS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS)
+	$(MKSHLIB) -o $@ $(OBJS) $(SUB_SHLOBJS) $(LD_LIBS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS)
 endif
 	chmod +x $@
 ifeq ($(OS_TARGET),Darwin)
@@ -379,7 +369,7 @@ endif
 	@echo $(RES) finished
 endif
 
-$(MAPFILE): $(MAPFILE_SOURCE)
+$(MAPFILE): $(LIBRARY_NAME).def
 	@$(MAKE_OBJDIR)
 	$(PROCESS_MAP_FILE)
 
@@ -387,16 +377,10 @@ $(MAPFILE): $(MAPFILE_SOURCE)
 $(OBJDIR)/$(PROG_PREFIX)%$(PROG_SUFFIX): $(OBJDIR)/$(PROG_PREFIX)%$(OBJ_SUFFIX)
 	@$(MAKE_OBJDIR)
 ifeq (,$(filter-out _WIN%,$(NS_USE_GCC)_$(OS_TARGET)))
-	$(MKPROG) $< -Fe$@ -link \
+	$(MKPROG) $(OBJDIR)/$(PROG_PREFIX)$*$(OBJ_SUFFIX) -Fe$@ -link \
 	$(LDFLAGS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS)
-ifdef MT
-	if test -f $@.manifest; then \
-		$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
-		rm -f $@.manifest; \
-	fi
-endif	# MSVC with manifest tool
 else
-	$(MKPROG) -o $@ $(CFLAGS) $< \
+	$(MKPROG) -o $@ $(OBJDIR)/$(PROG_PREFIX)$*$(OBJ_SUFFIX) \
 	$(LDFLAGS) $(EXTRA_LIBS) $(EXTRA_SHARED_LIBS) $(OS_LIBS)
 endif
 
@@ -407,37 +391,33 @@ WCCFLAGS3 := $(subst -D,-d,$(WCCFLAGS2))
 # Translate source filenames to absolute paths. This is required for
 # debuggers under Windows & OS/2 to find source files automatically
 
-ifeq (,$(filter-out OS2 AIX,$(OS_TARGET)))
-# OS/2 and AIX
+ifeq (,$(filter-out OS2%,$(OS_TARGET)))
 NEED_ABSOLUTE_PATH := 1
 PWD := $(shell pwd)
+endif
 
-else
-# Windows
 ifeq (,$(filter-out _WIN%,$(NS_USE_GCC)_$(OS_TARGET)))
 NEED_ABSOLUTE_PATH := 1
-PWD := $(shell pwd)
 ifeq (,$(findstring ;,$(PATH)))
-ifndef USE_MSYS
-PWD := $(subst \,/,$(shell cygpath -w $(PWD)))
-endif
-endif
-
+PWD :=  $(subst \,/,$(shell cygpath -w `pwd`))
 else
-# everything else
 PWD := $(shell pwd)
 endif
 endif
 
-core_abspath = $(if $(findstring :,$(1)),$(1),$(if $(filter /%,$(1)),$(1),$(PWD)/$(1)))
+ifdef NEED_ABSOLUTE_PATH
+abspath = $(if $(findstring :,$(1)),$(1),$(if $(filter /%,$(1)),$(1),$(PWD)/$(1)))
+else
+abspath = $(1)
+endif
 
 $(OBJDIR)/$(PROG_PREFIX)%$(OBJ_SUFFIX): %.c
 	@$(MAKE_OBJDIR)
 ifdef USE_NT_C_SYNTAX
-	$(CC) -Fo$@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CC) -Fo$@ -c $(CFLAGS) $(call abspath,$<)
 else
 ifdef NEED_ABSOLUTE_PATH
-	$(CC) -o $@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CC) -o $@ -c $(CFLAGS) $(call abspath,$<)
 else
 	$(CC) -o $@ -c $(CFLAGS) $<
 endif
@@ -445,10 +425,10 @@ endif
 
 $(PROG_PREFIX)%$(OBJ_SUFFIX): %.c
 ifdef USE_NT_C_SYNTAX
-	$(CC) -Fo$@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CC) -Fo$@ -c $(CFLAGS) $(call abspath,$<)
 else
 ifdef NEED_ABSOLUTE_PATH
-	$(CC) -o $@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CC) -o $@ -c $(CFLAGS) $(call abspath,$<)
 else
 	$(CC) -o $@ -c $(CFLAGS) $<
 endif
@@ -477,10 +457,10 @@ $(OBJDIR)/$(PROG_PREFIX)%$(OBJ_SUFFIX): %.S
 $(OBJDIR)/$(PROG_PREFIX)%: %.cpp
 	@$(MAKE_OBJDIR)
 ifdef USE_NT_C_SYNTAX
-	$(CCC) -Fo$@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CCC) -Fo$@ -c $(CFLAGS) $(call abspath,$<)
 else
 ifdef NEED_ABSOLUTE_PATH
-	$(CCC) -o $@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CCC) -o $@ -c $(CFLAGS) $(call abspath,$<)
 else
 	$(CCC) -o $@ -c $(CFLAGS) $<
 endif
@@ -501,10 +481,10 @@ ifdef STRICT_CPLUSPLUS_SUFFIX
 	rm -f $(OBJDIR)/t_$*.cc
 else
 ifdef USE_NT_C_SYNTAX
-	$(CCC) -Fo$@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CCC) -Fo$@ -c $(CFLAGS) $(call abspath,$<)
 else
 ifdef NEED_ABSOLUTE_PATH
-	$(CCC) -o $@ -c $(CFLAGS) $(call core_abspath,$<)
+	$(CCC) -o $@ -c $(CFLAGS) $(call abspath,$<)
 else
 	$(CCC) -o $@ -c $(CFLAGS) $<
 endif
@@ -512,25 +492,25 @@ endif
 endif #STRICT_CPLUSPLUS_SUFFIX
 
 %.i: %.cpp
-	$(CCC) -C -E $(CFLAGS) $< > $@
+	$(CCC) -C -E $(CFLAGS) $< > $*.i
 
 %.i: %.c
 ifeq (,$(filter-out WIN%,$(OS_TARGET)))
 	$(CC) -C /P $(CFLAGS) $< 
 else
-	$(CC) -C -E $(CFLAGS) $< > $@
+	$(CC) -C -E $(CFLAGS) $< > $*.i
 endif
 
 ifneq (,$(filter-out WIN%,$(OS_TARGET)))
 %.i: %.s
-	$(CC) -C -E $(CFLAGS) $< > $@
+	$(CC) -C -E $(CFLAGS) $< > $*.i
 endif
 
 %: %.pl
-	rm -f $@; cp $< $@; chmod +x $@
+	rm -f $@; cp $*.pl $@; chmod +x $@
 
 %: %.sh
-	rm -f $@; cp $< $@; chmod +x $@
+	rm -f $@; cp $*.sh $@; chmod +x $@
 
 ifdef DIRS
 $(DIRS)::
@@ -584,7 +564,7 @@ ifdef NETLIBDEPTH
 	CORE_DEPTH := $(NETLIBDEPTH)
 endif
 
-JAVA_EXPORT_SRCS=$(shell $(PERL) $(CORE_DEPTH)/coreconf/outofdate.pl $(PERLARG)	-d $(JAVA_DESTPATH)/$(PACKAGE) $(JSRCS) $(PRIVATE_JSRCS))
+JAVA_EXPORT_SRCS=$(shell perl $(CORE_DEPTH)/coreconf/outofdate.pl $(PERLARG)	-d $(JAVA_DESTPATH)/$(PACKAGE) $(JSRCS) $(PRIVATE_JSRCS))
 
 export:: $(JAVA_DESTPATH) $(JAVA_DESTPATH)/$(PACKAGE)
 ifneq ($(JAVA_EXPORT_SRCS),)
@@ -627,7 +607,7 @@ export:: $(JAVA_DESTPATH) $(JAVA_DESTPATH)/$(PACKAGE)
 		if test -d $$d; then						\
 			set $(EXIT_ON_ERROR);					\
 			files=`echo $$d/*.java`;				\
-			list=`$(PERL) $(CORE_DEPTH)/coreconf/outofdate.pl $(PERLARG)	\
+			list=`perl $(CORE_DEPTH)/coreconf/outofdate.pl $(PERLARG)	\
 				    -d $(JAVA_DESTPATH)/$(PACKAGE) $$files`;	\
 			if test "$${list}x" != "x"; then			\
 			    echo Building all java files in $$d;		\
@@ -756,7 +736,7 @@ export::
 		$(JAVAH) -jni -d $(JNI_GEN_DIR) $(JNI_GEN);				\
 	else										\
 		echo "Checking for out of date header files" ;                          \
-		$(PERL) $(CORE_DEPTH)/coreconf/jniregen.pl $(PERLARG)			\
+		perl $(CORE_DEPTH)/coreconf/jniregen.pl $(PERLARG)			\
 		 -d $(JAVA_DESTPATH) -j "$(JAVAH) -jni -d $(JNI_GEN_DIR)" $(JNI_GEN);\
 	fi
 endif
@@ -796,9 +776,9 @@ $(JMC_GEN_DIR)/M%.h: $(JMCSRCDIR)/%.class
 $(JMC_GEN_DIR)/M%.c: $(JMCSRCDIR)/%.class
 	$(JMC) -d $(JMC_GEN_DIR) -module $(JMC_GEN_FLAGS) $(?F:.class=)
 
-$(OBJDIR)/M%$(OBJ_SUFFIX): $(JMC_GEN_DIR)/M%.c $(JMC_GEN_DIR)/M%.h
+$(OBJDIR)/M%$(OBJ_SUFFIX): $(JMC_GEN_DIR)/M%.h $(JMC_GEN_DIR)/M%.c
 	@$(MAKE_OBJDIR)
-	$(CC) -o $@ -c $(CFLAGS) $<
+	$(CC) -o $@ -c $(CFLAGS) $(JMC_GEN_DIR)/M$*.c
 
 export:: $(JMC_HEADERS) $(JMC_STUBS)
 endif
@@ -855,7 +835,7 @@ TESTS_DIR = $(RESULTS_DIR)/$(RESULTS_SUBDIR)/$(OS_TARGET)$(OS_RELEASE)$(CPU_TAG)
 ifneq ($(REGRESSION_SPEC),)
 
 ifneq ($(BUILD_OPT),)
-REGDATE = $(subst \ ,, $(shell $(PERL)  $(CORE_DEPTH)/$(MODULE)/scripts/now))
+REGDATE = $(subst \ ,, $(shell perl  $(CORE_DEPTH)/$(MODULE)/scripts/now))
 endif
 
 tests:: $(REGRESSION_SPEC) 
@@ -894,82 +874,12 @@ endif
 
 
 
-
-################################################################################
-
--include $(DEPENDENCIES)
-
-ifneq (,$(filter-out OpenVMS OS2 WIN%,$(OS_TARGET)))
-# Can't use sed because of its 4000-char line length limit, so resort to perl
-PERL_DEPENDENCIES_PROGRAM =                                                   \
-	    open(MD, "< $(DEPENDENCIES)");                                    \
-	    while (<MD>) {                                                    \
-		if (m@ \.*/*$< @) {                                           \
-		    $$found = 1;                                              \
-		    last;                                                     \
-		}                                                             \
-	    }                                                                 \
-	    if ($$found) {                                                    \
-		print "Removing stale dependency $< from $(DEPENDENCIES)\n";  \
-		seek(MD, 0, 0);                                               \
-		$$tmpname = "$(OBJDIR)/fix.md" . $$$$;                        \
-		open(TMD, "> " . $$tmpname);                                  \
-		while (<MD>) {                                                \
-		    s@ \.*/*$< @ @;                                           \
-		    if (!print TMD "$$_") {                                   \
-			unlink(($$tmpname));                                  \
-			exit(1);                                              \
-		    }                                                         \
-		}                                                             \
-		close(TMD);                                                   \
-		if (!rename($$tmpname, "$(DEPENDENCIES)")) {                  \
-		    unlink(($$tmpname));                                      \
-		}                                                             \
-	    } elsif ("$<" ne "$(DEPENDENCIES)") {                             \
-		print "$(MAKE): *** No rule to make target $<.  Stop.\n";     \
-		exit(1);                                                      \
-	    }
-
-.DEFAULT:
-	@$(PERL) -e '$(PERL_DEPENDENCIES_PROGRAM)'
-endif
-
 #############################################################################
 # X dependency system
 #############################################################################
 
-ifdef MKDEPENDENCIES
-
-# For Windows, $(MKDEPENDENCIES) must be -included before including rules.mk
-
-$(MKDEPENDENCIES)::
-	@$(MAKE_OBJDIR)
-	touch $(MKDEPENDENCIES) 
-	chmod u+w $(MKDEPENDENCIES) 
-#on NT, the preceeding touch command creates a read-only file !?!?!
-#which is why we have to explicitly chmod it.
-	$(MKDEPEND) -p$(OBJDIR_NAME)/ -o'$(OBJ_SUFFIX)' -f$(MKDEPENDENCIES) \
-$(NOMD_CFLAGS) $(YOPT) $(CSRCS) $(CPPSRCS) $(ASFILES)
-
-$(MKDEPEND):: $(MKDEPEND_DIR)/*.c $(MKDEPEND_DIR)/*.h
-	cd $(MKDEPEND_DIR); $(MAKE)
-
-ifdef OBJS
-depend:: $(MKDEPEND) $(MKDEPENDENCIES)
-else
 depend::
-endif
-	+$(LOOP_OVER_DIRS)
 
-dependclean::
-	rm -f $(MKDEPENDENCIES)
-	+$(LOOP_OVER_DIRS)
-
-#-include $(NSINSTALL_DIR)/$(OBJDIR)/depend.mk
-
-else
-depend::
-endif
 
 ################################################################################
 # Special gmake rules.

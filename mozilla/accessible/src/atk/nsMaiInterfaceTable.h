@@ -55,22 +55,22 @@ public:
     virtual const GInterfaceInfo *GetInterfaceInfo();
 
     const char *GetColumnDescription() {
-        return mColumnDescription.get(); 
+        return NS_ConvertUCS2toUTF8(mColumnDescription).get(); 
     }
     void SetColumnDescription(nsAString &aString) {
-        CopyUTF16toUTF8(aString, mColumnDescription);
+        mColumnDescription = aString;
     }
 
     const char *GetRowDescription() {
-        return mRowDescription.get(); 
+        return NS_ConvertUCS2toUTF8(mRowDescription).get(); 
     }
     void SetRowDescription(nsAString &aString) {
-        CopyUTF16toUTF8(aString, mRowDescription);
+        mRowDescription = aString;
     }
 
 private:
-    nsCString mColumnDescription;
-    nsCString mRowDescription;
+    nsString mColumnDescription;
+    nsString mRowDescription;
 };
 
 #endif /* __MAI_INTERFACE_TABLE_H__ */

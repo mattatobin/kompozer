@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,24 +22,25 @@
  * Contributor(s):
  *   Peter Van der Beken <peterv@netscape.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsCOMPtr.h"
 #include "nsIChannel.h"
 #include "nsIDOMLoadListener.h"
-#include "nsIChannelEventSink.h"
+#include "nsIHttpEventSink.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIScriptContext.h"
 #include "nsISyncLoadDOMService.h"
@@ -65,7 +66,6 @@
 #include "nsIXMLContentSink.h"
 #include "nsIContent.h"
 #include "nsAutoPtr.h"
-#include "nsLoadListenerProxy.h"
 
 static const char kLoadAsData[] = "loadAsData";
 
@@ -98,7 +98,7 @@ public:
  */
 
 class nsSyncLoader : public nsIDOMLoadListener,
-                     public nsIChannelEventSink,
+                     public nsIHttpEventSink,
                      public nsIInterfaceRequestor,
                      public nsSupportsWeakReference
 {
@@ -122,7 +122,7 @@ public:
     NS_IMETHOD Abort(nsIDOMEvent* aEvent);
     NS_IMETHOD Error(nsIDOMEvent* aEvent);
 
-    NS_DECL_NSICHANNELEVENTSINK
+    NS_DECL_NSIHTTPEVENTSINK
 
     NS_DECL_NSIINTERFACEREQUESTOR
 
@@ -134,6 +134,121 @@ protected:
     PRPackedBool mLoading;
     PRPackedBool mLoadSuccess;
 };
+
+
+/*
+ * This class exists to prevent a circular reference between
+ * the loaded document and the nsSyncLoader instance. The
+ * request owns the document. While the document is loading, 
+ * the request is a load listener, held onto by the document.
+ * The proxy class breaks the circularity by filling in as the
+ * load listener and holding a weak reference to the request
+ * object.
+ */
+
+class txLoadListenerProxy : public nsIDOMLoadListener {
+public:
+    txLoadListenerProxy(nsWeakPtr aParent);
+    virtual ~txLoadListenerProxy();
+
+    NS_DECL_ISUPPORTS
+
+    // nsIDOMEventListener
+    NS_IMETHOD HandleEvent(nsIDOMEvent* aEvent);
+
+    // nsIDOMLoadListener
+    NS_IMETHOD Load(nsIDOMEvent* aEvent);
+    NS_IMETHOD BeforeUnload(nsIDOMEvent* aEvent);
+    NS_IMETHOD Unload(nsIDOMEvent* aEvent);
+    NS_IMETHOD Abort(nsIDOMEvent* aEvent);
+    NS_IMETHOD Error(nsIDOMEvent* aEvent);
+
+protected:
+    nsWeakPtr  mParent;
+};
+
+txLoadListenerProxy::txLoadListenerProxy(nsWeakPtr aParent)
+{
+    mParent = aParent;
+}
+
+txLoadListenerProxy::~txLoadListenerProxy()
+{
+}
+
+NS_IMPL_ISUPPORTS1(txLoadListenerProxy, nsIDOMLoadListener)
+
+NS_IMETHODIMP
+txLoadListenerProxy::HandleEvent(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->HandleEvent(aEvent);
+    }
+
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+txLoadListenerProxy::Load(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->Load(aEvent);
+    }
+
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+txLoadListenerProxy::BeforeUnload(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->BeforeUnload(aEvent);
+    }
+
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+txLoadListenerProxy::Unload(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->Unload(aEvent);
+    }
+
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+txLoadListenerProxy::Abort(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->Abort(aEvent);
+    }
+
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+txLoadListenerProxy::Error(nsIDOMEvent* aEvent)
+{
+    nsCOMPtr<nsIDOMLoadListener> listener = do_QueryReferent(mParent);
+
+    if (listener) {
+        return listener->Error(aEvent);
+    }
+
+    return NS_OK;
+}
 
 class nsForceXMLListener : public nsIStreamListener
 {
@@ -195,7 +310,7 @@ nsSyncLoader::~nsSyncLoader()
 
 NS_IMPL_ISUPPORTS4(nsSyncLoader,
                    nsIDOMLoadListener,
-                   nsIChannelEventSink,
+                   nsIHttpEventSink,
                    nsIInterfaceRequestor,
                    nsISupportsWeakReference)
 
@@ -211,12 +326,6 @@ nsSyncLoader::LoadDocument(nsIChannel* aChannel,
     nsresult rv = NS_OK;
 
     mChannel = aChannel;
-    nsCOMPtr<nsIHttpChannel> http = do_QueryInterface(mChannel);
-    if (http) {
-        http->SetRequestHeader(NS_LITERAL_CSTRING("Accept"),     
-                               NS_LITERAL_CSTRING("text/xml,application/xml,application/xhtml+xml,*/*;q=0.1"),
-                               PR_FALSE);
-    }
 
     if (aLoaderURI) {
         nsCOMPtr<nsIURI> docURI;
@@ -263,7 +372,7 @@ nsSyncLoader::LoadDocument(nsIChannel* aChannel,
     NS_ENSURE_TRUE(target, NS_ERROR_FAILURE);
 
     nsWeakPtr requestWeak = do_GetWeakReference(NS_STATIC_CAST(nsIDOMLoadListener*, this));
-    nsLoadListenerProxy* proxy = new nsLoadListenerProxy(requestWeak);
+    txLoadListenerProxy* proxy = new txLoadListenerProxy(requestWeak);
     NS_ENSURE_TRUE(proxy, NS_ERROR_OUT_OF_MEMORY);
 
     // This will addref the proxy
@@ -280,12 +389,6 @@ nsSyncLoader::LoadDocument(nsIChannel* aChannel,
         rv = PushAsyncStream(listener);
     }
 
-    http = do_QueryInterface(mChannel);
-    if (mLoadSuccess && http) {
-        PRBool succeeded;
-        mLoadSuccess = NS_SUCCEEDED(http->GetRequestSucceeded(&succeeded)) &&
-                       succeeded;
-    }
     mChannel = nsnull;
 
     // This will release the proxy. Don't use the errorvalue from this since
@@ -338,9 +441,6 @@ nsSyncLoader::PushAsyncStream(nsIStreamListener* aListener)
             }
         }
     }
-
-    // Note that if AsyncOpen failed that's ok -- the only caller of
-    // this method nulls out mChannel immediately after we return.
 
     service->PopThreadEventQueue(currentThreadQ);
     
@@ -414,14 +514,13 @@ nsSyncLoader::Error(nsIDOMEvent* aEvent)
 }
 
 NS_IMETHODIMP
-nsSyncLoader::OnChannelRedirect(nsIChannel *aOldChannel,
-                                nsIChannel *aNewChannel,
-                                PRUint32    aFlags)
+nsSyncLoader::OnRedirect(nsIHttpChannel *aHttpChannel,
+                         nsIChannel *aNewChannel)
 {
-    NS_PRECONDITION(aNewChannel, "Redirecting to null channel?");
+    NS_ENSURE_ARG_POINTER(aNewChannel);
 
     nsCOMPtr<nsIURI> oldURI;
-    nsresult rv = aOldChannel->GetURI(getter_AddRefs(oldURI)); // The original URI
+    nsresult rv = aHttpChannel->GetURI(getter_AddRefs(oldURI)); // The original URI
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr<nsIURI> newURI;

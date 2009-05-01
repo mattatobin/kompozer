@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,27 +14,27 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Jerry.Kirk@Nexwarecorp.com
- *   Michael.Kedl@Nexwarecorp.com
- *   Dale.Stansberry@Nexwarecorop.com
+ *     Jerry.Kirk@Nexwarecorp.com
+ *     Michael.Kedl@Nexwarecorp.com
+ *	   Dale.Stansberry@Nexwarecorop.com
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -57,20 +57,14 @@
 #ifdef PHOTON_DND
 #include "nsDragService.h"
 #endif
-#include "nsIViewManager.h"
-#include "nsIScrollableView.h"
 #include "nsReadableUtils.h"
 
 #include "nsIPref.h"
-#include "nsClipboard.h"
 
 #include <errno.h>
 #include <photon/PtServer.h>
 
-extern char *__progname;
-
 static NS_DEFINE_CID(kLookAndFeelCID, NS_LOOKANDFEEL_CID);
-static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
 // BGR, not RGB - REVISIT
 #define NSCOLOR_TO_PHCOLOR(g,n) \
@@ -92,15 +86,18 @@ nsILookAndFeel     *nsWidget::sLookAndFeel = nsnull;
 #ifdef PHOTON_DND
 nsIDragService     *nsWidget::sDragService = nsnull;
 #endif
-nsClipboard        *nsWidget::sClipboard = nsnull;
 PRUint32            nsWidget::sWidgetCount = 0;
 nsWidget*						nsWidget::sFocusWidget = 0;
 
 nsWidget::nsWidget()
 {
   if (!sLookAndFeel) {
-    CallGetService(kLookAndFeelCID, &sLookAndFeel);
-  }
+    if (NS_OK != nsComponentManager::CreateInstance(kLookAndFeelCID,
+                                                    nsnull,
+                                                    NS_GET_IID(nsILookAndFeel),
+                                                    (void**)&sLookAndFeel))
+		sLookAndFeel = nsnull;
+  	}
 
   if( sLookAndFeel )
     sLookAndFeel->GetColor( nsILookAndFeel::eColor_WindowBackground, mBackground );
@@ -114,14 +111,6 @@ nsWidget::nsWidget()
 		if( NS_FAILED( rv ) ) sDragService = 0;
 		}
 #endif
-
-	if( !sClipboard ) {
-		nsresult rv;
-		nsCOMPtr<nsClipboard> s;
-		s = do_GetService( kCClipboardCID, &rv );
-		sClipboard = ( nsClipboard * ) s;
-		if( NS_FAILED( rv ) ) sClipboard = 0;
-		}
 
   mWidget = nsnull;
   mParent = nsnull;
@@ -236,16 +225,9 @@ NS_IMETHODIMP nsWidget::ResetInputState( ) {
   return NS_OK;
 	}
 
-NS_IMETHODIMP nsWidget::SetIMEOpenState(PRBool aState) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-	}
-
-NS_IMETHODIMP nsWidget::GetIMEOpenState(PRBool* aState) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-	}
-
-NS_IMETHODIMP nsWidget::CancelIMEComposition() {
-  return NS_ERROR_NOT_IMPLEMENTED;
+// to be implemented
+NS_IMETHODIMP nsWidget::PasswordFieldInit( ) {
+  return NS_OK;
 	}
 
 //-------------------------------------------------------------------------
@@ -377,7 +359,7 @@ PRBool nsWidget::OnResize( nsRect &aRect ) {
 
   // call the event callback
   if( mEventCallback ) {
-		nsSizeEvent event(PR_TRUE, 0, nsnull);
+		nsSizeEvent event;
 
 	  InitEvent(event, NS_SIZE);
 
@@ -402,7 +384,7 @@ PRBool nsWidget::OnResize( nsRect &aRect ) {
 // Move
 //------
 PRBool nsWidget::OnMove( PRInt32 aX, PRInt32 aY ) {
-  nsGUIEvent event(PR_TRUE, 0, nsnull);
+  nsGUIEvent event;
   InitEvent(event, NS_MOVE);
   event.point.x = aX;
   event.point.y = aY;
@@ -451,126 +433,106 @@ NS_METHOD nsWidget::SetCursor( nsCursor aCursor ) {
   	unsigned short curs = Ph_CURSOR_POINTER;
   	PgColor_t color = Ph_CURSOR_DEFAULT_COLOR;
 
-	switch( aCursor ) {
-		case eCursor_nw_resize:
-			curs = Ph_CURSOR_DRAG_TL;
-			break;
-		case eCursor_se_resize:
-			curs = Ph_CURSOR_DRAG_BR;
-			break;
-		case eCursor_ne_resize:
-			curs = Ph_CURSOR_DRAG_TL;
-			break;
-		case eCursor_sw_resize:
-			curs = Ph_CURSOR_DRAG_BL;
-			break;
+    switch( aCursor ) {
+			case eCursor_sizeNW:
+				curs = Ph_CURSOR_DRAG_TL;
+				break;
+			case eCursor_sizeSE:
+				curs = Ph_CURSOR_DRAG_BR;
+				break;
+			case eCursor_sizeNE:
+				curs = Ph_CURSOR_DRAG_TL;
+				break;
+			case eCursor_sizeSW:
+				curs = Ph_CURSOR_DRAG_BL;
+				break;
 
-		case eCursor_crosshair:
-			curs = Ph_CURSOR_CROSSHAIR;
-			break;
+			case eCursor_crosshair:
+				curs = Ph_CURSOR_CROSSHAIR;
+				break;
 
-		case eCursor_copy:
-		case eCursor_alias:
-		case eCursor_context_menu:
-			// XXX: No suitable cursor, needs implementing
-			break;
+			case eCursor_copy:
+			case eCursor_alias:
+			case eCursor_context_menu:
+				break;
 
-		case eCursor_cell:
-			// XXX: No suitable cursor, needs implementing
-			break;
+			case eCursor_cell:
+				break;
 
-		case eCursor_spinning:
-			// XXX: No suitable cursor, needs implementing
-			break;
+			case eCursor_spinning:
+				break;
 
-		case eCursor_move:
-		  curs = Ph_CURSOR_MOVE;
-		  break;
-	  
-		case eCursor_help:
-		  curs = Ph_CURSOR_QUESTION_POINT;
-		  break;
-	  
-		case eCursor_grab:
-		case eCursor_grabbing:
-		  curs = Ph_CURSOR_FINGER;
-		  break;
-	  
-		case eCursor_select:
-		  curs = Ph_CURSOR_INSERT;
-		  color = Pg_BLACK;
-		  break;
-	  
-		case eCursor_wait:
-		  curs = Ph_CURSOR_LONG_WAIT;
-		  break;
+			case eCursor_count_up:
+			case eCursor_count_down:
+			case eCursor_count_up_down:
+				break;
 
-		case eCursor_hyperlink:
-		  curs = Ph_CURSOR_FINGER;
-		  break;
+  		case eCursor_move:
+  		  curs = Ph_CURSOR_MOVE;
+  		  break;
+      
+  		case eCursor_help:
+  		  curs = Ph_CURSOR_QUESTION_POINT;
+  		  break;
+      
+  		case eCursor_grab:
+  		case eCursor_grabbing:
+  		  curs = Ph_CURSOR_FINGER;
+  		  break;
+      
+  		case eCursor_select:
+  		  curs = Ph_CURSOR_INSERT;
+				color = Pg_BLACK;
+  		  break;
+      
+  		case eCursor_wait:
+  		  curs = Ph_CURSOR_LONG_WAIT;
+  		  break;
 
-		case eCursor_standard:
-		  curs = Ph_CURSOR_POINTER;
-		  break;
+  		case eCursor_hyperlink:
+  		  curs = Ph_CURSOR_FINGER;
+  		  break;
 
-		case eCursor_n_resize:
-		case eCursor_s_resize:
-		  curs = Ph_CURSOR_DRAG_VERTICAL;
-		  break;
+  		case eCursor_standard:
+  		  curs = Ph_CURSOR_POINTER;
+  		  break;
 
-		case eCursor_w_resize:
-		case eCursor_e_resize:
-		  curs = Ph_CURSOR_DRAG_HORIZONTAL;
-		  break;
+  		case eCursor_sizeWE:
+  		  curs = Ph_CURSOR_DRAG_HORIZONTAL;
+  		  break;
 
-		case eCursor_zoom_in:
-		case eCursor_zoom_out:
-		  // XXX: No suitable cursor, needs implementing
-		  break;
+  		case eCursor_sizeNS:
+  		  curs = Ph_CURSOR_DRAG_VERTICAL;
+  		  break;
 
-		case eCursor_not_allowed:
-		case eCursor_no_drop:
-		  curs = Ph_CURSOR_DONT;
-		  break;
+  		// REVISIT - Photon does not have the following cursor types...
+  		case eCursor_arrow_north:
+  		case eCursor_arrow_north_plus:
+  		  curs = Ph_CURSOR_DRAG_TOP;
+  		  break;
 
-		case eCursor_col_resize:
-		  // XXX: not 100% appropriate perhaps
-		  curs = Ph_CURSOR_DRAG_HORIZONTAL;
-		  break;
+  		case eCursor_arrow_south:
+  		case eCursor_arrow_south_plus:
+  		  curs = Ph_CURSOR_DRAG_BOTTOM;
+  		  break;
 
-		case eCursor_row_resize:
-		  // XXX: not 100% appropriate perhaps
-		  curs = Ph_CURSOR_DRAG_VERTICAL;
-		  break;
+  		case eCursor_arrow_east:
+  		case eCursor_arrow_east_plus:
+  		  curs = Ph_CURSOR_DRAG_RIGHT;
+  		  break;
 
-		case eCursor_vertical_text:
-		  curs = Ph_CURSOR_INSERT;
-		  color = Pg_BLACK;
-		  break;
+  		case eCursor_arrow_west:
+  		case eCursor_arrow_west_plus:
+  		  curs = Ph_CURSOR_DRAG_LEFT;
+  		  break;
 
-		case eCursor_all_scroll:
-		  // XXX: No suitable cursor, needs implementing
-		  break;
+  		case eCursor_zoom_in:
+  		case eCursor_zoom_out:
+  		  break;
 
-		case eCursor_nesw_resize:
-		  curs = Ph_CURSOR_DRAG_FOREDIAG;
-		  break;
-
-		case eCursor_nwse_resize:
-		  curs = Ph_CURSOR_DRAG_BACKDIAG;
-		  break;
-
-		case eCursor_ns_resize:
-		  curs = Ph_CURSOR_DRAG_VERTICAL;
-		  break;
-
-		case eCursor_ew_resize:
-		  curs = Ph_CURSOR_DRAG_HORIZONTAL;
-		  break;
-
-		default:
-		  NS_ASSERTION(0, "Invalid cursor type");
-		  break;
+  		default:
+  		  NS_ASSERTION(0, "Invalid cursor type");
+  		  break;
   		}
 
   	if( mWidget ) {
@@ -637,8 +599,6 @@ nsresult nsWidget::CreateWidget(nsIWidget *aParent,
 {
 
   PtWidget_t *parentWidget = nsnull;
-
-
 
   if( aNativeParent ) {
     parentWidget = (PtWidget_t*)aNativeParent;
@@ -744,7 +704,6 @@ PRBool nsWidget::DispatchMouseEvent( nsMouseEvent& aEvent ) {
   PRBool result = PR_FALSE;
   if (nsnull == mEventCallback && nsnull == mMouseListener) return result;
 
-  //printf("* DispatchMouseEvent %d\n", aEvent.message);
   // call the event callback
   if (nsnull != mEventCallback) {
     result = DispatchWindowEvent(&aEvent);
@@ -870,7 +829,7 @@ PRUint32 nsWidget::nsConvertKey( PhKeyEvent_t *aPhKeyEvent ) {
   return((int) 0);
 	}
 
-PRBool  nsWidget::DispatchKeyEvent( PhKeyEvent_t *aPhKeyEvent, int force ) {
+PRBool  nsWidget::DispatchKeyEvent( PhKeyEvent_t *aPhKeyEvent ) {
   NS_ASSERTION(aPhKeyEvent, "nsWidget::DispatchKeyEvent a NULL PhKeyEvent was passed in");
 
   if( !(aPhKeyEvent->key_flags & (Pk_KF_Cap_Valid|Pk_KF_Sym_Valid) ) ) {
@@ -879,7 +838,7 @@ PRBool  nsWidget::DispatchKeyEvent( PhKeyEvent_t *aPhKeyEvent, int force ) {
 		return PR_FALSE;
 		}
 
-  if ( !force && PtIsFocused(mWidget) != 2) {
+  if ( PtIsFocused(mWidget) != 2) {
      //printf("nsWidget::DispatchKeyEvent Not on focus leaf! PtIsFocused(mWidget)=<%d>\n", PtIsFocused(mWidget));
      return PR_FALSE;
   	}
@@ -898,24 +857,21 @@ PRBool  nsWidget::DispatchKeyEvent( PhKeyEvent_t *aPhKeyEvent, int force ) {
   w->AddRef();
  
   if (aPhKeyEvent->key_flags & Pk_KF_Key_Down) {
-		nsKeyEvent keyDownEvent(PR_TRUE, NS_KEY_DOWN, w);
+		nsKeyEvent keyDownEvent(NS_KEY_DOWN, w);
 		InitKeyEvent(aPhKeyEvent, keyDownEvent);
-		PRBool noDefault = w->OnKey(keyDownEvent);
+		w->OnKey(keyDownEvent);
 
-		nsKeyEvent keyPressEvent(PR_TRUE, NS_KEY_PRESS, w);
+		nsKeyEvent keyPressEvent(NS_KEY_PRESS, w);
 		InitKeyPressEvent(aPhKeyEvent, keyPressEvent);
-		if (noDefault) {  // If prevent default set for keydown, do same for keypress
-			keyPressEvent.flags = NS_EVENT_FLAG_NO_DEFAULT;
-		}
 		w->OnKey(keyPressEvent);
   	}
   else if (aPhKeyEvent->key_flags & Pk_KF_Key_Repeat) {
-		nsKeyEvent keyPressEvent(PR_TRUE, NS_KEY_PRESS, w);
+		nsKeyEvent keyPressEvent(NS_KEY_PRESS, w);
 		InitKeyPressEvent(aPhKeyEvent, keyPressEvent);
 		w->OnKey(keyPressEvent);
   	}
   else if (PkIsKeyDown(aPhKeyEvent->key_flags) == 0) {
-		nsKeyEvent kevent(PR_TRUE, NS_KEY_UP, w);
+		nsKeyEvent kevent(NS_KEY_UP, w);
 		InitKeyEvent(aPhKeyEvent, kevent);
 		w->OnKey(kevent);
   	}
@@ -984,7 +940,6 @@ inline void nsWidget::InitKeyPressEvent(PhKeyEvent_t *aPhKeyEvent, nsKeyEvent &a
 inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbInfo ) {
   PRBool  result = PR_TRUE; // call the default nsWindow proc
   PhEvent_t* event = aCbInfo->event;
-  static int prevx=-1, prevy=-1, left_button_down, kwww_outbound_valid;
 
 	if (event->processing_flags & Ph_CONSUMED) return PR_TRUE;
 
@@ -993,7 +948,7 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
       case Ph_EV_PTR_MOTION_NOBUTTON:
        	{
 	    	PhPointerEvent_t* ptrev = (PhPointerEvent_t*) PhGetData( event );
-	    	nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull, nsMouseEvent::eReal);
+	    	nsMouseEvent   theMouseEvent;
 
         if( ptrev ) {
 
@@ -1012,35 +967,29 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
        {
 
 	    	PhPointerEvent_t* ptrev = (PhPointerEvent_t*) PhGetData( event );
-   		  nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull, nsMouseEvent::eReal);
+   		  nsMouseEvent   theMouseEvent;
 
 				/* there should be no reason to do this - mozilla should figure out how to call SetFocus */
 				/* this though fixes the problem with the plugins capturing the focus */
 				PtWidget_t *disjoint = PtFindDisjoint( widget );
- 				if( PtWidgetIsClassMember( disjoint, PtServer ) || //mozserver
- 					PtWidgetIsClassMember( disjoint, PtContainer ) ) //TestPhEmbed
+ 				if( PtWidgetIsClassMember( disjoint, PtServer ) )
 					PtContainerGiveFocus( widget, aCbInfo->event );
 
         if( ptrev ) {
-		  prevx = ptrev->pos.x;
-		  prevy = ptrev->pos.y;
           ScreenToWidgetPos( ptrev->pos );
 
-          if( ptrev->buttons & Ph_BUTTON_SELECT ) { // Normally the left mouse button
-			InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_DOWN );
-			left_button_down = 1;
-          } else if( ptrev->buttons & Ph_BUTTON_MENU ) // the right button
-			InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_RIGHT_BUTTON_DOWN );
+          if( ptrev->buttons & Ph_BUTTON_SELECT ) // Normally the left mouse button
+						InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_DOWN );
+          else if( ptrev->buttons & Ph_BUTTON_MENU ) // the right button
+						InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_RIGHT_BUTTON_DOWN );
           else // middle button
-			InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_MIDDLE_BUTTON_DOWN );
+						InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_MIDDLE_BUTTON_DOWN );
 
-		  //printf("*** Button down\n");
-		  result = DispatchMouseEvent(theMouseEvent);
+		  		result = DispatchMouseEvent(theMouseEvent);
 
-					// if we're a right-button-down we're trying to popup a context menu. send that event to gecko also
+					// if we're a right-button-up we're trying to popup a context menu. send that event to gecko also
 					if( ptrev->buttons & Ph_BUTTON_MENU ) {
-						nsMouseEvent contextMenuEvent(PR_TRUE, 0, nsnull,
-                                                      nsMouseEvent::eReal);
+						nsMouseEvent contextMenuEvent;
 						InitMouseEvent( ptrev, this, contextMenuEvent, NS_CONTEXTMENU );
 						result = DispatchMouseEvent( contextMenuEvent );
 						}
@@ -1052,83 +1001,24 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
 		case Ph_EV_BUT_RELEASE:
 		  {
 			  PhPointerEvent_t* ptrev = (PhPointerEvent_t*) PhGetData( event );
-			  nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull,
-                                         nsMouseEvent::eReal);
+			  nsMouseEvent      theMouseEvent;
 			  
-			  // Update the current input group for clipboard mouse events
-			  // (mozilla only). Note that for mozserver the mouse based
-			  // (eg. Edit->Copy/Paste menu) events don't come through here.
-			  // They are sent by the voyager client app via libPtWeb.so to
-			  // do_command() in mozserver.cpp.
-			  if (sClipboard)
-			  	sClipboard->SetInputGroup(event->input_group);
-
 			  if (event->subtype==Ph_EV_RELEASE_REAL || event->subtype==Ph_EV_RELEASE_PHANTOM) {
 				  if (ptrev) {
 					  ScreenToWidgetPos( ptrev->pos );
-					  if ( ptrev->buttons & Ph_BUTTON_SELECT ) { // Normally the left mouse button
+					  if ( ptrev->buttons & Ph_BUTTON_SELECT ) // Normally the left mouse button
 						 InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_UP );
-						 kwww_outbound_valid = 0;
-						 //
-						 // To be clean, let's not send multiple left button up
-						 // events.
-						 //
-						 if (!left_button_down)
-						   break; //case
-						 left_button_down = 0;
-					  } else if( ptrev->buttons & Ph_BUTTON_MENU ) // the right button
+					  else if( ptrev->buttons & Ph_BUTTON_MENU ) // the right button
 						 InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_RIGHT_BUTTON_UP );
 					  else // middle button
 						 InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_MIDDLE_BUTTON_UP );
 					  
-				      //printf("*** Button up %s\n", event->subtype==Ph_EV_RELEASE_PHANTOM ? "(phantom)" : "");
 					  result = DispatchMouseEvent(theMouseEvent);
 				  }
 			  }
 			  else if (event->subtype==Ph_EV_RELEASE_OUTBOUND) {
 				  PhRect_t rect = {{0,0},{0,0}};
 				  PhRect_t boundary = {{-10000,-10000},{10000,10000}};
-
-				  //printf("*** OUTBOUND\n");
-		          if (__progname && strcmp(__progname, "kwww") == 0) {
-					//
-					// In kscope we only use dragging to scroll the view. So
-					// we don't want Mozilla to do any special drag processing,
-					// and fake this out by immediately doing a left-button-up.
-					// We do it at (999999,999999) so any control or link under
-					// the pointer doesn't get activated.
-					//
-			        ptrev->pos.x = ptrev->pos.y = 999999;
-                    InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_UP );
-                    result = DispatchMouseEvent(theMouseEvent);
- 	      	        InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_MOVE );
-        	        result = DispatchMouseEvent(theMouseEvent);
-					left_button_down = 0;
-					kwww_outbound_valid = 1;
-					//
-					// In case we activated a combo box, do another down/up
-					// Sending an Esc key also works. Which is better?
-					// The mouse button method may prevent drag initiation
-					// within (multiline?) input fields. 
-					//
-#if 0
-                    InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_DOWN );
-                    result = DispatchMouseEvent(theMouseEvent);
-                    InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_UP );
-                    result = DispatchMouseEvent(theMouseEvent);
-#else
-					PhKeyEvent_t kev;
-                    memset( &kev, 0, sizeof(kev) );
-					kev.key_cap = kev.key_sym = Pk_Escape;
-					kev.key_flags = Pk_KF_Key_Down | Pk_KF_Cap_Valid | Pk_KF_Sym_Valid;
-					DispatchKeyEvent( &kev, 1 );
-                    memset( &kev, 0, sizeof(kev) );
-					kev.key_cap = Pk_Escape;
-					kev.key_flags = Pk_KF_Cap_Valid;
-					DispatchKeyEvent( &kev, 1 );
-#endif
-				  }
-
 				  PhInitDrag( PtWidgetRid(mWidget), ( Ph_DRAG_KEY_MOTION | Ph_DRAG_TRACK | Ph_TRACK_DRAG),&rect, &boundary, aCbInfo->event->input_group , NULL, NULL, NULL, NULL, NULL);
 			  }
 		  }
@@ -1137,7 +1027,7 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
 		case Ph_EV_PTR_MOTION_BUTTON:
       	{
         PhPointerEvent_t* ptrev = (PhPointerEvent_t*) PhGetData( event );
-	    	nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull, nsMouseEvent::eReal);
+	    	nsMouseEvent   theMouseEvent;
 
         if( ptrev ) {
 
@@ -1152,133 +1042,41 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
 						}
 #endif
 
-		  if (!__progname || strcmp(__progname, "kwww") != 0) {
-		    //
-			// We don't send these events in kscope. Dragging is devoted to
-			// scrolling.
-			//
-            ScreenToWidgetPos( ptrev->pos );
+          ScreenToWidgetPos( ptrev->pos );
  	      	InitMouseEvent(ptrev, this, theMouseEvent, NS_MOUSE_MOVE );
-            result = DispatchMouseEvent(theMouseEvent);
-			}
-          }
+          result = DispatchMouseEvent(theMouseEvent);
+        	}
       	}
       	break;
 
       case Ph_EV_KEY:
-        // Update the current input group for clipboard key events. This
-        // covers both mozserver and mozilla.
-        if (sClipboard)
-          sClipboard->SetInputGroup(event->input_group);
-				result = DispatchKeyEvent( (PhKeyEvent_t*) PhGetData( event ), 0 );
+				result = DispatchKeyEvent( (PhKeyEvent_t*) PhGetData( event ) );
         break;
 
       case Ph_EV_DRAG:
 	    	{
-          nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull, nsMouseEvent::eReal);
+          nsMouseEvent   theMouseEvent;
 
           switch(event->subtype) {
-        	static int is_kwww=-1;
 
-            case Ph_EV_DRAG_COMPLETE: {
-                nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull,
-                                               nsMouseEvent::eReal);
-                PhPointerEvent_t* ptrev2 = (PhPointerEvent_t*) PhGetData( event );
-				//printf("*** Drag complete\n");
-                if (is_kwww) {  
-        	      // Already did the button up
-				  kwww_outbound_valid = 0;
-				  prevx = prevy = -1;
-			    } else {
-                  ScreenToWidgetPos( ptrev2->pos );
-                  InitMouseEvent(ptrev2, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_UP );
-                  result = DispatchMouseEvent(theMouseEvent);
-				  left_button_down = 0;
-                }
-			  }
-              break;
-            case Ph_EV_DRAG_MOTION_EVENT: {
-                PhPointerEvent_t* ptrev2 = (PhPointerEvent_t*) PhGetData( event );
-				//printf("*** Drag motion\n");
-			    if (is_kwww == -1) {
-			      is_kwww = 0;
-				  if (__progname && strcmp(__progname, "kwww") == 0)
-			      	is_kwww = 1;
-			    }
-
-			    if (is_kwww) {
-				  nsIWidget *nsw = this;
-				  nsIWidget *top_widget = nsw;
-
-				  if (!kwww_outbound_valid) {
-                    struct dragevent {
-                        PhEvent_t hdr;
-                        PhDragEvent_t drag;
-                        } ev;
-
-					//
-					// If the user does a drag where he releases the left mouse
-					// button almost right away, then we will start getting
-					// drag events even though the mouse button is not pressed!
-					// Work around this Photon bug by cancelling the drag
-					// ourselves. In 6.4.0 we can use PhCancelDrag() to do this.
-					//
-				  	//printf("*** CANCELLING DRAG!\n");
-                    memset( &ev, 0, sizeof(ev) );
-                    ev.hdr.type = Ph_EV_DRAG;
-                    ev.hdr.emitter.rid = Ph_DEV_RID;
-                    ev.hdr.flags = Ph_EVENT_INCLUSIVE | Ph_EMIT_TOWARD;
-                    ev.hdr.data_len = sizeof( ev.drag );
-					ev.hdr.subtype = Ph_EV_DRAG_COMPLETE;
-					ev.hdr.input_group = aCbInfo->event->input_group;
-					ev.drag.rid = PtWidgetRid(mWidget);
-					ev.drag.flags = 0;
-					PhEmit( &ev.hdr, NULL, &ev.drag );
-					break; //case
-				  }
-
-				  while (nsw) {
-					top_widget = nsw;
-					nsw = nsw->GetParent();
-				  }
-			try_again:
-                  nsIView *view = nsToolkit::GetViewFor(top_widget);
-				  if (view) {
-					nsIViewManager* vm = view->GetViewManager();
-					if (vm) {
-				      nsIScrollableView* scrollView = nsnull;
-				      vm->GetRootScrollableView(&scrollView);
-					  if (scrollView) {
-						if (prevx != -1 || prevy != -1) {
-						  //
-						  // The -1 check is to handle prevx and prevy not set
-						  // to the button press location, which happens when
-						  // you click on flash.
-						  //
-						  nsresult rc = ((nsIScrollableView_MOZILLA_1_8_BRANCH*)scrollView)->ScrollByPixels(prevx - ptrev2->pos.x, prevy - ptrev2->pos.y);
-						  //printf("*** rc %d from ScrollByPixels\n");
-						}
-					  } else if (top_widget != this) {
-					    //
-						// There is no scrollable view for the top level widget.
-						// See if there is one for the original widget.
-						//
-						top_widget = this;
-						goto try_again;
-					  }
+		  			case Ph_EV_DRAG_COMPLETE: 
+            	{
+ 		      		nsMouseEvent      theMouseEvent;
+              PhPointerEvent_t* ptrev2 = (PhPointerEvent_t*) PhGetData( event );
+              ScreenToWidgetPos( ptrev2->pos );
+              InitMouseEvent(ptrev2, this, theMouseEvent, NS_MOUSE_LEFT_BUTTON_UP );
+              result = DispatchMouseEvent(theMouseEvent);
+            	}
+							break;
+		  			case Ph_EV_DRAG_MOTION_EVENT: {
+      		    PhPointerEvent_t* ptrev2 = (PhPointerEvent_t*) PhGetData( event );
+      		    ScreenToWidgetPos( ptrev2->pos );
+  	  		    InitMouseEvent(ptrev2, this, theMouseEvent, NS_MOUSE_MOVE );
+      		    result = DispatchMouseEvent(theMouseEvent);
+							}
+							break;
+		  			}
 					}
-			      }
-			      prevx = ptrev2->pos.x;
-			      prevy = ptrev2->pos.y;
-			    } else {
-                  ScreenToWidgetPos( ptrev2->pos );
-                  InitMouseEvent(ptrev2, this, theMouseEvent, NS_MOUSE_MOVE );
-                  result = DispatchMouseEvent(theMouseEvent);
-			    }
-              }
-              break;
-            }
-          }
         break;
 
       case Ph_EV_BOUNDARY:
@@ -1300,8 +1098,7 @@ inline PRBool nsWidget::HandleEvent( PtWidget_t *widget, PtCallbackInfo_t* aCbIn
 
 				if( evtype != 0 ) {
 					PhPointerEvent_t* ptrev = (PhPointerEvent_t*) PhGetData( event );
-					nsMouseEvent theMouseEvent(PR_TRUE, 0, nsnull,
-                                               nsMouseEvent::eReal);
+					nsMouseEvent theMouseEvent;
 					ScreenToWidgetPos( ptrev->pos );
 					InitMouseEvent( ptrev, this, theMouseEvent, evtype );
 					result = DispatchMouseEvent( theMouseEvent );
@@ -1403,7 +1200,7 @@ void nsWidget::ProcessDrag( PhEvent_t *event, PRUint32 aEventType, PhPoint_t *po
 
 void nsWidget::DispatchDragDropEvent( PhEvent_t *phevent, PRUint32 aEventType, PhPoint_t *pos ) {
   nsEventStatus status;
-  nsMouseEvent event(PR_TRUE, 0, nsnull, nsMouseEvent::eReal);
+  nsMouseEvent event;
 
   InitEvent( event, aEventType );
 
@@ -1422,6 +1219,7 @@ void nsWidget::DispatchDragDropEvent( PhEvent_t *phevent, PRUint32 aEventType, P
 
   DispatchEvent( &event, status );
 	}
+
 
 int nsWidget::DndCallback( PtWidget_t *widget, void *data, PtCallbackInfo_t *cbinfo ) {
 	nsWidget *pWidget = (nsWidget *) data;

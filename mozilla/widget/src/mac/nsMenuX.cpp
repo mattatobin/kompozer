@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,7 +44,6 @@
 #include "nsIComponentManager.h"
 #include "nsIDocShell.h"
 #include "prinrval.h"
-#include "nsIRollupListener.h"
 
 #include "nsMenuX.h"
 #include "nsMenuBarX.h"
@@ -52,9 +51,8 @@
 #include "nsIMenuBar.h"
 #include "nsIMenuItem.h"
 #include "nsIMenuListener.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIMenuCommandDispatcher.h"
-#include "nsMenuItemIcon.h"
 
 #include "nsString.h"
 #include "nsReadableUtils.h"
@@ -72,12 +70,9 @@
 
 #include "nsGUIEvent.h"
 
+#include "nsDynamicMDEF.h"
 #include "nsCRT.h"
-#include "nsToolkit.h"
 
-// externs defined in nsWindow.cpp
-extern nsIRollupListener * gRollupListener;
-extern nsIWidget         * gRollupWidget;
 
 static OSStatus InstallMyMenuEventHandler(MenuRef menuRef, void* userData, EventHandlerRef* outHandler) ;
 
@@ -115,16 +110,16 @@ NS_IMPL_QUERY_INTERFACE0(nsDummyMenuItemX)
 static nsDummyMenuItemX gDummyMenuItemX;
 
 //-------------------------------------------------------------------------
-NS_IMPL_ISUPPORTS5(nsMenuX, nsIMenu, nsIMenu_MOZILLA_1_8_BRANCH, nsIMenuListener, nsIChangeObserver, nsISupportsWeakReference)
+NS_IMPL_ISUPPORTS4(nsMenuX, nsIMenu, nsIMenuListener, nsIChangeObserver, nsISupportsWeakReference)
 
 //
 // nsMenuX constructor
 //
 nsMenuX::nsMenuX()
     :   mNumMenuItems(0), mParent(nsnull), mManager(nsnull),
-        mMacMenuID(0), mMacMenuHandle(nsnull), mIsEnabled(PR_TRUE),
-        mDestroyHandlerCalled(PR_FALSE), mNeedsRebuild(PR_TRUE),
-        mConstructed(PR_FALSE), mVisible(PR_TRUE), mHandler(nsnull)
+        mMacMenuID(0), mMacMenuHandle(nsnull), mHelpMenuOSItemsCount(0),
+        mIsHelpMenu(PR_FALSE), mIsEnabled(PR_TRUE), mDestroyHandlerCalled(PR_FALSE),
+        mNeedsRebuild(PR_TRUE), mConstructed(PR_FALSE), mVisible(PR_TRUE), mHandler(nsnull)
 {
 #if DEBUG
   ++gMenuCounterX;
@@ -159,9 +154,9 @@ nsMenuX::~nsMenuX()
 //
 NS_METHOD 
 nsMenuX::Create(nsISupports * aParent, const nsAString &aLabel, const nsAString &aAccessKey, 
-                nsIChangeManager* aManager, nsIDocShell* aShell, nsIContent* aNode )
+                nsIChangeManager* aManager, nsIWebShell* aShell, nsIContent* aNode )
 {
-  mDocShellWeakRef = do_GetWeakReference(aShell);
+  mWebShellWeakRef = do_GetWeakReference(aShell);
   mMenuContent = aNode;
 
   // register this menu to be notified when changes are made to our content object
@@ -174,9 +169,13 @@ nsMenuX::Create(nsISupports * aParent, const nsAString &aLabel, const nsAString 
 
   mParent = aParent;
   // our parent could be either a menu bar (if we're toplevel) or a menu (if we're a submenu)
-  nsCOMPtr<nsIMenuBar> menubar = do_QueryInterface(aParent);
-  nsCOMPtr<nsIMenu_MOZILLA_1_8_BRANCH> menu = do_QueryInterface(aParent);
-  NS_ASSERTION(menubar || menu, "Menu parent not a menu bar or menu!" );
+  PRBool isValidParent = PR_FALSE;
+  if (aParent) {
+    nsCOMPtr<nsIMenuBar> menubar = do_QueryInterface(aParent);
+    nsCOMPtr<nsIMenu> menu = do_QueryInterface(aParent);
+    isValidParent = (menubar || menu);
+  }
+  NS_ASSERTION(isValidParent, "Menu parent not a menu bar or menu!" );
 
   SetLabel(aLabel);
   SetAccessKey(aAccessKey);
@@ -184,22 +183,8 @@ nsMenuX::Create(nsISupports * aParent, const nsAString &aLabel, const nsAString 
   nsAutoString hiddenValue, collapsedValue;
   mMenuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hiddenValue);
   mMenuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::collapsed, collapsedValue);
-  if ( hiddenValue.EqualsLiteral("true") || collapsedValue.EqualsLiteral("true") )
+  if ( hiddenValue == NS_LITERAL_STRING("true") || collapsedValue == NS_LITERAL_STRING("true") )
     mVisible = PR_FALSE;
-
-  if (menubar && mMenuContent->GetChildCount() == 0)
-    mVisible = PR_FALSE;
-
-  // We call MenuConstruct here because keyboard commands are dependent upon
-  // native menu items being created. If we only call MenuConstruct when a menu
-  // is actually selected, then we can't access keyboard commands until the
-  // menu gets selected, which is bad.
-  nsMenuEvent fake(PR_TRUE, 0, nsnull);
-  MenuConstruct(fake, nsnull, nsnull, nsnull);
-
-  if (menu)
-    mIcon = new nsMenuItemIcon(NS_STATIC_CAST(nsIMenu*, this),
-                               menu, mMenuContent);
 
   return NS_OK;
 }
@@ -282,7 +267,7 @@ NS_METHOD nsMenuX::AddMenuItem(nsIMenuItem * aMenuItem)
   // I want to be internationalized too!
   nsAutoString keyEquivalent(NS_LITERAL_STRING(" "));
   aMenuItem->GetShortcutChar(keyEquivalent);
-  if (!keyEquivalent.EqualsLiteral(" ")) {
+  if (keyEquivalent != NS_LITERAL_STRING(" ")) {
     ToUpperCase(keyEquivalent);
     char keyStr[2];
     keyEquivalent.ToCString(keyStr, sizeof(keyStr));
@@ -440,7 +425,7 @@ NS_METHOD nsMenuX::RemoveAll()
     // clear command id's
     nsCOMPtr<nsIMenuCommandDispatcher> dispatcher ( do_QueryInterface(mManager) );
     if ( dispatcher ) {
-      for ( unsigned int i = 1; i <= mNumMenuItems; ++i ) {
+      for ( int i = 1; i <= mNumMenuItems; ++i ) {
         PRUint32 commandID = 0L;
         OSErr err = ::GetMenuItemCommandID(mMacMenuHandle, i, (unsigned long*)&commandID);
         if ( !err )
@@ -505,6 +490,12 @@ nsEventStatus nsMenuX::MenuSelected(const nsMenuEvent & aMenuEvent)
   MenuHandle selectedMenuHandle = (MenuHandle) aMenuEvent.mCommand;
 
   if (mMacMenuHandle == selectedMenuHandle) {
+    if (mIsHelpMenu && mConstructed){
+      RemoveAll();
+      mConstructed = false;
+      SetRebuild(PR_TRUE);
+    }
+
     // Open the node.
     mMenuContent->SetAttr(kNameSpaceID_None, nsWidgetAtoms::open, NS_LITERAL_STRING("true"), PR_TRUE);
   
@@ -512,21 +503,25 @@ nsEventStatus nsMenuX::MenuSelected(const nsMenuEvent & aMenuEvent)
     // Fire our oncreate handler. If we're told to stop, don't build the menu at all
     PRBool keepProcessing = OnCreate();
 
-    if (!mNeedsRebuild || !keepProcessing)
+    if (!mIsHelpMenu && !mNeedsRebuild || !keepProcessing)
       return nsEventStatus_eConsumeNoDefault;
 
     if(!mConstructed || mNeedsRebuild) {
       if (mNeedsRebuild)
         RemoveAll();
 
-      nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-      if (!docShell) {
-        NS_ERROR("No doc shell");
+      nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+      if (!webShell) {
+        NS_ERROR("No web shell");
         return nsEventStatus_eConsumeNoDefault;
       }
-
-      MenuConstruct(aMenuEvent, nsnull /* mParentWindow */, nsnull, docShell);
-      mConstructed = true;
+      if (mIsHelpMenu) {
+        HelpMenuConstruct(aMenuEvent, nsnull /* mParentWindow */, nsnull, webShell);	      
+        mConstructed = true;
+      } else {
+        MenuConstruct(aMenuEvent, nsnull /* mParentWindow */, nsnull, webShell);
+        mConstructed = true;
+      }	
     } 
 
     OnCreated();  // Now that it's built, fire the popupShown event.
@@ -568,7 +563,7 @@ nsEventStatus nsMenuX::MenuConstruct(
     const nsMenuEvent & aMenuEvent,
     nsIWidget         * aParentWindow, 
     void              * /* menuNode */,
-	  void              * aDocShell)
+	  void              * aWebShell)
 {
   mConstructed = false;
   gConstructingMenu = PR_TRUE;
@@ -609,6 +604,47 @@ nsEventStatus nsMenuX::MenuConstruct(
 }
 
 //-------------------------------------------------------------------------
+nsEventStatus nsMenuX::HelpMenuConstruct(
+    const nsMenuEvent & aMenuEvent,
+    nsIWidget         * aParentWindow, 
+    void              * /* menuNode */,
+    void              * aWebShell)
+{
+  //printf("nsMenuX::MenuConstruct called for %s = %d \n", NS_LossyConvertUCS2toASCII(mLabel).get(), mMacMenuHandle);
+ 
+  int numHelpItems = ::CountMenuItems(mMacMenuHandle);
+  for (int i=0; i < numHelpItems; ++i) {
+    mMenuItemsArray.AppendElement(&gDummyMenuItemX);
+  }
+     
+  // Retrieve our menupopup.
+  nsCOMPtr<nsIContent> menuPopup;
+  GetMenuPopupContent(getter_AddRefs(menuPopup));
+  if (!menuPopup)
+    return nsEventStatus_eIgnore;
+      
+  // Iterate over the kids
+  PRUint32 count = menuPopup->GetChildCount();
+  for ( PRUint32 i = 0; i < count; ++i ) {
+    nsIContent *child = menuPopup->GetChildAt(i);
+    if ( child ) {      
+      // depending on the type, create a menu item, separator, or submenu
+      nsIAtom *tag = child->Tag();
+      if ( tag == nsWidgetAtoms::menuitem )
+        LoadMenuItem(this, child);
+      else if ( tag == nsWidgetAtoms::menuseparator )
+        LoadSeparator(child);
+      else if ( tag == nsWidgetAtoms::menu )
+        LoadSubMenu(this, child);
+    }   
+  } // for each menu item
+  
+  //printf("  Done building, mMenuItemVoidArray.Count() = %d \n", mMenuItemVoidArray.Count());
+             
+  return nsEventStatus_eIgnore;
+}
+
+//-------------------------------------------------------------------------
 nsEventStatus nsMenuX::MenuDestruct(const nsMenuEvent & aMenuEvent)
 {
   //printf("nsMenuX::MenuDestruct() called for %s \n", NS_LossyConvertUCS2toASCII(mLabel).get());
@@ -639,8 +675,11 @@ nsEventStatus nsMenuX::CheckRebuild(PRBool & aNeedsRebuild)
 //-------------------------------------------------------------------------
 nsEventStatus nsMenuX::SetRebuild(PRBool aNeedsRebuild)
 {
-  if(!gConstructingMenu)
+  if(!gConstructingMenu) {
     mNeedsRebuild = aNeedsRebuild;
+    //if(mNeedsRebuild)
+    //  RemoveAll();
+  }
   return nsEventStatus_eIgnore;
 }
 
@@ -680,7 +719,9 @@ NS_METHOD nsMenuX::GetEnabled(PRBool* aIsEnabled)
 */
 NS_METHOD nsMenuX::IsHelpMenu(PRBool* aIsHelpMenu)
 {
-  return NS_ERROR_NOT_IMPLEMENTED;
+  NS_ENSURE_ARG_POINTER(aIsHelpMenu);
+  *aIsHelpMenu = mIsHelpMenu;
+  return NS_OK;
 }
 
 
@@ -706,44 +747,13 @@ static pascal OSStatus MyMenuEventHandler(EventHandlerCallRef myHandler, EventRe
   OSStatus result = eventNotHandledErr;
 
   UInt32 kind = ::GetEventKind(event);
-  if (kind == kEventMenuTargetItem) {
-    // get the position of the menu item we want
-    nsIMenu* targetMenu = reinterpret_cast<nsIMenu*>(userData);
-    PRUint16 aPos;
-    ::GetEventParameter(event, kEventParamMenuItemIndex, typeMenuItemIndex, NULL, sizeof(MenuItemIndex), NULL, &aPos);
-    aPos--; // subtract 1 from aPos because Carbon menu positions start at 1 not 0
-    
-    nsISupports* aTargetMenuItem;
-    targetMenu->GetItemAt((PRUint32)aPos, aTargetMenuItem);
-    
-    // Send DOM event
-    // If the QI fails, we're over a submenu and we shouldn't send the event
-    nsCOMPtr<nsIMenuItem_MOZILLA_1_8_BRANCH> bTargetMenuItem(do_QueryInterface(aTargetMenuItem));
-    if (bTargetMenuItem) {
-      PRBool handlerCalledPreventDefault; // but we don't actually care
-      bTargetMenuItem->DispatchDOMEvent(NS_LITERAL_STRING("DOMMenuItemActive"), &handlerCalledPreventDefault);
-    }
-    
-    // remember which menu ID we're over for later
-    MenuRef menuRef;
-    ::GetEventParameter(event, kEventParamDirectObject, typeMenuRef, NULL, sizeof(menuRef), NULL, &menuRef);
-    gCurrentlyTrackedMenuID = ::GetMenuID(menuRef);
-  }
-  else if (kind == kEventMenuOpening || kind == kEventMenuClosed) {
-    if (kind == kEventMenuOpening && gRollupListener != nsnull && gRollupWidget != nsnull) {
-      gRollupListener->Rollup();
-      // We can only return userCanceledErr on Tiger or later because it crashes on Panther.
-      // See bug 351230.
-      if (nsToolkit::OSXVersion() >= MAC_OS_X_VERSION_10_4_HEX)
-        return userCanceledErr;
-    }
-
+  if (kind == kEventMenuOpening || kind == kEventMenuClosed) {
     nsISupports* supports = reinterpret_cast<nsISupports*>(userData);
     nsCOMPtr<nsIMenuListener> listener(do_QueryInterface(supports));
     if (listener) {
       MenuRef menuRef;
       ::GetEventParameter(event, kEventParamDirectObject, typeMenuRef, NULL, sizeof(menuRef), NULL, &menuRef);
-      nsMenuEvent menuEvent(PR_TRUE, NS_MENU_SELECTED, nsnull);
+      nsMenuEvent menuEvent(NS_MENU_SELECTED);
       menuEvent.time = PR_IntervalNow();
       menuEvent.mCommand = (PRUint32) menuRef;
       if (kind == kEventMenuOpening) {
@@ -754,6 +764,12 @@ static pascal OSStatus MyMenuEventHandler(EventHandlerCallRef myHandler, EventRe
         listener->MenuDeselected(menuEvent);
     }
   }
+  else if ( kind == kEventMenuTargetItem ) {
+    // remember which menu ID we're over for later
+    MenuRef menuRef;
+    ::GetEventParameter(event, kEventParamDirectObject, typeMenuRef, NULL, sizeof(menuRef), NULL, &menuRef);
+    gCurrentlyTrackedMenuID = ::GetMenuID(menuRef);
+  }
   
   return result;
 }
@@ -762,9 +778,14 @@ static OSStatus InstallMyMenuEventHandler(MenuRef menuRef, void* userData, Event
 {
   // install the event handler for the various carbon menu events.
   static EventTypeSpec eventList[] = {
+      { kEventClassMenu, kEventMenuBeginTracking },
+      { kEventClassMenu, kEventMenuEndTracking },
+      { kEventClassMenu, kEventMenuChangeTrackingMode },
       { kEventClassMenu, kEventMenuOpening },
       { kEventClassMenu, kEventMenuClosed },
       { kEventClassMenu, kEventMenuTargetItem },
+      { kEventClassMenu, kEventMenuMatchKey },
+      { kEventClassMenu, kEventMenuEnableItems }
   };
   static EventHandlerUPP gMyMenuEventHandlerUPP = NewEventHandlerUPP(&MyMenuEventHandler);
   return ::InstallMenuEventHandler(menuRef, gMyMenuEventHandlerUPP,
@@ -801,43 +822,12 @@ void nsMenuX::LoadMenuItem( nsIMenu* inParentMenu, nsIContent* inMenuItemContent
   // if menu should be hidden, bail
   nsAutoString hidden;
   inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hidden);
-  if ( hidden.EqualsLiteral("true") )
+  if ( hidden == NS_LITERAL_STRING("true") )
     return;
 
   // Create nsMenuItem
-  nsCOMPtr<nsIMenuItem_MOZILLA_1_8_BRANCH> pnsMenuItem =
-   do_CreateInstance ( kMenuItemCID ) ;
-  if (pnsMenuItem) {
-    nsCOMPtr<nsIDOMDocument> domDocument = do_QueryInterface(inMenuItemContent->GetDocument());
-    if (!domDocument)
-      return;
-
-    // We want the enabled state from the command element, not the menu item element.
-    // The command element is more up-to-date and it matters for keyboard shortcuts
-    // that can be invoked without opening the menu for the item. Sync menu item's
-    // enabled state with its command element now.
-    nsAutoString ourCommand;
-    inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::command, ourCommand);
-    if (!ourCommand.IsEmpty()) {
-      // get the command DOM element
-      nsCOMPtr<nsIDOMElement> commandElt;
-      domDocument->GetElementById(ourCommand, getter_AddRefs(commandElt));
-      if (commandElt) {
-        nsCOMPtr<nsIContent> commandContent = do_QueryInterface(commandElt);
-        nsAutoString menuItemDisabled;
-        nsAutoString commandDisabled;
-        inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, menuItemDisabled);
-        commandContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, commandDisabled);
-        if (!commandDisabled.Equals(menuItemDisabled)) {
-          // The menu's disabled state needs to be updated to match the command
-          if (commandDisabled.IsEmpty()) 
-            inMenuItemContent->UnsetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, PR_TRUE);
-          else
-            inMenuItemContent->SetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, commandDisabled, PR_TRUE);
-        }
-      }
-    }
-    
+  nsCOMPtr<nsIMenuItem> pnsMenuItem = do_CreateInstance ( kMenuItemCID ) ;
+  if ( pnsMenuItem ) {
     nsAutoString disabled;
     nsAutoString checked;
     nsAutoString type;
@@ -850,29 +840,23 @@ void nsMenuX::LoadMenuItem( nsIMenu* inParentMenu, nsIContent* inMenuItemContent
     inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::label, menuitemName);
     inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::command, menuitemCmd);
 
-    // Bug 164155 - Carbon interprets a leading hyphen on a menu item as
-    // a separator. We want a real menu item, so "escape" the hyphen by inserting
-    // a zero width space (Unicode 8204) before it.
-    if ( menuitemName[0] == '-' )
-      menuitemName.Assign( NS_LITERAL_STRING("\u200c") + menuitemName );
-
     //printf("menuitem %s \n", NS_LossyConvertUCS2toASCII(menuitemName).get());
               
-    PRBool enabled = ! (disabled.EqualsLiteral("true"));
+    PRBool enabled = ! (disabled == NS_LITERAL_STRING("true"));
     
     nsIMenuItem::EMenuItemType itemType = nsIMenuItem::eRegular;
-    if ( type.EqualsLiteral("checkbox") )
+    if ( type == NS_LITERAL_STRING("checkbox") )
       itemType = nsIMenuItem::eCheckbox;
-    else if ( type.EqualsLiteral("radio") )
+    else if ( type == NS_LITERAL_STRING("radio") )
       itemType = nsIMenuItem::eRadio;
       
-    nsCOMPtr<nsIDocShell>  docShell = do_QueryReferent(mDocShellWeakRef);
-    if (!docShell)
+    nsCOMPtr<nsIWebShell>  webShell = do_QueryReferent(mWebShellWeakRef);
+    if (!webShell)
       return;
 
     // Create the item.
     pnsMenuItem->Create(inParentMenu, menuitemName, PR_FALSE, itemType, 
-                          enabled, mManager, docShell, inMenuItemContent);   
+                          enabled, mManager, webShell, inMenuItemContent);   
 
     //
     // Set key shortcut and modifiers
@@ -881,7 +865,12 @@ void nsMenuX::LoadMenuItem( nsIMenu* inParentMenu, nsIContent* inMenuItemContent
     nsAutoString keyValue;
     inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::key, keyValue);
 
-    // Try to find the key node
+    // Try to find the key node. Get the document so we can do |GetElementByID|
+    nsCOMPtr<nsIDOMDocument> domDocument =
+      do_QueryInterface(inMenuItemContent->GetDocument());
+    if ( !domDocument )
+      return;
+
     nsCOMPtr<nsIDOMElement> keyElement;
     if (!keyValue.IsEmpty())
       domDocument->GetElementById(keyValue, getter_AddRefs(keyElement));
@@ -889,7 +878,7 @@ void nsMenuX::LoadMenuItem( nsIMenu* inParentMenu, nsIContent* inMenuItemContent
       nsCOMPtr<nsIContent> keyContent ( do_QueryInterface(keyElement) );
       nsAutoString keyChar(NS_LITERAL_STRING(" "));
       keyContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::key, keyChar);
-	    if(!keyChar.EqualsLiteral(" ")) 
+	    if(keyChar != NS_LITERAL_STRING(" ")) 
         pnsMenuItem->SetShortcutChar(keyChar);
         
       PRUint8 modifiers = knsMenuItemNoModifier;
@@ -917,15 +906,13 @@ void nsMenuX::LoadMenuItem( nsIMenu* inParentMenu, nsIContent* inMenuItemContent
 	    pnsMenuItem->SetModifiers ( modifiers );
     }
 
-    if ( checked.EqualsLiteral("true") )
+    if ( checked == NS_LITERAL_STRING("true") )
       pnsMenuItem->SetChecked(PR_TRUE);
     else
       pnsMenuItem->SetChecked(PR_FALSE);
       
     nsCOMPtr<nsISupports> supports ( do_QueryInterface(pnsMenuItem) );
     inParentMenu->AddItem(supports);         // Parent now owns menu item
-
-    pnsMenuItem->SetupIcon();
   }
 }
 
@@ -936,7 +923,7 @@ nsMenuX::LoadSubMenu( nsIMenu * pParentMenu, nsIContent* inMenuItemContent )
   // if menu should be hidden, bail
   nsAutoString hidden; 
   inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hidden);
-  if ( hidden.EqualsLiteral("true") )
+  if ( hidden == NS_LITERAL_STRING("true") )
     return;
   
   nsAutoString menuName; 
@@ -944,19 +931,19 @@ nsMenuX::LoadSubMenu( nsIMenu * pParentMenu, nsIContent* inMenuItemContent )
   //printf("Creating Menu [%s] \n", NS_LossyConvertUCS2toASCII(menuName).get());
 
   // Create nsMenu
-  nsCOMPtr<nsIMenu_MOZILLA_1_8_BRANCH> pnsMenu ( do_CreateInstance(kMenuCID) );
+  nsCOMPtr<nsIMenu> pnsMenu ( do_CreateInstance(kMenuCID) );
   if (pnsMenu) {
     // Call Create
-    nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-    if (!docShell)
+    nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+    if (!webShell)
         return;
     nsCOMPtr<nsISupports> supports(do_QueryInterface(pParentMenu));
-    pnsMenu->Create(supports, menuName, EmptyString(), mManager, docShell, inMenuItemContent);
+    pnsMenu->Create(supports, menuName, EmptyString(), mManager, webShell, inMenuItemContent);
 
     // set if it's enabled or disabled
     nsAutoString disabled;
     inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, disabled);
-    if ( disabled.EqualsLiteral("true") )
+    if ( disabled == NS_LITERAL_STRING("true") )
       pnsMenu->SetEnabled ( PR_FALSE );
     else
       pnsMenu->SetEnabled ( PR_TRUE );
@@ -964,8 +951,6 @@ nsMenuX::LoadSubMenu( nsIMenu * pParentMenu, nsIContent* inMenuItemContent )
     // Make nsMenu a child of parent nsMenu. The parent takes ownership
     nsCOMPtr<nsISupports> supports2 ( do_QueryInterface(pnsMenu) );
 	  pParentMenu->AddItem(supports2);
-
-    pnsMenu->SetupIcon();
   }     
 }
 
@@ -976,7 +961,7 @@ nsMenuX::LoadSeparator ( nsIContent* inMenuItemContent )
   // if item should be hidden, bail
   nsAutoString hidden;
   inMenuItemContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hidden);
-  if ( hidden.EqualsLiteral("true") )
+  if ( hidden == NS_LITERAL_STRING("true") )
     return;
 
   AddSeparator();
@@ -994,19 +979,18 @@ PRBool
 nsMenuX::OnCreate()
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_SHOWING, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_SHOWING);
   
   nsCOMPtr<nsIContent> popupContent;
   GetMenuPopupContent(getter_AddRefs(popupContent));
 
-  nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-  if (!docShell) {
-    NS_ERROR("No doc shell");
+  nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+  if (!webShell) {
+    NS_ERROR("No web shell");
     return PR_FALSE;
   }
-  nsCOMPtr<nsPresContext> presContext;
-  MenuHelpersX::DocShellToPresContext(docShell, getter_AddRefs(presContext) );
+  nsCOMPtr<nsIPresContext> presContext;
+  MenuHelpersX::WebShellToPresContext(webShell, getter_AddRefs(presContext) );
   if ( presContext ) {
     nsresult rv = NS_OK;
     nsIContent* dispatchTo = popupContent ? popupContent : mMenuContent;
@@ -1077,18 +1061,18 @@ PRBool
 nsMenuX::OnCreated()
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_SHOWN, nsnull, nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_SHOWN);
   
   nsCOMPtr<nsIContent> popupContent;
   GetMenuPopupContent(getter_AddRefs(popupContent));
 
-  nsCOMPtr<nsIDocShell> docShell = do_QueryReferent(mDocShellWeakRef);
-  if (!docShell) {
-    NS_ERROR("No doc shell");
+  nsCOMPtr<nsIWebShell> webShell = do_QueryReferent(mWebShellWeakRef);
+  if (!webShell) {
+    NS_ERROR("No web shell");
     return PR_FALSE;
   }
-  nsCOMPtr<nsPresContext> presContext;
-  MenuHelpersX::DocShellToPresContext(docShell, getter_AddRefs(presContext) );
+  nsCOMPtr<nsIPresContext> presContext;
+  MenuHelpersX::WebShellToPresContext(webShell, getter_AddRefs(presContext) );
   if ( presContext ) {
     nsresult rv = NS_OK;
     nsIContent* dispatchTo = popupContent ? popupContent : mMenuContent;
@@ -1113,20 +1097,19 @@ nsMenuX::OnDestroy()
     return PR_TRUE;
 
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_HIDING, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_HIDING);
   
-  nsCOMPtr<nsIDocShell>  docShell = do_QueryReferent(mDocShellWeakRef);
-  if (!docShell) {
-    NS_WARNING("No doc shell so can't run the OnDestroy");
+  nsCOMPtr<nsIWebShell>  webShell = do_QueryReferent(mWebShellWeakRef);
+  if (!webShell) {
+    NS_WARNING("No web shell so can't run the OnDestroy");
     return PR_FALSE;
   }
 
   nsCOMPtr<nsIContent> popupContent;
   GetMenuPopupContent(getter_AddRefs(popupContent));
 
-  nsCOMPtr<nsPresContext> presContext;
-  MenuHelpersX::DocShellToPresContext (docShell, getter_AddRefs(presContext) );
+  nsCOMPtr<nsIPresContext> presContext;
+  MenuHelpersX::WebShellToPresContext (webShell, getter_AddRefs(presContext) );
   if (presContext )  {
     nsresult rv = NS_OK;
     nsIContent* dispatchTo = popupContent ? popupContent : mMenuContent;
@@ -1144,20 +1127,19 @@ PRBool
 nsMenuX::OnDestroyed()
 {
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsMouseEvent event(PR_TRUE, NS_XUL_POPUP_HIDDEN, nsnull,
-                     nsMouseEvent::eReal);
+  nsMouseEvent event(NS_XUL_POPUP_HIDDEN);
   
-  nsCOMPtr<nsIDocShell>  docShell = do_QueryReferent(mDocShellWeakRef);
-  if (!docShell) {
-    NS_WARNING("No doc shell so can't run the OnDestroy");
+  nsCOMPtr<nsIWebShell>  webShell = do_QueryReferent(mWebShellWeakRef);
+  if (!webShell) {
+    NS_WARNING("No web shell so can't run the OnDestroy");
     return PR_FALSE;
   }
 
   nsCOMPtr<nsIContent> popupContent;
   GetMenuPopupContent(getter_AddRefs(popupContent));
 
-  nsCOMPtr<nsPresContext> presContext;
-  MenuHelpersX::DocShellToPresContext (docShell, getter_AddRefs(presContext) );
+  nsCOMPtr<nsIPresContext> presContext;
+  MenuHelpersX::WebShellToPresContext (webShell, getter_AddRefs(presContext) );
   if (presContext )  {
     nsresult rv = NS_OK;
     nsIContent* dispatchTo = popupContent ? popupContent : mMenuContent;
@@ -1192,7 +1174,7 @@ nsMenuX::GetMenuPopupContent(nsIContent** aResult)
   
   PRUint32 count = mMenuContent->GetChildCount();
 
-  for (PRUint32 i = 0; i < count; i++) {
+  for (PRInt32 i = 0; i < count; i++) {
     PRInt32 dummy;
     nsIContent *child = mMenuContent->GetChildAt(i);
     nsCOMPtr<nsIAtom> tag;
@@ -1247,9 +1229,7 @@ nsMenuX :: CountVisibleBefore ( PRUint32* outVisibleBefore )
         nsAutoString hiddenValue, collapsedValue;
         menuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hiddenValue);
         menuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::collapsed, collapsedValue);
-        if ( menuContent->GetChildCount() > 0 ||
-             !hiddenValue.EqualsLiteral("true") &&
-             !collapsedValue.EqualsLiteral("true"))
+        if ( hiddenValue != NS_LITERAL_STRING("true") && collapsedValue != NS_LITERAL_STRING("true"))
           ++(*outVisibleBefore);
       }
     }
@@ -1260,48 +1240,6 @@ nsMenuX :: CountVisibleBefore ( PRUint32* outVisibleBefore )
 
 } // CountVisibleBefore
 
-NS_IMETHODIMP
-nsMenuX::ChangeNativeEnabledStatusForMenuItem(nsIMenuItem* aMenuItem,
-                                              PRBool aEnabled)
-{
-  MenuRef menuRef;
-  PRUint16 menuItemIndex;
-  nsresult rv = GetMenuRefAndItemIndexForMenuItem(aMenuItem,
-                                                  (void**)&menuRef,
-                                                  &menuItemIndex);
-  if (NS_FAILED(rv)) return rv;
-
-  if (aEnabled)
-    ::EnableMenuItem(menuRef, menuItemIndex);
-  else
-    ::DisableMenuItem(menuRef, menuItemIndex);
-
-  return NS_OK;
-}
-
-
-NS_IMETHODIMP
-nsMenuX::GetMenuRefAndItemIndexForMenuItem(nsISupports* aMenuItem,
-                                           void**       aMenuRef,
-                                           PRUint16*    aMenuItemIndex)
-{
-  // look for the menu item given
-  PRUint32 menuItemCount;
-  mMenuItemsArray.Count(&menuItemCount);
-
-  for (PRUint32 i = 0; i < menuItemCount; i++) {
-    nsCOMPtr<nsISupports> currItem; 
-    mMenuItemsArray.GetElementAt(i, getter_AddRefs(currItem));
-    if (currItem == aMenuItem) {
-      *aMenuRef = (void*)mMacMenuHandle;
-      *aMenuItemIndex = i + 1;
-      return NS_OK;
-    }
-  }
-
-  return NS_ERROR_FAILURE;
-}
-
 
 #pragma mark -
 
@@ -1311,7 +1249,7 @@ nsMenuX::GetMenuRefAndItemIndexForMenuItem(nsISupports* aMenuItem,
 
 
 NS_IMETHODIMP
-nsMenuX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIContent* aContent, nsIAtom *aAttribute)
+nsMenuX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIAtom *aAttribute)
 {
   if (gConstructingMenu)
     return NS_OK;
@@ -1327,7 +1265,7 @@ nsMenuX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIConte
    
     nsAutoString valueString;
     mMenuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::disabled, valueString);
-    if(valueString.EqualsLiteral("true"))
+    if(valueString == NS_LITERAL_STRING("true"))
       SetEnabled(PR_FALSE);
     else
       SetEnabled(PR_TRUE);
@@ -1365,7 +1303,7 @@ nsMenuX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIConte
       mMenuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::hidden, hiddenValue);
       mMenuContent->GetAttr(kNameSpaceID_None, nsWidgetAtoms::collapsed, collapsedValue);
         
-      if (hiddenValue.EqualsLiteral("true") || collapsedValue.EqualsLiteral("true")) {
+      if (hiddenValue == NS_LITERAL_STRING("true") || collapsedValue == NS_LITERAL_STRING("true")) {
         if ( mVisible ) {
           if ( menubarParent ) {
             PRUint32 indexToRemove = 0;
@@ -1418,9 +1356,6 @@ nsMenuX::AttributeChanged(nsIDocument *aDocument, PRInt32 aNameSpaceID, nsIConte
         ::DrawMenuBar();
       }
   }
-  else if (aAttribute == nsWidgetAtoms::image) {
-    SetupIcon();
-  }
 
   return NS_OK;
   
@@ -1454,15 +1389,3 @@ nsMenuX :: ContentInserted(nsIDocument *aDocument, nsIContent *aChild, PRInt32 a
   return NS_OK;
   
 } // ContentInserted
-
-
-NS_IMETHODIMP
-nsMenuX::SetupIcon()
-{
-  // In addition to out-of-memory, menus that are children of the menu bar
-  // will not have mIcon set.
-
-  if (!mIcon) return NS_ERROR_OUT_OF_MEMORY;
-
-  return mIcon->SetupIcon();
-}

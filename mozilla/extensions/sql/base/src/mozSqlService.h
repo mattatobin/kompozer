@@ -76,7 +76,6 @@ class mozSqlService : public mozISqlService,
     static nsIRDFResource*              kSQL_Hostname;
     static nsIRDFResource*              kSQL_Port;
     static nsIRDFResource*              kSQL_Database;
-    static nsIRDFResource*              kSQL_Priority;
 	
     nsString                            mErrorMessage;
     nsCOMPtr<nsIRDFDataSource>          mInner;

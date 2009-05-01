@@ -1,11 +1,11 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Robert John Churchill      <rjc@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,8 +41,6 @@
  */
 
 #include "nsInternetSearchService.h"
-#include "nsLocalSearchService.h"
-
 #include "nscore.h"
 #include "nsIEnumerator.h"
 #include "nsIRDFObserver.h"
@@ -76,9 +74,7 @@
 #include "nsIHttpChannel.h"
 #include "nsIUploadChannel.h"
 #include "nsIInputStream.h"
-#ifndef MOZ_PLACES
 #include "nsIBookmarksService.h"
-#endif
 #include "nsIStringBundle.h"
 #include "nsIObserverService.h"
 #include "nsIURL.h"
@@ -86,7 +82,12 @@
 #include "nsUnicharUtils.h"
 #include "nsReadableUtils.h"
 #include "nsIPrefLocalizedString.h"
-#include "nsIGenericFactory.h"
+
+#ifdef	XP_MAC
+#include <Files.h>
+#include <Timer.h>
+#include <Gestalt.h>
+#endif
 
 #ifdef	XP_WIN
 #include "windef.h"
@@ -103,13 +104,12 @@
 #define POSTHEADER_PREFIX "Content-type: application/x-www-form-urlencoded\r\nContent-Length: "
 #define POSTHEADER_SUFFIX "\r\n\r\n"
 #define SEARCH_PROPERTIES "chrome://communicator/locale/search/search-panel.properties"
-#ifdef MOZ_XUL_APP
-#define SEARCHCONFIG_PROPERTIES "chrome://branding/content/searchconfig.properties"
-#define INTL_PROPERTIES "chrome://global/locale/intl.properties"
+#ifdef MOZ_PHOENIX
+#define SEARCHCONFIG_PROPERTIES "chrome://browser/content/searchconfig.properties"
 #else
 #define SEARCHCONFIG_PROPERTIES "chrome://navigator/content/searchconfig.properties"
-#define INTL_PROPERTIES "chrome://navigator/locale/navigator.properties"
 #endif
+#define INTL_PROPERTIES "chrome://global/locale/intl.properties"
 
 static NS_DEFINE_CID(kRDFServiceCID,               NS_RDFSERVICE_CID);
 static NS_DEFINE_CID(kRDFContainerCID,             NS_RDFCONTAINER_CID);
@@ -431,10 +431,14 @@ InternetSearchDataSource::InternetSearchDataSource(void)
 {
 	if (gRefCnt++ == 0)
 	{
-		nsresult rv = CallGetService(kRDFServiceCID, &gRDFService);
-		NS_ASSERTION(NS_SUCCEEDED(rv), "unable to get RDF service");
+		nsresult rv = nsServiceManager::GetService(kRDFServiceCID,
+			NS_GET_IID(nsIRDFService), (nsISupports**) &gRDFService);
+		PR_ASSERT(NS_SUCCEEDED(rv));
 
-		rv = CallGetService(kRDFContainerUtilsCID, &gRDFC);
+		rv = nsServiceManager::GetService(kRDFContainerUtilsCID,
+						  NS_GET_IID(nsIRDFContainerUtils),
+						  (nsISupports**) &gRDFC);
+
 		NS_ASSERTION(NS_SUCCEEDED(rv), "unable to get RDF container utils");
 
 		gRDFService->GetResource(NS_LITERAL_CSTRING(kURINC_SearchEngineRoot),
@@ -540,8 +544,8 @@ InternetSearchDataSource::InternetSearchDataSource(void)
 
 		gRDFService->GetLiteral(NS_LITERAL_STRING("true").get(), &kTrueLiteral);
 
-		prefs = do_GetService(kPrefCID);
-		if (prefs)
+		rv = nsServiceManager::GetService(kPrefCID, NS_GET_IID(nsIPref), getter_AddRefs(prefs));
+		if (NS_SUCCEEDED(rv) && (prefs))
 		{
 			prefs->RegisterCallback("browser.search.mode", searchModePrefCallback, this);
 			prefs->GetIntPref("browser.search.mode", &gBrowserSearchMode);
@@ -630,12 +634,18 @@ InternetSearchDataSource::~InternetSearchDataSource (void)
 			prefs = nsnull;
 		}
 
-    NS_IF_RELEASE(gRDFC);
+		if (gRDFC)
+		{
+			nsServiceManager::ReleaseService(kRDFContainerUtilsCID, gRDFC);
+			gRDFC = nsnull;
+		}
 
 		if (gRDFService)
 		{
 			gRDFService->UnregisterDataSource(this);
-      NS_RELEASE(gRDFService);
+
+			nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
+			gRDFService = nsnull;
 		}
 	}
 }
@@ -656,41 +666,44 @@ InternetSearchDataSource::GetSearchEngineToPing(nsIRDFResource **theEngine, nsCS
 	if (NS_FAILED(rv = mUpdateArray->Count(&numEngines)))	return(rv);
 	if (numEngines < 1)	return(NS_OK);
 
-	nsCOMPtr<nsIRDFResource> aRes (do_QueryElementAt(mUpdateArray, 0));
+	nsCOMPtr<nsISupports>	isupports = mUpdateArray->ElementAt(0);
 
 	// note: important to remove element from array
 	mUpdateArray->RemoveElementAt(0);
-
-	if (aRes)
+	if (isupports)
 	{
-		if (isSearchCategoryEngineURI(aRes))
+		nsCOMPtr<nsIRDFResource> aRes (do_QueryInterface(isupports));
+		if (aRes)
 		{
-			nsCOMPtr<nsIRDFResource>	trueEngine;
-			rv = resolveSearchCategoryEngineURI(aRes, getter_AddRefs(trueEngine));
-			if (NS_FAILED(rv) || (rv == NS_RDF_NO_VALUE))	return(rv);
-			if (!trueEngine)	return(NS_RDF_NO_VALUE);
-
-			aRes = trueEngine;
-		}
-
-		if (!aRes)	return(NS_OK);
-
-		*theEngine = aRes.get();
-		NS_ADDREF(*theEngine);
-
-		// get update URL
-		nsCOMPtr<nsIRDFNode>	aNode;
-		if (NS_SUCCEEDED(rv = mInner->GetTarget(aRes, kNC_Update, PR_TRUE, getter_AddRefs(aNode)))
-				&& (rv != NS_RDF_NO_VALUE))
-		{
-			nsCOMPtr<nsIRDFLiteral>	aLiteral (do_QueryInterface(aNode));
-			if (aLiteral)
+			if (isSearchCategoryEngineURI(aRes))
 			{
-				const PRUnichar	*updateUni = nsnull;
-				aLiteral->GetValueConst(&updateUni);
-				if (updateUni)
+				nsCOMPtr<nsIRDFResource>	trueEngine;
+				rv = resolveSearchCategoryEngineURI(aRes, getter_AddRefs(trueEngine));
+				if (NS_FAILED(rv) || (rv == NS_RDF_NO_VALUE))	return(rv);
+				if (!trueEngine)	return(NS_RDF_NO_VALUE);
+
+				aRes = trueEngine;
+			}
+
+			if (!aRes)	return(NS_OK);
+
+			*theEngine = aRes.get();
+			NS_ADDREF(*theEngine);
+
+			// get update URL
+			nsCOMPtr<nsIRDFNode>	aNode;
+			if (NS_SUCCEEDED(rv = mInner->GetTarget(aRes, kNC_Update, PR_TRUE, getter_AddRefs(aNode)))
+				&& (rv != NS_RDF_NO_VALUE))
+			{
+				nsCOMPtr<nsIRDFLiteral>	aLiteral (do_QueryInterface(aNode));
+				if (aLiteral)
 				{
-					updateURL.AssignWithConversion(updateUni);
+					const PRUnichar	*updateUni = nsnull;
+					aLiteral->GetValueConst(&updateUni);
+					if (updateUni)
+					{
+						updateURL.AssignWithConversion(updateUni);
+					}
 				}
 			}
 		}
@@ -719,7 +732,7 @@ InternetSearchDataSource::FireTimer(nsITimer* aTimer, void* aClosure)
 		search->busyResource = searchURI;
 
 		nsCOMPtr<nsIInternetSearchContext>	engineContext;
-		if (NS_FAILED(rv = NS_NewInternetSearchContext(nsIInternetSearchContext::ENGINE_UPDATE_HEAD_CONTEXT,
+		if (NS_FAILED(rv = NS_NewInternetSearchContext(nsIInternetSearchContext::ENGINE_UPDATE_CONTEXT,
 			nsnull, searchURI, nsnull, nsnull, getter_AddRefs(engineContext))))
 			return;
 		if (!engineContext)	return;
@@ -927,7 +940,8 @@ InternetSearchDataSource::Init()
 {
 	nsresult	rv = NS_ERROR_OUT_OF_MEMORY;
 
-	if (NS_FAILED(rv = CallCreateInstance(kRDFInMemoryDataSourceCID, &mInner)))
+	if (NS_FAILED(rv = nsComponentManager::CreateInstance(kRDFInMemoryDataSourceCID,
+		nsnull, NS_GET_IID(nsIRDFDataSource), (void **)&mInner)))
 		return(rv);
 
 	// get localstore, as we'll be using it
@@ -942,7 +956,7 @@ InternetSearchDataSource::Init()
 		return(rv);
 
 	rv = NS_NewLoadGroup(getter_AddRefs(mLoadGroup), nsnull);
-	NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create load group");
+	PR_ASSERT(NS_SUCCEEDED(rv));
 
 	if (!mTimer)
 	{
@@ -970,43 +984,46 @@ InternetSearchDataSource::Init()
 	return(rv);
 }
 
-void
+
+
+NS_METHOD
 InternetSearchDataSource::DeferredInit()
 {
-  if (gEngineListBuilt)
-    return;
+	nsresult	rv = NS_OK;
 
-  nsresult rv;
+  if (!gEngineListBuilt)
+	{
+		gEngineListBuilt = PR_TRUE;
 
-  nsCOMPtr<nsIProperties> dirSvc
-    (do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID));
-  if (!dirSvc)
-    return;
+		// get available search engines
+		nsCOMPtr<nsIFile>			nativeDir;
+		if (NS_SUCCEEDED(rv = GetSearchFolder(getter_AddRefs(nativeDir))))
+		{
+			rv = GetSearchEngineList(nativeDir, PR_FALSE, PR_FALSE);
+			
+			// read in category list
+			rv = GetCategoryList();
+		}
 
-  gEngineListBuilt = PR_TRUE;
+#ifdef	XP_MAC
+		// on Mac, use system's search files too
+      	nsCOMPtr<nsIFile> macSearchDir;
 
-  // get available search engines
-  nsCOMPtr<nsISimpleEnumerator> dirlist;
-  rv = dirSvc->Get(NS_APP_SEARCH_DIR_LIST,
-                   NS_GET_IID(nsISimpleEnumerator), getter_AddRefs(dirlist));
-  if (NS_SUCCEEDED(rv))
-  {
-    PRBool more;
-    while (NS_SUCCEEDED(dirlist->HasMoreElements(&more)) && more) {
-      nsCOMPtr<nsISupports> suppfile;
-      nsCOMPtr<nsIFile> dir;
-      dirlist->GetNext(getter_AddRefs(suppfile));
-      dir = do_QueryInterface(suppfile);
-      if (dir)
-      {
-        GetSearchEngineList(dir, PR_FALSE);
-      }
-    }
-  }
-
-  // read in category list
-  GetCategoryList();
+        rv = NS_GetSpecialDirectory(NS_MAC_INTERNET_SEARCH_DIR, getter_AddRefs(macSearchDir));
+        if (NS_SUCCEEDED(rv))
+        {
+      		// Mac OS X doesn't have file types set for search files, so don't check them
+      		long response;
+      		OSErr err = ::Gestalt(gestaltSystemVersion, &response);
+      		PRBool checkFileType = (!err) && (response >= 0x00001000) ? PR_FALSE : PR_TRUE;
+      		rv = GetSearchEngineList(macSearchDir, PR_TRUE, checkFileType);
+      	}
+#endif
+	}
+	return(rv);
 }
+
+
 
 NS_IMETHODIMP
 InternetSearchDataSource::GetURI(char **uri)
@@ -1148,15 +1165,15 @@ InternetSearchDataSource::GetTarget(nsIRDFResource *source,
         nsAutoString name;
 
         if (source == kNC_SearchCommand_AddToBookmarks)
-          name.AssignLiteral("addtobookmarks");
+          name = NS_LITERAL_STRING("addtobookmarks");
         else if (source == kNC_SearchCommand_AddQueryToBookmarks)
-          name.AssignLiteral("addquerytobookmarks");
+          name = NS_LITERAL_STRING("addquerytobookmarks");
         else if (source == kNC_SearchCommand_FilterResult)
-          name.AssignLiteral("excludeurl");
+          name = NS_LITERAL_STRING("excludeurl");
         else if (source == kNC_SearchCommand_FilterSite)
-          name.AssignLiteral("excludedomain");
+          name = NS_LITERAL_STRING("excludedomain");
         else if (source == kNC_SearchCommand_ClearFilters)
-          name.AssignLiteral("clearfilters");
+          name = NS_LITERAL_STRING("clearfilters");
 
         rv = bundle->GetStringFromName(name.get(), getter_Copies(valUni));
         if (NS_SUCCEEDED(rv) && valUni && *valUni) {
@@ -1368,8 +1385,9 @@ InternetSearchDataSource::GetTargets(nsIRDFResource *source,
 nsresult
 InternetSearchDataSource::GetCategoryList()
 {
-	nsIRDFDataSource	*ds;
-	nsresult rv = CallCreateInstance(kRDFXMLDataSourceCID, &ds);
+	nsIRDFDataSource	*ds = nsnull;
+	nsresult rv = nsComponentManager::CreateInstance(kRDFXMLDataSourceCID,
+			nsnull, NS_GET_IID(nsIRDFDataSource), (void**) &ds);
 	if (NS_FAILED(rv))	return(rv);
 	if (!ds)		return(NS_ERROR_UNEXPECTED);
 
@@ -1865,7 +1883,6 @@ InternetSearchDataSource::GetAllCmds(nsIRDFResource* source,
           &isSearchResult);
   if (NS_SUCCEEDED(rv) && isSearchResult)
 	{
-#ifndef MOZ_PLACES
 		nsCOMPtr<nsIRDFDataSource>	datasource;
 		if (NS_SUCCEEDED(rv = gRDFService->GetDataSource("rdf:bookmarks", getter_AddRefs(datasource))))
 		{
@@ -1885,7 +1902,6 @@ InternetSearchDataSource::GetAllCmds(nsIRDFResource* source,
 				}
 			}
 		}
-#endif
 		cmdArray->AppendElement(kNC_SearchCommand_AddQueryToBookmarks);
 		cmdArray->AppendElement(kNC_BookmarkSeparator);
 
@@ -1989,7 +2005,6 @@ InternetSearchDataSource::addToBookmarks(nsIRDFResource *src)
 		}
 	}
 
-#ifndef MOZ_PLACES
 	nsCOMPtr<nsIRDFDataSource>	datasource;
 	if (NS_SUCCEEDED(rv = gRDFService->GetDataSource("rdf:bookmarks", getter_AddRefs(datasource))))
 	{
@@ -2005,7 +2020,6 @@ InternetSearchDataSource::addToBookmarks(nsIRDFResource *src)
 			}
 		}
 	}
-#endif
 
 	return(NS_OK);
 }
@@ -2059,7 +2073,6 @@ InternetSearchDataSource::addQueryToBookmarks(nsIRDFResource *src)
 		}
 	}
 
-#ifndef MOZ_PLACES
 	nsCOMPtr<nsIRDFDataSource>	datasource;
 	if (NS_SUCCEEDED(rv = gRDFService->GetDataSource("rdf:bookmarks", getter_AddRefs(datasource))))
 	{
@@ -2068,7 +2081,6 @@ InternetSearchDataSource::addQueryToBookmarks(nsIRDFResource *src)
 			rv = bookmarks->AddBookmarkImmediately(uriUni, value.get(),
                                              nsIBookmarksService::BOOKMARK_SEARCH_TYPE, nsnull);
 	}
-#endif
 
 	return(NS_OK);
 }
@@ -2230,7 +2242,9 @@ InternetSearchDataSource::filterSite(nsIRDFResource *aResource)
 	if (NS_FAILED(rv = array->Count(&count)))	return(rv);
 	for (PRUint32 loop=0; loop<count; loop++)
 	{
-		nsCOMPtr<nsIRDFResource> aSearchRoot (do_QueryElementAt(array, loop));
+		nsCOMPtr<nsISupports>	element = array->ElementAt(loop);
+		if (!element)	break;
+		nsCOMPtr<nsIRDFResource> aSearchRoot (do_QueryInterface(element));
 		if (!aSearchRoot)	break;
 
 		if (NS_SUCCEEDED(rv = mInner->GetTargets(aSearchRoot, kNC_Child,
@@ -2395,7 +2409,9 @@ InternetSearchDataSource::DoCommand(nsISupportsArray/*<nsIRDFResource>*/* aSourc
 
 	for (loop=((PRInt32)numSources)-1; loop>=0; loop--)
 	{
-		nsCOMPtr<nsIRDFResource> src (do_QueryElementAt(aSources, loop));
+		nsCOMPtr<nsISupports>	aSource = aSources->ElementAt(loop);
+		if (!aSource)	return(NS_ERROR_NULL_POINTER);
+		nsCOMPtr<nsIRDFResource> src (do_QueryInterface(aSource));
 		if (!src)	return(NS_ERROR_NO_INTERFACE);
 
 		if (aCommand == kNC_SearchCommand_AddToBookmarks)
@@ -2443,16 +2459,6 @@ NS_IMETHODIMP
 InternetSearchDataSource::AddSearchEngine(const char *engineURL, const char *iconURL,
 					  const PRUnichar *suggestedTitle, const PRUnichar *suggestedCategory)
 {
-        return AddSearchEngineInternal(engineURL, iconURL, suggestedTitle,
-                                       suggestedCategory, nsnull);
-}
-
-nsresult
-InternetSearchDataSource::AddSearchEngineInternal(const char *engineURL, const char *iconURL,
-                                                  const PRUnichar *suggestedTitle,
-                                                  const PRUnichar *suggestedCategory,
-                                                  nsIRDFResource *aOldEngineResource)
-{
 	NS_PRECONDITION(engineURL != nsnull, "null ptr");
 	if (!engineURL)	return(NS_ERROR_NULL_POINTER);
 	// Note: iconURL, suggestedTitle & suggestedCategory
@@ -2475,13 +2481,9 @@ InternetSearchDataSource::AddSearchEngineInternal(const char *engineURL, const c
 
 	// download engine
 	nsCOMPtr<nsIInternetSearchContext>	engineContext;
-  rv = NS_NewInternetSearchContext
-         (aOldEngineResource? nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT:
-                              nsIInternetSearchContext::ENGINE_DOWNLOAD_NEW_CONTEXT,
-          nsnull, aOldEngineResource, nsnull, suggestedCategory,
-          getter_AddRefs(engineContext));
-  NS_ENSURE_SUCCESS(rv, rv);
-
+	if (NS_FAILED(rv = NS_NewInternetSearchContext(nsIInternetSearchContext::ENGINE_DOWNLOAD_CONTEXT,
+		nsnull, nsnull, nsnull, suggestedCategory, getter_AddRefs(engineContext))))
+		return(rv);
 	if (!engineContext)	return(NS_ERROR_UNEXPECTED);
 
 	nsCOMPtr<nsIURI>	engineURI;
@@ -2497,13 +2499,9 @@ InternetSearchDataSource::AddSearchEngineInternal(const char *engineURL, const c
 
 	// download icon
 	nsCOMPtr<nsIInternetSearchContext>	iconContext;
-  rv = NS_NewInternetSearchContext
-         (aOldEngineResource? nsIInternetSearchContext::ICON_DOWNLOAD_UPDATE_CONTEXT:
-                              nsIInternetSearchContext::ICON_DOWNLOAD_NEW_CONTEXT,
-          nsnull, aOldEngineResource, nsnull, suggestedCategory,
-          getter_AddRefs(iconContext));
-  NS_ENSURE_SUCCESS(rv, rv);
-
+	if (NS_FAILED(rv = NS_NewInternetSearchContext(nsIInternetSearchContext::ICON_DOWNLOAD_CONTEXT,
+		nsnull, nsnull, nsnull, nsnull, getter_AddRefs(iconContext))))
+		return(rv);
 	if (!iconContext)	return(NS_ERROR_UNEXPECTED);
 
 	if (iconURL && (*iconURL))
@@ -2526,11 +2524,6 @@ InternetSearchDataSource::AddSearchEngineInternal(const char *engineURL, const c
 nsresult
 InternetSearchDataSource::saveContents(nsIChannel* channel, nsIInternetSearchContext *context, PRUint32	contextType)
 {
-    NS_ASSERTION(contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_NEW_CONTEXT ||
-                 contextType == nsIInternetSearchContext::ICON_DOWNLOAD_NEW_CONTEXT ||
-                 contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT ||
-                 contextType == nsIInternetSearchContext::ICON_DOWNLOAD_UPDATE_CONTEXT,
-                 "unexpected context");
 	nsresult	rv = NS_OK;
 
 	if (!channel)	return(NS_ERROR_UNEXPECTED);
@@ -2554,8 +2547,8 @@ InternetSearchDataSource::saveContents(nsIChannel* channel, nsIInternetSearchCon
 
 	// make sure that search engines are .src files
 	PRInt32	extensionOffset;
-	if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_NEW_CONTEXT ||
-		contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT)
+	if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_CONTEXT ||
+		contextType == nsIInternetSearchContext::ENGINE_UPDATE_CONTEXT)
 	{
 		extensionOffset = baseName.RFind(".src", PR_TRUE);
 		if ((extensionOffset < 0) || (extensionOffset != (PRInt32)(baseName.Length()-4)))
@@ -2564,34 +2557,8 @@ InternetSearchDataSource::saveContents(nsIChannel* channel, nsIInternetSearchCon
 		}
 	}
 
-    nsCOMPtr<nsIFile> outFile;
-  // If the mode is "UPDATE", the output dir is same as the original file
-  // location. Otherwise ("NEW" mode), located in NS_APP_USER_SEARCH_DIR.
-  nsCOMPtr<nsIRDFResource> oldResource;
-  rv = context->GetEngine(getter_AddRefs(oldResource));
-
-  if (oldResource) {
-    nsCOMPtr<nsILocalFile> oldEngineFile;
-    rv = EngineFileFromResource(oldResource, getter_AddRefs(oldEngineFile));
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = oldEngineFile->GetParent(getter_AddRefs(outFile));
-    NS_ENSURE_SUCCESS(rv, rv);
-  }
-  else {
-    rv = NS_GetSpecialDirectory(NS_APP_USER_SEARCH_DIR, getter_AddRefs(outFile));
-    if (NS_FAILED(rv))
-        return rv;
-  }
-
-    PRBool exists;
-    rv = outFile->Exists(&exists);
-    if (NS_FAILED(rv)) return(rv);
-    if (!exists)
-    {
-        rv = outFile->Create(nsIFile::DIRECTORY_TYPE, 0755);
-        if (NS_FAILED(rv)) return(rv);
-    }
+	nsCOMPtr<nsIFile>	outFile;
+	if (NS_FAILED(rv = GetSearchFolder(getter_AddRefs(outFile))))		return(rv);
 
 	const PRUnichar	*dataBuf = nsnull;
 	if (NS_FAILED(rv = context->GetBufferConst(&dataBuf)))	return(rv);
@@ -2612,19 +2579,7 @@ InternetSearchDataSource::saveContents(nsIChannel* channel, nsIInternetSearchCon
     // XXX - It appears that this is done in order to discard the upper
     // byte of each PRUnichar.  I hope that's OK!!
     //
-    if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT ||
-        contextType == nsIInternetSearchContext::ICON_DOWNLOAD_UPDATE_CONTEXT) {
-        // This is an update operation that we triggered.  Remove the old one.
-        outFile->Remove(PR_FALSE);
-    } else {
-        PRBool exists;
-        rv = outFile->Exists(&exists);
-        if (NS_FAILED(rv) || exists) {
-            // We already have a search plugin with this filename; don't
-            // replace it (bug 290038).
-            return NS_ERROR_UNEXPECTED;
-        }
-    }
+	outFile->Remove(PR_FALSE);
 
     nsCOMPtr<nsIOutputStream> outputStream, fileOutputStream;
     rv = NS_NewLocalFileOutputStream(getter_AddRefs(fileOutputStream), outFile);
@@ -2641,21 +2596,29 @@ InternetSearchDataSource::saveContents(nsIChannel* channel, nsIInternetSearchCon
     outputStream->Flush();		
     outputStream->Close();
 
-    if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_NEW_CONTEXT ||
-        contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT)
+    if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_CONTEXT ||
+        contextType == nsIInternetSearchContext::ENGINE_UPDATE_CONTEXT)
     {
+#ifdef	XP_MAC
+        // set appropriate Mac file type/creator for search engine files
+        nsCOMPtr<nsILocalFileMac> macFile(do_QueryInterface(outFile));
+        if (macFile) {
+          macFile->SetFileType('issp');
+          macFile->SetFileCreator('fndf');
+        }
+#endif
+
         // check suggested category hint
         const PRUnichar	*hintUni = nsnull;
         rv = context->GetHintConst(&hintUni);
 
         // update graph with various required info
-        SaveEngineInfoIntoGraph(outFile, nsnull, hintUni, dataBuf, PR_FALSE);
+        SaveEngineInfoIntoGraph(outFile, nsnull, hintUni, dataBuf, PR_FALSE, PR_FALSE);
     }
-    else if (contextType == nsIInternetSearchContext::ICON_DOWNLOAD_NEW_CONTEXT ||
-             contextType == nsIInternetSearchContext::ICON_DOWNLOAD_UPDATE_CONTEXT)
+    else if (contextType == nsIInternetSearchContext::ICON_DOWNLOAD_CONTEXT)
     {
         // update graph with icon info
-        SaveEngineInfoIntoGraph(nsnull, outFile, nsnull, nsnull, PR_FALSE);
+        SaveEngineInfoIntoGraph(nsnull, outFile, nsnull, nsnull, PR_FALSE, PR_FALSE);
     }
 
 	// after we're all done with the data buffer, get rid of it
@@ -2754,24 +2717,18 @@ InternetSearchDataSource::GetInternetSearchURL(const char *searchEngineURI,
 	nsAutoString	action, input, method, userVar, name;
 	if (NS_FAILED(rv = GetData(dataUni, "search", 0, "action", action)))
 	    return(rv);
-
-    // Search only supports the http protocol
-    if (!StringBeginsWith(action, NS_LITERAL_STRING("http:")) &&
-        !StringBeginsWith(action, NS_LITERAL_STRING("https:")))
-        return NS_ERROR_UNEXPECTED;
-
 	if (NS_FAILED(rv = GetData(dataUni, "search", 0, "method", method)))
 	    return(rv);
-	if (NS_FAILED(rv = GetData(dataUni, "search", 0, "name", name)))
-	    return(rv);
+  if (NS_FAILED(rv = GetData(dataUni, "search", 0, "name", name)))
+      return(rv);
 	if (NS_FAILED(rv = GetInputs(dataUni, name, userVar, text, input, direction, pageNumber, whichButtons)))
 	    return(rv);
 	if (input.IsEmpty())				return(NS_ERROR_UNEXPECTED);
 
 	// we can only handle HTTP GET
-	if (!method.LowerCaseEqualsLiteral("get"))	return(NS_ERROR_UNEXPECTED);
+	if (!method.EqualsIgnoreCase("get"))	return(NS_ERROR_UNEXPECTED);
 	// HTTP Get method support
-	action += input;
+	action += NS_LITERAL_STRING("?") + input;
 
 	// return a copy of the resulting search URL
 	*resultURL = ToNewCString(action);
@@ -2896,10 +2853,10 @@ InternetSearchDataSource::FindInternetSearchResults(const char *url, PRBool *sea
 		searchURL.AssignWithConversion(url);
 
 		// look for query option which is the string the user is searching for
- 		nsAutoString	userVar, inputUnused, engineNameStr;
+		nsAutoString	userVar, inputUnused, engineNameStr;
   	GetData(dataUni, "search", 0, "name", engineNameStr);
 
-    if (NS_FAILED(rv = GetInputs(dataUni, engineNameStr, userVar, EmptyString(), inputUnused, 0, 0, 0)))  return(rv);
+    if (NS_FAILED(rv = GetInputs(dataUni, engineNameStr, userVar, nsAutoString(), inputUnused, 0, 0, 0)))  return(rv);
 		if (userVar.IsEmpty())	return(NS_RDF_NO_VALUE);
 
 		nsAutoString	queryStr;
@@ -3024,7 +2981,7 @@ InternetSearchDataSource::FindInternetSearchResults(const char *url, PRBool *sea
 		ClearResults(PR_FALSE);
 
 		// do the search
-		DoSearch(nsnull, engine, searchURL, EmptyString());
+		DoSearch(nsnull, engine, searchURL, nsAutoString());
 
 		*searchInProgress = PR_TRUE;
 	}
@@ -3289,7 +3246,7 @@ InternetSearchDataSource::BeginSearchRequest(nsIRDFResource *source, PRBool doNe
 		
 		if (!attrib.IsEmpty() && !value.IsEmpty())
 		{
-			if (attrib.LowerCaseEqualsLiteral("engine"))
+			if (attrib.EqualsIgnoreCase("engine"))
 			{
 				if ((value.Find(kEngineProtocol) == 0) ||
 					(value.Find(kURINC_SearchCategoryEnginePrefix) == 0))
@@ -3301,7 +3258,7 @@ InternetSearchDataSource::BeginSearchRequest(nsIRDFResource *source, PRBool doNe
 					}
 				}
 			}
-			else if (attrib.LowerCaseEqualsLiteral("text"))
+			else if (attrib.EqualsIgnoreCase("text"))
 			{
 				text = value;
 			}
@@ -3351,7 +3308,7 @@ InternetSearchDataSource::BeginSearchRequest(nsIRDFResource *source, PRBool doNe
 
     if (doNetworkRequest)
 		{
-			DoSearch(source, engine, EmptyString(), text);
+			DoSearch(source, engine, nsAutoString(), text);
 			requestInitiated = PR_TRUE;
 		}
 	}
@@ -3393,13 +3350,35 @@ InternetSearchDataSource::FindData(nsIRDFResource *engine, nsIRDFLiteral **dataL
 		return(NS_OK);
 	}
 
+	// don't have the data, so try and read it in
+
+	const char	*engineURI = nsnull;
+	if (NS_FAILED(rv = engine->GetValueConst(&engineURI)))
+		return(rv);
+	nsAutoString	engineStr;
+	engineStr.AssignWithConversion(engineURI);
+	if (engineStr.Find(kEngineProtocol) != 0)
+		return(rv);
+	engineStr.Cut(0, sizeof(kEngineProtocol) - 1);
+	char	*baseFilename = ToNewCString(engineStr);
+	if (!baseFilename)
+		return(rv);
+	baseFilename = nsUnescape(baseFilename);
+	if (!baseFilename)
+		return(rv);
+
+#ifdef	DEBUG_SEARCH_OUTPUT
+	printf("InternetSearchDataSource::FindData - reading in '%s'\n", baseFilename);
+#endif
         nsCOMPtr<nsILocalFile> engineFile;
-        rv = EngineFileFromResource(engine, getter_AddRefs(engineFile));
+        rv = NS_NewNativeLocalFile(nsDependentCString(baseFilename), PR_TRUE, getter_AddRefs(engineFile));
         if (NS_FAILED(rv)) return rv;
 
         nsString	data;
         rv = ReadFileContents(engineFile, data);
 
+	nsCRT::free(baseFilename);
+	baseFilename = nsnull;
 	if (NS_FAILED(rv))
 	{
 		return(rv);
@@ -3418,40 +3397,6 @@ InternetSearchDataSource::FindData(nsIRDFResource *engine, nsIRDFLiteral **dataL
 	}
 	
 	return(rv);
-}
-
-nsresult
-InternetSearchDataSource::EngineFileFromResource(nsIRDFResource *aResource,
-                                                 nsILocalFile **aResult)
-{
-  nsresult rv = NS_OK;
-
-  // get resource uri
-  const char *engineURI = nsnull;
-  rv = aResource->GetValueConst(&engineURI);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // remove protocol from uri and get escaped file path
-  nsCAutoString nativePath;
-  nativePath.Assign(engineURI);
-
-  NS_ENSURE_TRUE(StringBeginsWith(nativePath,
-                                  NS_LITERAL_CSTRING(kEngineProtocol)),
-                 NS_ERROR_FAILURE);
-  nativePath.Cut(0, sizeof(kEngineProtocol) - 1);
-
-  // unescape it
-  NS_UnescapeURL(nativePath);
-
-#ifdef DEBUG_SEARCH_OUTPUT
-  printf("InternetSearchDataSource::EngineFileFromResource\n"
-         "File Path: %s\n",
-         nativePath.get());
-#endif
-
-  rv = NS_NewNativeLocalFile(nativePath, PR_TRUE, aResult);
-
-  return rv;
 }
 
 nsresult
@@ -3619,14 +3564,14 @@ InternetSearchDataSource::updateDataHintsInGraph(nsIRDFResource *engine, const P
 			// if we have a ".hqx" extension, strip it off
 			nsAutoString	extension;
 			updateStr.Right(extension, 4);
-			if (extension.LowerCaseEqualsLiteral(".hqx"))
+			if (extension.EqualsIgnoreCase(".hqx"))
 			{
 				updateStr.Truncate(updateStr.Length() - 4);
 			}
 
 			// now, either way, ensure that we have a ".src" file
 			updateStr.Right(extension, 4);
-      if (!extension.LowerCaseEqualsLiteral(".src"))
+      if (!extension.EqualsIgnoreCase(".src"))
 			{
 				// and if we don't, toss it
 				updateStr.Truncate();
@@ -3779,9 +3724,9 @@ InternetSearchDataSource::MapEncoding(const nsString &numericEncoding,
   if (!numericEncoding.IsEmpty())	{
     for (PRUint32 i = 0; encodingList[i].numericEncoding != nsnull; i++)
     {
-      if (numericEncoding.EqualsASCII(encodingList[i].numericEncoding)) 
+      if (numericEncoding.EqualsWithConversion(encodingList[i].numericEncoding)) 
       {
-        stringEncoding.AssignASCII(encodingList[i].stringEncoding);
+        stringEncoding.AssignWithConversion(encodingList[i].stringEncoding);
         return NS_OK;
       }
     }
@@ -3797,7 +3742,7 @@ InternetSearchDataSource::MapEncoding(const nsString &numericEncoding,
     stringEncoding = defCharset;
   else
     // make "ISO-8859-1" as the default (not "UTF-8")
-    stringEncoding.AssignLiteral("ISO-8859-1");
+    stringEncoding.Assign(NS_LITERAL_STRING("ISO-8859-1"));
 
   return(NS_OK);
 }
@@ -3860,17 +3805,6 @@ InternetSearchDataSource::validateEngine(nsIRDFResource *engine)
 {
 	nsresult	rv;
 
-  // confirm whether the user wants to update plugins.
-  nsCOMPtr<nsIPrefBranch>
-    prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRBool userAllowed = PR_TRUE;
-  rv = prefBranch->GetBoolPref("browser.search.update", &userAllowed);
-  // if the pref value is not set or wrong type, don't stop here.
-  if (NS_SUCCEEDED(rv) && !userAllowed)
-    return NS_OK;
-
 #ifdef	DEBUG_SEARCH_UPDATES
 	const char	*engineURI = nsnull;
 	engine->GetValueConst(&engineURI);
@@ -3892,47 +3826,51 @@ InternetSearchDataSource::validateEngine(nsIRDFResource *engine)
 	PRInt32		updateCheckSecs = updateCheckDays * 60;
 #endif
 
+	// get the current date/time [from microseconds (PRTime) to seconds]
+	PRTime		now64 = PR_Now(), temp64, million;
+	LL_I2L(million, PR_USEC_PER_SEC);
+	LL_DIV(temp64, now64, million);
+	PRInt32		now32;
+	LL_L2I(now32, temp64);
+
 	nsCOMPtr<nsIRDFNode>	aNode;
 	rv = mLocalstore->GetTarget(engine, kWEB_LastPingDate, PR_TRUE, getter_AddRefs(aNode));
 	if (NS_FAILED(rv))	return(rv);
+	if (rv == NS_RDF_NO_VALUE)
+	{
+		// if we've never validated this engine before,
+		// then start its epoch as of now
+		validateEngineNow(engine);
 
-  // if aNode is a valid entry, we should check the durationSecs.
-  if (rv != NS_RDF_NO_VALUE) {
-    // get last validate date/time
-    nsCOMPtr<nsIRDFLiteral> lastCheckLiteral(do_QueryInterface(aNode));
-    if (!lastCheckLiteral)
-      return NS_ERROR_UNEXPECTED;
-
-    const PRUnichar *lastCheckUni = nsnull;
-    lastCheckLiteral->GetValueConst(&lastCheckUni);
-    if (!lastCheckUni)
-      return NS_ERROR_UNEXPECTED;
-
-    PRInt32 lastCheckInt = 0, err = 0;
-    lastCheckInt = nsDependentString(lastCheckUni).ToInteger(&err);
-    // signed int32 -> unsigned int32
-    rv = (nsresult) err;
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    // get the current date/time [from microseconds (PRTime) to seconds]
-    PRTime now64 = PR_Now(), temp64, million;
-    LL_I2L(million, PR_USEC_PER_SEC);
-    LL_DIV(temp64, now64, million);
-    PRInt32 now32;
-    LL_L2I(now32, temp64);
-
-    // calculate duration since last validation
-    // just return if it's too early to check again
-    PRInt32 durationSecs = now32 - lastCheckInt;
-
-    if (durationSecs < updateCheckSecs) {
 #ifdef	DEBUG_SEARCH_UPDATES
-      printf("    Search engine '%s' is valid for %d more seconds.\n",
-             engineURI, (updateCheckSecs-durationSecs));
+		printf("    Search engine '%s' marked valid as of now.\n", engineURI);
 #endif
-      return NS_OK;
-    }
-  }
+
+		return(NS_OK);
+	}
+
+	// get last validate date/time
+	nsCOMPtr<nsIRDFLiteral>	lastCheckLiteral (do_QueryInterface(aNode));
+	if (!lastCheckLiteral)	return(NS_ERROR_UNEXPECTED);
+	const PRUnichar		*lastCheckUni = nsnull;
+	lastCheckLiteral->GetValueConst(&lastCheckUni);
+	if (!lastCheckUni)	return(NS_ERROR_UNEXPECTED);
+	nsAutoString		lastCheckStr(lastCheckUni);
+	PRInt32			lastCheckInt=0, err=0;
+	lastCheckInt = lastCheckStr.ToInteger(&err);
+	if (err)		return(NS_ERROR_UNEXPECTED);
+
+	// calculate duration since last validation and
+	// just return if its too early to check again
+	PRInt32			durationSecs = now32 - lastCheckInt;
+	if (durationSecs < updateCheckSecs)
+	{
+#ifdef	DEBUG_SEARCH_UPDATES
+		printf("    Search engine '%s' is valid for %d more seconds.\n",
+			engineURI, (updateCheckSecs-durationSecs));
+#endif
+		return(NS_OK);
+	}
 
 	// search engine needs to be checked again, so add it into the to-be-validated array
 	PRInt32		elementIndex = mUpdateArray->IndexOf(engine);
@@ -3941,9 +3879,8 @@ InternetSearchDataSource::validateEngine(nsIRDFResource *engine)
 		mUpdateArray->AppendElement(engine);
 
 #ifdef	DEBUG_SEARCH_UPDATES
-    printf("    Search engine '%s' is now queued to be validated"
-           " via HTTP HEAD method.\n",
-           engineURI);
+		printf("    Search engine '%s' is now queued to be validated via HTTP HEAD method.\n",
+			engineURI, durationSecs);
 #endif
 	}
 	else
@@ -3986,7 +3923,7 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 	if (!fullURL.IsEmpty())
 	{
 		action.Assign(fullURL);
-		methodStr.AssignLiteral("get");
+		methodStr.Assign(NS_LITERAL_STRING("get"));
 	}
 	else
 	{
@@ -4057,7 +3994,7 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 		}
 	}
 
-	if (fullURL.IsEmpty() && methodStr.LowerCaseEqualsLiteral("get"))
+	if (fullURL.IsEmpty() && methodStr.EqualsIgnoreCase("get"))
 	{
     nsAutoString engineNameStr;
   	GetData(dataUni, "search", 0, "name", engineNameStr);
@@ -4066,7 +4003,7 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 		if (input.IsEmpty())				return(NS_ERROR_UNEXPECTED);
 
 		// HTTP Get method support
-		action += input;
+		action += NS_LITERAL_STRING("?") + input;
 	}
 
 	nsCOMPtr<nsIInternetSearchContext>	context;
@@ -4094,7 +4031,7 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 			// get it just from the cache if we can (do not validate)
 			channel->SetLoadFlags(nsIRequest::LOAD_FROM_CACHE);
 
-			if (methodStr.LowerCaseEqualsLiteral("post"))
+			if (methodStr.EqualsIgnoreCase("post"))
 			{
 				nsCOMPtr<nsIHttpChannel> httpChannel (do_QueryInterface(channel));
 				if (httpChannel)
@@ -4103,9 +4040,9 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 				    
 				    // construct post data to send
 				    nsAutoString	postStr;
-				    postStr.AssignASCII(POSTHEADER_PREFIX);
+				    postStr.AssignWithConversion(POSTHEADER_PREFIX);
 				    postStr.AppendInt(input.Length(), 10);
-				    postStr.AppendASCII(POSTHEADER_SUFFIX);
+				    postStr.AppendWithConversion(POSTHEADER_SUFFIX);
 				    postStr += input;
 				    
 				    nsCOMPtr<nsIInputStream>	postDataStream;
@@ -4154,11 +4091,29 @@ InternetSearchDataSource::DoSearch(nsIRDFResource *source, nsIRDFResource *engin
 	return(rv);
 }
 
+
+
+nsresult
+InternetSearchDataSource::GetSearchFolder(nsIFile **searchDir)
+{
+  NS_ENSURE_ARG_POINTER(searchDir);
+  *searchDir = nsnull;
+	
+  nsCOMPtr<nsIFile> aDir;
+  nsresult rv = NS_GetSpecialDirectory(NS_APP_SEARCH_DIR, getter_AddRefs(aDir));
+  if (NS_FAILED(rv)) return rv;
+  
+  *searchDir = aDir;
+  NS_ADDREF(*searchDir);
+  return NS_OK;
+}
+
+
+
 nsresult
 InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
-                                                  const PRUnichar *categoryHint,
-                                                  const PRUnichar *dataUni,
-                                                  PRBool isSystemSearchFile)
+		const PRUnichar *categoryHint, const PRUnichar *dataUni, PRBool isSystemSearchFile,
+		PRBool checkMacFileType)
 {
 	nsresult			rv = NS_OK;
 
@@ -4192,7 +4147,7 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
 	if ((extensionOffset = basename.RFindChar(PRUnichar('.'))) > 0)
 	{
 		basename.Truncate(extensionOffset);
-		basename.AppendLiteral(".src");
+		basename.Append(NS_LITERAL_STRING(".src"));
 	}
 
   nsCAutoString filePath;
@@ -4200,25 +4155,25 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
   if (NS_FAILED(rv)) return rv;
   
 	nsAutoString	searchURL;
-	searchURL.AssignASCII(kEngineProtocol);
+	searchURL.AssignWithConversion(kEngineProtocol);
 	char		*uriCescaped = nsEscape(filePath.get(), url_Path);
 	if (!uriCescaped)	return(NS_ERROR_NULL_POINTER);
-	searchURL.AppendASCII(uriCescaped);
+	searchURL.AppendWithConversion(uriCescaped);
 	nsCRT::free(uriCescaped);
 
 	if ((extensionOffset = searchURL.RFindChar(PRUnichar('.'))) > 0)
 	{
 		searchURL.Truncate(extensionOffset);
-		searchURL.AppendLiteral(".src");
+		searchURL.Append(NS_LITERAL_STRING(".src"));
 	}
 
 	if (NS_FAILED(rv = gRDFService->GetUnicodeResource(searchURL,
 		getter_AddRefs(searchRes))))	return(rv);
 
 	// save the basename reference
-	if (!basename.IsEmpty())
+	if (basename.Length() > 0)
 	{
-		basename.Insert(NS_ConvertASCIItoUTF16(kURINC_SearchCategoryEngineBasenamePrefix), 0);
+		basename.InsertWithConversion(kURINC_SearchCategoryEngineBasenamePrefix, 0);
 
 		if (NS_FAILED(rv = gRDFService->GetUnicodeResource(basename,
 			getter_AddRefs(categoryRes))))	return(rv);
@@ -4243,8 +4198,18 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
 		nsCAutoString iconFileURL;
 		if (NS_FAILED(rv = NS_GetURLSpecFromFile(icon, iconFileURL)))
 			return(rv);
-		AppendUTF8toUTF16(iconFileURL, iconURL);
+		iconURL = NS_ConvertUTF8toUCS2(iconFileURL);
 	}
+#ifdef XP_MAC
+	else if (file)
+	{
+		nsCAutoString  fileURL;
+		if (NS_FAILED(rv = NS_GetURLSpecFromFile(file,fileURL)))
+			return(rv);
+		iconURL.Assign(NS_LITERAL_STRING("moz-icon:"));
+		iconURL.Append(NS_ConvertUTF8toUCS2(fileURL));
+	}
+#endif
 
 	// save icon url (if we have one)
 	if (iconURL.Length() > 0)
@@ -4291,7 +4256,7 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
 			if (catURI)
 			{
 				nsAutoString	catList;
-				catList.AssignASCII(kURINC_SearchCategoryPrefix);
+				catList.AssignWithConversion(kURINC_SearchCategoryPrefix);
 				catList.AppendWithConversion(catURI);
 				gRDFService->GetUnicodeResource(catList, getter_AddRefs(catRes));
 			}
@@ -4299,7 +4264,10 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
 			nsCOMPtr<nsIRDFContainer> container;
 			if (catRes)
 			{
-				container = do_CreateInstance(kRDFContainerCID, &rv);
+				rv = nsComponentManager::CreateInstance(kRDFContainerCID,
+									nsnull,
+									NS_GET_IID(nsIRDFContainer),
+									getter_AddRefs(container));
 			}
 			if (container)
 			{
@@ -4345,7 +4313,7 @@ InternetSearchDataSource::SaveEngineInfoIntoGraph(nsIFile *file, nsIFile *icon,
 
 nsresult
 InternetSearchDataSource::GetSearchEngineList(nsIFile *searchDir,
-              PRBool isSystemSearchFile)
+              PRBool isSystemSearchFile, PRBool checkMacFileType)
 {
         nsresult			rv = NS_OK;
 
@@ -4378,7 +4346,7 @@ InternetSearchDataSource::GetSearchEngineList(nsIFile *searchDir,
           continue;
         if (isDirectory)
         {
-          GetSearchEngineList(dirEntry, isSystemSearchFile);
+          GetSearchEngineList(dirEntry, isSystemSearchFile, checkMacFileType);
           continue;
         }
 
@@ -4401,9 +4369,25 @@ InternetSearchDataSource::GetSearchEngineList(nsIFile *searchDir,
 			continue;
 		}
 
+#ifdef	XP_MAC
+    if (checkMacFileType)
+		{
+            nsCOMPtr<nsILocalFileMac> macFile(do_QueryInterface(dirEntry));
+            if (!macFile)
+                continue;
+            OSType type, creator;
+            rv = macFile->GetFileType(&type);
+            if (NS_FAILED(rv) || type != 'issp')
+                continue;
+            rv = macFile->GetFileCreator(&creator);     // Do we really care about creator?  
+            if (NS_FAILED(rv) || creator != 'fndf')
+                continue;  
+		}
+#endif
+
 		// check the extension (must be ".src")
 		nsAutoString	extension;
-		if ((uri.Right(extension, 4) != 4) || (!extension.LowerCaseEqualsLiteral(".src")))
+		if ((uri.Right(extension, 4) != 4) || (!extension.EqualsIgnoreCase(".src")))
 		{
 			continue;
 		}
@@ -4439,7 +4423,7 @@ InternetSearchDataSource::GetSearchEngineList(nsIFile *searchDir,
                         } 
                 }
 		
-		SaveEngineInfoIntoGraph(dirEntry, iconFile, nsnull, nsnull, isSystemSearchFile);
+		SaveEngineInfoIntoGraph(dirEntry, iconFile, nsnull, nsnull, isSystemSearchFile, checkMacFileType);
 	}
 
 #ifdef MOZ_PHOENIX
@@ -4555,7 +4539,7 @@ InternetSearchDataSource::GetData(const PRUnichar *dataUni, const char *sectionT
 	PRBool		inSection = PR_FALSE;
 
 	nsAutoString	section;
-	section.AssignLiteral("<");
+	section.Assign(NS_LITERAL_STRING("<"));
 	section.AppendWithConversion(sectionToFind);
 
 	while(!buffer.IsEmpty())
@@ -4648,8 +4632,7 @@ InternetSearchDataSource::GetInputs(const PRUnichar *dataUni, nsString &engineNa
 
 	nsresult	rv = NS_OK;
 	PRBool		inSection = PR_FALSE;
-  PRBool    inDirInput; // directional input: "inputnext" or "inputprev"
-  PRBool    foundInput = PR_FALSE;
+  PRBool        inDirInput; // directional input: "inputnext" or "inputprev"
 
 	while(!buffer.IsEmpty())
 	{
@@ -4746,8 +4729,7 @@ InternetSearchDataSource::GetInputs(const PRUnichar *dataUni, nsString &engineNa
 					}
 				}
 			}
-      if (foundInput && nameAttrib.IsEmpty()) 
-        continue;
+			if (nameAttrib.IsEmpty())	continue;
 
 			// first look for value attribute
 			nsAutoString	valueAttrib;
@@ -4796,33 +4778,16 @@ InternetSearchDataSource::GetInputs(const PRUnichar *dataUni, nsString &engineNa
 			if (line.RFind("mode=browser", PR_TRUE) >= 0)
 				continue;
 
-			if (!valueAttrib.IsEmpty())
+			if (!nameAttrib.IsEmpty() && !valueAttrib.IsEmpty())
 			{
-        // Here's how we construct the input string:
-        // <input> is first: Name Attr: Prefix      Data           Example:
-        // YES               EMPTY      None        <value>        ACTION<value>
-        // YES               NON-EMPTY  ?           <name>=<value> ACTION?<name>=<value>
-        // NO                EMPTY      ----------- <ignored> -------------
-        // NO                NON-EMPTY  &           <name>=<value> ACTION?<n1>=<v1>&<n2>=<v2>
 				if (!input.IsEmpty())
-					input.AppendLiteral("&");
-        else if (!nameAttrib.IsEmpty()) 
-          input.AppendLiteral("?");
-
-        if (!nameAttrib.IsEmpty()) 
-        {
-				  input += nameAttrib;
-          input.AppendLiteral("=");
-        }
-
-        // Indicate that we've already found an input, so we cannot have any 
-        // inputs after this that do not have names. I could be more sophisticated
-        // than this but I don't care right now since I'm only doing this for one
-        // plugin. --ben
-        foundInput = PR_TRUE;
-
+				{
+					input.Append(NS_LITERAL_STRING("&"));
+				}
+				input += nameAttrib;
+        input.Append(NS_LITERAL_STRING("="));
         if (!inDirInput)
-          input += valueAttrib;
+				input += valueAttrib;
         else
           input.AppendInt( computeIndex(valueAttrib, pageNumber, direction) );
 			}
@@ -4851,24 +4816,22 @@ InternetSearchDataSource::GetInputs(const PRUnichar *dataUni, nsString &engineNa
       rv = defaultBranch->GetComplexValue("browser.search.defaultenginename", 
                                           NS_GET_IID(nsIPrefLocalizedString),
                                           getter_AddRefs(defaultEngineName));
-      if (NS_SUCCEEDED(rv)) {
-        defaultEngineName->GetData(getter_Copies(defaultEngineNameStr));
+      defaultEngineName->GetData(getter_Copies(defaultEngineNameStr));
 
-        nsXPIDLString selectedEngineNameStr;
-        nsCOMPtr<nsIPrefLocalizedString> selectedEngineName;
-        rv = rootBranch->GetComplexValue("browser.search.selectedEngine", 
-                                         NS_GET_IID(nsIPrefLocalizedString),
-                                         getter_AddRefs(selectedEngineName));
-        if (NS_SUCCEEDED(rv) && selectedEngineName) {
-          selectedEngineName->GetData(getter_Copies(selectedEngineNameStr));
-          engineIsNotDefault = !defaultEngineNameStr.Equals(selectedEngineNameStr);
-        }
-        else {
-          engineIsNotDefault = PR_FALSE; // The selected engine *is* the default
-                                         // since the user has not changed the
-                                         // selected item in the list causing
-                                         // the selectedEngine pref to be set.
-        }
+      nsXPIDLString selectedEngineNameStr;
+      nsCOMPtr<nsIPrefLocalizedString> selectedEngineName;
+      rv = rootBranch->GetComplexValue("browser.search.selectedEngine", 
+                                       NS_GET_IID(nsIPrefLocalizedString),
+                                       getter_AddRefs(selectedEngineName));
+      if (selectedEngineName) {
+        selectedEngineName->GetData(getter_Copies(selectedEngineNameStr));
+        engineIsNotDefault = !defaultEngineNameStr.Equals(selectedEngineNameStr);
+      }
+      else {
+        engineIsNotDefault = PR_FALSE; // The selected engine *is* the default
+                                       // since the user has not changed the
+                                       // selected item in the list causing
+                                       // the selectedEngine pref to be set.
       }
     }
 
@@ -5163,10 +5126,8 @@ InternetSearchDataSource::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
 		// continue to process nsIInternetSearchContext::WEB_SEARCH_CONTEXT
 		rv = webSearchFinalize(channel, context);
 	}
-	else if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_NEW_CONTEXT ||
-	         contextType == nsIInternetSearchContext::ICON_DOWNLOAD_NEW_CONTEXT ||
-	         contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_UPDATE_CONTEXT ||
-	         contextType == nsIInternetSearchContext::ICON_DOWNLOAD_UPDATE_CONTEXT)
+	else if (contextType == nsIInternetSearchContext::ENGINE_DOWNLOAD_CONTEXT ||
+		 contextType == nsIInternetSearchContext::ICON_DOWNLOAD_CONTEXT)
 	{
 		nsCOMPtr<nsIHttpChannel> httpChannel (do_QueryInterface(channel));
 		if (!httpChannel)	return(NS_ERROR_UNEXPECTED);
@@ -5179,7 +5140,7 @@ InternetSearchDataSource::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
 			rv = saveContents(channel, context, contextType);
 		}
 	}
-	else if (contextType == nsIInternetSearchContext::ENGINE_UPDATE_HEAD_CONTEXT)
+	else if (contextType == nsIInternetSearchContext::ENGINE_UPDATE_CONTEXT)
 	{
 		nsCOMPtr<nsIRDFResource>	theEngine;
 		if (NS_FAILED(rv = context->GetEngine(getter_AddRefs(theEngine))))	return(rv);
@@ -5193,11 +5154,6 @@ InternetSearchDataSource::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
 		// free up "busy" info now & mark as non-busy
 		busySchedule = PR_FALSE;
 		busyResource = nsnull;
-
-		// mark now as the last time we stat'ted the search engine
-		// regardless of HTTP status
-		rv = validateEngineNow(theEngine);
-		NS_ENSURE_SUCCESS(rv, rv);
 
 		// we only have HTTP "HEAD" information when doing updates
 		nsCOMPtr<nsIHttpChannel> httpChannel (do_QueryInterface(channel));
@@ -5276,6 +5232,9 @@ InternetSearchDataSource::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
 			}
 		}
 
+		// mark now as the last time we stat'ted the search engine
+		validateEngineNow(theEngine);
+
     if (updateSearchEngineFile)
 		{
 #ifdef	DEBUG_SEARCH_UPDATES
@@ -5317,8 +5276,7 @@ InternetSearchDataSource::OnStopRequest(nsIRequest *request, nsISupports *ctxt,
 			}
 
 			// download it!
-      AddSearchEngineInternal(updateURL.get(), updateIconURL.get(),
-                              nsnull, nsnull, theEngine);
+			AddSearchEngine(updateURL.get(), updateIconURL.get(), nsnull, nsnull);
 		}
 		else
 		{
@@ -5479,7 +5437,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 	aURL->GetPath(serverPath);
 	if (!serverPath.IsEmpty())
 	{
-        AppendUTF8toUTF16(serverPath, serverPathStr);
+        serverPathStr = NS_ConvertUTF8toUCS2(serverPath);
         serverPath.Truncate();
 
 		PRInt32 serverOptionsOffset = serverPathStr.FindChar(PRUnichar('?'));
@@ -5503,8 +5461,12 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 #ifdef	DEBUG
 	PRTime		now;
+#ifdef	XP_MAC
+	Microseconds((UnsignedWide *)&now);
+#else
 	now = PR_Now();
-  printf("\nStart processing search results:   %u bytes \n", htmlPageSize); 
+#endif
+       printf("\nStart processing search results:   %u bytes \n", htmlPageSize); 
 #endif
 
 	// need to handle multiple <interpret> sections, per spec
@@ -5519,7 +5481,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 		nsAutoString	nameStartStr, nameEndStr;
 		nsAutoString	emailStartStr, emailEndStr;
 		nsAutoString	browserResultTypeStr;
-		browserResultTypeStr.AssignLiteral("result");		// default to "result"
+		browserResultTypeStr.Assign(NS_LITERAL_STRING("result"));		// default to "result"
 
 		// use a nsDependentString so that "htmlPage" data isn't copied
 		nsDependentString  htmlResults(htmlPage, htmlPageSize);
@@ -5536,7 +5498,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 			GetData(dataUni, "interpret", interpretSectionNum, "bannerStart", bannerStartStr);
 			GetData(dataUni, "interpret", interpretSectionNum, "bannerEnd", bannerEndStr);
 			GetData(dataUni, "interpret", interpretSectionNum, "skiplocal", skiplocalStr);
-			skipLocalFlag = (skiplocalStr.LowerCaseEqualsLiteral("true")) ? PR_TRUE : PR_FALSE;
+			skipLocalFlag = (skiplocalStr.EqualsIgnoreCase("true")) ? PR_TRUE : PR_FALSE;
 
 			// shopping channel support
 			GetData(dataUni, "interpret", interpretSectionNum, "priceStart", priceStartStr);
@@ -5558,7 +5520,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 			GetData(dataUni, "interpret", interpretSectionNum, "browserResultType", browserResultTypeStr);
 			if (browserResultTypeStr.IsEmpty())
 			{
-				browserResultTypeStr.AssignLiteral("result");	// default to "result"
+				browserResultTypeStr.Assign(NS_LITERAL_STRING("result"));	// default to "result"
 			}
 		}
 
@@ -5624,7 +5586,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 		// if resultItemStartStr is not specified, try making it just be "HREF="
 		if (resultItemStartStr.IsEmpty())
 		{
-			resultItemStartStr.AssignLiteral("HREF=");
+			resultItemStartStr.Assign(NS_LITERAL_STRING("HREF="));
 			trimItemStart = PR_FALSE;
 		}
 
@@ -5783,6 +5745,10 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 			nsCOMPtr<nsIRDFResource>	res;
 
+// #define	OLDWAY
+#ifdef	OLDWAY
+			rv = gRDFService->GetResource(nsCAutoString(hrefStr), getter_AddRefs(res));
+#else		
 			// save HREF attribute as URL
 			if (NS_SUCCEEDED(rv = gRDFService->GetAnonymousResource(getter_AddRefs(res))))
 			{
@@ -5796,7 +5762,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 					}
 				}
 			}
-
+	#endif
 			if (NS_FAILED(rv))	continue;
 			
 			// set HTML response chunk
@@ -5897,6 +5863,9 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 			// look for Name (if it isn't already set)
 			nsCOMPtr<nsIRDFNode>		oldNameRes = nsnull;
+#ifdef	OLDWAY
+			mInner->GetTarget(res, kNC_Name, PR_TRUE, getter_AddRefs(oldNameRes));
+#endif
 			if (!oldNameRes)
 			{
 				if (!nameStr.IsEmpty())
@@ -6050,6 +6019,9 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 			// look for Relevance (if it isn't already set)
 			nsCOMPtr<nsIRDFNode>		oldRelRes = nsnull;
+#ifdef	OLDWAY
+			mInner->GetTarget(res, kNC_Relevance, PR_TRUE, getter_AddRefs(oldRelRes));
+#endif
 			if (!oldRelRes)
 			{
 				if (!relItem.IsEmpty())
@@ -6092,7 +6064,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 				}
 				if (relItem.IsEmpty())
 				{
-					relItem.AssignLiteral("-");
+					relItem.Assign(NS_LITERAL_STRING("-"));
 				}
 
 				const PRUnichar *relItemUni = relItem.get();
@@ -6105,7 +6077,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 					}
 				}
 
-				if ((!relItem.IsEmpty()) && (!relItem.EqualsLiteral("-")))
+				if ((!relItem.IsEmpty()) && (!relItem.Equals(NS_LITERAL_STRING("-"))))
 				{
 					// If its a percentage, remove "%"
 					if (relItem[relItem.Length()-1] == PRUnichar('%'))
@@ -6115,7 +6087,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 					// left-pad with "0"s and set special sorting value
 					nsAutoString	zero;
-					zero.AssignLiteral("000");
+					zero.Assign(NS_LITERAL_STRING("000"));
 					if (relItem.Length() < 3)
 					{
 						relItem.Insert(zero.get(), 0, zero.Length() - relItem.Length()); 
@@ -6123,7 +6095,7 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 				}
 				else
 				{
-					relItem.AssignLiteral("000");
+					relItem.Assign(NS_LITERAL_STRING("000"));
 				}
 
 				const PRUnichar	*relSortUni = relItem.get();
@@ -6142,6 +6114,9 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 			// set reference to engine this came from (if it isn't already set)
 			nsCOMPtr<nsIRDFNode>		oldEngineRes = nsnull;
+#ifdef	OLDWAY
+			mInner->GetTarget(res, kNC_Engine, PR_TRUE, getter_AddRefs(oldEngineRes));
+#endif
 			if (!oldEngineRes)
 			{
 				if (!engineStr.IsEmpty())
@@ -6165,10 +6140,10 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 			// if no branding icon, use some default icons
 			nsAutoString	iconChromeDefault;
 
-			if (browserResultTypeStr.LowerCaseEqualsLiteral("category"))
-				iconChromeDefault.AssignLiteral("chrome://communicator/skin/search/category.gif");
-			else if ((browserResultTypeStr.LowerCaseEqualsLiteral("result")) && (!engineIconNode))
-				iconChromeDefault.AssignLiteral("chrome://communicator/skin/search/result.gif");
+			if (browserResultTypeStr.EqualsIgnoreCase("category"))
+				iconChromeDefault.Assign(NS_LITERAL_STRING("chrome://communicator/skin/search/category.gif"));
+			else if ((browserResultTypeStr.EqualsIgnoreCase("result")) && (!engineIconNode))
+				iconChromeDefault.Assign(NS_LITERAL_STRING("chrome://communicator/skin/search/result.gif"));
 
 			if (!iconChromeDefault.IsEmpty())
 			{
@@ -6257,7 +6232,11 @@ InternetSearchDataSource::ParseHTML(nsIURI *aURL, nsIRDFResource *mParent,
 
 #ifdef	DEBUG
 	PRTime		now2;
+#ifdef	XP_MAC
+	Microseconds((UnsignedWide *)&now2);
+#else
 	now2 = PR_Now();
+#endif
 	PRUint64	loadTime64;
 	LL_SUB(loadTime64, now2, now);
 	PRUint32	loadTime32;
@@ -6315,106 +6294,106 @@ InternetSearchDataSource::ConvertEntities(nsString &nameStr, PRBool removeHTMLFl
 		nameStr.Cut(ampOffset, semiOffset-ampOffset+1);
 
 		PRUnichar	entityChar = 0;
-		if (entityStr.LowerCaseEqualsLiteral("&quot;"))	entityChar = PRUnichar('\"');
-		else if (entityStr.LowerCaseEqualsLiteral("&amp;"))	entityChar = PRUnichar('&');
-		else if (entityStr.LowerCaseEqualsLiteral("&nbsp;"))	entityChar = PRUnichar(' ');
-		else if (entityStr.LowerCaseEqualsLiteral("&lt;"))		entityChar = PRUnichar('<');
-		else if (entityStr.LowerCaseEqualsLiteral("&gt;"))		entityChar = PRUnichar('>');
-		else if (entityStr.LowerCaseEqualsLiteral("&iexcl;"))	entityChar = PRUnichar(161);
-		else if (entityStr.LowerCaseEqualsLiteral("&cent;"))	entityChar = PRUnichar(162);
-		else if (entityStr.LowerCaseEqualsLiteral("&pound;"))	entityChar = PRUnichar(163);
-		else if (entityStr.LowerCaseEqualsLiteral("&curren;"))	entityChar = PRUnichar(164);
-		else if (entityStr.LowerCaseEqualsLiteral("&yen;"))	entityChar = PRUnichar(165);
-		else if (entityStr.LowerCaseEqualsLiteral("&brvbar;"))	entityChar = PRUnichar(166);
-		else if (entityStr.LowerCaseEqualsLiteral("&sect;"))	entityChar = PRUnichar(167);
-		else if (entityStr.LowerCaseEqualsLiteral("&uml;"))	entityChar = PRUnichar(168);
-		else if (entityStr.LowerCaseEqualsLiteral("&copy;"))	entityChar = PRUnichar(169);
-		else if (entityStr.LowerCaseEqualsLiteral("&ordf;"))	entityChar = PRUnichar(170);
-		else if (entityStr.LowerCaseEqualsLiteral("&laquo;"))	entityChar = PRUnichar(171);
-		else if (entityStr.LowerCaseEqualsLiteral("&not;"))	entityChar = PRUnichar(172);
-		else if (entityStr.LowerCaseEqualsLiteral("&shy;"))	entityChar = PRUnichar(173);
-		else if (entityStr.LowerCaseEqualsLiteral("&reg;"))	entityChar = PRUnichar(174);
-		else if (entityStr.LowerCaseEqualsLiteral("&macr;"))	entityChar = PRUnichar(175);
-		else if (entityStr.LowerCaseEqualsLiteral("&deg;"))	entityChar = PRUnichar(176);
-		else if (entityStr.LowerCaseEqualsLiteral("&plusmn;"))	entityChar = PRUnichar(177);
-		else if (entityStr.LowerCaseEqualsLiteral("&sup2;"))	entityChar = PRUnichar(178);
-		else if (entityStr.LowerCaseEqualsLiteral("&sup3;"))	entityChar = PRUnichar(179);
-		else if (entityStr.LowerCaseEqualsLiteral("&acute;"))	entityChar = PRUnichar(180);
-		else if (entityStr.LowerCaseEqualsLiteral("&micro;"))	entityChar = PRUnichar(181);
-		else if (entityStr.LowerCaseEqualsLiteral("&para;"))	entityChar = PRUnichar(182);
-		else if (entityStr.LowerCaseEqualsLiteral("&middot;"))	entityChar = PRUnichar(183);
-		else if (entityStr.LowerCaseEqualsLiteral("&cedil;"))	entityChar = PRUnichar(184);
-		else if (entityStr.LowerCaseEqualsLiteral("&sup1;"))	entityChar = PRUnichar(185);
-		else if (entityStr.LowerCaseEqualsLiteral("&ordm;"))	entityChar = PRUnichar(186);
-		else if (entityStr.LowerCaseEqualsLiteral("&raquo;"))	entityChar = PRUnichar(187);
-		else if (entityStr.LowerCaseEqualsLiteral("&frac14;"))	entityChar = PRUnichar(188);
-		else if (entityStr.LowerCaseEqualsLiteral("&frac12;"))	entityChar = PRUnichar(189);
-		else if (entityStr.LowerCaseEqualsLiteral("&frac34;"))	entityChar = PRUnichar(190);
-		else if (entityStr.LowerCaseEqualsLiteral("&iquest;"))	entityChar = PRUnichar(191);
-		else if (entityStr.LowerCaseEqualsLiteral("&agrave;"))	entityChar = PRUnichar(192);
-		else if (entityStr.LowerCaseEqualsLiteral("&aacute;"))	entityChar = PRUnichar(193);
-		else if (entityStr.LowerCaseEqualsLiteral("&acirc;"))	entityChar = PRUnichar(194);
-		else if (entityStr.LowerCaseEqualsLiteral("&atilde;"))	entityChar = PRUnichar(195);
-		else if (entityStr.LowerCaseEqualsLiteral("&auml;"))	entityChar = PRUnichar(196);
-		else if (entityStr.LowerCaseEqualsLiteral("&aring;"))	entityChar = PRUnichar(197);
-		else if (entityStr.LowerCaseEqualsLiteral("&aelig;"))	entityChar = PRUnichar(198);
-		else if (entityStr.LowerCaseEqualsLiteral("&ccedil;"))	entityChar = PRUnichar(199);
-		else if (entityStr.LowerCaseEqualsLiteral("&egrave;"))	entityChar = PRUnichar(200);
-		else if (entityStr.LowerCaseEqualsLiteral("&eacute;"))	entityChar = PRUnichar(201);
-		else if (entityStr.LowerCaseEqualsLiteral("&ecirc;"))	entityChar = PRUnichar(202);
-		else if (entityStr.LowerCaseEqualsLiteral("&euml;"))	entityChar = PRUnichar(203);
-		else if (entityStr.LowerCaseEqualsLiteral("&igrave;"))	entityChar = PRUnichar(204);
-		else if (entityStr.LowerCaseEqualsLiteral("&iacute;"))	entityChar = PRUnichar(205);
-		else if (entityStr.LowerCaseEqualsLiteral("&icirc;"))	entityChar = PRUnichar(206);
-		else if (entityStr.LowerCaseEqualsLiteral("&iuml;"))	entityChar = PRUnichar(207);
-		else if (entityStr.LowerCaseEqualsLiteral("&eth;"))	entityChar = PRUnichar(208);
-		else if (entityStr.LowerCaseEqualsLiteral("&ntilde;"))	entityChar = PRUnichar(209);
-		else if (entityStr.LowerCaseEqualsLiteral("&ograve;"))	entityChar = PRUnichar(210);
-		else if (entityStr.LowerCaseEqualsLiteral("&oacute;"))	entityChar = PRUnichar(211);
-		else if (entityStr.LowerCaseEqualsLiteral("&ocirc;"))	entityChar = PRUnichar(212);
-		else if (entityStr.LowerCaseEqualsLiteral("&otilde;"))	entityChar = PRUnichar(213);
-		else if (entityStr.LowerCaseEqualsLiteral("&ouml;"))	entityChar = PRUnichar(214);
-		else if (entityStr.LowerCaseEqualsLiteral("&times;"))	entityChar = PRUnichar(215);
-		else if (entityStr.LowerCaseEqualsLiteral("&oslash;"))	entityChar = PRUnichar(216);
-		else if (entityStr.LowerCaseEqualsLiteral("&ugrave;"))	entityChar = PRUnichar(217);
-		else if (entityStr.LowerCaseEqualsLiteral("&uacute;"))	entityChar = PRUnichar(218);
-		else if (entityStr.LowerCaseEqualsLiteral("&ucirc;"))	entityChar = PRUnichar(219);
-		else if (entityStr.LowerCaseEqualsLiteral("&uuml;"))	entityChar = PRUnichar(220);
-		else if (entityStr.LowerCaseEqualsLiteral("&yacute;"))	entityChar = PRUnichar(221);
-		else if (entityStr.LowerCaseEqualsLiteral("&thorn;"))	entityChar = PRUnichar(222);
-		else if (entityStr.LowerCaseEqualsLiteral("&szlig;"))	entityChar = PRUnichar(223);
-		else if (entityStr.LowerCaseEqualsLiteral("&agrave;"))	entityChar = PRUnichar(224);
-		else if (entityStr.LowerCaseEqualsLiteral("&aacute;"))	entityChar = PRUnichar(225);
-		else if (entityStr.LowerCaseEqualsLiteral("&acirc;"))	entityChar = PRUnichar(226);
-		else if (entityStr.LowerCaseEqualsLiteral("&atilde;"))	entityChar = PRUnichar(227);
-		else if (entityStr.LowerCaseEqualsLiteral("&auml;"))	entityChar = PRUnichar(228);
-		else if (entityStr.LowerCaseEqualsLiteral("&aring;"))	entityChar = PRUnichar(229);
-		else if (entityStr.LowerCaseEqualsLiteral("&aelig;"))	entityChar = PRUnichar(230);
-		else if (entityStr.LowerCaseEqualsLiteral("&ccedil;"))	entityChar = PRUnichar(231);
-		else if (entityStr.LowerCaseEqualsLiteral("&egrave;"))	entityChar = PRUnichar(232);
-		else if (entityStr.LowerCaseEqualsLiteral("&eacute;"))	entityChar = PRUnichar(233);
-		else if (entityStr.LowerCaseEqualsLiteral("&ecirc;"))	entityChar = PRUnichar(234);
-		else if (entityStr.LowerCaseEqualsLiteral("&euml;"))	entityChar = PRUnichar(235);
-		else if (entityStr.LowerCaseEqualsLiteral("&igrave;"))	entityChar = PRUnichar(236);
-		else if (entityStr.LowerCaseEqualsLiteral("&iacute;"))	entityChar = PRUnichar(237);
-		else if (entityStr.LowerCaseEqualsLiteral("&icirc;"))	entityChar = PRUnichar(238);
-		else if (entityStr.LowerCaseEqualsLiteral("&iuml;"))	entityChar = PRUnichar(239);
-		else if (entityStr.LowerCaseEqualsLiteral("&eth;"))	entityChar = PRUnichar(240);
-		else if (entityStr.LowerCaseEqualsLiteral("&ntilde;"))	entityChar = PRUnichar(241);
-		else if (entityStr.LowerCaseEqualsLiteral("&ograve;"))	entityChar = PRUnichar(242);
-		else if (entityStr.LowerCaseEqualsLiteral("&oacute;"))	entityChar = PRUnichar(243);
-		else if (entityStr.LowerCaseEqualsLiteral("&ocirc;"))	entityChar = PRUnichar(244);
-		else if (entityStr.LowerCaseEqualsLiteral("&otilde;"))	entityChar = PRUnichar(245);
-		else if (entityStr.LowerCaseEqualsLiteral("&ouml;"))	entityChar = PRUnichar(246);
-		else if (entityStr.LowerCaseEqualsLiteral("&divide;"))	entityChar = PRUnichar(247);
-		else if (entityStr.LowerCaseEqualsLiteral("&oslash;"))	entityChar = PRUnichar(248);
-		else if (entityStr.LowerCaseEqualsLiteral("&ugrave;"))	entityChar = PRUnichar(249);
-		else if (entityStr.LowerCaseEqualsLiteral("&uacute;"))	entityChar = PRUnichar(250);
-		else if (entityStr.LowerCaseEqualsLiteral("&ucirc;"))	entityChar = PRUnichar(251);
-		else if (entityStr.LowerCaseEqualsLiteral("&uuml;"))	entityChar = PRUnichar(252);
-		else if (entityStr.LowerCaseEqualsLiteral("&yacute;"))	entityChar = PRUnichar(253);
-		else if (entityStr.LowerCaseEqualsLiteral("&thorn;"))	entityChar = PRUnichar(254);
-		else if (entityStr.LowerCaseEqualsLiteral("&yuml;"))	entityChar = PRUnichar(255);
+		if (entityStr.EqualsIgnoreCase("&quot;"))	entityChar = PRUnichar('\"');
+		else if (entityStr.EqualsIgnoreCase("&amp;"))	entityChar = PRUnichar('&');
+		else if (entityStr.EqualsIgnoreCase("&nbsp;"))	entityChar = PRUnichar(' ');
+		else if (entityStr.EqualsIgnoreCase("&lt;"))		entityChar = PRUnichar('<');
+		else if (entityStr.EqualsIgnoreCase("&gt;"))		entityChar = PRUnichar('>');
+		else if (entityStr.EqualsIgnoreCase("&iexcl;"))	entityChar = PRUnichar(161);
+		else if (entityStr.EqualsIgnoreCase("&cent;"))	entityChar = PRUnichar(162);
+		else if (entityStr.EqualsIgnoreCase("&pound;"))	entityChar = PRUnichar(163);
+		else if (entityStr.EqualsIgnoreCase("&curren;"))	entityChar = PRUnichar(164);
+		else if (entityStr.EqualsIgnoreCase("&yen;"))	entityChar = PRUnichar(165);
+		else if (entityStr.EqualsIgnoreCase("&brvbar;"))	entityChar = PRUnichar(166);
+		else if (entityStr.EqualsIgnoreCase("&sect;"))	entityChar = PRUnichar(167);
+		else if (entityStr.EqualsIgnoreCase("&uml;"))	entityChar = PRUnichar(168);
+		else if (entityStr.EqualsIgnoreCase("&copy;"))	entityChar = PRUnichar(169);
+		else if (entityStr.EqualsIgnoreCase("&ordf;"))	entityChar = PRUnichar(170);
+		else if (entityStr.EqualsIgnoreCase("&laquo;"))	entityChar = PRUnichar(171);
+		else if (entityStr.EqualsIgnoreCase("&not;"))	entityChar = PRUnichar(172);
+		else if (entityStr.EqualsIgnoreCase("&shy;"))	entityChar = PRUnichar(173);
+		else if (entityStr.EqualsIgnoreCase("&reg;"))	entityChar = PRUnichar(174);
+		else if (entityStr.EqualsIgnoreCase("&macr;"))	entityChar = PRUnichar(175);
+		else if (entityStr.EqualsIgnoreCase("&deg;"))	entityChar = PRUnichar(176);
+		else if (entityStr.EqualsIgnoreCase("&plusmn;"))	entityChar = PRUnichar(177);
+		else if (entityStr.EqualsIgnoreCase("&sup2;"))	entityChar = PRUnichar(178);
+		else if (entityStr.EqualsIgnoreCase("&sup3;"))	entityChar = PRUnichar(179);
+		else if (entityStr.EqualsIgnoreCase("&acute;"))	entityChar = PRUnichar(180);
+		else if (entityStr.EqualsIgnoreCase("&micro;"))	entityChar = PRUnichar(181);
+		else if (entityStr.EqualsIgnoreCase("&para;"))	entityChar = PRUnichar(182);
+		else if (entityStr.EqualsIgnoreCase("&middot;"))	entityChar = PRUnichar(183);
+		else if (entityStr.EqualsIgnoreCase("&cedil;"))	entityChar = PRUnichar(184);
+		else if (entityStr.EqualsIgnoreCase("&sup1;"))	entityChar = PRUnichar(185);
+		else if (entityStr.EqualsIgnoreCase("&ordm;"))	entityChar = PRUnichar(186);
+		else if (entityStr.EqualsIgnoreCase("&raquo;"))	entityChar = PRUnichar(187);
+		else if (entityStr.EqualsIgnoreCase("&frac14;"))	entityChar = PRUnichar(188);
+		else if (entityStr.EqualsIgnoreCase("&frac12;"))	entityChar = PRUnichar(189);
+		else if (entityStr.EqualsIgnoreCase("&frac34;"))	entityChar = PRUnichar(190);
+		else if (entityStr.EqualsIgnoreCase("&iquest;"))	entityChar = PRUnichar(191);
+		else if (entityStr.EqualsIgnoreCase("&Agrave;"))	entityChar = PRUnichar(192);
+		else if (entityStr.EqualsIgnoreCase("&Aacute;"))	entityChar = PRUnichar(193);
+		else if (entityStr.EqualsIgnoreCase("&Acirc;"))	entityChar = PRUnichar(194);
+		else if (entityStr.EqualsIgnoreCase("&Atilde;"))	entityChar = PRUnichar(195);
+		else if (entityStr.EqualsIgnoreCase("&Auml;"))	entityChar = PRUnichar(196);
+		else if (entityStr.EqualsIgnoreCase("&Aring;"))	entityChar = PRUnichar(197);
+		else if (entityStr.EqualsIgnoreCase("&AElig;"))	entityChar = PRUnichar(198);
+		else if (entityStr.EqualsIgnoreCase("&Ccedil;"))	entityChar = PRUnichar(199);
+		else if (entityStr.EqualsIgnoreCase("&Egrave;"))	entityChar = PRUnichar(200);
+		else if (entityStr.EqualsIgnoreCase("&Eacute;"))	entityChar = PRUnichar(201);
+		else if (entityStr.EqualsIgnoreCase("&Ecirc;"))	entityChar = PRUnichar(202);
+		else if (entityStr.EqualsIgnoreCase("&Euml;"))	entityChar = PRUnichar(203);
+		else if (entityStr.EqualsIgnoreCase("&Igrave;"))	entityChar = PRUnichar(204);
+		else if (entityStr.EqualsIgnoreCase("&Iacute;"))	entityChar = PRUnichar(205);
+		else if (entityStr.EqualsIgnoreCase("&Icirc;"))	entityChar = PRUnichar(206);
+		else if (entityStr.EqualsIgnoreCase("&Iuml;"))	entityChar = PRUnichar(207);
+		else if (entityStr.EqualsIgnoreCase("&ETH;"))	entityChar = PRUnichar(208);
+		else if (entityStr.EqualsIgnoreCase("&Ntilde;"))	entityChar = PRUnichar(209);
+		else if (entityStr.EqualsIgnoreCase("&Ograve;"))	entityChar = PRUnichar(210);
+		else if (entityStr.EqualsIgnoreCase("&Oacute;"))	entityChar = PRUnichar(211);
+		else if (entityStr.EqualsIgnoreCase("&Ocirc;"))	entityChar = PRUnichar(212);
+		else if (entityStr.EqualsIgnoreCase("&Otilde;"))	entityChar = PRUnichar(213);
+		else if (entityStr.EqualsIgnoreCase("&Ouml;"))	entityChar = PRUnichar(214);
+		else if (entityStr.EqualsIgnoreCase("&times;"))	entityChar = PRUnichar(215);
+		else if (entityStr.EqualsIgnoreCase("&Oslash;"))	entityChar = PRUnichar(216);
+		else if (entityStr.EqualsIgnoreCase("&Ugrave;"))	entityChar = PRUnichar(217);
+		else if (entityStr.EqualsIgnoreCase("&Uacute;"))	entityChar = PRUnichar(218);
+		else if (entityStr.EqualsIgnoreCase("&Ucirc;"))	entityChar = PRUnichar(219);
+		else if (entityStr.EqualsIgnoreCase("&Uuml;"))	entityChar = PRUnichar(220);
+		else if (entityStr.EqualsIgnoreCase("&Yacute;"))	entityChar = PRUnichar(221);
+		else if (entityStr.EqualsIgnoreCase("&THORN;"))	entityChar = PRUnichar(222);
+		else if (entityStr.EqualsIgnoreCase("&szlig;"))	entityChar = PRUnichar(223);
+		else if (entityStr.EqualsIgnoreCase("&agrave;"))	entityChar = PRUnichar(224);
+		else if (entityStr.EqualsIgnoreCase("&aacute;"))	entityChar = PRUnichar(225);
+		else if (entityStr.EqualsIgnoreCase("&acirc;"))	entityChar = PRUnichar(226);
+		else if (entityStr.EqualsIgnoreCase("&atilde;"))	entityChar = PRUnichar(227);
+		else if (entityStr.EqualsIgnoreCase("&auml;"))	entityChar = PRUnichar(228);
+		else if (entityStr.EqualsIgnoreCase("&aring;"))	entityChar = PRUnichar(229);
+		else if (entityStr.EqualsIgnoreCase("&aelig;"))	entityChar = PRUnichar(230);
+		else if (entityStr.EqualsIgnoreCase("&ccedil;"))	entityChar = PRUnichar(231);
+		else if (entityStr.EqualsIgnoreCase("&egrave;"))	entityChar = PRUnichar(232);
+		else if (entityStr.EqualsIgnoreCase("&eacute;"))	entityChar = PRUnichar(233);
+		else if (entityStr.EqualsIgnoreCase("&ecirc;"))	entityChar = PRUnichar(234);
+		else if (entityStr.EqualsIgnoreCase("&euml;"))	entityChar = PRUnichar(235);
+		else if (entityStr.EqualsIgnoreCase("&igrave;"))	entityChar = PRUnichar(236);
+		else if (entityStr.EqualsIgnoreCase("&iacute;"))	entityChar = PRUnichar(237);
+		else if (entityStr.EqualsIgnoreCase("&icirc;"))	entityChar = PRUnichar(238);
+		else if (entityStr.EqualsIgnoreCase("&iuml;"))	entityChar = PRUnichar(239);
+		else if (entityStr.EqualsIgnoreCase("&eth;"))	entityChar = PRUnichar(240);
+		else if (entityStr.EqualsIgnoreCase("&ntilde;"))	entityChar = PRUnichar(241);
+		else if (entityStr.EqualsIgnoreCase("&ograve;"))	entityChar = PRUnichar(242);
+		else if (entityStr.EqualsIgnoreCase("&oacute;"))	entityChar = PRUnichar(243);
+		else if (entityStr.EqualsIgnoreCase("&ocirc;"))	entityChar = PRUnichar(244);
+		else if (entityStr.EqualsIgnoreCase("&otilde;"))	entityChar = PRUnichar(245);
+		else if (entityStr.EqualsIgnoreCase("&ouml;"))	entityChar = PRUnichar(246);
+		else if (entityStr.EqualsIgnoreCase("&divide;"))	entityChar = PRUnichar(247);
+		else if (entityStr.EqualsIgnoreCase("&oslash;"))	entityChar = PRUnichar(248);
+		else if (entityStr.EqualsIgnoreCase("&ugrave;"))	entityChar = PRUnichar(249);
+		else if (entityStr.EqualsIgnoreCase("&uacute;"))	entityChar = PRUnichar(250);
+		else if (entityStr.EqualsIgnoreCase("&ucirc;"))	entityChar = PRUnichar(251);
+		else if (entityStr.EqualsIgnoreCase("&uuml;"))	entityChar = PRUnichar(252);
+		else if (entityStr.EqualsIgnoreCase("&yacute;"))	entityChar = PRUnichar(253);
+		else if (entityStr.EqualsIgnoreCase("&thorn;"))	entityChar = PRUnichar(254);
+		else if (entityStr.EqualsIgnoreCase("&yuml;"))	entityChar = PRUnichar(255);
 
 		startOffset = ampOffset;
 		if (entityChar != 0)
@@ -6470,19 +6449,3 @@ InternetSearchDataSource::Observe(nsISupports *aSubject, const char *aTopic, con
 
     return rv;
 }
-
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(LocalSearchDataSource, Init)
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(InternetSearchDataSource, Init)
-
-static const nsModuleComponentInfo components[] = {
-    { "Local Search", NS_RDFFINDDATASOURCE_CID,
-      NS_LOCALSEARCH_SERVICE_CONTRACTID, LocalSearchDataSourceConstructor },
-    { "Local Search", NS_RDFFINDDATASOURCE_CID,
-      NS_LOCALSEARCH_DATASOURCE_CONTRACTID, LocalSearchDataSourceConstructor },
-    { "Internet Search", NS_RDFSEARCHDATASOURCE_CID,
-      NS_INTERNETSEARCH_SERVICE_CONTRACTID, InternetSearchDataSourceConstructor },
-    { "Internet Search", NS_RDFSEARCHDATASOURCE_CID,
-      NS_INTERNETSEARCH_DATASOURCE_CONTRACTID, InternetSearchDataSourceConstructor },
-};
-
-NS_IMPL_NSGETMODULE(SearchServiceModule, components)

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Neil Deakin <neil@mozdevgroup.com>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -47,7 +47,6 @@
 #include "nsIContentIterator.h"
 #include "nsIDOMNodeList.h"
 #include "nsIDOMRange.h"
-#include "nsIRangeUtils.h"
 #include "nsISelection.h"
 #include "nsIPlaintextEditor.h"
 #include "nsTextServicesDocument.h"
@@ -100,10 +99,17 @@ public:
 #include "nsTSAtomList.h"
 #undef TS_ATOM
 
-nsIRangeUtils* nsTextServicesDocument::sRangeHelper;
+
+PRInt32 nsTextServicesDocument::sInstanceCount;
 
 nsTextServicesDocument::nsTextServicesDocument()
 {
+static const nsStaticAtom ts_atoms[] = {
+#define TS_ATOM(name_, value_) { value_, &name_ },
+#include "nsTSAtomList.h"
+#undef TS_ATOM
+};
+
   mRefCnt         = 0;
 
   mSelStartIndex  = -1;
@@ -112,35 +118,21 @@ nsTextServicesDocument::nsTextServicesDocument()
   mSelEndOffset   = -1;
 
   mIteratorStatus = eIsDone;
+
+  if (sInstanceCount <= 0)
+    NS_RegisterStaticAtoms(ts_atoms, NS_ARRAY_LENGTH(ts_atoms));
+
+  ++sInstanceCount;
 }
 
 nsTextServicesDocument::~nsTextServicesDocument()
 {
-  nsCOMPtr<nsIEditor> editor (do_QueryReferent(mEditor));
-  if (editor && mNotifier)
-    editor->RemoveEditActionListener(mNotifier);
+  if (mEditor && mNotifier)
+    mEditor->RemoveEditActionListener(mNotifier);
 
   ClearOffsetTable(&mOffsetTable);
-}
 
-/* static */
-void
-nsTextServicesDocument::RegisterAtoms()
-{
-  static const nsStaticAtom ts_atoms[] = {
-#define TS_ATOM(name_, value_) { value_, &name_ },
-#include "nsTSAtomList.h"
-#undef TS_ATOM
-  };
-
-  NS_RegisterStaticAtoms(ts_atoms, NS_ARRAY_LENGTH(ts_atoms));
-}
-
-/* static */
-void
-nsTextServicesDocument::Shutdown()
-{
-  NS_IF_RELEASE(sRangeHelper);
+  --sInstanceCount;
 }
 
 #define DEBUG_TEXT_SERVICES__DOCUMENT_REFCNT 1
@@ -283,7 +275,8 @@ nsTextServicesDocument::InitWithEditor(nsIEditor *aEditor)
     }
   }
 
-  mEditor = do_GetWeakReference(aEditor);
+  mEditor = do_QueryInterface(aEditor);
+
   nsTSDNotifier *notifier = new nsTSDNotifier(this);
 
   if (!notifier)
@@ -294,7 +287,7 @@ nsTextServicesDocument::InitWithEditor(nsIEditor *aEditor)
 
   mNotifier = do_QueryInterface(notifier);
 
-  result = aEditor->AddEditActionListener(mNotifier);
+  result = mEditor->AddEditActionListener(mNotifier);
 
   UNLOCK_DOC(this);
 
@@ -568,9 +561,7 @@ nsTextServicesDocument::CanEdit(PRBool *aCanEdit)
   if (!aCanEdit)
     return NS_ERROR_NULL_POINTER;
 
-  nsCOMPtr<nsIEditor> editor (do_QueryReferent(mEditor));
-
-  *aCanEdit = (editor) ? PR_TRUE : PR_FALSE;
+  *aCanEdit = (mEditor) ? PR_TRUE : PR_FALSE;
 
   return NS_OK;
 }
@@ -1851,11 +1842,11 @@ nsTextServicesDocument::DeleteSelection()
   nsresult result = NS_OK;
 
   // We don't allow deletion during a collapsed selection!
-  nsCOMPtr<nsIEditor> editor (do_QueryReferent(mEditor));
-  NS_ASSERTION(editor, "DeleteSelection called without an editor present!"); 
+
+  NS_ASSERTION(mEditor, "DeleteSelection called without an editor present!"); 
   NS_ASSERTION(SelectionIsValid(), "DeleteSelection called without a valid selection!"); 
 
-  if (!editor || !SelectionIsValid())
+  if (!mEditor || !SelectionIsValid())
     return NS_ERROR_FAILURE;
 
   if (SelectionIsCollapsed())
@@ -2018,7 +2009,7 @@ nsTextServicesDocument::DeleteSelection()
 
   // Now delete the actual content!
 
-  result = editor->DeleteSelection(nsIEditor::ePrevious);
+  result = mEditor->DeleteSelection(nsIEditor::ePrevious);
 
   if (NS_FAILED(result))
   {
@@ -2151,10 +2142,9 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 {
   nsresult result = NS_OK;
 
-  nsCOMPtr<nsIEditor> editor (do_QueryReferent(mEditor));
-  NS_ASSERTION(editor, "InsertText called without an editor present!"); 
+  NS_ASSERTION(mEditor, "InsertText called without an editor present!"); 
 
-  if (!editor || !SelectionIsValid())
+  if (!mEditor || !SelectionIsValid())
     return NS_ERROR_FAILURE;
 
   if (!aText)
@@ -2185,7 +2175,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
   LOCK_DOC(this);
 
-  result = editor->BeginTransaction();
+  result = mEditor->BeginTransaction();
 
   if (NS_FAILED(result))
   {
@@ -2193,13 +2183,13 @@ nsTextServicesDocument::InsertText(const nsString *aText)
     return result;
   }
 
-  nsCOMPtr<nsIPlaintextEditor> textEditor (do_QueryInterface(editor, &result));
+  nsCOMPtr<nsIPlaintextEditor> textEditor (do_QueryInterface(mEditor, &result));
   if (textEditor)
     result = textEditor->InsertText(*aText);
 
   if (NS_FAILED(result))
   {
-    editor->EndTransaction();
+    mEditor->EndTransaction();
     UNLOCK_DOC(this);
     return result;
   }
@@ -2237,7 +2227,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
       if (!itEntry)
       {
-        editor->EndTransaction();
+        mEditor->EndTransaction();
         UNLOCK_DOC(this);
         return NS_ERROR_OUT_OF_MEMORY;
       }
@@ -2247,7 +2237,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
       if (!mOffsetTable.InsertElementAt(itEntry, mSelStartIndex))
       {
-        editor->EndTransaction();
+        mEditor->EndTransaction();
         UNLOCK_DOC(this);
         return NS_ERROR_FAILURE;
       }
@@ -2269,7 +2259,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
       if (!itEntry)
       {
-        editor->EndTransaction();
+        mEditor->EndTransaction();
         UNLOCK_DOC(this);
         return NS_ERROR_FAILURE;
       }
@@ -2290,7 +2280,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
       if (!itEntry)
       {
-        editor->EndTransaction();
+        mEditor->EndTransaction();
         UNLOCK_DOC(this);
         return NS_ERROR_OUT_OF_MEMORY;
       }
@@ -2317,7 +2307,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
     if (NS_FAILED(result))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return result;
     }
@@ -2326,7 +2316,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
         
     if (NS_FAILED(result))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return result;
     }
@@ -2343,7 +2333,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
     if (NS_FAILED(result))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return result;
     }
@@ -2352,7 +2342,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
     if (!itEntry)
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return NS_ERROR_OUT_OF_MEMORY;
     }
@@ -2362,7 +2352,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
     if (!mOffsetTable.InsertElementAt(itEntry, mSelStartIndex + 1))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return NS_ERROR_FAILURE;
     }
@@ -2399,7 +2389,7 @@ nsTextServicesDocument::InsertText(const nsString *aText)
 
     if (NS_FAILED(result))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return result;
     }
@@ -2408,13 +2398,13 @@ nsTextServicesDocument::InsertText(const nsString *aText)
   
     if (NS_FAILED(result))
     {
-      editor->EndTransaction();
+      mEditor->EndTransaction();
       UNLOCK_DOC(this);
       return result;
     }
   }
 
-  result = editor->EndTransaction();
+  result = mEditor->EndTransaction();
 
   UNLOCK_DOC(this);
 
@@ -2495,14 +2485,19 @@ nsTextServicesDocument::InsertNode(nsIDOMNode *aNode,
                                    nsIDOMNode *aParent,
                                    PRInt32 aPosition)
 {
+  //**** KDEBUG ****
+  // printf("** InsertNode: 0x%.8x  0x%.8x  %d\n", aNode, aParent, aPosition);
+  // fflush(stdout);
+  //**** KDEBUG ****
+
+  NS_ASSERTION(0, "InsertNode called, offset tables might be out of sync."); 
+
   return NS_OK;
 }
 
 nsresult
 nsTextServicesDocument::DeleteNode(nsIDOMNode *aChild)
 {
-  NS_ENSURE_TRUE(mIterator, NS_ERROR_FAILURE);
-
   //**** KDEBUG ****
   // printf("** DeleteNode: 0x%.8x\n", aChild);
   // fflush(stdout);
@@ -2559,6 +2554,7 @@ nsTextServicesDocument::DeleteNode(nsIDOMNode *aChild)
 
     if (entry->mNode == aChild)
     {
+      NS_ASSERTION(!entry->mIsValid, "DeleteNode called for a valid node! Offset table is out of sync."); 
       entry->mIsValid = PR_FALSE;
     }
 
@@ -2579,6 +2575,9 @@ nsTextServicesDocument::SplitNode(nsIDOMNode *aExistingRightNode,
   // printf("** SplitNode: 0x%.8x  %d  0x%.8x\n", aExistingRightNode, aOffset, aNewLeftNode);
   // fflush(stdout);
   //**** KDEBUG ****
+
+  NS_ASSERTION(0, "SplitNode called, offset tables might be out of sync."); 
+
   return NS_OK;
 }
 
@@ -2645,6 +2644,8 @@ nsTextServicesDocument::JoinNodes(nsIDOMNode  *aLeftNode,
 
   if (!rightHasEntry)
   {
+    // XXX: Not sure if we should be throwing an error here!
+    NS_ASSERTION(0, "JoinNode called with node not listed in offset table.");
     return NS_ERROR_FAILURE;
   }
 
@@ -2827,7 +2828,10 @@ nsTextServicesDocument::CreateDocumentContentRange(nsIDOMRange **aRange)
   if (!node)
     return NS_ERROR_NULL_POINTER;
 
-  result = CallCreateInstance("@mozilla.org/content/range;1", aRange);
+  result = nsComponentManager::CreateInstance("@mozilla.org/content/range;1", nsnull,
+                                              NS_GET_IID(nsIDOMRange), 
+                                              (void **)aRange);
+
   if (NS_FAILED(result))
     return result;
 
@@ -2914,7 +2918,10 @@ nsTextServicesDocument::CreateDocumentContentRootToNodeOffsetRange(nsIDOMNode *a
     }
   }
 
-  result = CallCreateInstance("@mozilla.org/content/range;1", aRange);
+  result = nsComponentManager::CreateInstance("@mozilla.org/content/range;1", nsnull,
+                                              NS_GET_IID(nsIDOMRange), 
+                                              (void **)aRange);
+
   if (NS_FAILED(result))
     return result;
 
@@ -4035,16 +4042,38 @@ nsTextServicesDocument::ComparePoints(nsIDOMNode* aParent1, PRInt32 aOffset1,
                                       PRInt32 *aResult)
 {
   nsresult result;
-  
-  if (!sRangeHelper) {
-    result = CallGetService("@mozilla.org/content/range-utils;1",
-                            &sRangeHelper);
-    if (!sRangeHelper)
-      return result;
-  }
 
-  *aResult = sRangeHelper->ComparePoints(aParent1, aOffset1,
-                                         aParent2, aOffset2);
+  // Compare two node/offset pairs.
+  //
+  // Return -1 if node1 <  node2
+  // Return  0 if node1 == node2
+  // Return  1 if node1 >  node2 
+
+  *aResult = 0;
+
+  if (aParent1 == aParent2 && aOffset1 == aOffset2)
+    return NS_OK;
+
+  nsCOMPtr<nsIDOMRange> range =
+                  do_CreateInstance("@mozilla.org/content/range;1", &result);
+  if (NS_FAILED(result))
+    return result;
+
+  if (!range)
+    return NS_ERROR_FAILURE;
+
+  result = range->SetStart(aParent1, aOffset1);
+
+  if (NS_FAILED(result))
+    return result;
+
+  result = range->SetEnd(aParent2, aOffset2);
+
+  if (NS_SUCCEEDED(result))
+    *aResult = -1;
+  else
+    *aResult = 1;
+
   return NS_OK;
 }
 
@@ -4092,7 +4121,10 @@ nsTextServicesDocument::CreateRange(nsIDOMNode *aStartParent, PRInt32 aStartOffs
 {
   nsresult result;
 
-  result = CallCreateInstance("@mozilla.org/content/range;1", aRange);
+  result = nsComponentManager::CreateInstance("@mozilla.org/content/range;1", nsnull,
+                                              NS_GET_IID(nsIDOMRange), 
+                                              (void **)aRange);
+
   if (NS_FAILED(result))
     return result;
 
@@ -4689,16 +4721,19 @@ nsTextServicesDocument::FindWordBounds(nsVoidArray *aOffsetTable,
                                  &beginWord, &endWord);
   NS_ENSURE_SUCCESS(result, result);
 
-  // Strip out the NBSPs at the ends
-  while ((beginWord <= endWord) && (IS_NBSP_CHAR(str[beginWord]))) 
+  PRBool hasBeginQuote = PR_FALSE;
+  if (str[beginWord] == '\''){
+    hasBeginQuote = PR_TRUE;
     beginWord++;
-  if (str[endWord] == (unsigned char)0x20)
-  {
+  }
+  if (hasBeginQuote && str[endWord - 1] == '\'') endWord--;
+
+  // Strip out the NBSPs at the ends
+  while ((beginWord <= endWord) && (IS_NBSP_CHAR(str[beginWord]))) beginWord++;
+  if (str[endWord] == (unsigned char)0x20){
     PRUint32 realEndWord = endWord - 1;
-    while ((realEndWord > beginWord) && (IS_NBSP_CHAR(str[realEndWord]))) 
-      realEndWord--;
-    if (realEndWord < endWord - 1) 
-      endWord = realEndWord + 1;
+    while ((realEndWord > beginWord) && (IS_NBSP_CHAR(str[realEndWord]))) realEndWord--;
+    if (realEndWord < endWord - 1) endWord = realEndWord + 1;
   }
 
   // Now that we have the string offsets for the beginning

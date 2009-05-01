@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,6 +40,7 @@
 #include "nsString.h"
 #include "nsClipboard.h"
 #include "nsIRegion.h"
+#include "nsVoidArray.h"
 #include "nsISupportsPrimitives.h"
 #include "nsPrimitiveHelpers.h"
 #include "nsCOMPtr.h"
@@ -49,10 +50,7 @@
 
 NS_IMPL_ADDREF_INHERITED(nsDragService, nsBaseDragService)
 NS_IMPL_RELEASE_INHERITED(nsDragService, nsBaseDragService)
-NS_IMPL_QUERY_INTERFACE3(nsDragService,
-                         nsIDragService,
-                         nsIDragService_1_8_BRANCH,
-                         nsIDragSession)
+NS_IMPL_QUERY_INTERFACE2(nsDragService, nsIDragService, nsIDragSession)
 
 char *nsDragService::mDndEvent = NULL;
 int nsDragService::mDndEventLen;
@@ -147,28 +145,9 @@ nsDragService::InvokeDragSession (nsIDOMNode *aDOMNode,
 #ifdef DEBUG
 	printf( "nsDragService::InvokeDragSession\n" );
 #endif
-  nsresult rv = nsBaseDragService::InvokeDragSession(aDOMNode,
-                                                     aArrayTransferables,
-                                                     aRegion, aActionType);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsBaseDragService::InvokeDragSession (aDOMNode, aArrayTransferables, aRegion, aActionType);
 
-  if(!aArrayTransferables)
-    return NS_ERROR_INVALID_ARG;
-  if(!mDndWidget || !mDndEvent )
-    return NS_ERROR_FAILURE; // Otherwise we seg fault
-
-  extern char* __progname;
-  if (__progname && strcmp(__progname, "kwww") == 0) {
-	//
-	// In kscope we use dragging to scroll, but due to synthesized mouse
-	// events coming in to nsViewManager::SynthesizeMouseMove() from
-	// PresShell::DidDoReflow() we may occasionally end up here when the
-	// user drags quickly and selects a copy/pastable element like a link.
-	// We don't want to do anything in this case, or else we will mess up
-	// a drag scroll in progress.
-	//
-    return NS_ERROR_FAILURE;
-  }
+  if(!aArrayTransferables) return NS_ERROR_INVALID_ARG;
 
 	/*  this will also addref the transferables since we're going to hang onto this beyond the length of this call */
 	mSourceDataItems = aArrayTransferables;
@@ -208,7 +187,7 @@ nsDragService::InvokeDragSession (nsIDOMNode *aDOMNode,
 						const char *FlavourStr = ( const char * ) flavorStr;
 						nsCOMPtr<nsISupports> data;
 						PRUint32 tmpDataLen = 0;
-						rv = currItem->GetTransferData( FlavourStr, getter_AddRefs(data), &tmpDataLen );
+						nsresult rv = currItem->GetTransferData( FlavourStr, getter_AddRefs(data), &tmpDataLen );
 						if( NS_SUCCEEDED( rv ) ) {
 							/* insert FlavourStr, data into the PtTransportCtrl_t */
 							int len = sizeof( PRUint32 ) + sizeof( PRUint32 ) + strlen( FlavourStr ) + 1 + tmpDataLen;
@@ -221,7 +200,7 @@ nsDragService::InvokeDragSession (nsIDOMNode *aDOMNode,
 								d[0] = itemIndex; /* copy itemIndex*/
 								d[1] = tmpDataLen; /* copy PRUint32 tmpDataLen */
 								strcpy( p + sizeof( PRUint32 ) + sizeof( PRUint32 ), FlavourStr ); /* copy flavorStr */
-	
+
 								void *mem_data;
 								nsPrimitiveHelpers::CreateDataFromPrimitive ( FlavourStr, data, &mem_data, tmpDataLen );
 	
@@ -285,7 +264,7 @@ NS_IMETHODIMP nsDragService::GetData (nsITransferable * aTransferable, PRUint32 
 			this_len = ( ( this_len + 3 ) / 4 ) * 4;
 			char *raw_data = flavorStr + strlen( flavorStr ) + 1;
 
-			if( d[0] == aItemIndex && mFlavourStr && !strcmp( mFlavourStr, flavorStr ) ) {
+			if( d[0] == aItemIndex && !strcmp( mFlavourStr, flavorStr ) ) {
 				nsPrimitiveHelpers::CreatePrimitiveForData( flavorStr, raw_data, d[1], getter_AddRefs( genericDataWrapper ) );
 				rv = aTransferable->SetTransferData( flavorStr, genericDataWrapper, d[1] );
 				break;

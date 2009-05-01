@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,33 +23,28 @@
  *   David Hyatt <hyatt@netscape.com> (Original Author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsXBLProtoImpl.h"
 #include "nsIContent.h"
 #include "nsIDocument.h"
-#include "nsContentUtils.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptGlobalObjectOwner.h"
 #include "nsIScriptContext.h"
 #include "nsIXPConnect.h"
 #include "nsIServiceManager.h"
 #include "nsIXBLDocumentInfo.h"
-#include "nsIDOMNode.h"
-#include "nsPIDOMWindow.h"
-
-nsresult NS_DOMClassInfo_PreserveNodeWrapper(nsIXPConnectWrappedNative *aWrapper);
 
 nsresult
 nsXBLProtoImpl::InstallImplementation(nsXBLPrototypeBinding* aBinding, nsIContent* aBoundElement)
@@ -58,36 +53,27 @@ nsXBLProtoImpl::InstallImplementation(nsXBLPrototypeBinding* aBinding, nsIConten
   // this prototype implementation as a guide.  The prototype implementation is compiled lazily,
   // so for the first bound element that needs a concrete implementation, we also build the
   // prototype implementation.
-  if (!mMembers)  // Constructor and destructor also live in mMembers
+  if (!mMembers)
     return NS_OK; // Nothing to do, so let's not waste time.
 
-  // If the way this gets the script context changes, fix
-  // nsXBLProtoImplAnonymousMethod::Execute
-  nsIDocument* document = aBoundElement->GetOwnerDoc();
+  nsIDocument* document = aBoundElement->GetDocument();
   if (!document) return NS_OK;
 
-  nsCOMPtr<nsPIDOMWindow> pwin =
-      do_QueryInterface(document->GetScriptGlobalObject());
-  if (!pwin || pwin->IsOuterWindow()) return NS_OK;
-
-  nsCOMPtr<nsIScriptGlobalObject> global = do_QueryInterface(pwin);
+  nsIScriptGlobalObject *global = document->GetScriptGlobalObject();
   if (!global) return NS_OK;
 
-  nsCOMPtr<nsIScriptContext> context = global->GetContext();
+  nsIScriptContext *context = global->GetContext();
   if (!context) return NS_OK;
 
   // InitTarget objects gives us back the JS object that represents the bound element and the
   // class object in the bound document that represents the concrete version of this implementation.
   // This function also has the side effect of building up the prototype implementation if it has
   // not been built already.
-  nsCOMPtr<nsIXPConnectJSObjectHolder> holder;
+  void * targetScriptObject = nsnull;
   void * targetClassObject = nsnull;
   nsresult rv = InitTargetObjects(aBinding, context, aBoundElement,
-                                  getter_AddRefs(holder), &targetClassObject);
+                                  &targetScriptObject, &targetClassObject);
   NS_ENSURE_SUCCESS(rv, rv); // kick out if we were unable to properly intialize our target objects
-
-  JSObject * targetScriptObject;
-  holder->GetJSObject(&targetScriptObject);
 
   // Walk our member list and install each one in turn.
   for (nsXBLProtoImplMember* curr = mMembers;
@@ -102,12 +88,10 @@ nsresult
 nsXBLProtoImpl::InitTargetObjects(nsXBLPrototypeBinding* aBinding,
                                   nsIScriptContext* aContext, 
                                   nsIContent* aBoundElement, 
-                                  nsIXPConnectJSObjectHolder** aScriptObjectHolder, 
+                                  void** aScriptObject, 
                                   void** aTargetClassObject)
 {
   nsresult rv = NS_OK;
-  *aScriptObjectHolder = nsnull;
-  
   if (!mClassObject) {
     rv = CompilePrototypeMembers(aBinding); // This is the first time we've ever installed this binding on an element.
                                  // We need to go ahead and compile all methods and properties on a class
@@ -119,26 +103,15 @@ nsXBLProtoImpl::InitTargetObjects(nsXBLPrototypeBinding* aBinding,
       return NS_OK; // This can be ok, if all we've got are fields (and no methods/properties).
   }
 
-  nsIDocument *ownerDoc = aBoundElement->GetOwnerDoc();
-  nsCOMPtr<nsPIDOMWindow> pwin;
-  nsCOMPtr<nsIScriptGlobalObject> sgo;
-
-  if (!ownerDoc ||
-      !(pwin = do_QueryInterface(ownerDoc->GetScriptGlobalObject())) ||
-      pwin->IsOuterWindow() ||
-      !(sgo = do_QueryInterface(pwin))) {
-    return NS_ERROR_UNEXPECTED;
-  }
-
   // Because our prototype implementation has a class, we need to build up a corresponding
   // class for the concrete implementation in the bound document.
   JSContext* jscontext = (JSContext*)aContext->GetNativeContext();
-  JSObject* global = sgo->GetGlobalJSObject();
+  JSObject* global = ::JS_GetGlobalObject(jscontext);
   nsCOMPtr<nsIXPConnectJSObjectHolder> wrapper;
-  rv = nsContentUtils::XPConnect()->WrapNative(jscontext, global,
-                                               aBoundElement,
-                                               NS_GET_IID(nsISupports),
-                                               getter_AddRefs(wrapper));
+  nsCOMPtr<nsIXPConnect> xpc(do_GetService(nsIXPConnect::GetCID(), &rv));
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = xpc->WrapNative(jscontext, global, aBoundElement,
+                       NS_GET_IID(nsISupports), getter_AddRefs(wrapper));
   NS_ENSURE_SUCCESS(rv, rv);
   JSObject * object = nsnull;
   rv = wrapper->GetJSObject(&object);
@@ -148,21 +121,18 @@ nsXBLProtoImpl::InitTargetObjects(nsXBLPrototypeBinding* aBinding,
   // concrete base class.  We need to alter the object so that our concrete class is interposed
   // between the object and its base class.  We become the new base class of the object, and the
   // object's old base class becomes the new class' base class.
-  rv = aBinding->InitClass(mClassName, jscontext, global, object,
-                           aTargetClassObject);
+  *aScriptObject = object;
+  rv = aBinding->InitClass(mClassName, aContext, (void *) object, aTargetClassObject);
   if (NS_FAILED(rv))
     return rv;
 
   // Root ourselves in the document.
-  nsIDocument* doc = aBoundElement->GetOwnerDoc();
+  nsIDocument* doc = aBoundElement->GetDocument();
   if (doc) {
     nsCOMPtr<nsIXPConnectWrappedNative> nativeWrapper(do_QueryInterface(wrapper));
-    if (nativeWrapper) {
-      NS_DOMClassInfo_PreserveNodeWrapper(nativeWrapper);
-    }
+    if (nativeWrapper)
+      doc->AddReference(aBoundElement, nativeWrapper);
   }
-
-  wrapper.swap(*aScriptObjectHolder);
   
   return rv;
 }
@@ -175,18 +145,14 @@ nsXBLProtoImpl::CompilePrototypeMembers(nsXBLPrototypeBinding* aBinding)
   // context.
   nsCOMPtr<nsIScriptGlobalObjectOwner> globalOwner(
       do_QueryInterface(aBinding->XBLDocumentInfo()));
-  nsIScriptGlobalObject* globalObject = globalOwner->GetScriptGlobalObject();
-  NS_ENSURE_TRUE(globalObject, NS_ERROR_UNEXPECTED);
+  nsCOMPtr<nsIScriptGlobalObject> globalObject;
+  globalOwner->GetScriptGlobalObject(getter_AddRefs(globalObject));
 
   nsIScriptContext *context = globalObject->GetContext();
-  NS_ENSURE_TRUE(context, NS_ERROR_OUT_OF_MEMORY);
-  JSObject *global = globalObject->GetGlobalJSObject();
 
   void* classObject;
-  nsresult rv = aBinding->InitClass(mClassName,
-                                    (JSContext *)context->GetNativeContext(),
-                                    global, global,
-                                    &classObject);
+  JSObject* scopeObject = globalObject->GetGlobalJSObject();
+  nsresult rv = aBinding->InitClass(mClassName, context, scopeObject, &classObject);
   if (NS_FAILED(rv))
     return rv;
 
@@ -219,12 +185,6 @@ nsXBLProtoImpl::DestroyMembers(nsXBLProtoImplMember* aBrokenMember)
     }
     curr->Destroy(compiled);
   }
-
-  // Now clear out mMembers so we don't try to call Destroy() on them again
-  delete mMembers;
-  mMembers = nsnull;
-  mConstructor = nsnull;
-  mDestructor = nsnull;
 }
 
 nsresult

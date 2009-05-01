@@ -50,7 +50,7 @@ function SelectListItem(listRef, itemValue)
 
     if (itemValue) {
       var elements = listRef.getElementsByAttribute("value", itemValue);
-      selectedItem = elements.item(0);
+      selectedItem = elements.length ? elements[0] : null;
     }
 
     if (selectedItem)

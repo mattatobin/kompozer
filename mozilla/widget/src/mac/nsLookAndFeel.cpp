@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -41,11 +41,6 @@
 #include "nsIServiceManager.h"
 #include "nsSize.h"
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_3
-// This theme brush is available in 10.2 and later, but was not
-// formally documented in the SDK until 10.3.
-#define kThemeBrushAlternatePrimaryHighlightColor -5
-#endif
  
 //-------------------------------------------------------------------------
 //
@@ -119,7 +114,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
         break;
     case eColor_highlight: // CSS2 color
     case eColor_TextSelectBackground:
-    case eColor__moz_menuhover:
         // XXX can probably just always use GetMacBrushColor here
 #ifdef MOZ_WIDGET_COCOA
         res = GetMacBrushColor(kThemeBrushPrimaryHighlightColor, aColor, NS_RGB(0x00,0x00,0x00));
@@ -138,7 +132,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
         break;
     case eColor_highlighttext:  // CSS2 color
     case eColor_TextSelectForeground:
-    case eColor__moz_menuhovertext:
     		GetColor(eColor_TextSelectBackground, aColor);
     		if (aColor == 0x000000)
 					aColor = NS_RGB(0xff,0xff,0xff);
@@ -159,7 +152,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
     //
     
     case eColor_buttontext:
-    case eColor__moz_buttonhovertext:
     	res = GetMacTextColor(kThemeTextColorPushButtonActive, aColor, NS_RGB(0x00,0x00,0x00));
 	    break;
     case eColor_captiontext:
@@ -202,7 +194,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
         res = NS_OK;
         break;
     case eColor_buttonface:
-    case eColor__moz_buttonhoverface:
     	res = GetMacBrushColor(kThemeBrushButtonFaceActive, aColor, NS_RGB(0xDD,0xDD,0xDD));
 	    break;
     case eColor_buttonhighlight:
@@ -278,14 +269,12 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
         res = GetMacTextColor(kThemeTextColorDialogActive, aColor, NS_RGB(0x00,0x00,0x00));
         break;
     case eColor__moz_dialog:
-    case eColor__moz_cellhighlight:
         // XXX There may be a better color for this, but I'm making it
         // the same as ThreeDFace since that's what's currently used where
         // I will use -moz-Dialog:
         res = GetMacBrushColor(kThemeBrushButtonFaceActive, aColor, NS_RGB(0xDD,0xDD,0xDD));
         break;
     case eColor__moz_dialogtext:
-    case eColor__moz_cellhighlighttext:
         // XXX There may be a better color for this, but I'm making it
         // the same as WindowText since that's what's currently used where
         // I will use -moz-DialogText.
@@ -302,9 +291,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
 	case eColor__moz_mac_menushadow:
 		res = GetMacBrushColor(kThemeBrushBevelActiveDark, aColor, NS_RGB(0x88,0x88,0x88));
 	    break;	        
-	case eColor__moz_mac_menutextdisable:
-		res = GetMacTextColor(kThemeTextColorMenuItemDisabled, aColor, NS_RGB(0x99,0x99,0x99));
-	    break;	    
 	case eColor__moz_mac_menutextselect:
 		//default to white, which is what Platinum uses, if not available		
 		res = GetMacTextColor(kThemeTextColorMenuItemSelected, aColor, NS_RGB(0xFF,0xFF,0xFF));
@@ -340,17 +326,6 @@ nsresult nsLookAndFeel::NativeGetColor(const nsColorID aID, nscolor &aColor)
 	    break;
     case eColor__moz_buttondefault:
         res = GetMacBrushColor(kThemeBrushButtonActiveDarkShadow, aColor, NS_RGB(0x77,0x77,0x77));
-        break;
-    case eColor__moz_mac_alternateprimaryhighlight:
-        // For proper styling of lists when active, on 10.2+
-        // On older OSs may have to fall back to primary highlight color
-        nscolor fallbackColor;
-        GetMacBrushColor(kThemeBrushPrimaryHighlightColor, fallbackColor, NS_RGB(0x00,0x00,0x00));
-        res = GetMacBrushColor(kThemeBrushAlternatePrimaryHighlightColor, aColor, fallbackColor);
-        break;
-    case eColor__moz_mac_secondaryhighlight:
-    	// For inactive list selection
-        res = GetMacBrushColor(kThemeBrushSecondaryHighlightColor, aColor, NS_RGB(0x00,0x00,0x00));
         break;
     default:
         NS_WARNING("Someone asked nsILookAndFeel for a color I don't know about");
@@ -503,7 +478,8 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_CaretBlinkTime:
         aMetric = ::GetCaretTime() * 1000 / 60;
         break;
-    case eMetric_CaretWidth:
+    case eMetric_SingleLineCaretWidth:
+    case eMetric_MultiLineCaretWidth:
         aMetric = 1;
         break;
     case eMetric_ShowCaretDuringSelection:
@@ -520,9 +496,6 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_MenusCanOverlapOSBar:
         // xul popups are not allowed to overlap the menubar.
         aMetric = 0;
-        break;
-    case eMetric_SkipNavigatingDisabledMenuItem:
-        aMetric = 1;
         break;
     case eMetric_DragFullWindow:
         aMetric = 1;
@@ -556,28 +529,7 @@ NS_IMETHODIMP nsLookAndFeel::GetMetric(const nsMetricID aID, PRInt32 & aMetric)
     case eMetric_TreeScrollLinesMax:
         aMetric = 3;
         break;
-    case eMetric_TabFocusModel:
-        {
-          // we should probably cache this
-          CFPropertyListRef fullKeyboardAccessProperty;
-          fullKeyboardAccessProperty = ::CFPreferencesCopyValue(CFSTR("AppleKeyboardUIMode"),
-                                                                 kCFPreferencesAnyApplication,
-                                                                 kCFPreferencesCurrentUser,
-                                                                 kCFPreferencesAnyHost);
-          aMetric = 1;    // default to just textboxes
-          if (fullKeyboardAccessProperty)
-          {
-            PRInt32 fullKeyboardAccessPrefVal;
-            if (::CFNumberGetValue((CFNumberRef) fullKeyboardAccessProperty, kCFNumberIntType, &fullKeyboardAccessPrefVal))
-            {
-              // the second bit means  "Full keyboard access" is on
-              if (fullKeyboardAccessPrefVal & (1 << 1))
-                aMetric = 7; // everything that can be focused
-            }
-            ::CFRelease(fullKeyboardAccessProperty);
-          }
-        }
-        break;
+
     default:
         aMetric = 0;
         res = NS_ERROR_FAILURE;

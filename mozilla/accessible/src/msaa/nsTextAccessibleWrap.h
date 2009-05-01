@@ -45,7 +45,7 @@
 #include "nsRect.h"
 
 class nsIFrame;
-class nsPresContext;
+class nsIPresContext;
 class nsIRenderingContext;
 
 class nsTextAccessibleWrap : public nsTextAccessible, 
@@ -83,18 +83,15 @@ class nsTextAccessibleWrap : public nsTextAccessible,
         /* [in] */ unsigned int startIndex,
         /* [in] */ unsigned int endIndex);
 
-    virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_fontFamily( 
-        /* [retval][out] */ BSTR __RPC_FAR *fontFamily);
-    
   protected:
     nsresult GetCharacterExtents(PRInt32 aStartOffset, PRInt32 aEndOffset,
                                  PRInt32* aX, PRInt32* aY, 
                                  PRInt32* aWidth, PRInt32* aHeight);
 
     // Return child frame containing offset on success
-    nsIFrame* GetPointFromOffset(nsIFrame *aContainingFrame, nsPresContext *aPresContext,
+    nsIFrame* GetPointFromOffset(nsIFrame *aContainingFrame, nsIPresContext *aPresContext,
                                  nsIRenderingContext *aRenderingContext,
-                                 PRInt32 aOffset, PRBool aPreferNext, nsPoint& aOutPoint);
+                                 PRInt32 aOffset, nsPoint& aOutPoint);
 };
 
 #endif

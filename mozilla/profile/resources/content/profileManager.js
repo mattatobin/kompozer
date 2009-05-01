@@ -1,46 +1,30 @@
 /* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is Mozilla Communicator client code, released
  * March 31, 1998.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 1998-1999 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
  *   Ben Goodger <ben@netscape.com>
  *   Brant Gurganus <brantgurganus2001@cherokeescouting.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 //NOTE: This script expects gBrandBundle and gProfileManagerBundle to be
-//      instantiated elsewhere (currently from StartUp in profileSelection.js)
+//      instanciated elsewhere (currently from StartUp in profileSelection.js)
 
 var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"].getService(Components.interfaces.nsIPromptService);
 var profileManagerMode = "selection";
@@ -56,10 +40,13 @@ function CreateProfileWizard()
 // update the display to show the additional profile
 function CreateProfile( aProfName, aProfDir )
 {
-  AddItem(aProfName, "yes");
+  var profile = new Profile( aProfName, "yes" );
+  var item = AddItem( "profiles", profile );
   var profileList = document.getElementById( "profiles" );
-  profileList.view.selection.select(profileList.view.rowCount - 1);
-  profileList.treeBoxObject.ensureRowIsVisible(profileList.currentIndex);
+  if( item ) {
+    profileList.ensureElementIsVisible( item );
+    profileList.selectItem( item );
+  }
 }
 
 // rename the selected profile
@@ -70,9 +57,8 @@ function RenameProfile()
   if (renameButton.getAttribute("disabled") == "true" )
     return false;
   var profileList = document.getElementById( "profiles" );
-  var selected = profileList.view.getItemAtIndex(profileList.currentIndex);
+  var selected = profileList.selectedItems[0];
   var profilename = selected.getAttribute("profile_name");
-  var errorMessage = null;
   if( selected.getAttribute("rowMigrate") == "no" ) {
     // migrate if the user wants to
     lString = gProfileManagerBundle.getString("migratebeforerename");
@@ -85,7 +71,7 @@ function RenameProfile()
         profileDir = profileDir.QueryInterface( Components.interfaces.nsIFile );
         if (profileDir) {
           if (!profileDir.exists()) {
-            errorMessage = gProfileManagerBundle.getString("sourceProfileDirMissing");
+            var errorMessage = gProfileManagerBundle.getString("sourceProfileDirMissing");
             var profileDirMissingTitle = gProfileManagerBundle.getString("sourceProfileDirMissingTitle");
             promptService.alert(window, profileDirMissingTitle, errorMessage);
             return false;
@@ -98,7 +84,7 @@ function RenameProfile()
       return false;
   }
   else {
-    oldName = selected.getAttribute("profile_name");
+    oldName = selected.getAttribute("rowName");
     newName = {value:oldName};
     var dialogTitle = gProfileManagerBundle.getString("renameprofiletitle");
     var msg = gProfileManagerBundle.getString("renameProfilePrompt");
@@ -112,7 +98,7 @@ function RenameProfile()
         if (newName == oldName)
           return false;
 
-        errorMessage = checkProfileName(newName);
+        var errorMessage = checkProfileName(newName);
         if (errorMessage) {
           var profileNameInvalidTitle = gProfileManagerBundle.getString("profileNameInvalidTitle");
           promptService.alert(window, profileNameInvalidTitle, errorMessage);
@@ -122,7 +108,8 @@ function RenameProfile()
         var migrate = selected.getAttribute("rowMigrate");
         try {
           profile.renameProfile(oldName, newName);
-          selected.firstChild.firstChild.setAttribute( "label", newName );
+          selected.setAttribute( "label", newName );
+          selected.setAttribute( "rowName", newName );
           selected.setAttribute( "profile_name", newName );
         }
         catch(e) {
@@ -148,8 +135,8 @@ function ConfirmDelete()
     return;
   var profileList = document.getElementById( "profiles" );
 
-  var selected = profileList.view.getItemAtIndex(profileList.currentIndex);
-  var name = selected.getAttribute("profile_name");
+  var selected = profileList.selectedItems[0];
+  var name = selected.getAttribute("rowName");
   
   var dialogTitle = gProfileManagerBundle.getString("deletetitle");
   var dialogText;
@@ -193,29 +180,25 @@ function ConfirmDelete()
 }
 
 // Delete the profile, with the delete flag set as per instruction above.
-function DeleteProfile(deleteFiles)
+function DeleteProfile( deleteFiles )
 {
-  var profileList = document.getElementById("profiles");
-  if (profileList.view.selection.count) {
-    var selected = profileList.view.getItemAtIndex(profileList.currentIndex);
-    var name = selected.getAttribute("profile_name");
-    var previous = profileList.currentIndex - 1;
-
+  var profileList = document.getElementById( "profiles" );
+  if (profileList.selectedItems && profileList.selectedItems.length) {
+    var selected = profileList.selectedItems[0];
+    var firstAdjacent = selected.previousSibling;
+    var name = selected.getAttribute( "rowName" );
     try {
-      profile.deleteProfile(name, deleteFiles);
-      profileList.lastChild.removeChild(selected);
-
-      if (previous) {
-        profileList.view.selection.select(previous);
-        profileList.treeBoxObject.ensureRowIsVisible(previous);
-      }
-
-      // set the button state
-      DoEnabling();
+      profile.deleteProfile( name, deleteFiles );
+      profileList.removeChild( selected );
     }
     catch (ex) {
-      dump("Exception during profile deletion.\n");
     }
+    if( firstAdjacent ) {
+      profileList.ensureElementIsVisible( firstAdjacent );
+      profileList.selectItem( firstAdjacent );
+    }
+    // set the button state
+    DoEnabling();
   }
 }
 
@@ -246,11 +229,9 @@ function SwitchProfileManagerMode()
       captionLine = "Manage Profiles *";
     }
     
-    var profileList = document.getElementById("profiles");
-    profileList.focus();
-
-    // hide the manage profiles button...
-    document.documentElement.getButton("extra2").hidden = true;
+    var manage = document.getElementById( "manage" );       // hide the manage profiles button...
+    var manageParent = manage.parentNode;
+    manageParent.removeChild( manage );
     profileManagerMode = "manager";                         // swap the mode
   } 
   else {
@@ -277,19 +258,20 @@ function SwitchProfileManagerMode()
 function ChangeCaption( aCaption )
 {
   var caption = document.getElementById( "header" );
-  caption.setAttribute( "description", aCaption );
-  document.title = aCaption;
+  caption.setAttribute( "value", aCaption );
+  window.title = aCaption;
 }
 
-// do button enabling based on tree selection
+// do button enabling based on listbox selection
 function DoEnabling()
 {
   var renbutton = document.getElementById( "renbutton" );
   var delbutton = document.getElementById( "delbutton" );
-  var start     = document.documentElement.getButton( "accept" );
+  var start     = document.getElementById( "ok" );
   
   var profileList = document.getElementById( "profiles" );
-  if (profileList.view.selection.count == 0)
+  var items = profileList.selectedItems;
+  if( items.length != 1 )
   {
     renbutton.setAttribute( "disabled", "true" );
     delbutton.setAttribute( "disabled", "true" );
@@ -303,7 +285,7 @@ function DoEnabling()
     
     var canDelete = true;
     if (!gStartupMode) {  
-      var selected = profileList.view.getItemAtIndex(profileList.currentIndex);
+      var selected = profileList.selectedItems[0];
       var profileName = selected.getAttribute("profile_name");
       var currentProfile = profile.currentProfile;
       if (currentProfile && (profileName == currentProfile))
@@ -319,7 +301,7 @@ function DoEnabling()
   }
 }
 
-// handle key event on tree
+// handle key event on listboxes
 function HandleKeyEvent( aEvent )
 {
   switch( aEvent.keyCode ) 
@@ -329,7 +311,7 @@ function HandleKeyEvent( aEvent )
       return;
     ConfirmDelete();
     break;
-  case KeyEvent.DOM_VK_F2:
+  case "VK_F2":
     if( profileManagerMode != "manager" )
       return;
     RenameProfile();
@@ -339,7 +321,7 @@ function HandleKeyEvent( aEvent )
 
 function HandleClickEvent( aEvent )
 {
-  if (aEvent.button == 0 && aEvent.target.parentNode.view.selection.count) {
+  if( aEvent.detail == 2 && aEvent.button == 0 && aEvent.target.localName == "listitem") {
     if (!onStart())
       return false;
     window.close();

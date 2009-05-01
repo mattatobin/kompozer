@@ -66,14 +66,3 @@
 .down:hover, .down:active {
   list-style-image: url("chrome://global/skin/arrow/arrow-dn-hov.gif");
 }
-
-spinbuttons image {
-  border: solid thin black;
-  padding: 2px;
-  -moz-border-radius: 3px;
-}
-
-spinbuttons image:hover:active {
-  background-color: #90A1B3;
-  color: #FFFFFF;
-}

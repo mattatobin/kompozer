@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: tdcache.c,v $ $Revision: 1.42.2.3 $ $Date: 2007/11/21 18:22:11 $";
+static const char CVS_ID[] = "@(#) $RCSfile: tdcache.c,v $ $Revision: 1.38 $ $Date: 2003/12/19 22:33:12 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 #ifndef PKIM_H
@@ -62,9 +59,11 @@ static const char CVS_ID[] = "@(#) $RCSfile: tdcache.c,v $ $Revision: 1.42.2.3 $
 #include "base.h"
 #endif /* BASE_H */
 
+#ifdef NSS_3_4_CODE
 #include "cert.h"
 #include "dev.h"
 #include "pki3hack.h"
+#endif
 
 #ifdef DEBUG_CACHE
 static PRLogModuleInfo *s_log = NULL;
@@ -146,6 +145,20 @@ new_cache_entry(NSSArena *arena, void *value, PRBool ownArena)
 	ce->nickname = NULL;
     }
     return ce;
+}
+
+/* sort the subject list from newest to oldest */
+static PRIntn subject_list_sort(void *v1, void *v2)
+{
+    NSSCertificate *c1 = (NSSCertificate *)v1;
+    NSSCertificate *c2 = (NSSCertificate *)v2;
+    nssDecodedCert *dc1 = nssCertificate_GetDecoding(c1);
+    nssDecodedCert *dc2 = nssCertificate_GetDecoding(c2);
+    if (dc1->isNewerThan(dc1, dc2)) {
+	return -1;
+    } else {
+	return 1;
+    }
 }
 
 /* this should not be exposed in a header, but is here to keep the above
@@ -427,7 +440,7 @@ remove_token_certs(const void *k, void *v, void *a)
     nssPKIObject *object = &c->object;
     struct token_cert_dtor *dtor = a;
     PRUint32 i;
-    nssPKIObject_Lock(object);
+    PZ_Lock(object->lock);
     for (i=0; i<object->numInstances; i++) {
 	if (object->instances[i]->token == dtor->token) {
 	    nssCryptokiObject_Destroy(object->instances[i]);
@@ -444,7 +457,7 @@ remove_token_certs(const void *k, void *v, void *a)
 	    break;
 	}
     }
-    nssPKIObject_Unlock(object);
+    PZ_Unlock(object->lock);
     return;
 }
 
@@ -580,7 +593,7 @@ add_subject_entry (
 	if (nickname) {
 	    ce->nickname = nssUTF8_Duplicate(nickname, arena);
 	}
-	nssList_SetSortFunction(list, nssCertificate_SubjectListSort);
+	nssList_SetSortFunction(list, subject_list_sort);
 	/* Add the cert entry to this list of subjects */
 	nssrv = nssList_AddUnique(list, cert);
 	if (nssrv != PR_SUCCESS) {
@@ -1071,6 +1084,7 @@ nssTrustDomain_GetCertForIssuerAndSNFromCache (
     return rvCert;
 }
 
+#ifdef NSS_3_4_CODE
 static PRStatus
 issuer_and_serial_from_encoding (
   NSSBER *encoding, 
@@ -1096,6 +1110,7 @@ issuer_and_serial_from_encoding (
     serial->size = derSerial.len;
     return PR_SUCCESS;
 }
+#endif
 
 /*
  * Look for a specific cert in the cache
@@ -1109,7 +1124,9 @@ nssTrustDomain_GetCertByDERFromCache (
     PRStatus nssrv = PR_FAILURE;
     NSSDER issuer, serial;
     NSSCertificate *rvCert;
+#ifdef NSS_3_4_CODE
     nssrv = issuer_and_serial_from_encoding(der, &issuer, &serial);
+#endif
     if (nssrv != PR_SUCCESS) {
 	return NULL;
     }
@@ -1118,8 +1135,10 @@ nssTrustDomain_GetCertByDERFromCache (
 #endif
     rvCert = nssTrustDomain_GetCertForIssuerAndSNFromCache(td, 
                                                            &issuer, &serial);
+#ifdef NSS_3_4_CODE
     PORT_Free(issuer.data);
     PORT_Free(serial.data);
+#endif
     return rvCert;
 }
 
@@ -1142,9 +1161,6 @@ nssTrustDomain_GetCertsFromCache (
 	certList = certListOpt;
     } else {
 	certList = nssList_Create(NULL, PR_FALSE);
-	if (!certList) {
-	    return NULL;
-	}
     }
     PZ_Lock(td->cache->lock);
     nssHash_Iterate(td->cache->issuerAndSN, cert_iter, (void *)certList);

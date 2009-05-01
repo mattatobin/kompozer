@@ -125,7 +125,7 @@ function onAccept()
       editor.setShouldTxnSetSelection(false);
 
       while (labelElement.firstChild)
-        editor.deleteNode(labelElement.firstChild);
+        editor.deleteNodeSafe(labelElement.firstChild);
       if (gDialog.labelText.value)
         editor.insertNode(editor.document.createTextNode(gDialog.labelText.value), labelElement, 0);
 

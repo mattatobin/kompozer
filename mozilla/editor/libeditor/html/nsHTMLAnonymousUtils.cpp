@@ -41,7 +41,6 @@
 #include "nsIDocument.h"
 #include "nsIEditor.h"
 #include "nsIPresShell.h"
-#include "nsPresContext.h"
 
 #include "nsISelection.h"
 
@@ -52,7 +51,6 @@
 
 #include "nsIDOMHTMLElement.h"
 #include "nsIDOMNSHTMLElement.h"
-#include "nsIDOMEventTarget.h"
 
 #include "nsIDOMCSSValue.h"
 #include "nsIDOMCSSPrimitiveValue.h"
@@ -89,11 +87,11 @@ static PRInt32 GetCSSFloatValue(nsIDOMCSSStyleDeclaration * aDecl,
       // numeric values
       nsAutoString str;
       res = val->GetStringValue(str);
-      if (str.EqualsLiteral("thin"))
+      if (str.Equals(NS_LITERAL_STRING("thin")))
         f = 1;
-      if (str.EqualsLiteral("medium"))
+      if (str.Equals(NS_LITERAL_STRING("medium")))
         f = 3;
-      if (str.EqualsLiteral("thick"))
+      if (str.Equals(NS_LITERAL_STRING("thick")))
         f = 5;
       break;
     }
@@ -155,12 +153,9 @@ nsHTMLEditor::CreateAnonymousElement(const nsAString & aTag, nsIDOMNode *  aPare
 
   // establish parenthood of the element
   newContent->SetNativeAnonymous(PR_TRUE);
-  res = newContent->BindToTree(doc, parentContent, newContent, PR_TRUE);
-  if (NS_FAILED(res)) {
-    newContent->UnbindFromTree();
-    return res;
-  }
-  
+  newContent->SetParent(parentContent);
+  newContent->SetDocument(doc, PR_TRUE, PR_TRUE);
+  newContent->SetBindingParent(newContent);
   // display the element
   ps->RecreateFramesFor(newContent);
 
@@ -169,27 +164,11 @@ nsHTMLEditor::CreateAnonymousElement(const nsAString & aTag, nsIDOMNode *  aPare
   return NS_OK;
 }
 
-// Removes event listener and calls DeleteRefToAnonymousNode.
-void
-nsHTMLEditor::RemoveListenerAndDeleteRef(const nsAString& aEvent,
-                                         nsIDOMEventListener* aListener,
-                                         PRBool aUseCapture,
-                                         nsIDOMElement* aElement,
-                                         nsIContent * aParentContent,
-                                         nsIPresShell* aShell)
-{
-  nsCOMPtr<nsIDOMEventTarget> evtTarget(do_QueryInterface(aElement));
-  if (evtTarget) {
-    evtTarget->RemoveEventListener(aEvent, aListener, aUseCapture);
-  }
-  DeleteRefToAnonymousNode(aElement, aParentContent, aShell);
-}
-
 // Deletes all references to an anonymous element
 void
 nsHTMLEditor::DeleteRefToAnonymousNode(nsIDOMElement* aElement,
-                                       nsIContent* aParentContent,
-                                       nsIPresShell* aShell)
+                                       nsIContent * aParentContent,
+                                       nsIDocumentObserver * aDocObserver)
 {
   // call ContentRemoved() for the anonymous content
   // node so its references get removed from the frame manager's
@@ -198,18 +177,10 @@ nsHTMLEditor::DeleteRefToAnonymousNode(nsIDOMElement* aElement,
   if (aElement) {
     nsCOMPtr<nsIContent> content = do_QueryInterface(aElement);
     if (content) {
-      // Need to check whether aShell has been destroyed (but not yet deleted).
-      // In that case presContext->GetPresShell() returns nsnull.
-      // See bug 338129.
-      if (aShell && aShell->GetPresContext() &&
-          aShell->GetPresContext()->GetPresShell() == aShell) {
-        nsCOMPtr<nsIDocumentObserver> docObserver = do_QueryInterface(aShell);
-        if (docObserver) {
-          docObserver->ContentRemoved(content->GetCurrentDoc(),
-                                      aParentContent, content, -1);
-        }
-      }
-      content->UnbindFromTree();
+      aDocObserver->ContentRemoved(nsnull, aParentContent, content, -1);
+      content->SetParent(nsnull);
+      content->SetBindingParent(nsnull);
+      content->SetDocument(nsnull, PR_TRUE, PR_TRUE);
     }
   }
 }  
@@ -222,6 +193,13 @@ NS_IMETHODIMP
 nsHTMLEditor::CheckSelectionStateForAnonymousButtons(nsISelection * aSelection)
 {
   NS_ENSURE_ARG_POINTER(aSelection);
+
+  if (!mIsInlineTableEditingEnabled && mInlineEditedCell)
+    HideInlineTableEditingUI();
+  if (!mIsAbsolutelyPositioningEnabled && mAbsolutelyPositionedObject)
+    HideGrabber();
+  if (!mIsObjectResizingEnabled && mResizedObject)
+    HideResizers();
 
   // early way out if all contextual UI extensions are disabled
   if (!mIsObjectResizingEnabled &&
@@ -362,7 +340,7 @@ nsHTMLEditor::GetPositionAndDimensions(nsIDOMElement * aElement,
     nsAutoString positionStr;
     mHTMLCSSUtils->GetComputedProperty(aElement, nsEditProperty::cssPosition,
                                        positionStr);
-    isPositioned = positionStr.EqualsLiteral("absolute");
+    isPositioned = positionStr.Equals(NS_LITERAL_STRING("absolute"));
   }
 
   if (isPositioned) {
@@ -405,7 +383,7 @@ nsHTMLEditor::GetPositionAndDimensions(nsIDOMElement * aElement,
     aBorderLeft = 0;
     aBorderTop  = 0;
     aMarginLeft = 0;
-    aMarginTop = 0;
+    aMarginTop  = 0;
   }
   return res;
 }

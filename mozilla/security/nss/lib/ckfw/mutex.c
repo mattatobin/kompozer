@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: mutex.c,v $ $Revision: 1.7 $ $Date: 2005/08/25 20:08:26 $";
+static const char CVS_ID[] = "@(#) $RCSfile: mutex.c,v $ $Revision: 1.2.132.1 $ $Date: 2004/10/15 21:13:51 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 /*
@@ -67,7 +64,11 @@ static const char CVS_ID[] = "@(#) $RCSfile: mutex.c,v $ $Revision: 1.7 $ $Date:
  */
 
 struct NSSCKFWMutexStr {
-  PRLock *lock;
+  CK_VOID_PTR etc;
+
+  CK_DESTROYMUTEX Destroy;
+  CK_LOCKMUTEX Lock;
+  CK_UNLOCKMUTEX Unlock;
 };
 
 #ifdef DEBUG
@@ -140,13 +141,23 @@ nssCKFWMutex_Create
     *pError = CKR_HOST_MEMORY;
     return (NSSCKFWMutex *)NULL;
   }
-  *pError = CKR_OK;
-  mutex->lock = NULL;
-  if (LockingState == MultiThreaded) {
-    mutex->lock = PR_NewLock();
-    if (!mutex->lock) {
-      *pError = CKR_HOST_MEMORY; /* we couldn't get the resource */
-    }
+
+  switch (LockingState)
+  {
+      default:
+      case SingleThreaded:
+          *pError = CKR_OK;
+          mutex->Destroy = (CK_DESTROYMUTEX)mutex_noop;
+          mutex->Lock    = (CK_LOCKMUTEX   )mutex_noop;
+          mutex->Unlock  = (CK_UNLOCKMUTEX )mutex_noop;
+          break;
+
+      case MultiThreaded:
+          *pError = pInitArgs->CreateMutex(&mutex->etc);
+          mutex->Destroy = pInitArgs->DestroyMutex;
+          mutex->Lock    = pInitArgs->LockMutex;
+          mutex->Unlock  = pInitArgs->UnlockMutex;
+          break;
   }
     
   if( CKR_OK != *pError ) {
@@ -157,9 +168,6 @@ nssCKFWMutex_Create
 #ifdef DEBUG
   *pError = mutex_add_pointer(mutex);
   if( CKR_OK != *pError ) {
-    if (mutex->lock) {
-      PR_DestroyLock(mutex->lock);
-    }
     (void)nss_ZFreeIf(mutex);
     return (NSSCKFWMutex *)NULL;
   }
@@ -186,10 +194,8 @@ nssCKFWMutex_Destroy
     return rv;
   }
 #endif /* NSSDEBUG */
- 
-  if (mutex->lock) {
-    PR_DestroyLock(mutex->lock);
-  } 
+  
+  rv = mutex->Destroy(mutex->etc);
 
 #ifdef DEBUG
   (void)mutex_remove_pointer(mutex);
@@ -215,11 +221,8 @@ nssCKFWMutex_Lock
     return rv;
   }
 #endif /* NSSDEBUG */
-  if (mutex->lock) {
-    PR_Lock(mutex->lock);
-  }
   
-  return CKR_OK;
+  return mutex->Lock(mutex->etc);
 }
 
 /*
@@ -232,24 +235,14 @@ nssCKFWMutex_Unlock
   NSSCKFWMutex *mutex
 )
 {
-  PRStatus nrv;
 #ifdef NSSDEBUG
   CK_RV rv = nssCKFWMutex_verifyPointer(mutex);
-
   if( CKR_OK != rv ) {
     return rv;
   }
 #endif /* NSSDEBUG */
 
-  if (!mutex->lock) 
-    return CKR_OK;
-
-  nrv =  PR_Unlock(mutex->lock);
-
-  /* if unlock fails, either we have a programming error, or we have
-   * some sort of hardware failure... in either case return CKR_DEVICE_ERROR.
-   */
-  return nrv == PR_SUCCESS ? CKR_OK : CKR_DEVICE_ERROR;
+  return mutex->Unlock(mutex->etc);
 }
 
 /*

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,15 +45,23 @@
 #include "nsGfxUtils.h"
 #include "nsFontUtils.h"
 
+#define BAD_FONT_NUM	-1
+
 
 nsFontMetricsMac :: nsFontMetricsMac()
 {
+  mFont = nsnull;
   mFontNum = BAD_FONT_NUM;
   mFontMapping = nsnull;
 }
   
 nsFontMetricsMac :: ~nsFontMetricsMac()
 {
+  if (nsnull != mFont)
+  {
+    delete mFont;
+    mFont = nsnull;
+  }
   if (mContext) {
     // Notify our device context that owns us so that it can update its font cache
     mContext->FontMetricsDeleted(this);
@@ -72,7 +81,7 @@ NS_IMETHODIMP nsFontMetricsMac::Init(const nsFont& aFont, nsIAtom* aLangGroup, n
 {
   NS_ASSERTION(!(nsnull == aCX), "attempt to init fontmetrics with null device context");
 
-  mFont = aFont;
+  mFont = new nsFont(aFont);
   mLangGroup = aLangGroup;
   mContext = aCX;
   RealizeFont();
@@ -93,16 +102,11 @@ NS_IMETHODIMP nsFontMetricsMac::Init(const nsFont& aFont, nsIAtom* aLangGroup, n
   mEmDescent  = NSToCoordRound(float(fInfo.descent) * dev2app);
   mEmHeight   = mEmAscent + mEmDescent;
 
-  mMaxHeight  = mEmHeight;
+	mMaxHeight  = mEmHeight + mLeading;
   mMaxAscent  = mEmAscent;
   mMaxDescent = mEmDescent;
 
-  float maxCharWidth = float(::CharWidth('M'));	// don't use fInfo.widMax here
-  mMaxAdvance = NSToCoordRound(maxCharWidth * dev2app);
-  // If we try to measure draw more than ~32767 pixels
-  // in one operation, the string may not be drawn:
-  mMaxStringLength = PR_MAX(1, (PRInt32)floor(32767.0 / maxCharWidth));
-
+  mMaxAdvance = NSToCoordRound(float(::CharWidth('M')) * dev2app);	// don't use fInfo.widMax here
   mAveCharWidth = NSToCoordRound(float(::CharWidth('x')) * dev2app);	
   mSpaceWidth = NSToCoordRound(float(::CharWidth(' ')) * dev2app);
 
@@ -129,10 +133,10 @@ nsUnicodeFontMappingMac* nsFontMetricsMac::GetUnicodeFontMapping()
   	if (mLangGroup)
   		mLangGroup->ToString(langGroup);
     else
-      langGroup.AssignLiteral("ja");
+      langGroup.Assign(NS_LITERAL_STRING("ja"));
       
   	nsString lang;
-    mFontMapping = new nsUnicodeFontMappingMac(&mFont, mContext, langGroup, lang);
+    mFontMapping = new nsUnicodeFontMappingMac(mFont, mContext, langGroup, lang);
   }
   
 	return mFontMapping;
@@ -156,33 +160,33 @@ static void MapGenericFamilyToFont(const nsString& aGenericFamily, nsString& aFo
   }
   
   NS_ASSERTION(0, "Failed to find a font");
-  aFontFace.AssignLiteral("Times");
+  aFontFace.Assign(NS_LITERAL_STRING("Times"));
 	
   /*
   // fall back onto hard-coded font names
-  if (aGenericFamily.LowerCaseEqualsLiteral("serif"))
+  if (aGenericFamily.EqualsIgnoreCase("serif"))
   {
-    aFontFace.AssignLiteral("Times");
+    aFontFace.Assign(NS_LITERAL_STRING("Times"));
   }
-  else if (aGenericFamily.LowerCaseEqualsLiteral("sans-serif"))
+  else if (aGenericFamily.EqualsIgnoreCase("sans-serif"))
   {
-    aFontFace.AssignLiteral("Helvetica");
+    aFontFace.Assign(NS_LITERAL_STRING("Helvetica"));
   }
-  else if (aGenericFamily.LowerCaseEqualsLiteral("cursive"))
+  else if (aGenericFamily.EqualsIgnoreCase("cursive"))
   {
-     aFontFace.AssignLiteral("Apple Chancery");
+     aFontFace.Assign(NS_LITERAL_STRING("Apple Chancery"));
   }
-  else if (aGenericFamily.LowerCaseEqualsLiteral("fantasy"))
+  else if (aGenericFamily.EqualsIgnoreCase("fantasy"))
   {
-    aFontFace.AssignLiteral("Gadget");
+    aFontFace.Assign(NS_LITERAL_STRING("Gadget"));
   }
-  else if (aGenericFamily.LowerCaseEqualsLiteral("monospace"))
+  else if (aGenericFamily.EqualsIgnoreCase("monospace"))
   {
-    aFontFace.AssignLiteral("Courier");
+    aFontFace.Assign(NS_LITERAL_STRING("Courier"));
   }
-  else if (aGenericFamily.LowerCaseEqualsLiteral("-moz-fixed"))
+  else if (aGenericFamily.EqualsIgnoreCase("-moz-fixed"))
   {
-    aFontFace.AssignLiteral("Courier");
+    aFontFace.Assign(NS_LITERAL_STRING("Courier"));
   }
   */
 }
@@ -234,7 +238,7 @@ void nsFontMetricsMac::RealizeFont()
 		if (mLangGroup)
 			mLangGroup->ToString(theLangGroupString);
 		else
-			theLangGroupString.AssignLiteral("ja");
+			theLangGroupString.Assign(NS_LITERAL_STRING("ja"));
 
 		theScriptCode = unicodeMappingUtil->MapLangGroupToScriptCode(
 		    NS_ConvertUCS2toUTF8(theLangGroupString).get());
@@ -244,7 +248,7 @@ void nsFontMetricsMac::RealizeFont()
 		theScriptCode = GetScriptManagerVariable (smSysScript);
 
 	FontEnumData  fontData(mContext, fontName, theScriptCode);
-	mFont.EnumerateFamilies(FontEnumCallback, &fontData);
+	mFont->EnumerateFamilies(FontEnumCallback, &fontData);
   
 	nsDeviceContextMac::GetMacFontNumber(fontName, mFontNum);
 }
@@ -312,7 +316,7 @@ NS_IMETHODIMP nsFontMetricsMac :: GetHeight(nscoord &aHeight)
 
 NS_IMETHODIMP nsFontMetricsMac :: GetNormalLineHeight(nscoord &aHeight)
 {
-  aHeight = mEmHeight + mLeading; // Mac's leading is external leading
+  aHeight = mMaxHeight; // on Windows, it's mEmHeight + mLeading (= mMaxHeight on the Mac)
   return NS_OK;
 }
 
@@ -374,17 +378,17 @@ NS_IMETHODIMP nsFontMetricsMac :: GetAveCharWidth(nscoord &aAveCharWidth)
   return NS_OK;
 }
 
-PRInt32 nsFontMetricsMac::GetMaxStringLength()
-{
-  return mMaxStringLength;
-}
-
 nsresult nsFontMetricsMac :: GetSpaceWidth(nscoord &aSpaceWidth)
 {
   aSpaceWidth = mSpaceWidth;
   return NS_OK;
 }
 
+NS_IMETHODIMP nsFontMetricsMac :: GetFont(const nsFont *&aFont)
+{
+  aFont = mFont;
+  return NS_OK;
+}
 NS_IMETHODIMP nsFontMetricsMac::GetLangGroup(nsIAtom** aLangGroup)
 {
   if (!aLangGroup) {

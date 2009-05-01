@@ -1,41 +1,29 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is JSIRC Sample bot
  *
- * The Original Code is JSIRC Sample bot.
- *
- * The Initial Developer of the Original Code is
- * New Dimensions Consulting, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is New Dimensions Consulting,
+ * Inc. Portions created by New Dimensions Consulting, Inc. are
+ * Copyright (C) 1999 New Dimenstions Consulting, Inc. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Robert Ginda, rginda@ndcico.com, original author
+ *  Robert Ginda, rginda@ndcico.com, original author
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * depends on utils.js, events.js, connection.js, http.js, and irc.js
  *
- * ***** END LICENSE BLOCK ***** */
+ * Sample client for the irc library.
+ */
 
 var LIB_PATH = "../lib/";
 
@@ -138,7 +126,7 @@ function go()
 }
 
 /*
- * If you didn't compile libjs with JS_HAS_ERROR_EXCEPTIONS, any error the
+ * If you didnt compile libjs with JS_HAS_ERROR_EXCEPTIONS, any error the
  * bot encounters will exit the mainloop and drop you back to a shell ("js>")
  * prompt.  You can continue the mainloop by executing this function.
  */
@@ -286,7 +274,7 @@ function bot_eval(e, script)
  */
 
 /*
- * What to do when a privmsg is received on a channel
+ * What to do when a privmsg is recieved on a channel
  */
 function my_chan_privmsg (e)
 {
@@ -366,7 +354,7 @@ function my_433 (e)
 }
 
 /*
- * What to do when raw data is received on a dcc chat connection
+ * What to do when raw data is recieved on a dcc chat connection
  */
 function my_dccchat_rawdata (e)
 {

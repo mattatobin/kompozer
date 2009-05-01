@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla FastLoad code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Brendan Eich <brendan@mozilla.org> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -141,8 +141,7 @@ typedef PRUint32 NSFastLoadOID;         // nsFastLoadFooter::mObjectMap index
 
 #define MFL_FILE_VERSION_0      0
 #define MFL_FILE_VERSION_1      1000
-#define MFL_FILE_VERSION        5       // rev'ed to defend against unversioned
-                                        // XPCOM JS component fastload files
+#define MFL_FILE_VERSION        4       // fix to note singletons in object map
 
 /**
  * Compute Fletcher's 16-bit checksum over aLength bytes starting at aBuffer,
@@ -297,9 +296,6 @@ class nsFastLoadFileReader
     NS_IMETHODIMP ReadSegments(nsWriteSegmentFun aWriter, void* aClosure,
                                PRUint32 aCount, PRUint32 *aResult);
 
-    // Override SetInputStream so we can update mSeekableInput
-    NS_IMETHOD SetInputStream(nsIInputStream* aInputStream);
-
     nsresult ReadHeader(nsFastLoadHeader *aHeader);
 
     /**
@@ -307,7 +303,7 @@ class nsFastLoadFileReader
      */
     struct nsObjectMapEntry : public nsFastLoadSharpObjectInfo {
         nsCOMPtr<nsISupports>   mReadObject;
-        PRInt64                 mSkipOffset;
+        PRUint32                mSkipOffset;
         PRUint16                mSaveStrongRefCnt;      // saved for an Update
         PRUint16                mSaveWeakRefCnt;        // after a Read
     };
@@ -388,9 +384,6 @@ class nsFastLoadFileReader
     NS_IMETHOD Close();
 
   protected:
-    // Kept in sync with mInputStream to avoid repeated QI
-    nsCOMPtr<nsISeekableStream> mSeekableInput;
-
     nsFastLoadHeader mHeader;
     nsFastLoadFooter mFooter;
 
@@ -453,9 +446,6 @@ class nsFastLoadFileWriter
                                    PRBool aIsStrongRef);
     NS_IMETHOD WriteID(const nsID& aID);
 
-    // Override SetOutputStream so we can update mSeekableOutput
-    NS_IMETHOD SetOutputStream(nsIOutputStream* aOutputStream);
-
     // nsIFastLoadFileControl methods
     NS_DECL_NSIFASTLOADFILECONTROL
 
@@ -508,9 +498,6 @@ class nsFastLoadFileWriter
                            void *aData);
 
   protected:
-    // Kept in sync with mOutputStream to avoid repeated QI
-    nsCOMPtr<nsISeekableStream> mSeekableOutput;
-
     nsFastLoadHeader mHeader;
 
     PLDHashTable mIDMap;
@@ -569,9 +556,6 @@ class nsFastLoadFileUpdater
 
   protected:
     nsCOMPtr<nsIInputStream> mInputStream;
-
-    // Kept in sync with mInputStream to avoid repeated QI
-    nsCOMPtr<nsISeekableStream> mSeekableInput;
 };
 
 NS_COM nsresult

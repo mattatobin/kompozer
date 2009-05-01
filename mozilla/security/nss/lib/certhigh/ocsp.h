@@ -1,43 +1,40 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * Interface to the OCSP implementation.
  *
- * $Id: ocsp.h,v 1.6.28.2 2007/04/25 01:05:06 kaie%kuix.de Exp $
+ * $Id: ocsp.h,v 1.5 2002/09/23 23:47:49 wtc%netscape.com Exp $
  */
 
 #ifndef _OCSP_H_
@@ -54,49 +51,6 @@
 
 /************************************************************************/
 SEC_BEGIN_PROTOS
-
-/*
- * This function registers the HttpClient with whose functions the
- * HttpClientFcn structure have been populated as the default Http
- * client.
- *
- * The function table must be a global object.
- * The caller must ensure that NSS will be able to call
- * the registered functions for the lifetime of the process.
- */
-extern SECStatus
-SEC_RegisterDefaultHttpClient(const SEC_HttpClientFcn *fcnTable);
-
-/*
- * Sets parameters that control NSS' internal OCSP cache.
- * maxCacheEntries, special varlues are:
- *   -1 disable cache
- *   0 unlimited cache entries
- * minimumSecondsToNextFetchAttempt:
- *   whenever an OCSP request was attempted or completed over the network,
- *   wait at least this number of seconds before trying to fetch again.
- * maximumSecondsToNextFetchAttempt:
- *   this is the maximum age of a cached response we allow, until we try
- *   to fetch an updated response, even if the OCSP responder expects
- *   that newer information update will not be available yet.
- */
-extern SECStatus
-CERT_OCSPCacheSettings(PRInt32 maxCacheEntries,
-                       PRUint32 minimumSecondsToNextFetchAttempt,
-                       PRUint32 maximumSecondsToNextFetchAttempt);
-
-/*
- * Set the desired behaviour on OCSP failures.
- * See definition of ocspFailureMode for allowed choices.
- */
-extern SECStatus
-CERT_SetOCSPFailureMode(SEC_OcspFailureMode ocspFailureMode);
-
-/*
- * Removes all items currently stored in the OCSP cache.
- */
-extern SECStatus
-CERT_ClearOCSPCache(void);
 
 /*
  * FUNCTION: CERT_EnableOCSPChecking

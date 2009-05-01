@@ -50,9 +50,7 @@
 //     T *mNext;
 //   };
 //
-// objects added to the list must be allocated with operator new.  class T may
-// optionally inherit from ipcListNode<T> if it doesn't wish to define mNext
-// explicitly.
+// objects added to the list must be allocated with operator new.
 //-----------------------------------------------------------------------------
 
 template<class T>
@@ -163,17 +161,6 @@ public:
 
     PRBool  IsEmpty() const { return mHead == NULL; }
 
-    //
-    // moves contents of list to another list
-    //
-    void MoveTo(ipcList<T> &other)
-    {
-        other.mHead = mHead;
-        other.mTail = mTail;
-        mHead = NULL;
-        mTail = NULL;
-    }
-
 protected:
     void AdvanceHead()
     {
@@ -184,15 +171,6 @@ protected:
 
     T *mHead;
     T *mTail;
-};
-
-template<class T>
-class ipcListNode
-{
-public:
-    ipcListNode() : mNext(nsnull) {}
-
-    T *mNext;
 };
 
 #endif // !ipcList_h__

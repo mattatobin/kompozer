@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is the Mozilla OS/2 libraries.
  *
- * The Initial Developer of the Original Code is
- * John Fairhurst, <john_fairhurst@iname.com>.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is John Fairhurst,
+ * <john_fairhurst@iname.com>.  Portions created by John Fairhurst are
+ * Copyright (C) 1999 John Fairhurst. All Rights Reserved.
  *
  * Contributor(s):
  *   Henry Sobotka <sobotka@axess.com> 2OOO/O2 update
  *   IBM Corp.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsDeviceContextOS2.h"
 #include "nsRenderingContextOS2.h"
@@ -96,7 +79,7 @@ nsDeviceContextOS2::~nsDeviceContextOS2()
     nsresult rv;
     nsCOMPtr<nsIPref> prefs = do_GetService(NS_PREF_CONTRACTID, &rv);
     if (NS_SUCCEEDED(rv)) {
-      prefs->UnregisterCallback("layout.css.dpi",
+      prefs->UnregisterCallback("browser.display.screen_resolution",
                                 prefChanged, (void *)this);
     }
   }
@@ -115,7 +98,7 @@ nsresult nsDeviceContextOS2::Init( nsNativeWidget aWidget)
     initialized = 1;
 
     // Set prefVal the value of the preference
-    // "layout.css.dpi"
+    // "browser.display.screen_resolution"
     // or -1 if we can't get it.
     // If it's negative, we pretend it's not set.
     // If it's 0, it means force use of the operating system's logical
@@ -125,11 +108,11 @@ nsresult nsDeviceContextOS2::Init( nsNativeWidget aWidget)
 
     nsCOMPtr<nsIPref> prefs(do_GetService(NS_PREF_CONTRACTID, &res));
     if (NS_SUCCEEDED(res) && prefs) {
-      res = prefs->GetIntPref("layout.css.dpi", &prefVal);
+      res = prefs->GetIntPref("browser.display.screen_resolution", &prefVal);
       if (NS_FAILED(res)) {
         prefVal = -1;
       }
-      prefs->RegisterCallback("layout.css.dpi", prefChanged,
+      prefs->RegisterCallback("browser.display.screen_resolution", prefChanged,
                               (void *)this);
     }
 
@@ -326,7 +309,7 @@ nsresult nsDeviceContextOS2::CreateRenderingContext( nsIRenderingContext *&aCont
 
    surf->Init( mPrintPS, mWidth, mHeight, 0);
 
-   nsresult rc = pContext->Init(this, surf);
+   nsresult rc = pContext->Init( this, (void*)((nsDrawingSurfaceOS2 *) surf));
 
    if( NS_OK != rc)
    {
@@ -531,6 +514,7 @@ NS_IMETHODIMP nsDeviceContextOS2 :: GetSystemFont(nsSystemFontID aID, nsFont *aF
 NS_IMETHODIMP nsDeviceContextOS2 :: CheckFontExistence(const nsString& aFontName)
 {
   HPS     hps = NULL;
+  PRBool  isthere = PR_FALSE;
 
   if (NULL != mPrintDC){
     hps = mPrintPS;
@@ -573,18 +557,16 @@ nsDeviceContextOS2::SetDPI(PRInt32 aPrefDPI)
   GFX (::DevQueryCaps(hdc, CAPS_HORIZONTAL_FONT_RES, 1, &OSVal), FALSE);
   ::WinReleasePS(ps);
 
-  if (aPrefDPI > 0) {
+  if (aPrefDPI == 0) {
+    // If the pref is 0 use of OS value
+    mDpi = OSVal;
+  } else if (aPrefDPI > 0) {
     // If there's a valid pref value for the logical resolution,
     // use it.
     mDpi = aPrefDPI;
-  } else if ((aPrefDPI == 0) || (OSVal > 96)) {
-    // Either if the pref is 0 (force use of OS value) or the OS
-    // value is bigger than 96, use the OS value.
-    mDpi = OSVal;
   } else {
-    // if we couldn't get the pref or it's negative, and the OS
-    // value is under 96ppi, then use 96.
-    mDpi = 96;
+    // if we couldn't get the pref or it's negative then use 120
+    mDpi = 120;
   }
 
   int pt2t = 72;
@@ -602,7 +584,7 @@ int prefChanged(const char *aPref, void *aClosure)
   nsDeviceContextOS2 *context = (nsDeviceContextOS2*)aClosure;
   nsresult rv;
   
-  if (nsCRT::strcmp(aPref, "layout.css.dpi")==0) {
+  if (nsCRT::strcmp(aPref, "browser.display.screen_resolution")==0) {
     PRInt32 dpi;
     nsCOMPtr<nsIPref> prefs(do_GetService(NS_PREF_CONTRACTID, &rv));
     rv = prefs->GetIntPref(aPref, &dpi);
@@ -713,17 +695,17 @@ nsresult nsDeviceContextOS2::CreateFontAliasTable()
    {
       mFontAliasTable = new nsHashtable;
 
-      nsAutoString  times;              times.AssignLiteral("Times");
-      nsAutoString  timesNewRoman;      timesNewRoman.AssignLiteral("Times New Roman");
-      nsAutoString  timesRoman;         timesRoman.AssignLiteral("Tms Rmn");
-      nsAutoString  arial;              arial.AssignLiteral("Arial");
-      nsAutoString  helv;               helv.AssignLiteral("Helv");
-      nsAutoString  helvetica;          helvetica.AssignLiteral("Helvetica");
-      nsAutoString  courier;            courier.AssignLiteral("Courier");
-      nsAutoString  courierNew;         courierNew.AssignLiteral("Courier New");
-      nsAutoString  sans;               sans.AssignLiteral("Sans");
-      nsAutoString  unicode;            unicode.AssignLiteral("Unicode");
-      nsAutoString  timesNewRomanMT30;  timesNewRomanMT30.AssignLiteral("Times New Roman MT 30");
+      nsAutoString  times;              times.Assign(NS_LITERAL_STRING("Times"));
+      nsAutoString  timesNewRoman;      timesNewRoman.Assign(NS_LITERAL_STRING("Times New Roman"));
+      nsAutoString  timesRoman;         timesRoman.Assign(NS_LITERAL_STRING("Tms Rmn"));
+      nsAutoString  arial;              arial.Assign(NS_LITERAL_STRING("Arial"));
+      nsAutoString  helv;               helv.Assign(NS_LITERAL_STRING("Helv"));
+      nsAutoString  helvetica;          helvetica.Assign(NS_LITERAL_STRING("Helvetica"));
+      nsAutoString  courier;            courier.Assign(NS_LITERAL_STRING("Courier"));
+      nsAutoString  courierNew;         courierNew.Assign(NS_LITERAL_STRING("Courier New"));
+      nsAutoString  sans;               sans.Assign(NS_LITERAL_STRING("Sans"));
+      nsAutoString  unicode;            unicode.Assign(NS_LITERAL_STRING("Unicode"));
+      nsAutoString  timesNewRomanMT30;  timesNewRomanMT30.Assign(NS_LITERAL_STRING("Times New Roman MT 30"));
       nsAutoString  nullStr;
 
       AliasFont(times, timesNewRoman, timesRoman, PR_FALSE);

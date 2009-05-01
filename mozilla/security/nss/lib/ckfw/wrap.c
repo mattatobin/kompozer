@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: wrap.c,v $ $Revision: 1.13.2.1 $ $Date: 2006/06/10 22:19:16 $";
+static const char CVS_ID[] = "@(#) $RCSfile: wrap.c,v $ $Revision: 1.9.76.1 $ $Date: 2004/10/15 21:13:51 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 /*
@@ -125,46 +122,6 @@ static const char CVS_ID[] = "@(#) $RCSfile: wrap.c,v $ $Revision: 1.13.2.1 $ $D
  * NSSCKFWC_CancelFunction
  */
 
-/* figure out out locking semantics */
-static CK_RV
-nssCKFW_GetThreadSafeState(CK_C_INITIALIZE_ARGS_PTR pInitArgs,
-                           CryptokiLockingState *pLocking_state) {
-  int functionCount = 0;
-
-  /* parsed according to (PKCS #11 Section 11.4) */
-  /* no args, the degenerate version of case 1 */
-  if (!pInitArgs) {
-    *pLocking_state = SingleThreaded;
-    return CKR_OK;
-  } 
-
-  /* CKF_OS_LOCKING_OK set, Cases 2 and 4 */
-  if (pInitArgs->flags & CKF_OS_LOCKING_OK) {
-    *pLocking_state = MultiThreaded;
-    return CKR_OK;
-  }
-  if ((CK_CREATEMUTEX) NULL != pInitArgs->CreateMutex) functionCount++;
-  if ((CK_DESTROYMUTEX) NULL != pInitArgs->DestroyMutex) functionCount++;
-  if ((CK_LOCKMUTEX) NULL != pInitArgs->LockMutex) functionCount++;
-  if ((CK_UNLOCKMUTEX) NULL != pInitArgs->UnlockMutex) functionCount++;
-
-  /* CKF_OS_LOCKING_OK is not set, and not functions supplied, 
-   * explicit case 1 */
-  if (0 == functionCount) {
-    *pLocking_state = SingleThreaded;
-    return CKR_OK;
-  }
-
-  /* OS_LOCKING_OK is not set and functions have been supplied. Since
-   * ckfw uses nssbase library which explicitly calls NSPR, and since 
-   * there is no way to reliably override these explicit calls to NSPR,
-   * therefore we can't support applications which have their own threading 
-   * module.  Return CKR_CANT_LOCK if they supplied the correct number of 
-   * arguments, or CKR_ARGUMENTS_BAD if they did not in either case we will 
-   * fail the initialize */
-  return (4 == functionCount) ? CKR_CANT_LOCK : CKR_ARGUMENTS_BAD;
-}
-
 /*
  * NSSCKFWC_Initialize
  *
@@ -195,9 +152,12 @@ NSSCKFWC_Initialize
     goto loser;
   }
 
-  error = nssCKFW_GetThreadSafeState(pInitArgs,&locking_state);
-  if( CKR_OK != error ) {
-    goto loser;
+  /* remember the locking args for those times we need to get a lock in code
+   * outside the framework.
+   */
+  error = nssSetLockArgs(pInitArgs, &locking_state);
+  if (CKR_OK != error) {
+      goto loser;
   }
 
   *pFwInstance = nssCKFWInstance_Create(pInitArgs, locking_state, mdInstance, &error);
@@ -647,8 +607,7 @@ NSSCKFWC_GetTokenInfo
   switch( error ) {
   case CKR_DEVICE_REMOVED:
   case CKR_TOKEN_NOT_PRESENT:
-    if (fwToken)
-      nssCKFWToken_Destroy(fwToken);
+    (void)nssCKFWToken_Destroy(fwToken);
     break;
   case CKR_CRYPTOKI_NOT_INITIALIZED:
   case CKR_DEVICE_ERROR:
@@ -842,8 +801,7 @@ NSSCKFWC_GetMechanismList
   switch( error ) {
   case CKR_DEVICE_REMOVED:
   case CKR_TOKEN_NOT_PRESENT:
-    if (fwToken)
-      nssCKFWToken_Destroy(fwToken);
+    (void)nssCKFWToken_Destroy(fwToken);
     break;
   case CKR_BUFFER_TOO_SMALL:
   case CKR_CRYPTOKI_NOT_INITIALIZED:
@@ -946,8 +904,7 @@ NSSCKFWC_GetMechanismInfo
   switch( error ) {
   case CKR_DEVICE_REMOVED:
   case CKR_TOKEN_NOT_PRESENT:
-    if (fwToken)
-      nssCKFWToken_Destroy(fwToken);
+    (void)nssCKFWToken_Destroy(fwToken);
     break;
   case CKR_CRYPTOKI_NOT_INITIALIZED:
   case CKR_DEVICE_ERROR:
@@ -1037,8 +994,7 @@ NSSCKFWC_InitToken
   switch( error ) {
   case CKR_DEVICE_REMOVED:
   case CKR_TOKEN_NOT_PRESENT:
-    if (fwToken)
-      nssCKFWToken_Destroy(fwToken);
+    (void)nssCKFWToken_Destroy(fwToken);
     break;
   case CKR_CRYPTOKI_NOT_INITIALIZED:
   case CKR_DEVICE_ERROR:

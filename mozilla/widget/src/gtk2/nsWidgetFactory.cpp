@@ -14,9 +14,9 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is mozilla.org code.
+ * The Original Code mozilla.org code.
  *
- * The Initial Developer of the Original Code is Christopher Blizzard
+ * The Initial Developer of the Original Code Christopher Blizzard
  * <blizzard@mozilla.org>.  Portions created by the Initial Developer
  * are Copyright (C) 2001 the Initial Developer. All Rights Reserved.
  *
@@ -42,6 +42,7 @@
 #include "nsBaseWidget.h"
 #include "nsLookAndFeel.h"
 #include "nsWindow.h"
+#include "nsGtkMozRemoteHelper.h"
 #include "nsTransferable.h"
 #include "nsClipboardHelper.h"
 #include "nsHTMLFormatConverter.h"
@@ -51,8 +52,6 @@
 #include "nsSound.h"
 #include "nsBidiKeyboard.h"
 #include "nsNativeKeyBindings.h"
-#include "nsIPrefService.h"
-#include "nsIPrefBranch.h"
 
 #include "nsIComponentRegistrar.h"
 #include "nsComponentManagerUtils.h"
@@ -72,45 +71,12 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsAppShell)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsLookAndFeel)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsTransferable)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsBidiKeyboard)
+NS_GENERIC_FACTORY_CONSTRUCTOR(nsGtkXRemoteWidgetHelper)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsClipboardHelper)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsHTMLFormatConverter)
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsClipboard, Init)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsDragService)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsSound)
-
-static NS_IMETHODIMP
-nsFilePickerConstructor(nsISupports *aOuter, REFNSIID aIID,
-                        void **aResult)
-{
-  *aResult = nsnull;
-  if (aOuter != nsnull) {
-    return NS_ERROR_NO_AGGREGATION;
-  }
-
-  PRBool allowPlatformPicker = PR_TRUE;
-  nsCOMPtr<nsIPrefBranch> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID);
-  if (prefs) {
-    PRBool prefAllow;
-    nsresult rv = prefs->GetBoolPref("ui.allow_platform_file_picker",
-                                     &prefAllow);
-    if (NS_SUCCEEDED(rv)) {
-        allowPlatformPicker = prefAllow;
-    }
-  }
-
-  nsCOMPtr<nsIFilePicker> picker;
-  if (allowPlatformPicker && gtk_check_version(2,6,3) == NULL) {
-    picker = new nsFilePicker;
-  } else {
-    picker = do_CreateInstance(kXULFilePickerCID);
-  }
-
-  if (!picker) {
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  return picker->QueryInterface(aIID, aResult);
-}
 
 static NS_IMETHODIMP
 nsNativeKeyBindingsConstructor(nsISupports *aOuter, REFNSIID aIID,
@@ -156,6 +122,34 @@ nsNativeKeyBindingsTextAreaConstructor(nsISupports *aOuter, REFNSIID aIID,
                                           eKeyBindings_TextArea);
 }
 
+static NS_IMETHODIMP
+nsFilePickerConstructor(nsISupports *aOuter, REFNSIID aIID,
+                        void **aResult)
+{
+  *aResult = nsnull;
+  if (aOuter != nsnull) {
+    return NS_ERROR_NO_AGGREGATION;
+  }
+
+  nsCOMPtr<nsIFilePicker> picker;
+  PRBool enabled = PR_FALSE;
+
+  /* need pref fu */
+
+  if (enabled && gtk_check_version(2,4,0) == NULL) {
+    picker = new nsFilePicker;
+  } else {
+    picker = do_CreateInstance(kXULFilePickerCID);
+  }
+
+  if (!picker) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  return picker->QueryInterface(aIID, aResult);
+}
+
+
 static const nsModuleComponentInfo components[] =
 {
     { "Gtk2 Window",
@@ -182,6 +176,10 @@ static const nsModuleComponentInfo components[] =
       NS_SOUND_CID,
       "@mozilla.org/sound;1",
       nsSoundConstructor },
+  { NS_IXREMOTEWIDGETHELPER_CLASSNAME,
+    NS_GTKXREMOTEWIDGETHELPER_CID,
+    NS_IXREMOTEWIDGETHELPER_CONTRACTID,
+    nsGtkXRemoteWidgetHelperConstructor },
   { "Transferable",
     NS_TRANSFERABLE_CID,
     "@mozilla.org/widget/transferable;1",

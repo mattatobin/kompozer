@@ -1,39 +1,36 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1998-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "primpl.h"
 
@@ -106,11 +103,6 @@ PRLock *_pr_dnsLock = NULL;
         || (defined(HPUX10_20) && defined(_REENTRANT))
 #define _PR_HAVE_GETPROTO_R
 #define _PR_HAVE_GETPROTO_R_INT
-#endif
-
-#if __FreeBSD_version >= 602000
-#define _PR_HAVE_GETPROTO_R
-#define _PR_HAVE_5_ARG_GETPROTO_R
 #endif
 
 #if (defined(LINUX) && defined(__GLIBC__) && __GLIBC__ >= 2)
@@ -193,8 +185,8 @@ static PRBool _pr_have_inet6_if = PR_FALSE;
 
 #if defined(AIX) \
     || (defined(DARWIN) && (!defined(HAVE_GETIFADDRS) \
-        || (defined(XP_MACOSX) && (!defined(MAC_OS_X_VERSION_10_2) || \
-        MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_2))))
+        || (defined(MACOS_DEPLOYMENT_TARGET) \
+        && MACOS_DEPLOYMENT_TARGET < 100200)))
 
 /*
  * Use SIOCGIFCONF ioctl on platforms that don't have routing
@@ -701,7 +693,7 @@ PR_IMPLEMENT(PRStatus) PR_GetHostByName(
 #ifdef XP_OS2_VACPP
 	h = GETHOSTBYNAME((char *)name);
 #else
-	h = GETHOSTBYNAME(name);
+    h = GETHOSTBYNAME(name);
 #endif
     
 	if (NULL == h)
@@ -932,7 +924,7 @@ PR_IMPLEMENT(PRStatus) PR_GetIPNodeByName(
 #else /* _PR_INET6 */
     LOCK_DNS();
 #ifdef XP_OS2_VACPP
-    h = GETHOSTBYNAME((char *)name);
+	h = GETHOSTBYNAME((char *)name);
 #else
     h = GETHOSTBYNAME(name);
 #endif
@@ -1381,7 +1373,7 @@ PRUintn _PR_NetAddrSize(const PRNetAddr* addr)
 #else
         addrsize = sizeof(addr->ipv6);
 #endif
-#if defined(XP_UNIX) || defined(XP_OS2_EMX)
+#if defined(XP_UNIX) || defined(XP_OS2)
     else if (AF_UNIX == addr->raw.family)
         addrsize = sizeof(addr->local);
 #endif
@@ -1984,32 +1976,23 @@ _pr_find_getaddrinfo(void)
     PRLibrary *lib;
 #ifdef WIN32
     /*
-     * On windows, we need to search ws2_32.dll or wship6.dll
-     * (Microsoft IPv6 Technology Preview for Windows 2000) for
-     * getaddrinfo and freeaddrinfo.  These libraries might not
-     * be loaded yet.
+     * On windows, we need to search ws2_32.dll for getaddrinfo and
+     * freeaddrinfo.  This library might not be loaded yet.
      */
-    const char *libname[] = { "ws2_32.dll", "wship6.dll" };
-    int i;
-
-    for (i = 0; i < sizeof(libname)/sizeof(libname[0]); i++) {
-        lib = PR_LoadLibrary(libname[i]);
-        if (!lib) {
-            continue;
-        }
-        _pr_getaddrinfo = (FN_GETADDRINFO)
-            PR_FindFunctionSymbol(lib, GETADDRINFO_SYMBOL);
-        if (!_pr_getaddrinfo) {
-            PR_UnloadLibrary(lib);
-            continue;
-        }
-        _pr_freeaddrinfo = (FN_FREEADDRINFO)
-            PR_FindFunctionSymbol(lib, FREEADDRINFO_SYMBOL);
-        PR_ASSERT(_pr_freeaddrinfo);
-        /* Keep the library loaded. */
-        return PR_SUCCESS;
+    lib = PR_LoadLibrary("ws2_32.dll");
+    if (!lib) {
+        return PR_FAILURE;
     }
-    return PR_FAILURE;
+    _pr_getaddrinfo = (FN_GETADDRINFO)
+        PR_FindFunctionSymbol(lib, GETADDRINFO_SYMBOL);
+    _pr_freeaddrinfo = (FN_FREEADDRINFO)
+        PR_FindFunctionSymbol(lib, FREEADDRINFO_SYMBOL);
+    if (!_pr_getaddrinfo || !_pr_freeaddrinfo) {
+        PR_UnloadLibrary(lib);
+        return PR_FAILURE;
+    }
+    /* Keep ws2_32.dll loaded. */
+    return PR_SUCCESS;
 #else
     /*
      * Resolve getaddrinfo by searching all loaded libraries.  Then
@@ -2149,11 +2132,11 @@ PR_IMPLEMENT(void *) PR_EnumerateAddrInfo(void             *iterPtr,
 #if defined(_PR_INET6_PROBE)
     if (!_pr_ipv6_is_present) {
         /* using PRAddrInfoFB */
-        PRIntn iter = (PRIntn)(PRPtrdiff) iterPtr;
+        PRIntn iter = (PRIntn) iterPtr;
         iter = PR_EnumerateHostEnt(iter, &((PRAddrInfoFB *) base)->hostent, port, result);
         if (iter < 0)
             iter = 0;
-        return (void *)(PRPtrdiff) iter;
+        return (void *) iter;
     }
 #endif
 

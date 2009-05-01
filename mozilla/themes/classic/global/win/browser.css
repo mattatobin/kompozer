@@ -25,13 +25,10 @@ tabpanels {
   margin-right: 3px;
   width: 16px;
   height: 16px;
-}
-
-tab {
   list-style-image: url("chrome://communicator/skin/bookmarks/bookmark-item.gif"); 
 }
 
-tab[busy] {
+tab[busy] > .tab-icon {
   list-style-image: url("chrome://communicator/skin/icons/loading.gif");
 }
 
@@ -49,23 +46,4 @@ tab[busy] {
 .tabs-newbutton {
   margin: 0px;
   list-style-image: url("chrome://global/skin/icons/tab-new.gif");
-}
-
-.tab-drop-indicator-bar {
-    height: 11px;
-    margin-top: -11px;
-    margin-left: -8px;
-    position: relative;
-}
-
-.tab-drop-indicator {
-    height: 11px;
-    width: 11px;
-    margin-bottom: -5px;
-    position: relative;
-    list-style-image: url('chrome://global/skin/icons/tab-drag-indicator.gif');
-}
-
-tooltip[tabpreview="true"] {
-  max-width: none;
 }

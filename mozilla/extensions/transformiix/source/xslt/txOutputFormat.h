@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is the TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -39,7 +39,8 @@
 #ifndef TRANSFRMX_OUTPUTFORMAT_H
 #define TRANSFRMX_OUTPUTFORMAT_H
 
-#include "txList.h"
+#include "baseutils.h"
+#include "List.h"
 #include "nsString.h"
 
 enum txOutputMethod {

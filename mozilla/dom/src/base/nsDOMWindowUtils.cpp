@@ -36,11 +36,10 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsIDocShell.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 
 #include "nsDOMWindowUtils.h"
 #include "nsGlobalWindow.h"
-#include "nsIDocument.h"
 
 NS_INTERFACE_MAP_BEGIN(nsDOMWindowUtils)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDOMWindowUtils)
@@ -51,24 +50,22 @@ NS_INTERFACE_MAP_END
 NS_IMPL_ADDREF(nsDOMWindowUtils)
 NS_IMPL_RELEASE(nsDOMWindowUtils)
 
-nsDOMWindowUtils::nsDOMWindowUtils(nsGlobalWindow *aWindow)
-  : mWindow(aWindow)
-{
+nsDOMWindowUtils::nsDOMWindowUtils(GlobalWindowImpl *aWindow) :
+                    mWindow(aWindow) {
 }
 
-nsDOMWindowUtils::~nsDOMWindowUtils()
-{
+nsDOMWindowUtils::~nsDOMWindowUtils() {
 }
 
 NS_IMETHODIMP
-nsDOMWindowUtils::GetImageAnimationMode(PRUint16 *aMode)
-{
+nsDOMWindowUtils::GetImageAnimationMode(PRUint16 *aMode) {
+
   NS_ENSURE_ARG_POINTER(aMode);
   *aMode = 0;
   if (mWindow) {
     nsIDocShell *docShell = mWindow->GetDocShell();
     if (docShell) {
-      nsCOMPtr<nsPresContext> presContext;
+      nsCOMPtr<nsIPresContext> presContext;
       docShell->GetPresContext(getter_AddRefs(presContext));
       if (presContext) {
         *aMode = presContext->ImageAnimationMode();
@@ -80,12 +77,12 @@ nsDOMWindowUtils::GetImageAnimationMode(PRUint16 *aMode)
 }
 
 NS_IMETHODIMP
-nsDOMWindowUtils::SetImageAnimationMode(PRUint16 aMode)
-{
+nsDOMWindowUtils::SetImageAnimationMode(PRUint16 aMode) {
+
   if (mWindow) {
     nsIDocShell *docShell = mWindow->GetDocShell();
     if (docShell) {
-      nsCOMPtr<nsPresContext> presContext;
+      nsCOMPtr<nsIPresContext> presContext;
       docShell->GetPresContext(getter_AddRefs(presContext));
       if (presContext) {
         presContext->SetImageAnimationMode(aMode);
@@ -97,18 +94,27 @@ nsDOMWindowUtils::SetImageAnimationMode(PRUint16 aMode)
 }
 
 NS_IMETHODIMP
-nsDOMWindowUtils::GetDocumentMetadata(const nsAString& aName,
-                                      nsAString& aValue)
-{
+nsDOMWindowUtils::GetBrowserDOMWindow(nsIBrowserDOMWindow **aBrowserWindow) {
+
+  NS_ENSURE_ARG_POINTER(aBrowserWindow);
+
   if (mWindow) {
-    nsCOMPtr<nsIDocument> doc(do_QueryInterface(mWindow->GetExtantDocument()));
-    if (doc) {
-      nsCOMPtr<nsIAtom> name = do_GetAtom(aName);
-      doc->GetHeaderData(name, aValue);
-      return NS_OK;
-    }
+    *aBrowserWindow = mWindow->mBrowserDOMWindow;
+    NS_IF_ADDREF(*aBrowserWindow);
+    return NS_OK;
   }
-  
-  aValue.Truncate();
-  return NS_OK;
+
+  return NS_ERROR_NOT_AVAILABLE;
 }
+
+NS_IMETHODIMP
+nsDOMWindowUtils::SetBrowserDOMWindow(nsIBrowserDOMWindow *aBrowserWindow) {
+
+  if (mWindow) {
+    mWindow->mBrowserDOMWindow = aBrowserWindow;
+    return NS_OK;
+  }
+
+  return NS_ERROR_NOT_AVAILABLE;
+}
+

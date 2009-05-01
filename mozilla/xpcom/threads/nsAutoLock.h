@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -116,8 +116,6 @@
  * Clients of derived classes need not play with this superclass.
  **/
 class NS_COM nsAutoLockBase {
-    friend class nsAutoUnlockBase;
-
 protected:
     nsAutoLockBase() {}
     enum nsAutoLockType {eAutoLock, eAutoMonitor, eAutoCMonitor};
@@ -138,26 +136,6 @@ protected:
 
     void            Show() {}
     void            Hide() {}
-#endif
-};
-
-/**
- * nsAutoUnlockBase
- * This is the base class for stack-based unlocking objects.
- * It unlocks locking objects based on nsAutoLockBase.
- **/
-class NS_COM nsAutoUnlockBase {
-protected:
-    nsAutoUnlockBase() {}
-
-#ifdef DEBUG
-    nsAutoUnlockBase(void* addr);
-    ~nsAutoUnlockBase();
-
-    nsAutoLockBase* mLock;
-#else
-    nsAutoUnlockBase(void* addr) {}
-    ~nsAutoUnlockBase() {}
 #endif
 };
 
@@ -186,20 +164,6 @@ private:
     static void operator delete(void* /*memory*/) {}
 
 public:
-
-    /**
-     * NewLock
-     * Allocates a new PRLock for use with nsAutoLock. name is
-     * not checked for uniqueness.
-     * @param name A name which can reference this lock
-     * @param lock A valid PRLock* that was created by nsAutoLock::NewLock()
-     * @returns nsnull if failure
-     *          A valid PRLock* if successful, which must be destroyed
-     *          by nsAutoLock::DestroyLock()
-     **/
-    static PRLock* NewLock(const char* name);
-    static void    DestroyLock(PRLock* lock);
-
     /**
      * Constructor
      * The constructor aquires the given lock.  The destructor

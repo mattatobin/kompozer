@@ -37,11 +37,17 @@
 
 #include "nsPopupWindowManager.h"
 
+#include "nsCOMPtr.h"
 #include "nsCRT.h"
-#include "nsIServiceManager.h"
-#include "nsIPrefService.h"
+#include "nsPermission.h"
+#include "nsIPermissionManager.h"
+
+#include "nsIObserverService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
+#include "nsIPrefService.h"
+#include "nsIServiceManagerUtils.h"
+#include "nsIURI.h"
 
 /**
  * The Popup Window Manager maintains popup window permissions by website.
@@ -58,7 +64,7 @@ nsPopupWindowManager::nsPopupWindowManager() :
 {
 }
 
-nsPopupWindowManager::~nsPopupWindowManager()
+nsPopupWindowManager::~nsPopupWindowManager(void)
 {
 }
 
@@ -73,17 +79,16 @@ nsPopupWindowManager::Init()
   nsresult rv;
   mPermissionManager = do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
 
-  nsCOMPtr<nsIPrefBranch2> prefBranch =
-    do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
+  mPrefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
   if (NS_SUCCEEDED(rv)) {
     PRBool permission;
-    rv = prefBranch->GetBoolPref(kPopupDisablePref, &permission);
+    rv = mPrefBranch->GetBoolPref(kPopupDisablePref, &permission);
     if (NS_FAILED(rv)) {
-      permission = PR_TRUE;
+      permission = PR_FALSE;
     }
     mPolicy = permission ? (PRUint32) DENY_POPUP : (PRUint32) ALLOW_POPUP;
 
-    prefBranch->AddObserver(kPopupDisablePref, this, PR_TRUE);
+    mPrefBranch->AddObserver(kPopupDisablePref, this, PR_TRUE);
   } 
 
   return NS_OK;
@@ -94,6 +99,22 @@ nsPopupWindowManager::Init()
 //*****************************************************************************
 
 NS_IMETHODIMP
+nsPopupWindowManager::GetDefaultPermission(PRUint32 *aDefaultPermission)
+{
+  NS_ENSURE_ARG_POINTER(aDefaultPermission);
+  *aDefaultPermission = mPolicy;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsPopupWindowManager::SetDefaultPermission(PRUint32 aDefaultPermission)
+{
+  mPolicy = aDefaultPermission;
+  return NS_OK;
+}
+
+
+NS_IMETHODIMP
 nsPopupWindowManager::TestPermission(nsIURI *aURI, PRUint32 *aPermission)
 {
   NS_ENSURE_ARG_POINTER(aURI);
@@ -102,21 +123,20 @@ nsPopupWindowManager::TestPermission(nsIURI *aURI, PRUint32 *aPermission)
   nsresult rv;
   PRUint32 permit;
 
-  *aPermission = mPolicy;
-
   if (mPermissionManager) {
     rv = mPermissionManager->TestPermission(aURI, "popup", &permit);
 
-    if (NS_SUCCEEDED(rv)) {
-      // Share some constants between interfaces?
-      if (permit == nsIPermissionManager::ALLOW_ACTION) {
-        *aPermission = ALLOW_POPUP;
-      } else if (permit == nsIPermissionManager::DENY_ACTION) {
-        *aPermission = DENY_POPUP;
-      }
+    // Share some constants between interfaces?
+    if (permit == nsIPermissionManager::ALLOW_ACTION) {
+      *aPermission = ALLOW_POPUP;
+    } else if (permit == nsIPermissionManager::DENY_ACTION) {
+      *aPermission = DENY_POPUP;
+    } else {
+      *aPermission = mPolicy;
     }
+  } else {
+    *aPermission = mPolicy;
   }
-
   return NS_OK;
 }
 
@@ -128,17 +148,15 @@ nsPopupWindowManager::Observe(nsISupports *aSubject,
                               const char *aTopic,
                               const PRUnichar *aData)
 {
-  nsCOMPtr<nsIPrefBranch> prefBranch = do_QueryInterface(aSubject);
-  NS_ASSERTION(!nsCRT::strcmp(NS_PREFBRANCH_PREFCHANGE_TOPIC_ID, aTopic),
-               "unexpected topic - we only deal with pref changes!");
-
-  if (prefBranch) {
+  NS_LossyConvertUCS2toASCII pref(aData);
+  if (pref.Equals(kPopupDisablePref)) {
     // refresh our local copy of the "disable popups" pref
-    PRBool permission = PR_TRUE;
-    prefBranch->GetBoolPref(kPopupDisablePref, &permission);
+    PRBool permission = PR_FALSE;
 
+    if (mPrefBranch) {
+      mPrefBranch->GetBoolPref(kPopupDisablePref, &permission);
+    }
     mPolicy = permission ? (PRUint32) DENY_POPUP : (PRUint32) ALLOW_POPUP;
   }
-
   return NS_OK;
 }

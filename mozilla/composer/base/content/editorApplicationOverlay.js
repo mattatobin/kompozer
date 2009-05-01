@@ -99,7 +99,7 @@ function NewEditorTab()
 
 // Any non-editor window wanting to create an editor with a URL
 //   should use this instead of "window.openDialog..."
-// We must always find an existing window with requested URL
+//  We must always find an existing window with requested URL
 // (When calling from a dialog, "launchWindow" is dialog's "opener"
 //   and we need a delay to let dialog close)
 function editPage(url, launchWindow, delay, newTab)
@@ -130,7 +130,7 @@ function editPage(url, launchWindow, delay, newTab)
     // <Kaze> the original code has been moved to CheckWindowsForUrlMatch
     // Is there a Composer window we can use?
     var win = CheckAllTabsForUrlMatch(url, launchWindow, newTab); // patched
-    //var win = CheckWindowsForUrlMatch(url, launchWindow, newTab); // original behavior
+    //~ var win = CheckWindowsForUrlMatch(url, launchWindow, newTab); // original behavior
     if (win) {
       if (win != launchWindow)
         win.focus();

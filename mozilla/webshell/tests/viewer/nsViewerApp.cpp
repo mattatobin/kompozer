@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Brian Ryner <bryner@brianryner.com>
+ *  Brian Ryner <bryner@brianryner.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -58,7 +58,6 @@
 #include "nsIComponentManager.h"
 #include "nsIComponentRegistrar.h"
 #include "nsIServiceManager.h"
-#include "nsIFactory.h"
 #include "nsIEventQueueService.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIInterfaceRequestorUtils.h"
@@ -69,7 +68,6 @@
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptContext.h"
 #include "nsGUIEvent.h"
-#include "nsStaticComponents.h"
 
 // Needed for Dialog GUI
 #include "nsICheckButton.h"
@@ -129,6 +127,13 @@ static NS_DEFINE_CID(kFormProcessorCID,   NS_FORMPROCESSOR_CID);
 
 #define DEFAULT_WIDTH 620
 #define DEFAULT_HEIGHT 400
+
+
+#ifdef _BUILD_STATIC_BIN
+#include "nsStaticComponent.h"
+nsresult PR_CALLBACK
+app_getModuleInfo(nsStaticModuleInfo **info, PRUint32 *count);
+#endif
 
 
 nsViewerApp::nsViewerApp()
@@ -199,10 +204,50 @@ nsViewerApp::Destroy()
   NS_IF_RELEASE(mPrefService);
 }
 
-#ifndef _BUILD_STATIC_BIN
-nsStaticModuleInfo const *const kPStaticModules = nsnull;
-PRUint32 const kStaticModuleCount = 0;
+class nsTestFormProcessor : public nsIFormProcessor {
+public:
+  nsTestFormProcessor();
+  NS_IMETHOD ProcessValue(nsIDOMHTMLElement *aElement, 
+                          const nsString& aName, 
+                          nsString& aValue);
+
+  NS_IMETHOD ProvideContent(const nsString& aFormType, 
+                            nsVoidArray& aContent,
+                            nsString& aAttribute);
+  NS_DECL_ISUPPORTS
+};
+
+
+
+NS_IMPL_ISUPPORTS1(nsTestFormProcessor, nsIFormProcessor)
+
+nsTestFormProcessor::nsTestFormProcessor()
+{
+}
+
+NS_METHOD 
+nsTestFormProcessor::ProcessValue(nsIDOMHTMLElement *aElement, 
+                                  const nsString& aName, 
+                                  nsString& aValue)
+{
+#ifdef DEBUG_kmcclusk
+  char *name = ToNewCString(aName);
+  char *value = ToNewCString(aValue);
+  printf("ProcessValue: name %s value %s\n",  name, value);
+  delete [] name;
+  delete [] value;
 #endif
+
+  return NS_OK;
+}
+
+NS_METHOD nsTestFormProcessor::ProvideContent(const nsString& aFormType, 
+                               nsVoidArray& aContent,
+                               nsString& aAttribute)
+{
+  return NS_OK;
+}
+
 
 nsresult
 nsViewerApp::SetupRegistry()
@@ -210,9 +255,7 @@ nsViewerApp::SetupRegistry()
   nsresult rv;
 
   nsCOMPtr<nsIServiceManager> servManager;
-  rv = NS_InitXPCOM3(getter_AddRefs(servManager), nsnull, nsnull,
-                     kPStaticModules, kStaticModuleCount);
-
+  NS_GetServiceManager(getter_AddRefs(servManager));
   nsCOMPtr<nsIComponentRegistrar> registrar = do_QueryInterface(servManager);
   NS_ASSERTION(registrar, "No nsIComponentRegistrar from get service. see dougt");
   rv = registrar->AutoRegister(nsnull);
@@ -232,6 +275,15 @@ nsViewerApp::SetupRegistry()
 #endif
   }
 
+   // Register a form processor. The form processor has the opportunity to
+   // modify the value's passed during form submission.
+  nsTestFormProcessor* testFormProcessor = new nsTestFormProcessor();
+  nsCOMPtr<nsISupports> formProcessor;
+  rv = testFormProcessor->QueryInterface(kISupportsIID, getter_AddRefs(formProcessor));
+  if (NS_SUCCEEDED(rv) && formProcessor) {
+    rv = nsServiceManager::RegisterService(kFormProcessorCID, formProcessor);
+  }
+
   return NS_OK;
 }
 
@@ -240,23 +292,29 @@ nsViewerApp::Initialize(int argc, char** argv)
 {
   nsresult rv;
 
+#ifdef _BUILD_STATIC_BIN
+  // Initialize XPCOM's module info table
+  NSGetStaticModuleInfo = app_getModuleInfo;
+#endif
+
   rv = SetupRegistry();
-  if (NS_FAILED(rv)) {
+  if (NS_OK != rv) {
     return rv;
   }
 
   InitializeWindowCreator();
 
   // Create widget application shell
-  rv = CallCreateInstance(kAppShellCID, &mAppShell);
-  if (NS_FAILED(rv)) {
+  rv = nsComponentManager::CreateInstance(kAppShellCID, nsnull, kIAppShellIID,
+                                          (void**)&mAppShell);
+  if (NS_OK != rv) {
     return rv;
   }
   mAppShell->Create(&argc, argv);
 
   // Load preferences
   rv = CallGetService(NS_PREFSERVICE_CONTRACTID, &mPrefService);
-  if (NS_FAILED(rv)) {
+  if (NS_OK != rv) {
     return rv;
   }
   mPrefService->ReadUserPrefs(nsnull);
@@ -298,6 +356,9 @@ nsViewerApp::Exit()
     mAppShell->Exit();
     NS_RELEASE(mAppShell);
   }
+
+    // Unregister the test form processor registered in nsViewerApp::SetupRegistry
+  rv = nsServiceManager::UnregisterService(kFormProcessorCID);
 
   return rv;
 }
@@ -726,6 +787,7 @@ static NS_DEFINE_IID(kCheckButtonCID, NS_CHECKBUTTON_CID);
 static NS_DEFINE_IID(kLabelCID,       NS_LABEL_CID);
 
 
+static NS_DEFINE_IID(kILookAndFeelIID, NS_ILOOKANDFEEL_IID);
 static NS_DEFINE_IID(kIButtonIID,      NS_IBUTTON_IID);
 static NS_DEFINE_IID(kITextWidgetIID,  NS_ITEXTWIDGET_IID);
 static NS_DEFINE_IID(kIWidgetIID,      NS_IWIDGET_IID);
@@ -870,7 +932,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
   nsRect rect;
   rect.SetRect(0, 0, dialogWidth, 162);  
 
-  CallCreateInstance(kWindowCID, &mRobotDialog);
+  nsComponentManager::CreateInstance(kWindowCID, nsnull, kIWidgetIID, (void**)&mRobotDialog);
   if (nsnull == mRobotDialog)
   	return PR_FALSE;
 
@@ -887,13 +949,11 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
   nscolor textBGColor = NS_RGB(255,255,255);
   nscolor textFGColor = NS_RGB(255,255,255);
 
-  {
-    nsCOMPtr<nsILookAndFeel> lookAndFeel = do_GetService(kLookAndFeelCID);
-    if (lookAndFeel) {
-      lookAndFeel->GetMetric(nsILookAndFeel::eMetric_TextFieldHeight, txtHeight);
-      lookAndFeel->GetColor(nsILookAndFeel::eColor_TextBackground, textBGColor);
-      lookAndFeel->GetColor(nsILookAndFeel::eColor_TextForeground, textFGColor);
-    }
+  nsILookAndFeel * lookAndFeel;
+  if (NS_OK == nsComponentManager::CreateInstance(kLookAndFeelCID, nsnull, kILookAndFeelIID, (void**)&lookAndFeel)) {
+     lookAndFeel->GetMetric(nsILookAndFeel::eMetric_TextFieldHeight, txtHeight);
+     lookAndFeel->GetColor(nsILookAndFeel::eColor_TextBackground, textBGColor);
+     lookAndFeel->GetColor(nsILookAndFeel::eColor_TextForeground, textFGColor);
   }
   
   nscoord w  = 65;
@@ -905,7 +965,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewCheckButton(&mUpdateChkBtn);
 #else
-  CallCreateInstance(kCheckButtonCID, &mUpdateChkBtn);
+  nsComponentManager::CreateInstance(kCheckButtonCID, nsnull, kICheckButtonIID, (void**)&mUpdateChkBtn);
 #endif
   NS_CreateCheckButton(mRobotDialog, mUpdateChkBtn,rect,HandleRobotEvent,&font);
   mUpdateChkBtn->SetLabel(NS_ConvertASCIItoUCS2("Update Display (Visual)"));
@@ -918,7 +978,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewLabel(&label);
 #else
-  CallCreateInstance(kLabelCID, &label);
+  nsComponentManager::CreateInstance(kLabelCID, nsnull, kILabelIID, (void**)&label);
 #endif
   NS_CreateLabel(mRobotDialog,label,rect,HandleRobotEvent,&font);
   label->SetAlignment(eAlign_Right);
@@ -931,7 +991,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewTextWidget(&mVerDirTxt);
 #else
-  CallCreateInstance(kTextFieldCID, &mVerDirTxt);
+  nsComponentManager::CreateInstance(kTextFieldCID, nsnull, kITextWidgetIID, (void**)&mVerDirTxt);
 #endif
   NS_CreateTextWidget(mRobotDialog,mVerDirTxt,rect,HandleRobotEvent,&font);
   if (mVerDirTxt && NS_OK == mVerDirTxt->QueryInterface(kIWidgetIID,(void**)&widget))
@@ -951,7 +1011,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewLabel(&label);
 #else
-  CallCreateInstance(kLabelCID, &label);
+  nsComponentManager::CreateInstance(kLabelCID, nsnull, kILabelIID, (void**)&label);
 #endif
   NS_CreateLabel(mRobotDialog,label,rect,HandleRobotEvent,&font);
   label->SetAlignment(eAlign_Right);
@@ -963,7 +1023,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewTextWidget(&mStopAfterTxt);
 #else
-  CallCreateInstance(kTextFieldCID, &mStopAfterTxt);
+  nsComponentManager::CreateInstance(kTextFieldCID, nsnull, kITextWidgetIID, (void**)&mStopAfterTxt);
 #endif
   NS_CreateTextWidget(mRobotDialog,mStopAfterTxt,rect,HandleRobotEvent,&font);
   if (mStopAfterTxt && NS_OK == mStopAfterTxt->QueryInterface(kIWidgetIID,(void**)&widget))
@@ -979,7 +1039,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewLabel(&label);
 #else
-  CallCreateInstance(kLabelCID, &label);
+  nsComponentManager::CreateInstance(kLabelCID, nsnull, kILabelIID, (void**)&label);
 #endif
   NS_CreateLabel(mRobotDialog,label,rect,HandleRobotEvent,&font);
   label->SetAlignment(eAlign_Left);
@@ -995,7 +1055,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewButton(&mStartBtn);
 #else
-  CallCreateInstance(kButtonCID, &mStartBtn);
+  nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mStartBtn);
 #endif
   NS_CreateButton(mRobotDialog,mStartBtn,rect,HandleRobotEvent,&font);
   mStartBtn->SetLabel(NS_ConvertASCIItoUCS2("Start"));
@@ -1006,7 +1066,7 @@ PRBool CreateRobotDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
   NS_NewButton(&mCancelBtn);
 #else
-  CallCreateInstance(kButtonCID, &mCancelBtn);
+  nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mCancelBtn);
 #endif
   NS_CreateButton(mRobotDialog,mCancelBtn,rect,HandleRobotEvent,&font);
   mCancelBtn->SetLabel(NS_ConvertASCIItoUCS2("Cancel"));
@@ -1024,7 +1084,8 @@ nsViewerApp::CreateRobot(nsBrowserWindow* aWindow)
   {
     nsIPresShell* shell = aWindow->GetPresShell();
     if (nsnull != shell) {
-      nsIDocument *doc = shell->GetDocument();
+      nsCOMPtr<nsIDocument> doc;
+      shell->GetDocument(getter_AddRefs(doc));
       if (doc) {
         nsCAutoString str;
         nsresult rv = doc->GetDocumentURI()->GetSpec(str);
@@ -1315,7 +1376,8 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
     rect.SetRect(0, 0, dialogWidth, 125+24+10);  
 
     nsIWidget* widget = nsnull;
-    CallCreateInstance(kWindowCID, &mSiteDialog);
+    nsComponentManager::CreateInstance(kWindowCID, nsnull, 
+                                       kIWidgetIID, (void**)&mSiteDialog);
     if (nsnull == mSiteDialog)
       return PR_FALSE;
     
@@ -1327,7 +1389,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
     //mSiteDialog->SetClientData(this);
     nsAutoString titleStr(NS_LITERAL_STRING("Top "));
     titleStr.AppendInt(gTop100LastPointer);
-    titleStr.AppendLiteral(" Sites");
+    titleStr.Append(NS_LITERAL_STRING(" Sites"));
     mSiteDialog->SetTitle(titleStr);
 
     nscoord w  = 65;
@@ -1340,7 +1402,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewLabel(&label);
 #else
-    CallCreateInstance(kLabelCID, &label);
+    nsComponentManager::CreateInstance(kLabelCID, nsnull, kILabelIID, (void**)&label);
 #endif
     NS_CreateLabel(mSiteDialog,label,rect,HandleSiteEvent,&font);
     label->SetAlignment(eAlign_Right);
@@ -1352,11 +1414,11 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewLabel(&mSiteLabel);
 #else
-   CallCreateInstance(kLabelCID, &mSiteLabel);
+   nsComponentManager::CreateInstance(kLabelCID, nsnull, kILabelIID, (void**)&mSiteLabel);
 #endif
     NS_CreateLabel(mSiteDialog,mSiteLabel,rect,HandleSiteEvent,&font);
     mSiteLabel->SetAlignment(eAlign_Left);
-    mSiteLabel->SetLabel(EmptyString());
+    mSiteLabel->SetLabel(nsAutoString());
 
     y += 34;
     w = 75;
@@ -1367,7 +1429,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewButton(&mSitePrevBtn);
 #else
-    CallCreateInstance(kButtonCID, &mSitePrevBtn);
+    nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mSitePrevBtn);
 #endif
     NS_CreateButton(mSiteDialog,mSitePrevBtn,rect,HandleSiteEvent,&font);
     mSitePrevBtn->SetLabel(NS_ConvertASCIItoUCS2("<< Previous"));
@@ -1378,7 +1440,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewButton(&mSiteNextBtn);
 #else
-    CallCreateInstance(kButtonCID, &mSiteNextBtn);
+    nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mSiteNextBtn);
 #endif
     NS_CreateButton(mSiteDialog,mSiteNextBtn,rect,HandleSiteEvent,&font);
     mSiteNextBtn->SetLabel(NS_ConvertASCIItoUCS2("Next >>"));
@@ -1389,7 +1451,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewButton(&mSiteCancelBtn);
 #else
-    CallCreateInstance(kButtonCID, &mSiteCancelBtn);
+    nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mSiteCancelBtn);
 #endif
     NS_CreateButton(mSiteDialog,mSiteCancelBtn,rect,HandleSiteEvent,&font);
     mSiteCancelBtn->SetLabel(NS_ConvertASCIItoUCS2("Cancel"));
@@ -1403,13 +1465,11 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
     nscolor textBGColor = NS_RGB(255,255,255);
     nscolor textFGColor = NS_RGB(255,255,255);
 
-    {
-      nsCOMPtr<nsILookAndFeel> lookAndFeel = do_GetService(kLookAndFeelCID);
-      if (lookAndFeel) {
-        lookAndFeel->GetMetric(nsILookAndFeel::eMetric_TextFieldHeight, txtHeight);
-        lookAndFeel->GetColor(nsILookAndFeel::eColor_TextBackground, textBGColor);
-        lookAndFeel->GetColor(nsILookAndFeel::eColor_TextForeground, textFGColor);
-      }
+    nsILookAndFeel * lookAndFeel;
+    if (NS_OK == nsComponentManager::CreateInstance(kLookAndFeelCID, nsnull, kILookAndFeelIID, (void**)&lookAndFeel)) {
+       lookAndFeel->GetMetric(nsILookAndFeel::eMetric_TextFieldHeight, txtHeight);
+       lookAndFeel->GetColor(nsILookAndFeel::eColor_TextBackground, textBGColor);
+       lookAndFeel->GetColor(nsILookAndFeel::eColor_TextForeground, textFGColor);
     }
 
     // Create TextField
@@ -1417,13 +1477,14 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewTextWidget(&mSiteIndexTxt);
 #else
-    CallCreateInstance(kTextFieldCID, &mSiteIndexTxt);
+    nsComponentManager::CreateInstance(kTextFieldCID, nsnull, kITextWidgetIID, (void**)&mSiteIndexTxt);
 #endif
     NS_CreateTextWidget(mSiteDialog,mSiteIndexTxt,rect,HandleSiteEvent,&font);
     if (mVerDirTxt && NS_OK == mSiteIndexTxt->QueryInterface(kIWidgetIID,(void**)&widget)) {
       widget->SetBackgroundColor(textBGColor);
       widget->SetForegroundColor(textFGColor);
     }
+    NS_IF_RELEASE(lookAndFeel);
 
     nsString str;
     str.AppendInt(0);
@@ -1437,7 +1498,7 @@ PRBool CreateSiteDialog(nsIWidget * aParent)
 #ifdef USE_LOCAL_WIDGETS
     NS_NewButton(&mSiteJumpBtn);
 #else
-    CallCreateInstance(kButtonCID, &mSiteJumpBtn);
+    nsComponentManager::CreateInstance(kButtonCID, nsnull, kIButtonIID, (void**)&mSiteJumpBtn);
 #endif
     NS_CreateButton(mSiteDialog,mSiteJumpBtn,rect,HandleSiteEvent,&font);
     mSiteJumpBtn->SetLabel(NS_ConvertASCIItoUCS2("Jump to Index"));
@@ -1505,6 +1566,10 @@ static void ShowConsole(nsBrowserWindow* aWindow)
           // create the console
           gConsole = JSConsole::CreateConsole();
           gConsole->SetContext(context);
+          // lifetime of the context is still unclear at this point.
+          // Anyway, as long as the web widget is alive the context is alive.
+          // Maybe the context shouldn't even be RefCounted
+          context->Release();
           gConsole->SetNotification(DestroyConsole);
         }
       }

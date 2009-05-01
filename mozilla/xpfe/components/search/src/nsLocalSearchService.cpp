@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8; c-file-style: "stroustrup" -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -24,16 +24,16 @@
  *   Pierre Phaneuf             <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -96,7 +96,9 @@ LocalSearchDataSource::LocalSearchDataSource(void)
 {
 	if (gRefCnt++ == 0)
 	{
-		nsresult rv = CallGetService(kRDFServiceCID, &gRDFService);
+		nsresult rv = nsServiceManager::GetService(kRDFServiceCID,
+		                           NS_GET_IID(nsIRDFService),
+		                           (nsISupports**) &gRDFService);
 
 		PR_ASSERT(NS_SUCCEEDED(rv));
 
@@ -135,7 +137,8 @@ LocalSearchDataSource::~LocalSearchDataSource (void)
 		NS_RELEASE(kRDF_type);
 
 		gLocalSearchDataSource = nsnull;
-		NS_RELEASE(gRDFService);
+		nsServiceManager::ReleaseService(kRDFServiceCID, gRDFService);
+		gRDFService = nsnull;
 	}
 }
 
@@ -366,13 +369,13 @@ LocalSearchDataSource::doMatch(nsIRDFLiteral *literal,
 	if (! str)	return(found);
 	nsAutoString	value(str);
 
-        if (matchMethod.EqualsLiteral("contains"))
+        if (matchMethod.Equals(NS_LITERAL_STRING("contains")))
 	{
             if (FindInReadable(matchText, value,
                                nsCaseInsensitiveStringComparator()))
                 found = PR_TRUE;
 	}
-        else if (matchMethod.EqualsLiteral("startswith"))
+        else if (matchMethod.Equals(NS_LITERAL_STRING("startswith")))
 	{
             nsAString::const_iterator start, realstart, end;
             value.BeginReading(start);
@@ -385,7 +388,7 @@ LocalSearchDataSource::doMatch(nsIRDFLiteral *literal,
                 
                 found = PR_TRUE;
 	}
-        else if (matchMethod.EqualsLiteral("endswith"))
+        else if (matchMethod.Equals(NS_LITERAL_STRING("endswith")))
 	{
             nsAString::const_iterator start, end, realend;
             value.BeginReading(start);
@@ -398,17 +401,17 @@ LocalSearchDataSource::doMatch(nsIRDFLiteral *literal,
                 
                 found = PR_TRUE;
 	}
-        else if (matchMethod.EqualsLiteral("is"))
+        else if (matchMethod.Equals(NS_LITERAL_STRING("is")))
 	{
             if (value.Equals(matchText, nsCaseInsensitiveStringComparator()))
                 found = PR_TRUE;
 	}
-        else if (matchMethod.EqualsLiteral("isnot"))
+        else if (matchMethod.Equals(NS_LITERAL_STRING("isnot")))
 	{
             if (!value.Equals(matchText, nsCaseInsensitiveStringComparator()))
                 found = PR_TRUE;
 	}
-        else if (matchMethod.EqualsLiteral("doesntcontain"))
+        else if (matchMethod.Equals(NS_LITERAL_STRING("doesntcontain")))
 	{
             if (!FindInReadable(matchText, value,
                                 nsCaseInsensitiveStringComparator()))
@@ -424,8 +427,8 @@ LocalSearchDataSource::doDateMatch(nsIRDFDate *aDate,
 {
     PRBool found = PR_FALSE;
     
-    if (matchMethod.EqualsLiteral("isbefore") ||
-        matchMethod.EqualsLiteral("isafter"))
+    if (matchMethod.Equals(NS_LITERAL_STRING("isbefore")) ||
+        matchMethod.Equals(NS_LITERAL_STRING("isafter")))
     {
         PRInt64 matchDate;
         nsresult rv = parseDate(matchText, &matchDate);
@@ -452,11 +455,11 @@ LocalSearchDataSource::doIntMatch(nsIRDFInt *aInt,
     PRInt32 matchVal = matchText.ToInteger(&error);
     if (error != 0) return PR_FALSE;
     
-    if (matchMethod.EqualsLiteral("is"))
+    if (matchMethod.Equals(NS_LITERAL_STRING("is")))
         found = (val == matchVal);
-    else if (matchMethod.EqualsLiteral("isgreater"))
+    else if (matchMethod.Equals(NS_LITERAL_STRING("isgreater")))
         found = (val > matchVal);
-    else if (matchMethod.EqualsLiteral("isless"))
+    else if (matchMethod.Equals(NS_LITERAL_STRING("isless")))
         found = (val < matchVal);
 
     return found;
@@ -488,13 +491,13 @@ LocalSearchDataSource::dateMatches(nsIRDFDate *aDate,
     aDate->GetValue(&date);
     PRBool matches = PR_FALSE;
     
-    if (method.EqualsLiteral("isbefore"))
+    if (method.Equals(NS_LITERAL_STRING("isbefore")))
         matches = LL_CMP(date, <, matchDate);
     
-    else if (method.EqualsLiteral("isafter"))
+    else if (method.Equals(NS_LITERAL_STRING("isafter")))
         matches = LL_CMP(date, >, matchDate);
 
-    else if (method.EqualsLiteral("is"))
+    else if (method.Equals(NS_LITERAL_STRING("is")))
         matches = LL_EQ(date, matchDate);
 
     return matches;

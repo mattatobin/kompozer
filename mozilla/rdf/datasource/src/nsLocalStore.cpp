@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -63,7 +63,6 @@
 #include "nsIObserverService.h"
 #include "nsWeakReference.h"
 #include "nsCRT.h"
-#include "stdio.h"
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -79,7 +78,6 @@ protected:
     LocalStoreImpl();
     virtual ~LocalStoreImpl();
     nsresult Init();
-    nsresult CreateLocalStore(nsIFile* aFile);
     nsresult LoadData();
 
     friend NS_IMETHODIMP
@@ -405,43 +403,6 @@ LocalStoreImpl::Init()
 }
 
 nsresult
-LocalStoreImpl::CreateLocalStore(nsIFile* aFile)
-{
-    nsresult rv;
-
-    rv = aFile->Create(nsIFile::NORMAL_FILE_TYPE, 0666);
-    if (NS_FAILED(rv)) return rv;
-
-    nsCOMPtr<nsIOutputStream> outStream;
-    rv = NS_NewLocalFileOutputStream(getter_AddRefs(outStream), aFile);
-    if (NS_FAILED(rv)) return rv;
-
-    const char defaultRDF[] = 
-        "<?xml version=\"1.0\"?>\n" \
-        "<RDF:RDF xmlns:RDF=\"" RDF_NAMESPACE_URI "\"\n" \
-        "         xmlns:NC=\""  NC_NAMESPACE_URI "\">\n" \
-        "  <!-- Empty -->\n" \
-        "</RDF:RDF>\n";
-
-    PRUint32 count;
-    rv = outStream->Write(defaultRDF, sizeof(defaultRDF)-1, &count);
-    if (NS_FAILED(rv)) return rv;
-
-    if (count != sizeof(defaultRDF)-1)
-        return NS_ERROR_UNEXPECTED;
-
-    // Okay, now see if the file exists _for real_. If it's still
-    // not there, it could be that the profile service gave us
-    // back a read-only directory. Whatever.
-    PRBool fileExistsFlag = PR_FALSE;
-    aFile->Exists(&fileExistsFlag);
-    if (!fileExistsFlag)
-        return NS_ERROR_UNEXPECTED;
-
-    return NS_OK;
-}
-
-nsresult
 LocalStoreImpl::LoadData()
 {
     nsresult rv;
@@ -457,8 +418,35 @@ LocalStoreImpl::LoadData()
     (void)aFile->Exists(&fileExistsFlag);
     if (!fileExistsFlag) {
         // if file doesn't exist, create it
-        rv = CreateLocalStore(aFile);
-        if (NS_FAILED(rv)) return rv;
+        (void)aFile->Create(nsIFile::NORMAL_FILE_TYPE, 0666);
+
+        nsCOMPtr<nsIOutputStream> outStream;
+        rv = NS_NewLocalFileOutputStream(getter_AddRefs(outStream), aFile);
+        if (NS_FAILED(rv))
+            return rv;
+
+        const char defaultRDF[] = 
+            "<?xml version=\"1.0\"?>\n" \
+            "<RDF:RDF xmlns:RDF=\"" RDF_NAMESPACE_URI "\"\n" \
+            "         xmlns:NC=\""  NC_NAMESPACE_URI "\">\n" \
+            "  <!-- Empty -->\n" \
+            "</RDF:RDF>\n";
+
+        PRUint32 count;
+        rv = outStream->Write(defaultRDF, sizeof(defaultRDF)-1, &count);
+        if (NS_FAILED(rv))
+            return rv;
+
+        if (count != sizeof(defaultRDF)-1)
+            return NS_ERROR_UNEXPECTED;
+
+        // Okay, now see if the file exists _for real_. If it's still
+        // not there, it could be that the profile service gave us
+        // back a read-only directory. Whatever.
+        fileExistsFlag = PR_FALSE;
+        (void)aFile->Exists(&fileExistsFlag);
+        if (!fileExistsFlag)
+            return NS_ERROR_UNEXPECTED;
     }
 
     mInner = do_CreateInstance(NS_RDF_DATASOURCE_CONTRACTID_PREFIX "xml-datasource", &rv);
@@ -479,18 +467,7 @@ LocalStoreImpl::LoadData()
     if (NS_FAILED(rv)) return rv;
 
     // Read the datasource synchronously.
-    rv = remote->Refresh(PR_TRUE);
-    
-    if (NS_FAILED(rv)) {
-        // Load failed, delete and recreate a fresh localstore
-        aFile->Remove(PR_TRUE);
-        rv = CreateLocalStore(aFile);
-        if (NS_FAILED(rv)) return rv;
-        
-        rv = remote->Refresh(PR_TRUE);
-    }
-
-    return rv;
+    return remote->Refresh(PR_TRUE);
 }
 
 
@@ -501,7 +478,7 @@ LocalStoreImpl::GetURI(char* *aURI)
     if (! aURI)
         return NS_ERROR_NULL_POINTER;
 
-    *aURI = nsCRT::strdup("rdf:local-store");
+    *aURI = nsCRT::strdup("rdf:localstore");
     if (! *aURI)
         return NS_ERROR_OUT_OF_MEMORY;
 

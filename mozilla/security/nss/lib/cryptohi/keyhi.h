@@ -1,41 +1,44 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved. 
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
+ * Contributor(s): 
+ *	Dr Stephen Henson <stephen.henson@gemplus.com>
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Contributor(s):
- *   Dr Stephen Henson <stephen.henson@gemplus.com>
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * key.h - public data structures and prototypes for the private key library
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: keyhi.h,v 1.13.2.2 2006/06/08 05:42:36 wtchang%redhat.com Exp $ */
+ * $Id: keyhi.h,v 1.9 2004/01/22 02:19:42 nelsonb%netscape.com Exp $
+ */
 
 #ifndef _KEYHI_H_
 #define _KEYHI_H_
@@ -88,11 +91,6 @@ extern unsigned SECKEY_PublicKeyStrength(SECKEYPublicKey *pubk);
 ** Return the strength of the public key in bits
 */
 extern unsigned SECKEY_PublicKeyStrengthInBits(SECKEYPublicKey *pubk);
-
-/*
-** Return the length of the signature in bytes
-*/
-extern unsigned SECKEY_SignatureLen(const SECKEYPublicKey *pubk);
 
 /*
 ** Make a copy of the private key "privKey"
@@ -226,9 +224,6 @@ SECKEY_CopyPrivateKeyInfo(PRArenaPool *poolp,
 			  SECKEYPrivateKeyInfo *to,
 			  SECKEYPrivateKeyInfo *from);
 
-extern SECStatus
-SECKEY_CacheStaticFlags(SECKEYPrivateKey* key);
-
 /* Copy encrypted private key info structure.  
  *  poolp is the arena into which the contents of from is to be copied.
  *	NULL is a valid entry.
@@ -288,23 +283,9 @@ SECKEY_AddPublicKeyToListTail( SECKEYPublicKeyList *list,
 #define PUBKEY_LIST_NEXT(n) ((SECKEYPublicKeyListNode *)n->links.next)
 #define PUBKEY_LIST_END(n,l) (((void *)n) == ((void *)&l->list))
 
-/*
- * Length in bits of the EC's field size.  This is also the length of
- * the x and y coordinates of EC points, such as EC public keys and
- * base points.
- *
- * Return 0 on failure (unknown EC domain parameters).
- */
+#ifdef NSS_ENABLE_ECC
 extern int SECKEY_ECParamsToKeySize(const SECItem *params);
-
-/*
- * Length in bits of the EC base point order, usually denoted n.  This
- * is also the length of EC private keys and ECDSA signature components
- * r and s.
- *
- * Return 0 on failure (unknown EC domain parameters).
- */
-extern int SECKEY_ECParamsToBasePointOrderLen(const SECItem *params);
+#endif /* NSS_ENABLE_ECC */
 
 SEC_END_PROTOS
 

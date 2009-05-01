@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -43,7 +43,6 @@
 #endif
 
 #ifdef METERING
-# include <stdio.h>
 # define METER(x)       x
 # define MAX_BIG_SEEKS  20
 
@@ -55,8 +54,8 @@ static struct {
     PRUint32            mBytesReadFromBuffer;
     PRUint32            mBigSeekIndex;
     struct {
-        PRInt64         mOldOffset;
-        PRInt64         mNewOffset;
+        PRUint32        mOldOffset;
+        PRUint32        mNewOffset;
     } mBigSeek[MAX_BIG_SEEKS];
 } bufstats;
 #else
@@ -110,7 +109,6 @@ nsBufferedStream::Close()
         mBufferSize = 0;
         mBufferStartOffset = 0;
         mCursor = 0;
-        mFillPoint = 0;
     }
 #ifdef METERING
     {
@@ -144,7 +142,7 @@ nsBufferedStream::Close()
 }
 
 NS_IMETHODIMP
-nsBufferedStream::Seek(PRInt32 whence, PRInt64 offset)
+nsBufferedStream::Seek(PRInt32 whence, PRInt32 offset)
 {
     if (mStream == nsnull)
         return NS_BASE_STREAM_CLOSED;
@@ -157,15 +155,13 @@ nsBufferedStream::Seek(PRInt32 whence, PRInt64 offset)
     nsCOMPtr<nsISeekableStream> ras = do_QueryInterface(mStream, &rv);
     if (NS_FAILED(rv)) return rv;
 
-    nsInt64 absPos;
+    PRInt32 absPos;
     switch (whence) {
       case nsISeekableStream::NS_SEEK_SET:
         absPos = offset;
         break;
       case nsISeekableStream::NS_SEEK_CUR:
-        absPos = mBufferStartOffset;
-        absPos += mCursor;
-        absPos += offset;
+        absPos = mBufferStartOffset + mCursor + offset;
         break;
       case nsISeekableStream::NS_SEEK_END:
         absPos = -1;
@@ -197,13 +193,10 @@ nsBufferedStream::Seek(PRInt32 whence, PRInt64 offset)
 
     METER(if (bufstats.mBigSeekIndex < MAX_BIG_SEEKS)
               bufstats.mBigSeek[bufstats.mBigSeekIndex].mOldOffset =
-                  mBufferStartOffset + nsInt64(mCursor));
-    const nsInt64 minus1 = -1;
-    if (absPos == minus1) {
+                  mBufferStartOffset + mCursor);
+    if (absPos == -1) {
         // then we had the SEEK_END case, above
-        PRInt64 tellPos;
-        rv = ras->Tell(&tellPos);
-        mBufferStartOffset = tellPos;
+        rv = ras->Tell(&mBufferStartOffset);
         if (NS_FAILED(rv)) return rv;
     }
     else {
@@ -218,14 +211,12 @@ nsBufferedStream::Seek(PRInt32 whence, PRInt64 offset)
 }
 
 NS_IMETHODIMP
-nsBufferedStream::Tell(PRInt64 *result)
+nsBufferedStream::Tell(PRUint32 *result)
 {
     if (mStream == nsnull)
         return NS_BASE_STREAM_CLOSED;
     
-    nsInt64 result64 = mBufferStartOffset;
-    result64 += mCursor;
-    *result = result64;
+    *result = mBufferStartOffset + mCursor;
     return NS_OK;
 }
 

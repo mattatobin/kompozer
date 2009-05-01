@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+﻿<?xml version="1.0" ?>
 <menubar id="mainMenu" xmlns="http://www.silverstone.net.nz/2001/manticore/uidl">
   <menu label="File" accesskey="f">
     <menu label="New Window" accesskey="n" command="file-new-window" />
@@ -99,7 +99,7 @@
     <menu label="Search the Web" accesskey="s" command="tools-search" />
     <menuseparator />
     <menu label="History" accesskey="h" command="tools-history" />
-    <menu label="Error Console" accesskey="E" command="tools-jsconsole" />
+    <menu label="JavaScript Console" accesskey="j" command="tools-jsconsole" />
     <menu label="Java Console" accesskey="c" command="tools-jconsole" />
     <menuseparator />
     <menu label="Options" accesskey="o" command="tools-options" />

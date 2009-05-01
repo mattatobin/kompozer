@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -51,9 +52,7 @@
 #include "nsICharRepresentable.h"
 #include "nsCompressedCharMap.h"
 #include "nsIFontMetricsGTK.h"
-#ifdef MOZ_ENABLE_FREETYPE2
 #include "nsIFontCatalogService.h"
-#endif
 
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
@@ -93,9 +92,7 @@ struct nsFontStretch
   char*              mScalable;
   PRBool             mOutlineScaled;
   nsVoidArray        mScaledFonts;
-#ifdef MOZ_ENABLE_FREETYPE2
   nsITrueTypeFontCatalogEntry*   mFreeTypeFaceID;
-#endif
 };
 
 struct nsFontStyle
@@ -255,7 +252,7 @@ public:
   NS_IMETHOD  GetMaxDescent(nscoord &aDescent);
   NS_IMETHOD  GetMaxAdvance(nscoord &aAdvance);
   NS_IMETHOD  GetAveCharWidth(nscoord &aAveCharWidth);
-  virtual PRInt32 GetMaxStringLength();
+  NS_IMETHOD  GetFont(const nsFont *&aFont);
   NS_IMETHOD  GetLangGroup(nsIAtom** aLangGroup);
   NS_IMETHOD  GetFontHandle(nsFontHandle &aHandle);
   
@@ -347,29 +344,6 @@ public:
 
   virtual GdkFont* GetCurrentGDKFont(void);
 
-  virtual nsresult SetRightToLeftText(PRBool aIsRTL);
-  virtual PRBool GetRightToLeftText();
-
-  virtual nsresult GetClusterInfo(const PRUnichar *aText,
-                                  PRUint32 aLength,
-                                  PRUint8 *aClusterStarts);
-
-  virtual PRInt32 GetPosition(const PRUnichar *aText,
-                              PRUint32 aLength,
-                              nsPoint aPt);
-
-  virtual nsresult GetRangeWidth(const PRUnichar *aText,
-                                 PRUint32 aLength,
-                                 PRUint32 aStart,
-                                 PRUint32 aEnd,
-                                 PRUint32 &aWidth);
-
-  virtual nsresult GetRangeWidth(const char *aText,
-                                 PRUint32 aLength,
-                                 PRUint32 aStart,
-                                 PRUint32 aEnd,
-                                 PRUint32 &aWidth);
-
   static nsresult FamilyExists(nsIDeviceContext *aDevice, const nsString& aName);
   static PRUint32 GetHints(void);
 
@@ -382,7 +356,7 @@ public:
   nsFontGTK   *mSubstituteFont;
 
   nsCStringArray mFonts;
-  PRInt32        mFontsIndex;
+  PRUint16       mFontsIndex;
   nsAutoVoidArray   mFontIsGeneric;
 
   nsCAutoString     mDefaultFont;
@@ -398,6 +372,7 @@ protected:
   nsFontGTK* LocateFont(PRUint32 aChar, PRInt32 & aCount);
 
   nsIDeviceContext    *mDeviceContext;
+  nsFont              *mFont;
   nsFontGTK           *mWesternFont;
   nsFontGTK           *mCurrentFont;
 
@@ -418,7 +393,6 @@ protected:
   nscoord             mUnderlineOffset;
   nscoord             mSpaceWidth;
   nscoord             mAveCharWidth;
-  PRInt32             mMaxStringLength;
 
   PRUint16            mPixelSize;
   PRUint8             mStretchIndex;
@@ -437,9 +411,7 @@ public:
 class nsHashKey;
 PRBool FreeNode(nsHashKey* aKey, void* aData, void* aClosure);
 nsFontCharSetInfo *GetCharSetInfo(const char *aCharSetName);
-#ifdef MOZ_ENABLE_FREETYPE2
 void CharSetNameToCodeRangeBits(const char*, PRUint32*, PRUint32*);
-#endif
 nsFontCharSetMap *GetCharSetMap(const char *aCharSetName);
 
 

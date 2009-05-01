@@ -1,10 +1,10 @@
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -13,7 +13,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  *   Joe Hewitt <hewitt@netscape.com> (Original Author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -39,20 +39,10 @@
 #include "nsCOMPtr.h"
 #include "nsCRT.h"
 
-static void SwapBytes(PRUnichar* aDest, const PRUnichar* aSrc, PRUint32 aLen)
-{
-  for(PRUint32 i = 0; i < aLen; i++)
-  {
-    PRUnichar aChar = *aSrc++;
-    *aDest++ = (0xff & (aChar >> 8)) | (aChar << 8);
-  }
-}
-
 NS_INTERFACE_MAP_BEGIN(nsAutoCompleteMdbResult)
   NS_INTERFACE_MAP_ENTRY(nsIAutoCompleteResult)
   NS_INTERFACE_MAP_ENTRY(nsIAutoCompleteBaseResult)
   NS_INTERFACE_MAP_ENTRY(nsIAutoCompleteMdbResult)
-  NS_INTERFACE_MAP_ENTRY(nsIAutoCompleteMdbResult2)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIAutoCompleteResult)
 NS_INTERFACE_MAP_END
 
@@ -61,8 +51,7 @@ NS_IMPL_RELEASE(nsAutoCompleteMdbResult)
 
 nsAutoCompleteMdbResult::nsAutoCompleteMdbResult() :
   mDefaultIndex(-1),
-  mSearchResult(nsIAutoCompleteResult::RESULT_IGNORED),
-  mReverseByteOrder(PR_FALSE)
+  mSearchResult(nsIAutoCompleteResult::RESULT_IGNORED)
 {
 }
 
@@ -130,7 +119,7 @@ nsAutoCompleteMdbResult::GetValueAt(PRInt32 aIndex, nsAString & _retval)
   sprintf(value, "foopy (%d)", aIndex);
   
   nsAutoString result;
-  result.AssignASCII(value);
+  result.AssignWithConversion(value);
   _retval = result;*/
 
   return NS_OK;
@@ -152,7 +141,7 @@ nsAutoCompleteMdbResult::GetCommentAt(PRInt32 aIndex, nsAString & _retval)
     _retval = NS_ConvertUTF8toUCS2(value);
   }
 
-  return NS_OK;
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
@@ -227,33 +216,8 @@ nsAutoCompleteMdbResult::RemoveValueAt(PRInt32 aRowIndex, PRBool aRemoveFromDb)
   NS_ENSURE_TRUE(row, NS_ERROR_INVALID_ARG);
 
   if (aRemoveFromDb && mTable && mEnv) {
-    // TODO: share this code with nsGlobalHistory::RemovePageInternal(),
-    // rather than duplicating it here.
-
-    nsIMdbPort *port = nsnull;
-    mTable->GetPort(mEnv, &port);  // note: doesn't addref
-
-    nsCOMPtr<nsIMdbStore> store = do_QueryInterface(port);
-    NS_ENSURE_TRUE(store, NS_ERROR_FAILURE);
-
     mdb_err err = mTable->CutRow(mEnv, row);
     NS_ENSURE_TRUE(!err, NS_ERROR_FAILURE);
-
-    row->CutAllColumns(mEnv);
-
-    // We must do a CompressCommit on the store now.  If we don't,
-    // mork can leave the file in an inconsistent state, which causes it to
-    // be killed the next time it's opened.
-
-    nsCOMPtr<nsIMdbThumb> thumb;
-    err = store->CompressCommit(mEnv, getter_AddRefs(thumb));
-    if (err == 0) {
-      mdb_count total, current;
-      mdb_bool done, broken;
-      do {
-	err = thumb->DoMore(mEnv, &total, &current, &done, &broken);
-      } while ((err == 0) && !broken && !done);
-    }
   }
 
   mResults.RemoveObjectAt(aRowIndex);
@@ -281,21 +245,9 @@ nsAutoCompleteMdbResult::GetRowValue(nsIMdbRow *aRow, mdb_column aCol, nsAString
     return NS_OK;
   
   switch (yarn.mYarn_Form) {
-    case 0: { // unicode
-      PRUint32 len = yarn.mYarn_Fill / sizeof(PRUnichar);
-      if (mReverseByteOrder) {
-        // The mdb file is other-endian, byte-swap the result
-        PRUnichar *swapval = new PRUnichar[len];
-        if (!swapval)
-          return NS_ERROR_OUT_OF_MEMORY;
-        SwapBytes(swapval, (const PRUnichar *)yarn.mYarn_Buf, len);
-        aValue.Assign(swapval, len);
-        delete swapval;
-      }
-      else
-        aValue.Assign((const PRUnichar *)yarn.mYarn_Buf, len);
+    case 0: // unicode
+      aValue.Assign((const PRUnichar *)yarn.mYarn_Buf, yarn.mYarn_Fill/sizeof(PRUnichar));
       break;
-    }
     case 1: // utf 8
       aValue.Assign(NS_ConvertUTF8toUCS2((const char*)yarn.mYarn_Buf, yarn.mYarn_Fill));
       break;
@@ -341,22 +293,5 @@ nsAutoCompleteMdbResult::GetIntRowValue(nsIMdbRow *aRow, mdb_column aCol,
   else
     *aValue = 0;
   
-  return NS_OK;
-}
-
-////////////////////////////////////////////////////////////////////////
-//// nsIAutoCompleteMdbResult2
-
-NS_IMETHODIMP
-nsAutoCompleteMdbResult::GetReverseByteOrder(PRBool *aReverseByteOrder)
-{
-  *aReverseByteOrder = mReverseByteOrder;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsAutoCompleteMdbResult::SetReverseByteOrder(PRBool aReverseByteOrder)
-{
-  mReverseByteOrder = aReverseByteOrder;
   return NS_OK;
 }

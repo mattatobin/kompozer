@@ -6,10 +6,7 @@
 }
 
 updateitem {
-  padding-top: 5px;
-  padding-bottom: 5px;
-  -moz-padding-start: 5px;
-  -moz-padding-end: 0px;
+  padding: 5px 0px 5px 5px;
   border-bottom: 1px dotted #C0C0C0;
   margin-bottom: 5px;
 }
@@ -23,7 +20,7 @@ updateitem {
   height: 32px;
   max-width: 32px !important;
   max-height: 32px !important;
-  -moz-margin-end: 5px;
+  margin-right: 5px;
 }
 
 .updateItemName {
@@ -92,10 +89,7 @@ toolbarbutton[type="updates"][severity="2"] > .toolbarbutton-icon {
   list-style-image: url("chrome://global/skin/throbber/Throbber-small.gif");
   width: 16px;
   height: 16px;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  -moz-margin-start: 5px;
-  -moz-margin-end: 2px;
+  margin: 5px 2px 5px 5px;
 }
 
 #incompatibleAlert {
@@ -164,8 +158,12 @@ link:active {
   color: #FF0000;
 }
 
+.linkLabel {
+  cursor: pointer; 
+}
+
 .updateCategoryContent {
-  -moz-margin-start: 12px;
+  margin-left: 12px;
 }
 
 #optionalItemsList {

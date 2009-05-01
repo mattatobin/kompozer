@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,30 +14,31 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Travis Bogard <travis@netscape.com>
+ *   Travis Bogard <travis@netscape.com> 
  *   Dan Rosen <dr@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsDocShell.h"
+#include "nsIWebShell.h"
 #include "nsWebShell.h"
 #include "nsIWebBrowserChrome.h"
 #include "nsIInterfaceRequestor.h"
@@ -52,11 +53,13 @@
 #include "nsIStreamListener.h"
 #include "nsIPrompt.h"
 #include "nsNetUtil.h"
+#include "nsIDNSService.h"
+#include "nsISocketProvider.h"
 #include "nsIRefreshURI.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIScriptGlobalObjectOwner.h"
 #include "nsIDOMEvent.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIComponentManager.h"
 #include "nsIEventQueueService.h"
 #include "nsCRT.h"
@@ -118,7 +121,8 @@
 #include "nsIExternalProtocolService.h"
 #include "nsCExternalHandlerService.h"
 
-#include "nsIIDNService.h"
+// Used in the fixup code
+#include "prnetdb.h"
 
 #ifdef NS_DEBUG
 /**
@@ -179,11 +183,31 @@ nsWebShell::~nsWebShell()
 {
    Destroy();
 
+  // Stop any pending document loads and destroy the loader...
+  if (mDocLoader) {
+    mDocLoader->Stop();
+    mDocLoader->SetContainer(nsnull);
+    mDocLoader->Destroy();
+    mDocLoader = nsnull;
+  }
+  // Cancel any timers that were set for this loader.
+  CancelRefreshURITimers();
+
   ++mRefCnt; // following releases can cause this destructor to be called
              // recursively if the refcount is allowed to remain 0
 
   mContentViewer=nsnull;
   mDeviceContext=nsnull;
+  NS_IF_RELEASE(mContainer);
+
+  if (mScriptGlobal) {
+    mScriptGlobal->SetDocShell(nsnull);
+    mScriptGlobal = nsnull;
+  }
+  if (mScriptContext) {
+    mScriptContext->SetOwner(nsnull);
+    mScriptContext = nsnull;
+  }
 
   InitFrameData();
 
@@ -230,7 +254,9 @@ NS_IMPL_ADDREF_INHERITED(nsWebShell, nsDocShell)
 NS_IMPL_RELEASE_INHERITED(nsWebShell, nsDocShell)
 
 NS_INTERFACE_MAP_BEGIN(nsWebShell)
+   NS_INTERFACE_MAP_ENTRY(nsIWebShell)
    NS_INTERFACE_MAP_ENTRY(nsIWebShellServices)
+   NS_INTERFACE_MAP_ENTRY(nsIWebShellContainer)
    NS_INTERFACE_MAP_ENTRY(nsILinkHandler)
    NS_INTERFACE_MAP_ENTRY(nsIClipboardCommands)
 NS_INTERFACE_MAP_END_INHERITING(nsDocShell)
@@ -238,19 +264,73 @@ NS_INTERFACE_MAP_END_INHERITING(nsDocShell)
 NS_IMETHODIMP
 nsWebShell::GetInterface(const nsIID &aIID, void** aInstancePtr)
 {
-   NS_PRECONDITION(aInstancePtr, "null out param");
-
+   NS_ENSURE_ARG_POINTER(aInstancePtr);
+   nsresult rv = NS_OK;
    *aInstancePtr = nsnull;
 
-   if(aIID.Equals(NS_GET_IID(nsICommandManager)))
+   if(aIID.Equals(NS_GET_IID(nsILinkHandler)))
+      {
+      // Note: If we ever allow for registering other link handlers,
+      // we need to make sure that link handler implementations take
+      // the necessary precautions to prevent the security compromise
+      // that is blocked by nsWebSell::OnLinkClickSync().
+
+      *aInstancePtr = NS_STATIC_CAST(nsILinkHandler*, this);
+      NS_ADDREF((nsISupports*)*aInstancePtr);
+      return NS_OK;
+      }
+   else if(aIID.Equals(NS_GET_IID(nsIScriptGlobalObjectOwner)))
+      {
+      *aInstancePtr = NS_STATIC_CAST(nsIScriptGlobalObjectOwner*, this);
+      NS_ADDREF((nsISupports*)*aInstancePtr);
+      return NS_OK;
+      }
+   else if(aIID.Equals(NS_GET_IID(nsIScriptGlobalObject)))
+      {
+      NS_ENSURE_SUCCESS(EnsureScriptEnvironment(), NS_ERROR_FAILURE);
+      *aInstancePtr = mScriptGlobal;
+      NS_ADDREF((nsISupports*)*aInstancePtr);
+      return NS_OK;
+      }
+   else if(aIID.Equals(NS_GET_IID(nsIDOMWindowInternal)) ||
+           aIID.Equals(NS_GET_IID(nsIDOMWindow)))
+
+      {
+      NS_ENSURE_SUCCESS(EnsureScriptEnvironment(), NS_ERROR_FAILURE);
+      NS_ENSURE_SUCCESS(mScriptGlobal->QueryInterface(aIID, aInstancePtr),
+                        NS_ERROR_FAILURE);
+      return NS_OK;
+      }
+   else if(aIID.Equals(NS_GET_IID(nsICommandManager)))
       {
       NS_ENSURE_SUCCESS(EnsureCommandHandler(), NS_ERROR_FAILURE);
-      *aInstancePtr = mCommandManager;
-      NS_ADDREF((nsISupports*) *aInstancePtr);
+      NS_ENSURE_SUCCESS(mCommandManager->QueryInterface(NS_GET_IID(nsICommandManager),
+         aInstancePtr), NS_ERROR_FAILURE);
       return NS_OK;
       }
 
-   return nsDocShell::GetInterface(aIID, aInstancePtr);
+   if (!*aInstancePtr || NS_FAILED(rv))
+     return nsDocShell::GetInterface(aIID,aInstancePtr);
+   else
+     return rv;
+}
+
+NS_IMETHODIMP
+nsWebShell::SetContainer(nsIWebShellContainer* aContainer)
+{
+  NS_IF_RELEASE(mContainer);
+  mContainer = aContainer;
+  NS_IF_ADDREF(mContainer);
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsWebShell::GetContainer(nsIWebShellContainer*& aResult)
+{
+  aResult = mContainer;
+  NS_IF_ADDREF(mContainer);
+  return NS_OK;
 }
 
 nsEventStatus PR_CALLBACK
@@ -259,6 +339,19 @@ nsWebShell::HandleEvent(nsGUIEvent *aEvent)
   return nsEventStatus_eIgnore;
 }
 
+
+/**
+ * Document Load methods
+ */
+NS_IMETHODIMP
+nsWebShell::GetDocumentLoader(nsIDocumentLoader*& aResult)
+{
+  aResult = mDocLoader;
+  if (!mDocLoader)
+    return NS_ERROR_FAILURE;
+  NS_ADDREF(aResult);
+  return NS_OK;
+}
 
 //----------------------------------------------------------------------
 // Web Shell Services API
@@ -411,10 +504,6 @@ nsWebShell::OnLinkClick(nsIContent* aContent,
                         nsIInputStream* aPostDataStream,
                         nsIInputStream* aHeadersDataStream)
 {
-  if (mFiredUnloadEvent) {
-    return NS_OK;
-  }
-  
   OnLinkClickEvent* ev;
 
   ev = new OnLinkClickEvent(this, aContent, aVerb, aURI,
@@ -447,18 +536,6 @@ nsWebShell::OnLinkClickSync(nsIContent *aContent,
                             nsIDocShell** aDocShell,
                             nsIRequest** aRequest)
 {
-  // Initialize the DocShell / Request
-  if (aDocShell) {
-    *aDocShell = nsnull;
-  }
-  if (aRequest) {
-    *aRequest = nsnull;
-  }
-
-  if (mFiredUnloadEvent) {
-    return NS_OK;
-  }
-
   {
     // defer to an external protocol handler if necessary...
     nsCOMPtr<nsIExternalProtocolService> extProtService = do_GetService(NS_EXTERNALPROTOCOLSERVICE_CONTRACTID);
@@ -501,7 +578,10 @@ nsWebShell::OnLinkClickSync(nsIContent *aContent,
     GetPresShell(getter_AddRefs(presShell));
     NS_ENSURE_TRUE(presShell, NS_ERROR_FAILURE);
 
-    if (presShell->GetDocument() != sourceDoc) {
+    nsCOMPtr<nsIDocument> currentDoc;
+    presShell->GetDocument(getter_AddRefs(currentDoc));
+
+    if (currentDoc != sourceDoc) {
       // The source is not in the current document, don't let it
       // execute any javascript in the current document.
 
@@ -534,10 +614,17 @@ nsWebShell::OnLinkClickSync(nsIContent *aContent,
     anchor->GetType(typeHint);
   }
   
+  // Initialize the DocShell / Request
+  if (aDocShell) {
+    *aDocShell = nsnull;
+  }
+  if (aRequest) {
+    *aRequest = nsnull;
+  }
+
   switch(aVerb) {
     case eLinkVerb_New:
-      NS_ASSERTION(target.IsEmpty(), "Losing window name information");
-      target.AssignLiteral("_blank");
+      target.Assign(NS_LITERAL_STRING("_blank"));
       // Fall into replace case
     case eLinkVerb_Undefined:
       // Fall through, this seems like the most reasonable action
@@ -654,17 +741,12 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
   else 
     mCharsetReloadState = eCharsetReloadInit;
 
-  // Save a pointer to the currently-loading history entry.
-  // nsDocShell::EndPageLoad will clear mLSHE, but we may need this history
-  // entry further down in this method.
-  nsCOMPtr<nsISHEntry> loadingSHE = mLSHE;
-  
   //
   // one of many safeguards that prevent death and destruction if
   // someone is so very very rude as to bring this window down
   // during this load handler.
   //
-  nsCOMPtr<nsIDocShell> kungFuDeathGrip(this);
+  nsCOMPtr<nsIWebShell> kungFuDeathGrip(this);
   nsDocShell::EndPageLoad(aProgress, channel, aStatus);
 
   // Test if this is the top frame or a subframe
@@ -688,11 +770,17 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
 
   if(url && NS_FAILED(aStatus)) {
     if (aStatus == NS_ERROR_FILE_NOT_FOUND) {
-      DisplayLoadError(aStatus, url, nsnull, channel);
+      DisplayLoadError(aStatus, url, nsnull);
       return NS_OK;
     }  
 
-    if (sURIFixup)
+    // Create the fixup object if necessary
+    if (!mURIFixup)
+    {
+      mURIFixup = do_GetService(NS_URIFIXUP_CONTRACTID);
+    }
+
+    if (mURIFixup)
     {
       //
       // Try and make an alternative URI from the old one
@@ -705,17 +793,12 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
       //
       // First try keyword fixup
       //
-      if (aStatus == NS_ERROR_UNKNOWN_HOST && mAllowKeywordFixup)
+      if (aStatus == NS_ERROR_UNKNOWN_HOST)  
       {
         PRBool keywordsEnabled = PR_FALSE;
 
         if (mPrefs && NS_FAILED(mPrefs->GetBoolPref("keyword.enabled", &keywordsEnabled)))
             keywordsEnabled = PR_FALSE;
-
-        nsCOMPtr<nsIURIFixup_MOZILLA_1_8_BRANCH> uriFix =
-          do_QueryInterface(sURIFixup);
-        if (!uriFix)
-          keywordsEnabled = PR_FALSE;
 
         nsCAutoString host;
         url->GetHost(host);
@@ -739,28 +822,19 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
             keywordsEnabled = PR_FALSE;
         }
 
-        if(keywordsEnabled && (kNotFound == dotLoc)) {
+        // Don't perform fixup on an IP address
+        PRNetAddr addr;
+        if(PR_StringToNetAddr(host.get(), &addr) == PR_SUCCESS) {
+            keywordsEnabled = PR_FALSE;
+        }
+
+        if(keywordsEnabled && (-1 == dotLoc)) {
           // only send non-qualified hosts to the keyword server
-          //
-          // If this string was passed through nsStandardURL by chance, then it
-          // may have been converted from UTF-8 to ACE, which would result in a
-          // completely bogus keyword query.  Here we try to recover the
-          // original Unicode value, but this is not 100% correct since the
-          // value may have been normalized per the IDN normalization rules.
-          //
-          // Since we don't have access to the exact original string that was
-          // entered by the user, this will just have to do.
-          //
-          PRBool isACE;
-          nsCAutoString utf8Host;
-          nsCOMPtr<nsIIDNService> idnSrv =
-              do_GetService(NS_IDNSERVICE_CONTRACTID);
-          if (idnSrv &&
-              NS_SUCCEEDED(idnSrv->IsACE(host, &isACE)) && isACE &&
-              NS_SUCCEEDED(idnSrv->ConvertACEtoUTF8(host, utf8Host)))
-            uriFix->KeywordToURI(utf8Host, getter_AddRefs(newURI));
-          else
-            uriFix->KeywordToURI(host, getter_AddRefs(newURI));
+          nsCAutoString keywordSpec("keyword:");
+          keywordSpec += host;
+
+          NS_NewURI(getter_AddRefs(newURI),
+                    keywordSpec, nsnull);
         } // end keywordsEnabled
       }
 
@@ -797,7 +871,7 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
         if (doCreateAlternate)
         {
           newURI = nsnull;
-          sURIFixup->CreateFixupURI(oldSpec,
+          mURIFixup->CreateFixupURI(oldSpec,
               nsIURIFixup::FIXUP_FLAGS_MAKE_ALTERNATE_URI, getter_AddRefs(newURI));
         }
       }
@@ -841,16 +915,15 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
          aStatus == NS_ERROR_UNKNOWN_PROXY_HOST || 
          aStatus == NS_ERROR_PROXY_CONNECTION_REFUSED) &&
             (isTopFrame || mUseErrorPages)) {
-      DisplayLoadError(aStatus, url, nsnull, channel);
+      DisplayLoadError(aStatus, url, nsnull);
     }
     // Errors to be shown for any frame
     else if (aStatus == NS_ERROR_NET_TIMEOUT ||
              aStatus == NS_ERROR_REDIRECT_LOOP ||
              aStatus == NS_ERROR_UNKNOWN_SOCKET_TYPE ||
              aStatus == NS_ERROR_NET_INTERRUPT ||
-             aStatus == NS_ERROR_NET_RESET ||
-             aStatus == NS_ERROR_UNSAFE_CONTENT_TYPE) {
-      DisplayLoadError(aStatus, url, nsnull, channel);
+             aStatus == NS_ERROR_NET_RESET) {
+      DisplayLoadError(aStatus, url, nsnull);
     }
     else if (aStatus == NS_ERROR_DOCUMENT_NOT_CACHED) {
       /* A document that was requested to be fetched *only* from
@@ -878,8 +951,9 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
             
           if (NS_SUCCEEDED(rv) && messageStr) {
             prompter->Confirm(nsnull, messageStr, &repost);
-            /* If the user pressed cancel in the dialog, return. Don't
-             * try to load the page with out the post data.
+            /* If the user pressed cancel in the dialog, 
+             * return failure. Don't try to load the page with out 
+             * the post data. 
              */
             if (!repost)
               return NS_OK;
@@ -906,25 +980,9 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
 
             if (rootSH && (mLoadType & LOAD_CMD_HISTORY)) {
               nsCOMPtr<nsISHistoryInternal> shInternal(do_QueryInterface(rootSH));
-              if (shInternal) {
-                rootSH->GetIndex(&mPreviousTransIndex);
-                shInternal->UpdateIndex();
-                rootSH->GetIndex(&mLoadedTransIndex);
-#ifdef DEBUG_PAGE_CACHE
-                printf("Previous index: %d, Loaded index: %d\n\n",
-                       mPreviousTransIndex, mLoadedTransIndex);
-#endif
-              }
+              if (shInternal)
+               shInternal->UpdateIndex();
             }
-
-            // Make it look like we really did honestly finish loading the
-            // history page we were loading, since the "reload" load we're
-            // about to kick off will reload our current history entry.  This
-            // is a bit of a hack, and if the force-load fails I think we'll
-            // end up being confused about what page we're on... but we would
-            // anyway, since we've updated the session history index above.
-            SetHistoryEntry(&mOSHE, loadingSHE);
-            
             /* The user does want to repost the data to the server.
              * Initiate a new load again.
              */
@@ -964,7 +1022,7 @@ nsresult nsWebShell::EndPageLoad(nsIWebProgress *aProgress,
         }
       }
       else {
-        DisplayLoadError(aStatus, url, nsnull, channel);
+        DisplayLoadError(aStatus, url, nsnull);
       }
     }
   } // if we have a host
@@ -990,7 +1048,8 @@ nsWebShell::GetControllerForCommand ( const char * inCommand, nsIController** ou
   
   nsCOMPtr<nsPIDOMWindow> window ( do_QueryInterface(mScriptGlobal) );
   if ( window ) {
-    nsIFocusController *focusController = window->GetRootFocusController();
+    nsCOMPtr<nsIFocusController> focusController;
+    rv = window->GetRootFocusController ( getter_AddRefs(focusController) );
     if ( focusController )
       rv = focusController->GetControllerForCommand ( inCommand, outController );
   } // if window
@@ -1135,11 +1194,6 @@ nsWebShell::SelectNone(void)
 
 NS_IMETHODIMP nsWebShell::Create()
 {
-  if (mPrefs) {
-    // We've already been created
-    return NS_OK;
-  }
-  
   // Remember the current thread (in current and forseeable implementations,
   // it'll just be the unique UI thread)
   //
@@ -1151,7 +1205,32 @@ NS_IMETHODIMP nsWebShell::Create()
   WEB_TRACE(WEB_TRACE_CALLS,
             ("nsWebShell::Init: this=%p", this));
 
+  // HACK....force the uri loader to give us a load cookie for this webshell...then get its
+  // doc loader and store it...as more of the docshell lands, we'll be able to get rid
+  // of this hack...
+  nsresult rv;
+  nsCOMPtr<nsIURILoader> uriLoader = do_GetService(NS_URI_LOADER_CONTRACTID, &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  rv = uriLoader->GetDocumentLoaderForContext(NS_STATIC_CAST(nsIWebShell*, this),
+                                              getter_AddRefs(mDocLoader));
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIContentViewerContainer> shellAsContainer;
+  CallQueryInterface(this, NS_STATIC_CAST(nsIContentViewerContainer**, getter_AddRefs(shellAsContainer)));
+  // Set the webshell as the default IContentViewerContainer for the loader...
+  mDocLoader->SetContainer(shellAsContainer);
+
   return nsDocShell::Create();
+}
+
+NS_IMETHODIMP nsWebShell::Destroy()
+{
+  nsDocShell::Destroy();
+
+  SetContainer(nsnull);
+
+  return NS_OK;
 }
 
 #ifdef DEBUG

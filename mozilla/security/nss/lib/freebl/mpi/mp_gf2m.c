@@ -1,5 +1,4 @@
 /*
- * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -12,16 +11,16 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is the Multi-precision Binary Polynomial Arithmetic Library.
+ * The Original Code is the Multi-precision Binary Polynomial Arithmetic 
+ * Library.
  *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Sun Microsystems, Inc.
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Sheueling Chang Shantz <sheueling.chang@sun.com> and
- *   Douglas Stebila <douglas@stebila.ca> of Sun Laboratories.
+ *      Sheueling Chang Shantz <sheueling.chang@sun.com> and
+ *      Douglas Stebila <douglas@stebila.ca> of Sun Laboratories.
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -35,7 +34,7 @@
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "mp_gf2m.h"
 #include "mp_gf2m-priv.h"
@@ -92,7 +91,7 @@ s_bmul_1x1(mp_digit *rh, mp_digit *rl, const mp_digit a, const mp_digit b)
     mp_digit tab[16], top3b = a >> 61;
     register mp_digit a1, a2, a4, a8;
 
-    a1 = a & (0x1FFFFFFFFFFFFFFFULL); a2 = a1 << 1; 
+    a1 = a & (0x1FFFFFFFFFFFFFFF); a2 = a1 << 1; 
     a4 = a2 << 1; a8 = a4 << 1;
     tab[ 0] = 0;     tab[ 1] = a1;       tab[ 2] = a2;       tab[ 3] = a1^a2;
     tab[ 4] = a4;    tab[ 5] = a1^a4;    tab[ 6] = a2^a4;    tab[ 7] = a1^a2^a4;
@@ -544,9 +543,6 @@ mp_bdivmod(const mp_int *y, const mp_int *x, const mp_int *pp,
     MP_CHECKOK( mp_copy(u, r) );
 
 CLEANUP:
-    mp_clear(&aa);
-    mp_clear(&bb);
-    mp_clear(&uu);
     return res;
 
 }

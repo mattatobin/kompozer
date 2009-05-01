@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
@@ -23,17 +23,18 @@
  *   Vidur Apparao (vidur@netscape.com)  (Original author)
  *   John Bandhauer (jband@netscape.com)
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -46,7 +47,6 @@
 #include "nsISOAPHeaderBlock.h"
 #include "nsISOAPEncoding.h"
 #include "nsIComponentManager.h"
-#include "nsIVariant.h"
 #include "nsVoidArray.h"
 
 #define NS_SOAP_1_1_ENCODING_NAMESPACE \
@@ -103,7 +103,7 @@ WSPProxy::Init(nsIWSDLPort* aPort, nsIInterfaceInfo* aPrimaryInterface,
       return NS_ERROR_FAILURE;
     }
     rv = mPrimaryInterface->GetInfoForParam(3, &listenerParam,
-                                            getter_AddRefs(mListenerInterfaceInfo));
+                                      getter_AddRefs(mListenerInterfaceInfo));
     if (NS_FAILED(rv)) {
       return rv;
     }
@@ -159,22 +159,6 @@ WSPProxy::QueryInterface(REFNSIID aIID, void** aInstancePtr)
 // Implementation of nsXPTCStubBase methods
 //
 ///////////////////////////////////////////////////
-
-/**
- * Asynchronous processing :
- * 1-> WSPProxy::CallMethod
- * 2  -> WSPCallContext::CallAsync
- * 3    -> nsSOAPCall::AsyncInvoke
- * 4      -> nsXXXSOAPTransport::AsyncCall
- * 5        -> nsIXMLHttpRequest::Send, nsXXXSOAPTransportCompletion::AddEventListener
- * ---- asynchronous ----
- * 6          -> nsXXXSOAPTransportCompletion::HandleEvent
- * 7            -> WSPCallContext::HandleResponse, 
- *                 WSPCallContext::CallCompletionListener
- * 8              -> nsSOAPBlock::SetSchemaType, nsSOAPBlock::GetValue
- * 9                -> nsSOAPEncoding::Decode, nsDefaultSOAPDecode::Decode
- * 10                 -> WSPProxy::CallCompleted
- */
 NS_IMETHODIMP
 WSPProxy::CallMethod(PRUint16 methodIndex,
                      const nsXPTMethodInfo* info,
@@ -402,8 +386,8 @@ WSPProxy::CallMethod(PRUint16 methodIndex,
 
     nsCOMPtr<nsISchemaType> type;
     nsAutoString blockName, blockNamespace;
-    nsCOMPtr<nsISchemaElement> element = do_QueryInterface(schemaComponent);
 
+    nsCOMPtr<nsISchemaElement> element = do_QueryInterface(schemaComponent);
     if (element) {
       rv = element->GetType(getter_AddRefs(type));
       if (NS_FAILED(rv)) {
@@ -683,7 +667,6 @@ WSPProxy::XPTCMiniVariantToVariant(uint8 aTypeTag, nsXPTCMiniVariant aResult,
       var->SetAsWString(NS_STATIC_CAST(PRUnichar*, aResult.val.p));
       break;
     case nsXPTType::T_DOMSTRING:
-    case nsXPTType::T_ASTRING:
       var->SetAsAString(*((nsAString*)aResult.val.p));
       break;
     case nsXPTType::T_INTERFACE:
@@ -834,6 +817,9 @@ WSPProxy::VariantToInParameter(nsIInterfaceInfo* aInterfaceInfo,
     return rv;
   }
   
+  // Set the param's type on the XPTCVariant because xptcinvoke's 
+  // invoke_copy_to_stack depends on it. This fixes bug 203434.
+  aXPTCVariant->type = type;
   
   uint8 type_tag = type.TagPart();
   nsCOMPtr<nsIInterfaceInfo> iinfo;
@@ -853,15 +839,9 @@ WSPProxy::VariantToInParameter(nsIInterfaceInfo* aInterfaceInfo,
       }
     }
 
-    aXPTCVariant[0].type = nsXPTType::T_U32;
-    aXPTCVariant[1].type = nsXPTType::T_ARRAY;
-    aXPTCVariant[1].SetValIsArray();
-    return VariantToArrayValue(arrayType.TagPart(), aXPTCVariant, aXPTCVariant+1,
+    return VariantToArrayValue(arrayType.TagPart(), aXPTCVariant,
                                iinfo, aVariant);
   }
-  // Set the param's type on the XPTCVariant because xptcinvoke's 
-  // invoke_copy_to_stack depends on it. This fixes bug 203434.
-  aXPTCVariant->type = type;
   // else
   if (type.IsInterfacePointer()) {
     rv = aInterfaceInfo->GetInfoForParam(aMethodIndex, aParamInfo, 
@@ -913,8 +893,7 @@ WSPProxy::VariantToOutParameter(nsIInterfaceInfo* aInterfaceInfo,
         return rv;
       }
     }
-    return VariantToArrayValue(arrayType.TagPart(), 
-                               aMiniVariant, aMiniVariant + 1,
+    return VariantToArrayValue(arrayType.TagPart(), aMiniVariant,
                                iinfo, aVariant);
   }
   // else
@@ -1000,7 +979,6 @@ WSPProxy::VariantToValue(uint8 aTypeTag, void* aValue,
       rv = aProperty->GetAsWString((PRUnichar**)aValue);
       break;
     case nsXPTType::T_DOMSTRING:
-    case nsXPTType::T_ASTRING:
       rv = aProperty->GetAsAString(*(nsAString*)aValue);
       break;
     case nsXPTType::T_INTERFACE:
@@ -1046,9 +1024,7 @@ WSPProxy::VariantToValue(uint8 aTypeTag, void* aValue,
 }
 
 nsresult
-WSPProxy::VariantToArrayValue(uint8 aTypeTag,
-                              nsXPTCMiniVariant* aResultSize,
-                              nsXPTCMiniVariant* aResultArray,
+WSPProxy::VariantToArrayValue(uint8 aTypeTag, nsXPTCMiniVariant* aResult,
                               nsIInterfaceInfo* aInterfaceInfo,
                               nsIVariant* aProperty)
 {
@@ -1062,8 +1038,7 @@ WSPProxy::VariantToArrayValue(uint8 aTypeTag,
     return rv;
   }
 
-  aResultSize->val.u32 = count;
-
+  *((PRUint32*)aResult[0].val.p) = count;
   switch (aTypeTag) {
     case nsXPTType::T_I8:
     case nsXPTType::T_U8:
@@ -1080,13 +1055,13 @@ WSPProxy::VariantToArrayValue(uint8 aTypeTag,
     case nsXPTType::T_WCHAR:
     case nsXPTType::T_CHAR_STR:
     case nsXPTType::T_WCHAR_STR:
-      aResultArray->val.p = array;
+      *((void**)aResult[1].val.p) = array;
       break;
     case nsXPTType::T_INTERFACE:
     case nsXPTType::T_INTERFACE_IS:
     {
       if (arrayIID.Equals(NS_GET_IID(nsIVariant))) {
-        aResultArray->val.p = array;
+        *((void**)aResult[1].val.p) = array;
       }
       else if (!arrayIID.Equals(NS_GET_IID(nsIPropertyBag))) {
         NS_ERROR("Array of complex types should be represented by property "
@@ -1123,7 +1098,7 @@ WSPProxy::VariantToArrayValue(uint8 aTypeTag,
             }
           }
         }
-        aResultArray->val.p = outptr;
+        *((void**)aResult[1].val.p) = outptr;
       }
       break;
     }
@@ -1266,16 +1241,8 @@ WSPProxy::GetInterfaces(PRUint32 *count, nsIID * **array)
   }
 
   iids[0] = NS_STATIC_CAST(nsIID *, nsMemory::Clone(mIID, sizeof(nsIID)));
-  if (NS_UNLIKELY(!iids[0])) {
-    NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(0, iids);
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
   const nsIID& wsiid = NS_GET_IID(nsIWebServiceProxy);
   iids[1] = NS_STATIC_CAST(nsIID *, nsMemory::Clone(&wsiid, sizeof(nsIID)));
-  if (NS_UNLIKELY(!iids[1])) {
-    NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(1, iids);
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
 
   *array = iids;
 

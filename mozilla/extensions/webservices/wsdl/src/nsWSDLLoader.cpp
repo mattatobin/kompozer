@@ -1,42 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is Mozilla.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications.  Portions created by Netscape Communications are
+ * Copyright (C) 2001 by Netscape Communications.  All
+ * Rights Reserved.
  *
  * Contributor(s):
  *   Vidur Apparao <vidur@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-
-#include "nsIWebServiceErrorHandler.h"
+ */
 
 #include "nsWSDLLoader.h"
 
@@ -46,6 +29,8 @@
 #include "nsNetUtil.h"
 
 // content includes
+#include "nsIContent.h"
+#include "nsINodeInfo.h"
 #include "nsIDOMDocument.h"
 #include "nsIDOM3Node.h"
 
@@ -60,8 +45,6 @@
 // XPCOM includes
 #include "nsIServiceManager.h"
 #include "nsIComponentManager.h"
-#include "nsStaticAtom.h"
-
 
 // XMLExtras includes
 #include "nsISOAPMessage.h"
@@ -78,21 +61,90 @@
 //
 ////////////////////////////////////////////////////////////
 
-// define storage for all atoms
-#define WSDL_ATOM(_name, _value) nsIAtom* nsWSDLAtoms::_name;
-#include "nsWSDLAtomList.h"
-#undef WSDL_ATOM
+// Statics
+nsIAtom* nsWSDLAtoms::sDefinitions_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sImport_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sTypes_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sMessage_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sPortType_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sBinding_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sService_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sPort_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sOperation_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sPart_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sDocumentation_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sInput_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sOutput_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sFault_atom = nsnull;
 
-static const nsStaticAtom atomInfo[] = {
-#define WSDL_ATOM(_name, _value) { _value, &nsWSDLAtoms::_name },
-#include "nsWSDLAtomList.h"
-#undef WSDL_ATOM
-};
+nsIAtom* nsWSDLAtoms::sBody_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sHeader_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sHeaderFault_atom = nsnull;
+nsIAtom* nsWSDLAtoms::sAddress_atom = nsnull;
+
+nsIAtom* nsWSDLAtoms::sSchema_atom = nsnull;
+
+#define SET_AND_CHECK_ATOM(_atom, _val)   \
+  PR_BEGIN_MACRO                          \
+    _atom = NS_NewAtom(_val);             \
+    if (!_atom)                           \
+      return NS_ERROR_OUT_OF_MEMORY;      \
+  PR_END_MACRO
 
 nsresult
-nsWSDLAtoms::AddRefAtoms()
+nsWSDLAtoms::CreateWSDLAtoms()
 {
-  return NS_RegisterStaticAtoms(atomInfo, NS_ARRAY_LENGTH(atomInfo));
+  NS_ASSERTION(!sDefinitions_atom, "nsWSDLAtoms already created!");
+
+  SET_AND_CHECK_ATOM(sDefinitions_atom,   "definitions");
+  SET_AND_CHECK_ATOM(sImport_atom,        "import");
+  SET_AND_CHECK_ATOM(sTypes_atom,         "types");
+  SET_AND_CHECK_ATOM(sMessage_atom,       "message");
+  SET_AND_CHECK_ATOM(sPortType_atom,      "portType");
+  SET_AND_CHECK_ATOM(sBinding_atom,       "binding");
+  SET_AND_CHECK_ATOM(sService_atom,       "service");
+  SET_AND_CHECK_ATOM(sPort_atom,          "port");
+  SET_AND_CHECK_ATOM(sOperation_atom,     "operation");
+  SET_AND_CHECK_ATOM(sPart_atom,          "part");
+  SET_AND_CHECK_ATOM(sDocumentation_atom, "documentation");
+  SET_AND_CHECK_ATOM(sInput_atom,         "input");
+  SET_AND_CHECK_ATOM(sOutput_atom,        "output");
+  SET_AND_CHECK_ATOM(sFault_atom,         "fault");
+
+  SET_AND_CHECK_ATOM(sBody_atom,          "body");
+  SET_AND_CHECK_ATOM(sHeader_atom,        "header");
+  SET_AND_CHECK_ATOM(sHeaderFault_atom,   "headerFault");
+  SET_AND_CHECK_ATOM(sAddress_atom,       "address");
+
+  SET_AND_CHECK_ATOM(sSchema_atom,        "schema");
+
+  return NS_OK;
+}
+
+void
+nsWSDLAtoms::DestroyWSDLAtoms()
+{
+  NS_IF_RELEASE(sDefinitions_atom);
+  NS_IF_RELEASE(sImport_atom);
+  NS_IF_RELEASE(sTypes_atom);
+  NS_IF_RELEASE(sMessage_atom);
+  NS_IF_RELEASE(sPortType_atom);
+  NS_IF_RELEASE(sBinding_atom);
+  NS_IF_RELEASE(sService_atom);
+  NS_IF_RELEASE(sPort_atom);
+  NS_IF_RELEASE(sOperation_atom);
+  NS_IF_RELEASE(sPart_atom);
+  NS_IF_RELEASE(sDocumentation_atom);
+  NS_IF_RELEASE(sInput_atom);
+  NS_IF_RELEASE(sOutput_atom);
+  NS_IF_RELEASE(sFault_atom);
+
+  NS_IF_RELEASE(sBody_atom);
+  NS_IF_RELEASE(sHeader_atom);
+  NS_IF_RELEASE(sHeaderFault_atom);
+  NS_IF_RELEASE(sAddress_atom);
+
+  NS_IF_RELEASE(sSchema_atom);
 }
 
 ////////////////////////////////////////////////////////////
@@ -125,7 +177,19 @@ nsWSDLLoader::Init()
     }
   }
 
-  return disabled ? NS_ERROR_WSDL_NOT_ENABLED : NS_OK;
+  if (disabled) {
+    return NS_ERROR_WSDL_NOT_ENABLED;
+  }
+
+  if (!nsWSDLAtoms::sDefinitions_atom) {
+    nsresult rv = nsWSDLAtoms::CreateWSDLAtoms();
+
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+  }
+
+  return NS_OK;
 }
 nsresult
 nsWSDLLoader::GetResolvedURI(const nsAString& aWSDLURI, const char* aMethod,
@@ -242,13 +306,6 @@ nsWSDLLoadRequest::nsWSDLLoadRequest(PRBool aIsSync,
                                      const nsAString& aPortName)
   : mListener(aListener), mIsSync(aIsSync), mPortName(aPortName)
 {
-  mErrorHandler = mListener;
-
-  if (!mErrorHandler) {
-    NS_WARNING("nsWSDLLoadRequest::<init>: Error about interface "
-               "nsIWebserviceErrorHandler");
-
-  }
 }
 
 nsWSDLLoadRequest::~nsWSDLLoadRequest()
@@ -294,7 +351,7 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
   }
 
   // Force the mimetype of the returned stream to be xml.
-  rv = mRequest->OverrideMimeType(NS_LITERAL_CSTRING("application/xml"));
+  rv = mRequest->OverrideMimeType(NS_LITERAL_CSTRING("text/xml"));
   if (NS_FAILED(rv)) {
     return rv;
   }
@@ -325,10 +382,6 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
     nsCOMPtr<nsIDOMDocument> document;
     rv = mRequest->GetResponseXML(getter_AddRefs(document));
     if (NS_FAILED(rv)) {
-      nsAutoString errorMsg(NS_LITERAL_STRING("Failure retrieving XML "));
-      errorMsg.AppendLiteral("response for WSDL");
-      NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
       return rv;
     }
 
@@ -340,17 +393,6 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
                                NS_LITERAL_STRING(NS_WSDL_NAMESPACE))) {
         rv = PushContext(document, aURI);
         if (NS_FAILED(rv)) {
-          nsAutoString elementName;
-          nsresult rc = element->GetTagName(elementName);
-          NS_ENSURE_SUCCESS(rc, rc);
-
-          nsAutoString errorMsg;
-          errorMsg.AppendLiteral("Failure queuing element \"");
-          errorMsg.Append(elementName);
-          errorMsg.AppendLiteral("\" to be processed");
-
-          NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
           return rv;
         }
 
@@ -359,17 +401,6 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
         PopContext();
 
         if (NS_FAILED(rv)) {
-          nsAutoString elementName;
-          nsresult rc = element->GetTagName(elementName);
-          NS_ENSURE_SUCCESS(rc, rc);
-
-          nsAutoString errorMsg;
-          errorMsg.AppendLiteral("Failure processing WSDL element \"");
-          errorMsg.Append(elementName);
-          errorMsg.AppendLiteral("\"");
-
-          NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
           return rv;
         }
       }
@@ -378,7 +409,7 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
                IsElementOfNamespace(element,
                              NS_LITERAL_STRING(SCHEMA_1999_NAMESPACE))) {
         nsCOMPtr<nsISchema> schema;
-        rv = mSchemaLoader->ProcessSchemaElement(element, mErrorHandler,
+        rv = mSchemaLoader->ProcessSchemaElement(element,
                                                  getter_AddRefs(schema));
         if (NS_FAILED(rv)) {
           return NS_ERROR_WSDL_SCHEMA_PROCESSING_ERROR;
@@ -391,27 +422,10 @@ nsWSDLLoadRequest::LoadDefinition(const nsAString& aURI)
         mTypes.Put(&key, schema);
       }
       else {
-        // element of unknown namespace
-        rv = NS_ERROR_WSDL_NOT_WSDL_ELEMENT;
-        nsAutoString elementName;
-        nsresult rc = element->GetTagName(elementName);
-        NS_ENSURE_SUCCESS(rc, rc);
-
-        nsAutoString errorMsg;
-        errorMsg.AppendLiteral("Failure processing WSDL, element of ");
-        errorMsg.AppendLiteral("unknown namespace \"");
-        errorMsg.Append(elementName);
-        errorMsg.AppendLiteral("\"");
-
-        NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
-        return rv;        
+        rv = NS_ERROR_WSDL_NOT_WSDL_ELEMENT; // element of unknown namespace
       }
     }
     else {
-      nsAutoString errorMsg(NS_LITERAL_STRING("Failure processing WSDL, no document"));
-      NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_NOT_WSDL_ELEMENT, errorMsg);
-
       return NS_ERROR_WSDL_NOT_WSDL_ELEMENT;
     }
   }
@@ -445,7 +459,7 @@ nsWSDLLoadRequest::HandleEvent(nsIDOMEvent *event)
 
   event->GetType(eventType);
 
-  if (eventType.EqualsLiteral("load")) {
+  if (eventType.Equals(NS_LITERAL_STRING("load"))) {
     nsCOMPtr<nsIDOMDocument> document;
 
     rv = mRequest->GetResponseXML(getter_AddRefs(document));
@@ -473,37 +487,6 @@ nsWSDLLoadRequest::HandleEvent(nsIDOMEvent *event)
 
           if (NS_SUCCEEDED(rv)) {
             rv = ContineProcessingTillDone();
-
-            if (NS_FAILED(rv)) {
-              nsAutoString elementName;
-              element->GetTagName(elementName);
-
-              NS_ENSURE_SUCCESS(rv, rv);
-
-              nsAutoString errorMsg;
-              errorMsg.AppendLiteral("Failure processing WSDL element \"");
-              errorMsg.Append(elementName);
-              errorMsg.AppendLiteral("\"");
-              
-              NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_LOADING_ERROR, errorMsg);
-
-              return NS_ERROR_WSDL_LOADING_ERROR;
-            }
-          }
-          else {
-            nsAutoString elementName;
-            element->GetTagName(elementName);
-
-            NS_ENSURE_SUCCESS(rv, rv);
-
-            nsAutoString errorMsg;
-            errorMsg.AppendLiteral("Failure queuing WSDL element \"");
-            errorMsg.Append(elementName);
-            errorMsg.AppendLiteral("\" for processing");
-
-            NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_LOADING_ERROR, errorMsg);
-
-            return NS_ERROR_WSDL_LOADING_ERROR;
           }
         }
         else if (IsElementOfNamespace(element,
@@ -511,7 +494,7 @@ nsWSDLLoadRequest::HandleEvent(nsIDOMEvent *event)
                  IsElementOfNamespace(element,
                                 NS_LITERAL_STRING(SCHEMA_1999_NAMESPACE))) {
           nsCOMPtr<nsISchema> schema;
-          rv = mSchemaLoader->ProcessSchemaElement(element, mErrorHandler,
+          rv = mSchemaLoader->ProcessSchemaElement(element,
                                                    getter_AddRefs(schema));
           if (NS_FAILED(rv)) {
             return NS_ERROR_WSDL_SCHEMA_PROCESSING_ERROR;
@@ -526,42 +509,22 @@ nsWSDLLoadRequest::HandleEvent(nsIDOMEvent *event)
           rv = ContineProcessingTillDone();
         }
         else {
-          // element of unknown namespace
-          nsAutoString elementName;
-          rv = element->GetTagName(elementName);
-          NS_ENSURE_SUCCESS(rv, rv);
-
-          rv = NS_ERROR_WSDL_NOT_WSDL_ELEMENT;
-
-          nsAutoString errorMsg;
-          errorMsg.AppendLiteral("Failure processing WSDL, ");
-          errorMsg.AppendLiteral("element of unknown namespace \"");
-          errorMsg.Append(elementName);
-          errorMsg.AppendLiteral("\"");
-
-          NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
-          return rv;
+          rv = NS_ERROR_WSDL_NOT_WSDL_ELEMENT; // element of unknown namespace
         }
       }
       else {
         rv = NS_ERROR_WSDL_NOT_WSDL_ELEMENT;
-        
-        nsAutoString errorMsg(NS_LITERAL_STRING("Failure processing WSDL document"));
-        NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
-        return rv;
       }
     }
+
     if (NS_FAILED(rv)) {
       mListener->OnError(rv, NS_LITERAL_STRING("Failure processing WSDL document"));
       return NS_OK;
     }
   }
-  else if (eventType.EqualsLiteral("error")) {
-    nsAutoString errorMsg(NS_LITERAL_STRING("Failure loading WSDL document"));
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_LOADING_ERROR, errorMsg);
-
+  else if (eventType.Equals(NS_LITERAL_STRING("error"))) {
+    mListener->OnError(NS_ERROR_WSDL_LOADING_ERROR,
+                       NS_LITERAL_STRING("Failure loading"));
     return NS_OK;
   }
 
@@ -570,8 +533,8 @@ nsWSDLLoadRequest::HandleEvent(nsIDOMEvent *event)
       mListener->OnLoad(mPort);
     }
     else {
-      nsAutoString errorMsg(NS_LITERAL_STRING("WSDL Binding not found"));
-      NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_BINDING_NOT_FOUND, errorMsg);
+      mListener->OnError(NS_ERROR_WSDL_BINDING_NOT_FOUND,
+                         NS_LITERAL_STRING("Binding not found"));
     }
     mRequest = nsnull;
   }
@@ -724,25 +687,12 @@ nsWSDLLoadRequest::GetSchemaElement(const nsAString& aName,
   nsCOMPtr<nsISupports> sup = dont_AddRef(mTypes.Get(&key));
   nsCOMPtr<nsISchema> schema(do_QueryInterface(sup));
   if (!schema) {
-    nsAutoString errorMsg(NS_LITERAL_STRING("Failure processing WSDL, "));
-    errorMsg.AppendLiteral("element is not schema");
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT;
   }
 
   nsCOMPtr<nsISchemaElement> element;
   schema->GetElementByName(aName, getter_AddRefs(element));
   if (!element) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, unknown schema component \"");
-    errorMsg.Append(aNamespace);
-    errorMsg.AppendLiteral(":");
-    errorMsg.Append(aName);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT;
   }
 
@@ -757,8 +707,8 @@ nsWSDLLoadRequest::GetSchemaType(const nsAString& aName,
                                  const nsAString& aNamespace,
                                  nsISchemaType** aSchemaComponent)
 {
-  if (aNamespace.EqualsLiteral(SCHEMA_2001_NAMESPACE) ||
-      aNamespace.EqualsLiteral(SCHEMA_1999_NAMESPACE)) {
+  if (aNamespace.Equals(NS_LITERAL_STRING(SCHEMA_2001_NAMESPACE)) ||
+      aNamespace.Equals(NS_LITERAL_STRING(SCHEMA_1999_NAMESPACE))) {
     nsCOMPtr<nsISchemaCollection> collection(do_QueryInterface(mSchemaLoader));
     return collection->GetType(aName, aNamespace, aSchemaComponent);
   }
@@ -767,24 +717,12 @@ nsWSDLLoadRequest::GetSchemaType(const nsAString& aName,
   nsCOMPtr<nsISupports> sup = dont_AddRef(mTypes.Get(&key));
   nsCOMPtr<nsISchema> schema(do_QueryInterface(sup));
   if (!schema) {
-    nsAutoString errorMsg(NS_LITERAL_STRING("Failure processing WSDL, not schema"));
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT;
   }
 
   nsCOMPtr<nsISchemaType> type;
   schema->GetTypeByName(aName, getter_AddRefs(type));
   if (!type) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, unknown schema type \"");
-    errorMsg.Append(aNamespace);
-    errorMsg.AppendLiteral(":");
-    errorMsg.Append(aName);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_SCHEMA_COMPONENT;
   }
 
@@ -807,15 +745,6 @@ nsWSDLLoadRequest::GetMessage(const nsAString& aName,
   nsCOMPtr<nsISupports> sup = dont_AddRef(mMessages.Get(&key));
   nsCOMPtr<nsIWSDLMessage> message(do_QueryInterface(sup));
   if (!message) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, unknown WSDL component \"");
-    errorMsg.Append(aNamespace);
-    errorMsg.AppendLiteral(":");
-    errorMsg.Append(aName);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT;
   }
 
@@ -838,15 +767,6 @@ nsWSDLLoadRequest::GetPortType(const nsAString& aName,
   nsCOMPtr<nsISupports> sup = dont_AddRef(mPortTypes.Get(&key));
   nsCOMPtr<nsIWSDLPort> port(do_QueryInterface(sup));
   if (!port) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, unknown WSDL port type \"");
-    errorMsg.Append(aNamespace);
-    errorMsg.AppendLiteral(":");
-    errorMsg.Append(aName);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT;
   }
 
@@ -905,28 +825,11 @@ nsWSDLLoadRequest::ProcessImportElement(nsIDOMElement* aElement,
   nsCOMPtr<nsIURI> uri, baseURI;
   rv = NS_NewURI(getter_AddRefs(baseURI), documentLocation);
   if (NS_FAILED(rv)) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, ");
-    errorMsg.AppendLiteral("cannot find base URI for document location \"");
-    errorMsg.Append(documentLocation);
-    errorMsg.AppendLiteral("\" for import \"");
-    errorMsg.Append(location);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
     return rv;
   }
 
   rv = NS_NewURI(getter_AddRefs(uri), location, nsnull, baseURI);
   if (NS_FAILED(rv)) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, Cannot find URI for import \"");
-    errorMsg.Append(location);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
     return rv;
   }
 
@@ -941,13 +844,6 @@ nsWSDLLoadRequest::ProcessImportElement(nsIDOMElement* aElement,
     if (equal) {
       // Looks like this uri has already been loaded.
       // Loading it again will end up in an infinite loop.
-      nsAutoString errorMsg;
-      errorMsg.AppendLiteral("Failure processing WSDL, import \"");
-      errorMsg.Append(location);
-      errorMsg.AppendLiteral("\" could cause recursive import");
-
-      NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_RECURSIVE_IMPORT, errorMsg);
-
       return NS_ERROR_WSDL_RECURSIVE_IMPORT;
     }
   }
@@ -991,10 +887,9 @@ nsWSDLLoadRequest::ProcessTypesElement(nsIDOMElement* aElement)
   while (NS_SUCCEEDED(iterator.GetNextChild(getter_AddRefs(childElement),
                                             getter_AddRefs(tagName))) &&
          childElement) {
-    // XXX : We need to deal with xs:import elements too.
     if (tagName == nsWSDLAtoms::sSchema_atom) {
       nsCOMPtr<nsISchema> schema;
-      rv = mSchemaLoader->ProcessSchemaElement(childElement, mErrorHandler,
+      rv = mSchemaLoader->ProcessSchemaElement(childElement,
                                                getter_AddRefs(schema));
       if (NS_FAILED(rv)) {
         return NS_ERROR_WSDL_SCHEMA_PROCESSING_ERROR;
@@ -1045,15 +940,6 @@ nsWSDLLoadRequest::ProcessAbstractPartElement(nsIDOMElement* aElement,
     rv = GetSchemaElement(elementLocalName, elementNamespace,
                           getter_AddRefs(schemaElement));
     if (NS_FAILED(rv)) {
-      nsAutoString errorMsg;
-      errorMsg.AppendLiteral("Failure processing WSDL, cannot find schema element \"");
-      errorMsg.Append(elementNamespace);
-      errorMsg.AppendLiteral(":");
-      errorMsg.Append(elementLocalName);
-      errorMsg.AppendLiteral("\"");
-
-      NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
       return rv;
     }
 
@@ -1072,15 +958,6 @@ nsWSDLLoadRequest::ProcessAbstractPartElement(nsIDOMElement* aElement,
     rv = GetSchemaType(typeLocalName, typeNamespace,
                        getter_AddRefs(schemaType));
     if (NS_FAILED(rv)) {
-      nsAutoString errorMsg;
-      errorMsg.AppendLiteral("Failure processing WSDL, cannot find schema type \"");
-      errorMsg.Append(typeNamespace);
-      errorMsg.AppendLiteral(":");
-      errorMsg.Append(typeLocalName);
-      errorMsg.AppendLiteral("\"");
-
-      NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
       return rv;
     }
 
@@ -1171,15 +1048,6 @@ nsWSDLLoadRequest::ProcessOperationComponent(nsIDOMElement* aElement,
       context->GetTargetNamespace(targetNamespace);
       rv = GetMessage(messageLocalName, targetNamespace, aMessage);
       if (NS_FAILED(rv)) {
-        nsAutoString errorMsg;
-        errorMsg.AppendLiteral("Failure processing WSDL, cannot find message \"");
-        errorMsg.Append(targetNamespace);
-        errorMsg.AppendLiteral(":");
-        errorMsg.Append(messageLocalName);
-        errorMsg.AppendLiteral("\"");
-
-        NS_WSDLLOADER_FIRE_ERROR(rv, errorMsg);
-
         return rv;
       }
     }
@@ -1345,7 +1213,7 @@ nsWSDLLoadRequest::ProcessMessageBinding(nsIDOMElement* aElement,
       childElement->GetAttribute(NS_LITERAL_STRING("namespace"), namespaceStr);
 
       PRUint16 use = nsISOAPPartBinding::USE_LITERAL;
-      if (useStr.EqualsLiteral("encoded")) {
+      if (useStr.Equals(NS_LITERAL_STRING("encoded"))) {
         use = nsISOAPPartBinding::USE_ENCODED;
       }
 
@@ -1435,13 +1303,6 @@ nsWSDLLoadRequest::ProcessOperationBinding(nsIDOMElement* aElement,
   nsCOMPtr<nsIWSDLOperation> operation;
   aPort->GetOperationByName(name, getter_AddRefs(operation));
   if (!operation) {
-    nsAutoString errorMsg;
-    errorMsg.AppendLiteral("Failure processing WSDL, cannot find operation \"");
-    errorMsg.Append(name);
-    errorMsg.AppendLiteral("\"");
-
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT, errorMsg);
-
     return NS_ERROR_WSDL_UNKNOWN_WSDL_COMPONENT;
   }
   nsWSDLOperation* operationInst = NS_REINTERPRET_CAST(nsWSDLOperation*,
@@ -1474,10 +1335,10 @@ nsWSDLLoadRequest::ProcessOperationBinding(nsIDOMElement* aElement,
       childElement->GetAttribute(NS_LITERAL_STRING("style"), style);
 
       bindingInst->SetSoapAction(action);
-      if (style.EqualsLiteral("rpc")) {
+      if (style.Equals(NS_LITERAL_STRING("rpc"))) {
         bindingInst->SetStyle(nsISOAPPortBinding::STYLE_RPC);
       }
-      else if (style.EqualsLiteral("document")) {
+      else if (style.Equals(NS_LITERAL_STRING("document"))) {
         bindingInst->SetStyle(nsISOAPPortBinding::STYLE_DOCUMENT);
       }
       // If one isn't explicitly specified, we inherit from the port
@@ -1518,11 +1379,7 @@ nsWSDLLoadRequest::ProcessOperationBinding(nsIDOMElement* aElement,
     else if ((tagName == nsWSDLAtoms::sFault_atom) &&
              IsElementOfNamespace(childElement,
                                   NS_LITERAL_STRING(NS_WSDL_NAMESPACE))) {
-
-      //XXX To be implemented
-      nsAutoString errorMsg(NS_LITERAL_STRING("Fault management not yet "));
-      errorMsg.AppendLiteral("implemented in WSDL support");
-      NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_NOT_IMPLEMENTED, errorMsg);
+      // XXX TO BE IMPLEMENTED
     }
   }
 
@@ -1540,7 +1397,7 @@ nsWSDLLoadRequest::ProcessBindingElement(nsIDOMElement* aElement)
   nsAutoString name;
   aElement->GetAttribute(NS_LITERAL_STRING("name"), name);
 
-  PRBool foundSOAPBinding = PR_FALSE;
+  PRBool foundSOAPBinding;
   nsCOMPtr<nsIWSDLBinding> binding;
   nsSOAPPortBinding* bindingInst = new nsSOAPPortBinding(name);
   if (!bindingInst) {
@@ -1602,10 +1459,10 @@ nsWSDLLoadRequest::ProcessBindingElement(nsIDOMElement* aElement)
       childElement->GetAttribute(NS_LITERAL_STRING("style"), style);
       childElement->GetAttribute(NS_LITERAL_STRING("transport"), transport);
 
-      if (style.EqualsLiteral("rpc")) {
+      if (style.Equals(NS_LITERAL_STRING("rpc"))) {
         bindingInst->SetStyle(nsISOAPPortBinding::STYLE_RPC);
       }
-      else if (style.EqualsLiteral("document")) {
+      else if (style.Equals(NS_LITERAL_STRING("document"))) {
         bindingInst->SetStyle(nsISOAPPortBinding::STYLE_DOCUMENT);
       }
       bindingInst->SetTransport(transport);
@@ -1623,10 +1480,6 @@ nsWSDLLoadRequest::ProcessBindingElement(nsIDOMElement* aElement)
 
   if (!foundSOAPBinding) {
     // If we don't have a SOAP binding, we can't continue
-    nsAutoString errorMsg(NS_LITERAL_STRING("Failure processing WSDL, "));
-    errorMsg.AppendLiteral("no SOAP binding found");
-    NS_WSDLLOADER_FIRE_ERROR(NS_ERROR_WSDL_BINDING_NOT_FOUND, errorMsg);
-
     return NS_ERROR_WSDL_BINDING_NOT_FOUND;
   }
   nsWSDLPort* portInst = NS_REINTERPRET_CAST(nsWSDLPort*, port.get());

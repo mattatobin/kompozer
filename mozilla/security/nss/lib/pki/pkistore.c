@@ -1,41 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #ifdef DEBUG
-static const char CVS_ID[] = "@(#) $RCSfile: pkistore.c,v $ $Revision: 1.26.2.3 $ $Date: 2007/11/16 05:25:08 $";
+static const char CVS_ID[] = "@(#) $RCSfile: pkistore.c,v $ $Revision: 1.22 $ $Date: 2003/01/08 21:48:45 $ $Name: FIREFOX_1_0_RELEASE $";
 #endif /* DEBUG */
 
 #ifndef PKIM_H
@@ -58,7 +55,9 @@ static const char CVS_ID[] = "@(#) $RCSfile: pkistore.c,v $ $Revision: 1.26.2.3 
 #include "pkistore.h"
 #endif /* PKISTORE_H */
 
+#ifdef NSS_3_4_CODE
 #include "cert.h"
+#endif
 
 /* 
  * Certificate Store
@@ -87,13 +86,22 @@ struct certificate_hash_entry_str
     nssSMIMEProfile *profile;
 };
 
-/* forward static declarations */
-static NSSCertificate *
-nssCertStore_FindCertByIssuerAndSerialNumberLocked (
-  nssCertificateStore *store,
-  NSSDER *issuer,
-  NSSDER *serial
-);
+/* XXX This a common function that should be moved out, possibly an
+ *     nssSubjectCertificateList should be created?
+ */
+/* sort the subject list from newest to oldest */
+static PRIntn subject_list_sort(void *v1, void *v2)
+{
+    NSSCertificate *c1 = (NSSCertificate *)v1;
+    NSSCertificate *c2 = (NSSCertificate *)v2;
+    nssDecodedCert *dc1 = nssCertificate_GetDecoding(c1);
+    nssDecodedCert *dc2 = nssCertificate_GetDecoding(c2);
+    if (dc1->isNewerThan(dc1, dc2)) {
+	return -1;
+    } else {
+	return 1;
+    }
+}
 
 NSS_IMPLEMENT nssCertificateStore *
 nssCertificateStore_Create (
@@ -212,7 +220,7 @@ add_subject_entry (
 	if (!subjectList) {
 	    return PR_FAILURE;
 	}
-	nssList_SetSortFunction(subjectList, nssCertificate_SubjectListSort);
+	nssList_SetSortFunction(subjectList, subject_list_sort);
 	/* Add the cert entry to this list of subjects */
 	nssrv = nssList_Add(subjectList, cert);
 	if (nssrv != PR_SUCCESS) {
@@ -231,44 +239,27 @@ remove_certificate_entry (
   NSSCertificate *cert
 );
 
-/* Caller must hold store->lock */
-static PRStatus
-nssCertificateStore_AddLocked (
+NSS_IMPLEMENT PRStatus
+nssCertificateStore_Add (
   nssCertificateStore *store,
   NSSCertificate *cert
 )
 {
-    PRStatus nssrv = add_certificate_entry(store, cert);
+    PRStatus nssrv;
+    PZ_Lock(store->lock);
+    if (nssHash_Exists(store->issuer_and_serial, cert)) {
+	PZ_Unlock(store->lock);
+	return PR_SUCCESS;
+    }
+    nssrv = add_certificate_entry(store, cert);
     if (nssrv == PR_SUCCESS) {
 	nssrv = add_subject_entry(store, cert);
 	if (nssrv == PR_FAILURE) {
 	    remove_certificate_entry(store, cert);
 	}
     }
-    return nssrv;
-}
-
-
-NSS_IMPLEMENT NSSCertificate *
-nssCertificateStore_FindOrAdd (
-  nssCertificateStore *store,
-  NSSCertificate *c
-)
-{
-    PRStatus nssrv;
-    NSSCertificate *rvCert = NULL;
-
-    PZ_Lock(store->lock);
-    rvCert = nssCertStore_FindCertByIssuerAndSerialNumberLocked(
-					   store, &c->issuer, &c->serial);
-    if (!rvCert) {
-	nssrv = nssCertificateStore_AddLocked(store, c);
-	if (PR_SUCCESS == nssrv) {
-	    rvCert = nssCertificate_AddRef(c);
-	}
-    }
     PZ_Unlock(store->lock);
-    return rvCert;
+    return nssrv;
 }
 
 static void
@@ -336,41 +327,18 @@ nssCertificateStore_RemoveCertLOCKED (
 
 NSS_IMPLEMENT void
 nssCertificateStore_Lock (
-  nssCertificateStore *store, nssCertificateStoreTrace* out
+  nssCertificateStore *store
 )
 {
-#ifdef DEBUG
-    PORT_Assert(out);
-    out->store = store;
-    out->lock = store->lock;
-    out->locked = PR_TRUE;
-    PZ_Lock(out->lock);
-#else
     PZ_Lock(store->lock);
-#endif
 }
 
 NSS_IMPLEMENT void
 nssCertificateStore_Unlock (
-  nssCertificateStore *store, nssCertificateStoreTrace* in,
-  nssCertificateStoreTrace* out
+  nssCertificateStore *store
 )
 {
-#ifdef DEBUG
-    PORT_Assert(in);
-    PORT_Assert(out);
-    out->store = store;
-    out->lock = store->lock;
-    out->unlocked = PR_TRUE;
-
-    PORT_Assert(in->store == out->store);
-    PORT_Assert(in->lock == out->lock);
-    PORT_Assert(in->locked);
-
-    PZ_Unlock(out->lock);
-#else
     PZ_Unlock(store->lock);
-#endif
 }
 
 static NSSCertificate **
@@ -547,28 +515,6 @@ nssCertificateStore_FindCertificatesByEmail (
     return rvArray;
 }
 
-/* Caller holds store->lock */
-static NSSCertificate *
-nssCertStore_FindCertByIssuerAndSerialNumberLocked (
-  nssCertificateStore *store,
-  NSSDER *issuer,
-  NSSDER *serial
-)
-{
-    certificate_hash_entry *entry;
-    NSSCertificate *rvCert = NULL;
-    NSSCertificate index;
-
-    index.issuer = *issuer;
-    index.serial = *serial;
-    entry = (certificate_hash_entry *)
-                           nssHash_Lookup(store->issuer_and_serial, &index);
-    if (entry) {
-	rvCert = nssCertificate_AddRef(entry->cert);
-    }
-    return rvCert;
-}
-
 NSS_IMPLEMENT NSSCertificate *
 nssCertificateStore_FindCertificateByIssuerAndSerialNumber (
   nssCertificateStore *store,
@@ -576,15 +522,22 @@ nssCertificateStore_FindCertificateByIssuerAndSerialNumber (
   NSSDER *serial
 )
 {
+    certificate_hash_entry *entry;
+    NSSCertificate index;
     NSSCertificate *rvCert = NULL;
-
+    index.issuer = *issuer;
+    index.serial = *serial;
     PZ_Lock(store->lock);
-    rvCert = nssCertStore_FindCertByIssuerAndSerialNumberLocked (
-                           store, issuer, serial);
+    entry = (certificate_hash_entry *)
+                           nssHash_Lookup(store->issuer_and_serial, &index);
+    if (entry) {
+	rvCert = nssCertificate_AddRef(entry->cert);
+    }
     PZ_Unlock(store->lock);
     return rvCert;
 }
 
+#ifdef NSS_3_4_CODE
 static PRStatus
 issuer_and_serial_from_encoding (
   NSSBER *encoding, 
@@ -611,6 +564,7 @@ issuer_and_serial_from_encoding (
     serial->size = derSerial.len;
     return PR_SUCCESS;
 }
+#endif
 
 NSS_IMPLEMENT NSSCertificate *
 nssCertificateStore_FindCertificateByEncodedCertificate (
@@ -621,15 +575,19 @@ nssCertificateStore_FindCertificateByEncodedCertificate (
     PRStatus nssrv = PR_FAILURE;
     NSSDER issuer, serial;
     NSSCertificate *rvCert = NULL;
+#ifdef NSS_3_4_CODE
     nssrv = issuer_and_serial_from_encoding(encoding, &issuer, &serial);
+#endif
     if (nssrv != PR_SUCCESS) {
 	return NULL;
     }
     rvCert = nssCertificateStore_FindCertificateByIssuerAndSerialNumber(store, 
                                                                      &issuer, 
                                                                      &serial);
+#ifdef NSS_3_4_CODE
     PORT_Free(issuer.data);
     PORT_Free(serial.data);
+#endif
     return rvCert;
 }
 

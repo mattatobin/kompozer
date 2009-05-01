@@ -1,40 +1,36 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1998-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Masayuki Nakano <masayuki@d-toybox.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /* Windows NT IO module
  *
@@ -64,10 +60,8 @@ static PRThread             *_pr_io_completion_thread;
 
 #define RECYCLE_SIZE 512
 static struct _MDLock        _pr_recycle_lock;
-static PRInt32               _pr_recycle_INET_array[RECYCLE_SIZE];
-static PRInt32               _pr_recycle_INET_tail = 0; 
-static PRInt32               _pr_recycle_INET6_array[RECYCLE_SIZE];
-static PRInt32               _pr_recycle_INET6_tail = 0; 
+static PRInt32               _pr_recycle_array[RECYCLE_SIZE];
+static PRInt32               _pr_recycle_tail = 0; 
 
 __declspec(thread) PRThread *_pr_io_restarted_io = NULL;
 DWORD _pr_io_restartedIOIndex;  /* The thread local storage slot for each
@@ -110,8 +104,6 @@ static const PRTime _pr_filetime_offset = 116444736000000000LL;
 #else
 static const PRTime _pr_filetime_offset = 116444736000000000i64;
 #endif
-
-static PRBool IsPrevCharSlash(const char *str, const char *current);
 
 #define _NEED_351_FILE_LOCKING_HACK
 #ifdef _NEED_351_FILE_LOCKING_HACK
@@ -965,20 +957,15 @@ _PR_MD_INIT_IO()
  * second argument.
  */
 static SOCKET
-_md_get_recycled_socket(int af)
+_md_get_recycled_socket()
 {
     SOCKET rv;
+    int af = AF_INET;
 
     _MD_LOCK(&_pr_recycle_lock);
-    if (af == AF_INET && _pr_recycle_INET_tail) {
-        _pr_recycle_INET_tail--;
-        rv = _pr_recycle_INET_array[_pr_recycle_INET_tail];
-        _MD_UNLOCK(&_pr_recycle_lock);
-        return rv;
-    }
-    if (af == AF_INET6 && _pr_recycle_INET6_tail) {
-        _pr_recycle_INET6_tail--;
-        rv = _pr_recycle_INET6_array[_pr_recycle_INET6_tail];
+    if (_pr_recycle_tail) {
+        _pr_recycle_tail--;
+        rv = _pr_recycle_array[_pr_recycle_tail];
         _MD_UNLOCK(&_pr_recycle_lock);
         return rv;
     }
@@ -996,19 +983,14 @@ _md_get_recycled_socket(int af)
  * Add a socket to the recycle bin.
  */
 static void
-_md_put_recycled_socket(SOCKET newsock, int af)
+_md_put_recycled_socket(SOCKET newsock)
 {
-    PR_ASSERT(_pr_recycle_INET_tail >= 0);
-    PR_ASSERT(_pr_recycle_INET6_tail >= 0);
+    PR_ASSERT(_pr_recycle_tail >= 0);
 
     _MD_LOCK(&_pr_recycle_lock);
-    if (af == AF_INET && _pr_recycle_INET_tail < RECYCLE_SIZE) {
-        _pr_recycle_INET_array[_pr_recycle_INET_tail] = newsock;
-        _pr_recycle_INET_tail++;
-        _MD_UNLOCK(&_pr_recycle_lock);
-    } else if (af == AF_INET6 && _pr_recycle_INET6_tail < RECYCLE_SIZE) {
-        _pr_recycle_INET6_array[_pr_recycle_INET6_tail] = newsock;
-        _pr_recycle_INET6_tail++;
+    if (_pr_recycle_tail < RECYCLE_SIZE) {
+        _pr_recycle_array[_pr_recycle_tail] = newsock;
+        _pr_recycle_tail++;
         _MD_UNLOCK(&_pr_recycle_lock);
     } else {
         _MD_UNLOCK(&_pr_recycle_lock);
@@ -1337,7 +1319,7 @@ _PR_MD_FAST_ACCEPT(PRFileDesc *fd, PRNetAddr *raddr, PRUint32 *rlen,
         }
     }
 
-    accept_sock = _md_get_recycled_socket(fd->secret->af);
+    accept_sock = _md_get_recycled_socket();
     if (accept_sock == INVALID_SOCKET)
         return -1;
 
@@ -1367,7 +1349,7 @@ _PR_MD_FAST_ACCEPT(PRFileDesc *fd, PRNetAddr *raddr, PRUint32 *rlen,
                   &bytes,
                   &(me->md.overlapped.overlapped));
 
-    if ( (rv == 0) && ((err = WSAGetLastError()) != ERROR_IO_PENDING))  {
+    if ( (rv == 0) && ((err = GetLastError()) != ERROR_IO_PENDING))  {
         /* Argh! The IO failed */
 		closesocket(accept_sock);
 		_PR_THREAD_LOCK(me);
@@ -1460,7 +1442,7 @@ _PR_MD_FAST_ACCEPT_READ(PRFileDesc *sd, PRInt32 *newSock, PRNetAddr **raddr,
         sd->secret->md.io_model_committed = PR_TRUE;
     }
 
-    *newSock = _md_get_recycled_socket(sd->secret->af);
+    *newSock = _md_get_recycled_socket();
     if (*newSock == INVALID_SOCKET)
         return -1;
 
@@ -1710,7 +1692,7 @@ _PR_MD_SENDFILE(PRFileDesc *sock, PRSendFileData *sfd,
     }
 
     if (flags & PR_TRANSMITFILE_CLOSE_SOCKET) {
-        _md_put_recycled_socket(sock->secret->md.osfd, sock->secret->af);
+        _md_put_recycled_socket(sock->secret->md.osfd);
     }
 
     PR_ASSERT(me->io_pending == PR_FALSE);
@@ -2784,7 +2766,7 @@ _PR_MD_OPEN_DIR(_MDDir *d, const char *name)
      * If 'name' ends in a slash or backslash, do not append
      * another backslash.
      */
-    if (IsPrevCharSlash(filename, filename + len)) {
+    if (filename[len - 1] == '/' || filename[len - 1] == '\\') {
         len--;
     }
     strcpy(&filename[len], "\\*.*");
@@ -2922,7 +2904,7 @@ _PR_MD_STAT(const char *fn, struct stat *info)
 
         int len = strlen(fn);
         if (len > 0 && len <= _MAX_PATH
-                && IsPrevCharSlash(fn, fn + len)) {
+                && (fn[len - 1] == '\\' || fn[len - 1] == '/')) {
             char newfn[_MAX_PATH + 1];
 
             strcpy(newfn, fn);
@@ -2938,17 +2920,6 @@ _PR_MD_STAT(const char *fn, struct stat *info)
 }
 
 #define _PR_IS_SLASH(ch) ((ch) == '/' || (ch) == '\\')
-
-static PRBool
-IsPrevCharSlash(const char *str, const char *current)
-{
-    const char *prev;
-
-    if (str >= current)
-        return PR_FALSE;
-    prev = _mbsdec(str, current);
-    return (prev == current - 1) && _PR_IS_SLASH(*prev);
-}
 
 /*
  * IsRootDirectory --
@@ -2996,7 +2967,7 @@ IsRootDirectory(char *fn, size_t buflen)
 
         /* look for the next slash */
         do {
-            p = _mbsinc(p);
+            p++;
         } while (*p != '\0' && !_PR_IS_SLASH(*p));
         if (*p == '\0') {
             return PR_FALSE;
@@ -3010,7 +2981,7 @@ IsRootDirectory(char *fn, size_t buflen)
 
         /* look for the final slash */
         do {
-            p = _mbsinc(p);
+            p++;
         } while (*p != '\0' && !_PR_IS_SLASH(*p));
         if (_PR_IS_SLASH(*p) && p[1] != '\0') {
             return PR_FALSE;
@@ -3100,7 +3071,7 @@ _PR_MD_GETFILEINFO64(const char *fn, PRFileInfo64 *info)
             info->creationTime = 0;
             return 0;
         }
-        if (!IsPrevCharSlash(pathbuf, pathbuf + len)) {
+        if (!_PR_IS_SLASH(pathbuf[len - 1])) {
             _PR_MD_MAP_OPENDIR_ERROR(GetLastError());
             return -1;
         } else {

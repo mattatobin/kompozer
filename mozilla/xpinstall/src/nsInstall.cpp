@@ -1,45 +1,32 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * The contents of this file are subject to the Netscape Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/NPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * The Original Code is Mozilla Communicator client code,
+ * released March 31, 1998.
  *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape Communications
+ * Corporation.  Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
  *     Daniel Veditz <dveditz@netscape.com>
  *     Douglas Turner <dougt@netscape.com>
- *     Jens Bannmann <jens.b@web.de>
  *     Pierre Phaneuf <pp@ludusdesign.com>
  *     Sean Su <ssu@netscape.com>
  *     Samir Gehani <sgehani@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
+
+
 
 #include "nscore.h"
 #include "nsIFactory.h"
@@ -53,10 +40,6 @@
 #include "nsIFileChannel.h"
 #include "nsDirectoryService.h"
 #include "nsDirectoryServiceDefs.h"
-#include "nsAppDirectoryServiceDefs.h"
-#include "nsDirectoryServiceUtils.h"
-
-#include "nsNetUtil.h"
 
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
@@ -111,9 +94,11 @@
 #endif
 
 static NS_DEFINE_IID(kEventQueueServiceCID, NS_EVENTQUEUESERVICE_CID);
+static NS_DEFINE_IID(kIEventQueueServiceIID, NS_IEVENTQUEUESERVICE_IID);
 static NS_DEFINE_IID(kProxyObjectManagerCID, NS_PROXYEVENT_MANAGER_CID);
 
 static NS_DEFINE_CID(kStringBundleServiceCID, NS_STRINGBUNDLESERVICE_CID);
+static NS_DEFINE_IID(kIStringBundleServiceIID, NS_ISTRINGBUNDLESERVICE_IID);
 
 #define kInstallLocaleProperties "chrome://global/locale/commonDialogs.properties"
 
@@ -142,19 +127,7 @@ NS_SoftwareUpdateRequestAutoReg()
   }
 
   file->AppendNative(nsDependentCString(".autoreg"));
-#ifdef DEBUG_timeless
-  PRBool condition;
-  if (NS_SUCCEEDED(file->IsDirectory(&condition)) && condition) {
-    /* someone did this intentionally, no point in complaining */
-    return;
-  }
-#endif
 
-  // Remove and recreate the file to update its timestamp.
-  // .autoreg must be newer than compreg.dat for component registration
-  // to occur.
-
-  file->Remove(PR_FALSE);
   rv = file->Create(nsIFile::NORMAL_FILE_TYPE, 0666);
 
   if (NS_FAILED(rv)) {
@@ -173,7 +146,9 @@ nsInstallInfo::nsInstallInfo(PRUint32           aInstallType,
                              const PRUnichar*   aArgs,
                              nsIPrincipal*      aPrincipal,
                              PRUint32           flags,
-                             nsIXPIListener*    aListener)
+                             nsIXPIListener*    aListener,
+                             nsIXULChromeRegistry* aChromeRegistry,
+                             nsIExtensionManager* aExtensionManager)
 : mPrincipal(aPrincipal),
   mError(0),
   mType(aInstallType),
@@ -181,45 +156,11 @@ nsInstallInfo::nsInstallInfo(PRUint32           aInstallType,
   mURL(aURL),
   mArgs(aArgs),
   mFile(aFile),
-  mListener(aListener)
+  mListener(aListener),
+  mChromeRegistry(aChromeRegistry),
+  mExtensionManager(aExtensionManager)
 {
     MOZ_COUNT_CTOR(nsInstallInfo);
-
-    nsresult rv;
-
-    // Failure is an option, and will occur in the stub installer.
-
-    NS_WITH_ALWAYS_PROXIED_SERVICE(CHROMEREG_IFACE, cr,
-                                   NS_CHROMEREGISTRY_CONTRACTID,
-                                   NS_UI_THREAD_EVENTQ, &rv);
-    if (NS_SUCCEEDED(rv)) {
-      mChromeRegistry = cr;
-
-      nsCAutoString spec;
-      rv = NS_GetURLSpecFromFile(aFile, spec);
-      if (NS_SUCCEEDED(rv)) {
-        spec.Insert(NS_LITERAL_CSTRING("jar:"), 0);
-        spec.AppendLiteral("!/");
-#ifdef MOZ_XUL_APP
-        NS_NewURI(getter_AddRefs(mFileJARURL), spec);
-#else
-        mFileJARSpec.Assign(spec);
-#endif
-      }
-    }
-
-#ifdef MOZ_XUL_APP
-    NS_WITH_ALWAYS_PROXIED_SERVICE(nsIExtensionManager, em,
-                                   "@mozilla.org/extensions/manager;1",
-                                   NS_UI_THREAD_EVENTQ, &rv);
-    if (NS_SUCCEEDED(rv))
-      mExtensionManager = em;
-
-    nsCOMPtr<nsIFile> manifest;
-    rv = NS_GetSpecialDirectory(NS_APP_CHROME_DIR, getter_AddRefs(manifest));
-    if (NS_SUCCEEDED(rv))
-      NS_NewFileURI(getter_AddRefs(mManifestURL), manifest);
-#endif
 }
 
 
@@ -228,6 +169,7 @@ nsInstallInfo::~nsInstallInfo()
   MOZ_COUNT_DTOR(nsInstallInfo);
 }
 
+static NS_DEFINE_IID(kISoftwareUpdateIID, NS_ISOFTWAREUPDATE_IID);
 static NS_DEFINE_IID(kSoftwareUpdateCID,  NS_SoftwareUpdate_CID);
 
 
@@ -255,7 +197,9 @@ nsInstall::nsInstall(nsIZipReader * theJARFile)
     mJarFileData = theJARFile;
 
     nsISoftwareUpdate *su;
-    nsresult rv = CallGetService(kSoftwareUpdateCID, &su);
+    nsresult rv = nsServiceManager::GetService(kSoftwareUpdateCID,
+                                               kISoftwareUpdateIID,
+                                               (nsISupports**) &su);
 
     if (NS_SUCCEEDED(rv))
     {
@@ -497,7 +441,7 @@ nsInstall::AddDirectory(const nsString& aRegName,
 
     if (!subdirectory.IsEmpty())
     {
-        subdirectory.AppendLiteral("/");
+        subdirectory.Append(NS_LITERAL_STRING("/"));
     }
 
 
@@ -523,7 +467,7 @@ nsInstall::AddDirectory(const nsString& aRegName,
         nsString *thisPath = (nsString *)paths->ElementAt(i);
 
         nsString newJarSource = aJarSource;
-        newJarSource.AppendLiteral("/");
+        newJarSource.Append(NS_LITERAL_STRING("/"));
         newJarSource += *thisPath;
 
         nsString newSubDir;
@@ -590,7 +534,7 @@ nsInstall::AddDirectory(const nsString& aRegName,
                         PRInt32* aReturn)
 {
     return AddDirectory(aRegName,
-                        EmptyString(),
+                        nsAutoString(),
                         aJarSource,
                         aFolder,
                         aSubdir,
@@ -608,11 +552,11 @@ nsInstall::AddDirectory(const nsString& aJarSource,
         return NS_OK;
     }
 
-    return AddDirectory(EmptyString(),
-                        EmptyString(),
+    return AddDirectory(nsAutoString(),
+                        nsAutoString(),
                         aJarSource,
                         mPackageFolder,
-                        EmptyString(),
+                        nsAutoString(),
                         INSTALL_NO_COMPARE,
                         aReturn);
 }
@@ -659,7 +603,7 @@ nsInstall::AddSubcomponent(const nsString& aRegName,
     }
 
     if (qualifiedVersion.IsEmpty())
-        qualifiedVersion.AssignLiteral("0.0.0.0");
+        qualifiedVersion.Assign(NS_LITERAL_STRING("0.0.0.0"));
 
 
     if ( aRegName.IsEmpty() )
@@ -783,11 +727,11 @@ nsInstall::AddSubcomponent(const nsString& aJarSource,
         return NS_OK;
     }
 
-    return AddSubcomponent(EmptyString(),
+    return AddSubcomponent(nsAutoString(),
                            version,
                            aJarSource,
                            mPackageFolder,
-                           EmptyString(),
+                           nsAutoString(),
                            INSTALL_NO_COMPARE,
                            aReturn);
 }
@@ -1075,7 +1019,7 @@ nsInstall::GetComponentFolder(const nsString& aComponentName, const nsString& aS
 PRInt32
 nsInstall::GetComponentFolder(const nsString& aComponentName, nsInstallFolder** aNewFolder)
 {
-    return GetComponentFolder(aComponentName, EmptyString(), aNewFolder);
+    return GetComponentFolder(aComponentName, nsAutoString(), aNewFolder);
 }
 
 PRInt32
@@ -1107,7 +1051,7 @@ PRInt32
 nsInstall::GetFolder(const nsString& targetFolder, nsInstallFolder** aNewFolder)
 {
     /* This version of GetFolder takes an nsString object as the only param */
-    return GetFolder(targetFolder, EmptyString(), aNewFolder);
+    return GetFolder(targetFolder, nsAutoString(), aNewFolder);
 }
 
 PRInt32
@@ -1150,8 +1094,11 @@ nsInstall::GetWinProfile(const nsString& aFolder, const nsString& aFile, JSConte
 {
     *aReturn = JSVAL_NULL;
 
-    if (SanityCheck() != nsInstall::SUCCESS)
+    PRInt32 result = SanityCheck();
+
+    if (result != nsInstall::SUCCESS)
     {
+        *aReturn = SaveError( result );
         return NS_OK;
     }
 
@@ -1181,8 +1128,11 @@ nsInstall::GetWinRegistry(JSContext* jscontext, JSClass* WinRegClass, jsval* aRe
 {
     *aReturn = JSVAL_NULL;
 
-    if (SanityCheck() != nsInstall::SUCCESS)
+    PRInt32 result = SanityCheck();
+
+    if (result != nsInstall::SUCCESS)
     {
+        *aReturn = SaveError( result );
         return NS_OK;
     }
 
@@ -1210,10 +1160,11 @@ nsInstall::GetWinRegistry(JSContext* jscontext, JSClass* WinRegClass, jsval* aRe
 PRInt32
 nsInstall::LoadResources(JSContext* cx, const nsString& aBaseName, jsval* aReturn)
 {
-    *aReturn = JSVAL_NULL;
- 
-    if (SanityCheck() != nsInstall::SUCCESS)
+    PRInt32 result = SanityCheck();
+
+    if (result != nsInstall::SUCCESS)
     {
+        *aReturn = SaveError( result );
         return NS_OK;
     }
     nsresult ret;
@@ -1223,6 +1174,7 @@ nsInstall::LoadResources(JSContext* cx, const nsString& aBaseName, jsval* aRetur
     nsIEventQueueService* pEventQueueService = nsnull;
     nsIStringBundle* bundle = nsnull;
     nsCOMPtr<nsISimpleEnumerator> propEnum;
+    *aReturn = JSVAL_NULL;
     jsval v = JSVAL_NULL;
 
     // set up JSObject to return
@@ -1244,14 +1196,15 @@ nsInstall::LoadResources(JSContext* cx, const nsString& aBaseName, jsval* aRetur
     }
 
     // initialize string bundle and related services
-    ret = CallGetService(kStringBundleServiceCID, &service);
+    ret = nsServiceManager::GetService(kStringBundleServiceCID,
+                    kIStringBundleServiceIID, (nsISupports**) &service);
     if (NS_FAILED(ret))
         goto cleanup;
-    ret = CallGetService(kEventQueueServiceCID, &pEventQueueService);
+    ret = nsServiceManager::GetService(kEventQueueServiceCID,
+                    kIEventQueueServiceIID, (nsISupports**) &pEventQueueService);
     if (NS_FAILED(ret))
         goto cleanup;
     ret = pEventQueueService->CreateThreadEventQueue();
-    NS_RELEASE(pEventQueueService);
     if (NS_FAILED(ret))
         goto cleanup;
 
@@ -1262,7 +1215,7 @@ nsInstall::LoadResources(JSContext* cx, const nsString& aBaseName, jsval* aRetur
       ret = NS_GetURLSpecFromFile(resFile, spec);
       if (NS_FAILED(ret)) {
         NS_WARNING("cannot get url spec\n");
-        NS_RELEASE(service);
+        nsServiceManager::ReleaseService(kStringBundleServiceCID, service);
         return ret;
       }
       ret = service->CreateBundle(spec.get(), &bundle);
@@ -1304,7 +1257,7 @@ nsInstall::LoadResources(JSContext* cx, const nsString& aBaseName, jsval* aRetur
         {
             JSString* propValJSStr = JS_NewUCStringCopyZ(cx, NS_REINTERPRET_CAST(const jschar*, pVal.get()));
             jsval propValJSVal = STRING_TO_JSVAL(propValJSStr);
-            NS_ConvertUTF8toUTF16 UCKey(pKey);
+            nsString UCKey = NS_ConvertUTF8toUCS2(pKey);
             JS_SetUCProperty(cx, res, (jschar*)UCKey.get(), UCKey.Length(), &propValJSVal);
         }
     }
@@ -1317,6 +1270,7 @@ cleanup:
 
     // release services
     NS_IF_RELEASE( service );
+    NS_IF_RELEASE( pEventQueueService );
 
     // release file, URL, StringBundle, Enumerator
     NS_IF_RELEASE( url );
@@ -1381,7 +1335,7 @@ nsInstall::Patch(const nsString& aRegName, const nsString& aVersion, const nsStr
 PRInt32
 nsInstall::Patch(const nsString& aRegName, const nsString& aJarSource, nsInstallFolder* aFolder, const nsString& aTargetName, PRInt32* aReturn)
 {
-    return Patch(aRegName, EmptyString(), aJarSource, aFolder, aTargetName, aReturn);
+    return Patch(aRegName, nsAutoString(), aJarSource, aFolder, aTargetName, aReturn);
 }
 
 PRInt32
@@ -1448,7 +1402,7 @@ nsInstall::SetPackageFolder(nsInstallFolder& aFolder)
     {
         return OUT_OF_MEMORY;
     }
-    nsresult res = folder->Init(aFolder, EmptyString());
+    nsresult res = folder->Init(aFolder, nsAutoString());
 
     if (NS_FAILED(res))
     {
@@ -1528,7 +1482,7 @@ nsInstall::StartInstall(const nsString& aUserPackageName, const nsString& aRegis
 
         if (mPackageFolder && packageDir)
         {
-            if (NS_FAILED( mPackageFolder->Init(packageDir, EmptyString()) ))
+            if (NS_FAILED( mPackageFolder->Init(packageDir, nsString()) ))
             {
                 delete mPackageFolder;
                 mPackageFolder = nsnull;
@@ -1613,9 +1567,9 @@ nsInstall::GetPatch(nsHashKey *aKey, nsIFile** fileName)
     else
         *fileName = nsnull;
 
-    if (mPatchList)
+    if (mPatchList != nsnull)
     {
-        NS_IF_ADDREF(*fileName = (nsIFile*) mPatchList->Get(aKey));
+        *fileName = (nsIFile*) mPatchList->Get(aKey);
     }
 }
 
@@ -1668,7 +1622,7 @@ nsInstall::FileOpDirGetParent(nsInstallFolder& aTarget, nsInstallFolder** thePar
     {
         return NS_ERROR_OUT_OF_MEMORY;
     }
-      folder->Init(parent, EmptyString());
+      folder->Init(parent,nsString());
       *theParentFolder = folder;
   }
   else
@@ -1928,7 +1882,7 @@ nsInstall::FileOpFileGetNativeVersion(nsInstallFolder& aTarget, nsString* aRetur
       rv = nsInstall::OUT_OF_MEMORY;
     else
     {
-      aReturn->AssignASCII(nativeVersionString);
+      aReturn->Assign(NS_ConvertASCIItoUCS2(nativeVersionString));
       PR_smprintf_free(nativeVersionString);
     }
 
@@ -2391,7 +2345,7 @@ nsInstall::GetQualifiedPackageName( const nsString& name, nsString& qualifiedNam
     nsString startOfName;
     name.Left(startOfName, 7);
 
-    if ( startOfName.EqualsLiteral("=USER=/") )
+    if ( startOfName.Equals(NS_LITERAL_STRING("=USER=/")) )
     {
         CurrentUserNode(qualifiedName);
         qualifiedName += name;
@@ -2431,7 +2385,7 @@ nsInstall::GetQualifiedRegName(const nsString& name, nsString& qualifiedRegName 
     nsString startOfName;
     name.Left(startOfName, 7);
 
-    if ( startOfName.EqualsLiteral("=COMM=/") || startOfName.EqualsLiteral("=USER=/"))
+    if ( startOfName.Equals(NS_LITERAL_STRING("=COMM=/")) || startOfName.Equals(NS_LITERAL_STRING("=USER=/")))
     {
         qualifiedRegName = startOfName;
     }
@@ -2467,11 +2421,11 @@ nsInstall::CurrentUserNode(nsString& userRegNode)
         prefBranch->GetCharPref("profile.name", getter_Copies(profname));
     }
 
-    userRegNode.AssignLiteral("/Netscape/Users/");
+    userRegNode.Assign(NS_LITERAL_STRING("/Netscape/Users/"));
     if ( !profname.IsEmpty() )
     {
         userRegNode.AppendWithConversion(profname);
-        userRegNode.AppendLiteral("/");
+        userRegNode.Append(NS_LITERAL_STRING("/"));
     }
 }
 
@@ -2601,55 +2555,22 @@ nsInstall::Alert(nsString& string)
     if (!ui)
         return UNEXPECTED_ERROR;
 
-    nsAutoString title;
-    title.AssignLiteral("Alert");
-    if (!mUIName.IsEmpty())
-    {
-        title = mUIName;
-    }
-    else
-    {
-        PRUnichar *t = GetTranslatedString(title.get());
-        if (t)
-            title.Adopt(t);
-    }
-    return ui->Alert( title.get(), string.get());
+    return ui->Alert( GetTranslatedString(NS_LITERAL_STRING("Alert").get()),
+                      string.get());
 }
 
 PRInt32
-nsInstall::ConfirmEx(nsString& aDialogTitle, nsString& aText, PRUint32 aButtonFlags, nsString& aButton0Title, nsString& aButton1Title, nsString& aButton2Title, nsString& aCheckMsg, PRBool* aCheckState, PRInt32* aReturn)
+nsInstall::Confirm(nsString& string, PRBool* aReturn)
 {
-    *aReturn = -1; /* default value */
+    *aReturn = PR_FALSE; /* default value */
 
     nsPIXPIProxy *ui = GetUIThreadProxy();
     if (!ui)
         return UNEXPECTED_ERROR;
 
-    nsAutoString title;
-    title.AssignLiteral("Confirm");
-    if (!aDialogTitle.IsEmpty())
-    {
-        title = aDialogTitle;
-    }
-    else if (!mUIName.IsEmpty())
-    {
-        title = mUIName;
-    }
-    else
-    {
-        PRUnichar *t = GetTranslatedString(title.get());
-        if (t)
-            title.Adopt(t);
-    }
-    return ui->ConfirmEx( title.get(),
-                          aText.get(),
-                          aButtonFlags,
-                          aButton0Title.get(),
-                          aButton1Title.get(),
-                          aButton2Title.get(),
-                          aCheckMsg.get(),
-                          aCheckState,
-                          aReturn);
+    return ui->Confirm( GetTranslatedString(NS_LITERAL_STRING("Confirm").get()),
+                        string.get(),
+                        aReturn);
 }
 
 
@@ -2718,7 +2639,7 @@ nsInstall::ExtractFileFromJar(const nsString& aJarfile, nsIFile* aSuggestedName,
                 // We found the extension;
                 newLeafName.Truncate(extpos + 1); //strip off the old extension
             }
-            newLeafName.AppendLiteral("new");
+            newLeafName.Append(NS_LITERAL_STRING("new"));
 
             //Now reset the leafname
             tempFile->SetLeafName(newLeafName);

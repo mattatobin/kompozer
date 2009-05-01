@@ -1,40 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Ian McGreer <mcgreer@netscape.com>
+ *  Ian McGreer <mcgreer@netscape.com>
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: nsPKCS12Blob.cpp,v 1.42.20.3 2006/01/31 12:50:31 kaie%kuix.de Exp $ */
+ * $Id: nsPKCS12Blob.cpp,v 1.38 2004/02/26 04:07:23 jgmyers%speakeasy.net Exp $
+ */
 
 #include "prmem.h"
 #include "prprf.h"
@@ -88,8 +86,6 @@ static NS_DEFINE_CID(kNSSComponentCID, NS_NSSCOMPONENT_CID);
 nsPKCS12Blob::nsPKCS12Blob():mCertArray(0),
                              mTmpFile(nsnull),
                              mTmpFilePath(nsnull),
-                             mDigest(nsnull),
-                             mDigestIterator(nsnull),
                              mTokenSet(PR_FALSE)
 {
   mUIContext = new PipUIContext();
@@ -98,8 +94,6 @@ nsPKCS12Blob::nsPKCS12Blob():mCertArray(0),
 // destructor
 nsPKCS12Blob::~nsPKCS12Blob()
 {
-  delete mDigestIterator;
-  delete mDigest;
 }
 
 // nsPKCS12Blob::SetToken
@@ -155,25 +149,18 @@ nsPKCS12Blob::ImportFromFile(nsILocalFile *file)
   rv = mToken->Login(PR_TRUE);
   if (NS_FAILED(rv)) return rv;
   
-  RetryReason wantRetry;
+  int wantRetry;
   
   do {
-    rv = ImportFromFileHelper(file, im_standard_prompt, wantRetry);
-    
-    if (NS_SUCCEEDED(rv) && wantRetry == rr_auto_retry_empty_password_flavors)
-    {
-      rv = ImportFromFileHelper(file, im_try_zero_length_secitem, wantRetry);
-    }
+    rv = ImportFromFileHelper(file, wantRetry);
   }
-  while (NS_SUCCEEDED(rv) && (wantRetry != rr_do_not_retry));
+  while (NS_SUCCEEDED(rv) && wantRetry);
   
   return rv;
 }
 
 nsresult
-nsPKCS12Blob::ImportFromFileHelper(nsILocalFile *file, 
-                                   nsPKCS12Blob::ImportMode aImportMode,
-                                   nsPKCS12Blob::RetryReason &aWantRetry)
+nsPKCS12Blob::ImportFromFileHelper(nsILocalFile *file, PRBool &aWantRetry)
 {
   nsNSSShutDownPreventionLock locker;
   nsresult rv;
@@ -183,30 +170,27 @@ nsPKCS12Blob::ImportFromFileHelper(nsILocalFile *file,
 
   PK11SlotInfo *slot=nsnull;
   nsXPIDLString tokenName;
-  unicodePw.data = NULL;
+  nsXPIDLCString tokenNameCString;
+  const char *tokNameRef;
   
-  aWantRetry = rr_do_not_retry;
+  aWantRetry = PR_FALSE;
 
-  if (aImportMode == im_try_zero_length_secitem)
-  {
-    unicodePw.len = 0;
+  // get file password (unicode)
+  unicodePw.data = NULL;
+  rv = getPKCS12FilePassword(&unicodePw);
+  if (NS_FAILED(rv)) goto finish;
+  if (unicodePw.data == NULL) {
+    handleError(PIP_PKCS12_USER_CANCELED);
+    return NS_OK;
   }
-  else
-  {
-    // get file password (unicode)
-    rv = getPKCS12FilePassword(&unicodePw);
-    if (NS_FAILED(rv)) goto finish;
-    if (unicodePw.data == NULL) {
-      handleError(PIP_PKCS12_USER_CANCELED);
-      return NS_OK;
-    }
-  }
-  
+
   mToken->GetTokenName(getter_Copies(tokenName));
-  {
-    NS_ConvertUTF16toUTF8 tokenNameCString(tokenName);
-    slot = PK11_FindSlotByName(tokenNameCString.get());
-  }
+  tokenNameCString.Adopt(ToNewUTF8String(tokenName));
+  tokNameRef = tokenNameCString; //I do this here so that the
+                                 //NS_CONST_CAST below doesn't
+                                 //break the build on Win32
+
+  slot = PK11_FindSlotByName(NS_CONST_CAST(char*,tokNameRef));
   if (!slot) {
     srv = SECFailure;
     goto finish;
@@ -247,22 +231,9 @@ finish:
   // for every error possible.
   if (srv != SECSuccess) {
     if (SEC_ERROR_BAD_PASSWORD == PORT_GetError()) {
-      if (unicodePw.len == sizeof(PRUnichar))
-      {
-        // no password chars available, 
-        // unicodeToItem allocated space for the trailing zero character only.
-        aWantRetry = rr_auto_retry_empty_password_flavors;
-      }
-      else
-      {
-        aWantRetry = rr_bad_password;
-        handleError(PIP_PKCS12_NSS_ERROR);
-      }
+      aWantRetry = PR_TRUE;
     }
-    else
-    {
-      handleError(PIP_PKCS12_NSS_ERROR);
-    }
+    handleError(PIP_PKCS12_NSS_ERROR);
   } else if (NS_FAILED(rv)) { 
     handleError(PIP_PKCS12_RESTORE_FAILED);
   }
@@ -314,24 +285,6 @@ nsPKCS12Blob::LoadCerts(const PRUnichar **certNames, int numCerts)
 }
 #endif
 
-static PRBool
-isExtractable(SECKEYPrivateKey *privKey)
-{
-  SECItem value;
-  PRBool  isExtractable = PR_FALSE;
-  SECStatus rv;
-
-  rv=PK11_ReadRawAttribute(PK11_TypePrivKey, privKey, CKA_EXTRACTABLE, &value);
-  if (rv != SECSuccess) {
-    return PR_FALSE;
-  }
-  if ((value.len == 1) && (value.data != NULL)) {
-    isExtractable = *(CK_BBOOL*)value.data;
-  }
-  SECITEM_FreeItem(&value, PR_FALSE);
-  return isExtractable;
-}
-  
 // nsPKCS12Blob::ExportToFile
 //
 // Having already loaded the certs, form them into a blob (loading the keys
@@ -409,23 +362,11 @@ nsPKCS12Blob::ExportToFile(nsILocalFile *file,
     // shape or form) from the card.  So let's punt if 
     // the cert is not in the internal db.
     if (nssCert->slot && !PK11_IsInternal(nssCert->slot)) {
-      // we aren't the internal token, see if the key is extractable.
-      SECKEYPrivateKey *privKey=PK11_FindKeyByDERCert(nssCert->slot,
-                                                      nssCert, this);
-
-      if (privKey) {
-        PRBool privKeyIsExtractable = isExtractable(privKey);
-
-        SECKEY_DestroyPrivateKey(privKey);
-
-        if (!privKeyIsExtractable) {
-          if (!InformedUserNoSmartcardBackup) {
-            InformedUserNoSmartcardBackup = PR_TRUE;
-            handleError(PIP_PKCS12_NOSMARTCARD_EXPORT);
-          }
-          continue;
-        }
+      if (!InformedUserNoSmartcardBackup) {
+        InformedUserNoSmartcardBackup = PR_TRUE;
+        handleError(PIP_PKCS12_NOSMARTCARD_EXPORT);
       }
+      continue;
     }
 
     // XXX this is why, to verify the slot is the same
@@ -464,7 +405,7 @@ nsPKCS12Blob::ExportToFile(nsILocalFile *file,
     // We're going to add the .p12 extension to the file name just like
     // Communicator used to.  We create a new nsILocalFile and initialize
     // it with the new patch.
-    filePath.AppendLiteral(".p12");
+    filePath.Append(NS_LITERAL_STRING(".p12"));
     localFileRef = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
     if (NS_FAILED(rv)) goto finish;
     localFileRef->InitWithPath(filePath);
@@ -644,98 +585,74 @@ OSErr ConvertMacPathToUnixPath(const char *macPath, char **unixPath)
 //
 
 // digest_open
-// prepare a memory buffer for reading/writing digests
+// open a temporary file for reading/writing digests
 SECStatus PR_CALLBACK
 nsPKCS12Blob::digest_open(void *arg, PRBool reading)
 {
-  nsPKCS12Blob *cx = NS_REINTERPRET_POINTER_CAST(nsPKCS12Blob *, arg);
-  NS_ENSURE_TRUE(cx, SECFailure);
-  
+  nsPKCS12Blob *cx = (nsPKCS12Blob *)arg;
+  nsresult rv;
+  // use DirectoryService to find the system temp directory
+  nsCOMPtr<nsILocalFile> tmpFile;
+  nsCOMPtr<nsIProperties> directoryService = 
+           do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
+  if (NS_FAILED(rv)) return SECFailure;
+  directoryService->Get(NS_OS_TEMP_DIR, 
+                        NS_GET_IID(nsILocalFile),
+                        getter_AddRefs(tmpFile));
+  if (tmpFile) {
+    tmpFile->AppendNative(PIP_PKCS12_TMPFILENAME);
+    nsCAutoString pathBuf;
+    tmpFile->GetNativePath(pathBuf);
+    cx->mTmpFilePath = ToNewCString(pathBuf);
+#ifdef XP_MAC
+    char *unixPath = nsnull;
+    ConvertMacPathToUnixPath(cx->mTmpFilePath, &unixPath);
+    nsMemory::Free(cx->mTmpFilePath);
+    cx->mTmpFilePath = unixPath;
+#endif    
+  }
+  // Open the file using NSPR
   if (reading) {
-    NS_ENSURE_TRUE(cx->mDigest, SECFailure);
-
-    delete cx->mDigestIterator;
-    cx->mDigestIterator = new nsCString::const_iterator;
-
-    if (!cx->mDigestIterator) {
-      PORT_SetError(SEC_ERROR_NO_MEMORY);
-      return SECFailure;
-    }
-
-    cx->mDigest->BeginReading(*cx->mDigestIterator);
+    cx->mTmpFile = PR_Open(cx->mTmpFilePath, PR_RDONLY, 0400);
+  } else {
+    cx->mTmpFile = PR_Open(cx->mTmpFilePath, 
+                           PR_RDWR | PR_CREATE_FILE | PR_TRUNCATE, 0600);
   }
-  else {
-    delete cx->mDigest;
-    cx->mDigest = new nsCString;
-
-    if (!cx->mDigest) {
-      PORT_SetError(SEC_ERROR_NO_MEMORY);
-      return SECFailure;
-    }
-  }
-
-  return SECSuccess;
+  return (cx->mTmpFile != NULL) ? SECSuccess : SECFailure;
 }
 
 // digest_close
-// destroy a possibly active iterator
-// remove the data buffer if requested
+// close the temp file opened above
 SECStatus PR_CALLBACK
 nsPKCS12Blob::digest_close(void *arg, PRBool remove_it)
 {
-  nsPKCS12Blob *cx = NS_REINTERPRET_POINTER_CAST(nsPKCS12Blob *, arg);
-  NS_ENSURE_TRUE(cx, SECFailure);
-
-  delete cx->mDigestIterator;
-  cx->mDigestIterator = nsnull;
-
-  if (remove_it) {  
-    delete cx->mDigest;
-    cx->mDigest = nsnull;
+  nsPKCS12Blob *cx = (nsPKCS12Blob *)arg;
+  PR_Close(cx->mTmpFile);
+  if (remove_it) {
+    PR_Delete(cx->mTmpFilePath);
+    PR_Free(cx->mTmpFilePath);
+    cx->mTmpFilePath = NULL;
   }
-  
+  cx->mTmpFile = NULL;
   return SECSuccess;
 }
 
 // digest_read
-// read bytes from the memory buffer
+// read bytes from the temp digest file
 int PR_CALLBACK
 nsPKCS12Blob::digest_read(void *arg, unsigned char *buf, unsigned long len)
 {
-  nsPKCS12Blob *cx = NS_REINTERPRET_POINTER_CAST(nsPKCS12Blob *, arg);
-  NS_ENSURE_TRUE(cx, SECFailure);
-  NS_ENSURE_TRUE(cx->mDigest, SECFailure);
-
-  // iterator object must exist when digest has been opened in read mode
-  NS_ENSURE_TRUE(cx->mDigestIterator, SECFailure);
-
-  unsigned long available = cx->mDigestIterator->size_forward();
-  
-  if (len > available)
-    len = available;
-
-  memcpy(buf, cx->mDigestIterator->get(), len);
-  cx->mDigestIterator->advance(len);
-  
-  return len;
+  nsPKCS12Blob *cx = (nsPKCS12Blob *)arg;
+  return PR_Read(cx->mTmpFile, buf, len);
 }
 
 // digest_write
-// append bytes to the memory buffer
+// write bytes to the temp digest file
 int PR_CALLBACK
 nsPKCS12Blob::digest_write(void *arg, unsigned char *buf, unsigned long len)
 {
-  nsPKCS12Blob *cx = NS_REINTERPRET_POINTER_CAST(nsPKCS12Blob *, arg);
-  NS_ENSURE_TRUE(cx, SECFailure);
-  NS_ENSURE_TRUE(cx->mDigest, SECFailure);
-
-  // make sure we are in write mode, read iterator has not yet been allocated
-  NS_ENSURE_FALSE(cx->mDigestIterator, SECFailure);
-  
-  cx->mDigest->Append(NS_REINTERPRET_CAST(char *, buf),
-                     NS_STATIC_CAST(PRUint32, len));
-  
-  return len;
+  nsPKCS12Blob *cx = (nsPKCS12Blob *)arg;
+  return PR_Write(cx->mTmpFile, buf, len);
 }
 
 // nickname_collision
@@ -753,7 +670,8 @@ nsPKCS12Blob::nickname_collision(SECItem *oldNick, PRBool *cancel, void *wincx)
   nsCString nickname;
   nsAutoString nickFromProp;
   nssComponent->GetPIPNSSBundleString("P12DefaultNickname", nickFromProp);
-  NS_ConvertUTF16toUTF8 nickFromPropC(nickFromProp);
+  nsXPIDLCString nickFromPropC;
+  nickFromPropC.Adopt(ToNewUTF8String(nickFromProp));
   // The user is trying to import a PKCS#12 file that doesn't have the
   // attribute we use to set the nickname.  So in order to reduce the
   // number of interactions we require with the user, we'll build a nickname

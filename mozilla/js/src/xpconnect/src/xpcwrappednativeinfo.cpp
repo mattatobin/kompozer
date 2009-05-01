@@ -1,6 +1,5 @@
-/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-// vim:cindent:ts=8:et:sw=4:
-/*
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -44,46 +43,6 @@
 #include "xpcprivate.h"
 
 /***************************************************************************/
-
-/*
- * Helper that clones JS Function objects along with both of its
- * reserved slots.
- */
-
-JSObject *
-xpc_CloneJSFunction(XPCCallContext &ccx, JSObject *funobj, JSObject *parent)
-{
-    JSObject *clone = JS_CloneFunctionObject(ccx, funobj, parent);
-    if(!clone)
-        return nsnull;
-
-    AUTO_MARK_JSVAL(ccx, OBJECT_TO_JSVAL(clone));
-
-    XPCWrappedNativeScope *scope = 
-        XPCWrappedNativeScope::FindInJSObjectScope(ccx, parent);
-
-    if (!scope) {
-        return nsnull;
-    }
-
-    // Make sure to break the prototype chain to the function object
-    // we cloned to prevent its scope from leaking into the clones
-    // scope.
-    JS_SetPrototype(ccx, clone, scope->GetPrototypeJSFunction());
-
-    // Copy the reserved slots to the clone.
-    jsval ifaceVal, memberVal;
-    if(!JS_GetReservedSlot(ccx, funobj, 0, &ifaceVal) ||
-       !JS_GetReservedSlot(ccx, funobj, 1, &memberVal))
-        return nsnull;
-
-    if(!JS_SetReservedSlot(ccx, clone, 0, ifaceVal) ||
-       !JS_SetReservedSlot(ccx, clone, 1, memberVal))
-        return nsnull;
-
-    return clone;
-}
-
 // XPCNativeMember
 
 // static
@@ -93,11 +52,19 @@ XPCNativeMember::GetCallInfo(XPCCallContext& ccx,
                              XPCNativeInterface** pInterface,
                              XPCNativeMember**    pMember)
 {
+    JSFunction* fun;
+    JSObject* realFunObj;
+
+    // We expect funobj to be a clone, we need the real funobj.
+
+    fun = (JSFunction*) JS_GetPrivate(ccx, funobj);
+    realFunObj = JS_GetFunctionObject(fun);
+
     jsval ifaceVal;
     jsval memberVal;
 
-    if(!JS_GetReservedSlot(ccx, funobj, 0, &ifaceVal) ||
-       !JS_GetReservedSlot(ccx, funobj, 1, &memberVal) ||
+    if(!JS_GetReservedSlot(ccx, realFunObj, 0, &ifaceVal) ||
+       !JS_GetReservedSlot(ccx, realFunObj, 1, &memberVal) ||
        !JSVAL_IS_INT(ifaceVal) || !JSVAL_IS_INT(memberVal))
     {
         return JS_FALSE;
@@ -188,8 +155,6 @@ XPCNativeMember::Resolve(XPCCallContext& ccx, XPCNativeInterface* iface)
     JSObject* funobj = JS_GetFunctionObject(fun);
     if(!funobj)
         return JS_FALSE;
-
-    AUTO_MARK_JSVAL(ccx, OBJECT_TO_JSVAL(funobj));
 
     if(!JS_SetReservedSlot(ccx, funobj, 0, PRIVATE_TO_JSVAL(iface))||
        !JS_SetReservedSlot(ccx, funobj, 1, PRIVATE_TO_JSVAL(this)))
@@ -598,7 +563,7 @@ XPCNativeSet::GetNewOrUsed(XPCCallContext& ccx, nsIClassInfo* classInfo)
         return set;
 
     nsIID** iidArray = nsnull;
-    AutoMarkingNativeInterfacePtrArrayPtr interfaceArray(ccx);
+    XPCNativeInterface** interfaceArray = nsnull;
     PRUint32 iidCount = 0;
 
     if(NS_FAILED(classInfo->GetInterfaces(&iidCount, &iidArray)))
@@ -618,12 +583,9 @@ XPCNativeSet::GetNewOrUsed(XPCCallContext& ccx, nsIClassInfo* classInfo)
 
     if(iidCount)
     {
-        AutoMarkingNativeInterfacePtrArrayPtr
-            arr(ccx, new XPCNativeInterface*[iidCount], iidCount, PR_TRUE);
-        if (!arr)
+        interfaceArray = new XPCNativeInterface*[iidCount];
+        if(!interfaceArray)
             goto out;
-
-        interfaceArray = arr;
 
         XPCNativeInterface** currentInterface = interfaceArray;
         nsIID**              currentIID = iidArray;
@@ -632,13 +594,9 @@ XPCNativeSet::GetNewOrUsed(XPCCallContext& ccx, nsIClassInfo* classInfo)
         for(PRUint32 i = 0; i < iidCount; i++)
         {
             nsIID* iid = *(currentIID++);
-            if (!iid) {
-                NS_ERROR("Null found in classinfo interface list");
-                continue;
-            }
 
-            XPCNativeInterface* iface =
-                XPCNativeInterface::GetNewOrUsed(ccx, iid);
+            AutoMarkingNativeInterfacePtr iface(ccx);
+            iface = XPCNativeInterface::GetNewOrUsed(ccx, iid);
 
             if(!iface)
             {
@@ -697,7 +655,7 @@ out:
     if(iidArray)
         NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(iidCount, iidArray);
     if(interfaceArray)
-        delete [] interfaceArray.get();
+        delete [] interfaceArray;
 
     return set;
 }

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsCOMPtr.h"
@@ -52,7 +52,7 @@
 #include "nsViewerApp.h"
 
 #include "nsIDocument.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIDocumentViewer.h"
 #include "nsIContentViewer.h"
 #include "nsIPresShell.h"
@@ -80,12 +80,15 @@
 //#include "nsUnitConversion.h"
 //#include "nsIDeviceContext.h"
 
+static NS_DEFINE_IID(kWebShellCID, NS_WEB_SHELL_CID);
 static NS_DEFINE_IID(kWindowCID, NS_WINDOW_CID);
 
 
 static NS_DEFINE_IID(kIXPBaseWindowIID, NS_IXPBASE_WINDOW_IID);
 static NS_DEFINE_IID(kISupportsIID, NS_ISUPPORTS_IID);
 static NS_DEFINE_IID(kIFactoryIID, NS_IFACTORY_IID);
+static NS_DEFINE_IID(kIWebShellIID, NS_IWEB_SHELL_IID);
+static NS_DEFINE_IID(kIWebShellContainerIID, NS_IWEB_SHELL_CONTAINER_IID);
 static NS_DEFINE_IID(kIDocumentViewerIID, NS_IDOCUMENT_VIEWER_IID);
 static NS_DEFINE_IID(kIWidgetIID, NS_IWIDGET_IID);
 
@@ -126,6 +129,11 @@ nsresult nsXPBaseWindow::QueryInterface(const nsIID& aIID,
 
   if (aIID.Equals(kIXPBaseWindowIID)) {
     *aInstancePtrResult = (void*) ((nsIXPBaseWindow*)this);
+    NS_ADDREF_THIS();
+    return NS_OK;
+  }
+  if (aIID.Equals(kIWebShellContainerIID)) {
+    *aInstancePtrResult = (void*) ((nsIWebShellContainer*)this);
     NS_ADDREF_THIS();
     return NS_OK;
   }
@@ -197,8 +205,10 @@ nsresult nsXPBaseWindow::Init(nsXPBaseWindowType aType,
 
   // Create top level window
   nsresult rv;
-  rv = CallCreateInstance(kWindowCID, &mWindow);
-  if (NS_FAILED(rv)) {
+  rv = nsComponentManager::CreateInstance(kWindowCID, nsnull, kIWidgetIID,
+                                             (void**)&mWindow);
+
+  if (NS_OK != rv) {
     return rv;
   }
 
@@ -214,16 +224,20 @@ nsresult nsXPBaseWindow::Init(nsXPBaseWindowType aType,
   mWindow->GetBounds(r);
 
   // Create web shell
-  rv = CallCreateInstance("@mozilla.org/webshell;1", &mDocShell);
-  if (NS_FAILED(rv)) {
+  rv = nsComponentManager::CreateInstance(kWebShellCID, nsnull,
+                                    kIWebShellIID,
+                                    (void**)&mWebShell);
+  if (NS_OK != rv) {
     return rv;
   }
   r.x = r.y = 0;
-  mDocShell->SetAllowPlugins(aAllowPlugins);
-  nsCOMPtr<nsIBaseWindow> docShellWin(do_QueryInterface(mDocShell));
+  nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(mWebShell));
+  docShell->SetAllowPlugins(aAllowPlugins);
+  nsCOMPtr<nsIBaseWindow> docShellWin(do_QueryInterface(mWebShell));
 
   rv = docShellWin->InitWindow(nsnull, mWindow, r.x, r.y, r.width, r.height);
   docShellWin->Create();
+  mWebShell->SetContainer((nsIWebShellContainer*) this);
   docShellWin->SetVisibility(PR_TRUE);
 
   // Now lay it all out
@@ -244,7 +258,8 @@ void nsXPBaseWindow::ForceRefresh()
   nsIPresShell* shell;
   GetPresShell(shell);
   if (nsnull != shell) {
-    nsIViewManager *vm = shell->GetViewManager();
+    nsCOMPtr<nsIViewManager> vm;
+    shell->GetViewManager(getter_AddRefs(vm));
     if (vm) {
       nsIView* root;
       vm->GetRootView(root);
@@ -260,8 +275,8 @@ void nsXPBaseWindow::ForceRefresh()
 void nsXPBaseWindow::Layout(PRInt32 aWidth, PRInt32 aHeight)
 {
   nsRect rr(0, 0, aWidth, aHeight);
-  nsCOMPtr<nsIBaseWindow> docShellWin(do_QueryInterface(mDocShell));
-  docShellWin->SetPositionAndSize(rr.x, rr.y, rr.width, rr.height, PR_FALSE);
+  nsCOMPtr<nsIBaseWindow> webShellWin(do_QueryInterface(mWebShell));
+  webShellWin->SetPositionAndSize(rr.x, rr.y, rr.width, rr.height, PR_FALSE);
 }
 
 //----------------------------------------------------------------------
@@ -316,10 +331,10 @@ NS_IMETHODIMP nsXPBaseWindow::Close()
     mWindowListener->Destroy(this);
   }
 
-  if (mDocShell) {
-    nsCOMPtr<nsIBaseWindow> webShellWin(do_QueryInterface(mDocShell));
+  if (nsnull != mWebShell) {
+    nsCOMPtr<nsIBaseWindow> webShellWin(do_QueryInterface(mWebShell));
     webShellWin->Destroy();
-    NS_RELEASE(mDocShell);
+    NS_RELEASE(mWebShell);
   }
 
   if (nsnull != mWindow) {
@@ -332,9 +347,10 @@ NS_IMETHODIMP nsXPBaseWindow::Close()
 
 
 //----------------------------------------------------------------------
-NS_IMETHODIMP nsXPBaseWindow::GetDocShell(nsIDocShell*& aResult)
+NS_IMETHODIMP nsXPBaseWindow::GetWebShell(nsIWebShell*& aResult)
 {
-  NS_IF_ADDREF(aResult = mDocShell);
+  aResult = mWebShell;
+  NS_IF_ADDREF(mWebShell);
   return NS_OK;
 }
 
@@ -358,9 +374,91 @@ NS_IMETHODIMP nsXPBaseWindow::GetTitle(const PRUnichar** aResult)
 //---------------------------------------------------------------
 NS_IMETHODIMP nsXPBaseWindow::LoadURL(const nsString& aURL)
 {
-   nsCOMPtr<nsIWebNavigation> webNav(do_QueryInterface(mDocShell));
+   nsCOMPtr<nsIWebNavigation> webNav(do_QueryInterface(mWebShell));
    webNav->LoadURI(aURL.get(), nsIWebNavigation::LOAD_FLAGS_NONE, nsnull, nsnull, nsnull);
    return NS_OK;
+}
+
+//---------------------------------------------------------------
+NS_IMETHODIMP nsXPBaseWindow::WillLoadURL(nsIWebShell* aShell, const PRUnichar* aURL, nsLoadType aReason)
+{
+  return NS_OK;
+}
+
+//-----------------------------------------------------------------
+NS_IMETHODIMP nsXPBaseWindow::BeginLoadURL(nsIWebShell* aShell, const PRUnichar* aURL)
+{
+  return NS_OK;
+}
+
+//-----------------------------------------------------------------
+NS_IMETHODIMP nsXPBaseWindow::ProgressLoadURL(nsIWebShell* aShell, const PRUnichar* aURL, PRInt32 aProgress, PRInt32 aProgressMax)
+{
+  return NS_OK;
+}
+
+//-----------------------------------------------------------------
+NS_IMETHODIMP nsXPBaseWindow::EndLoadURL(nsIWebShell* aShell, const PRUnichar* aURL, nsresult aStatus)
+{
+  // Find the Root Conent Node for this Window
+  nsIPresShell* shell;
+  GetPresShell(shell);
+  if (nsnull != shell) {
+    nsCOMPtr<nsIDocument> doc;
+    shell->GetDocument(getter_AddRefs(doc));
+    if (doc) {
+      NS_IF_ADDREF(mContentRoot = doc->GetRootContent());
+      mDocIsLoaded = PR_TRUE;
+      if (nsnull != mWindowListener) {
+        mWindowListener->Initialize(this);
+      }
+    }
+    NS_RELEASE(shell);
+  }
+
+  return NS_OK;
+}
+
+//-----------------------------------------------------------------
+
+NS_IMETHODIMP
+nsXPBaseWindow::FindWebShellWithName(const PRUnichar* aName,
+                                     nsIWebShell*& aResult)
+{
+  aResult = nsnull;
+
+  nsString aNameStr(aName);
+
+  nsCOMPtr<nsIWebShell> webShell;
+  GetWebShell(*getter_AddRefs(webShell));
+  nsCOMPtr<nsIDocShellTreeItem> docShellAsItem(do_QueryInterface(webShell));
+  if (webShell) {
+    nsXPIDLString name;
+    if (NS_SUCCEEDED(docShellAsItem->GetName(getter_Copies(name)))) {
+      if (aNameStr.Equals(name)) {
+        aResult = webShell;
+        NS_ADDREF(aResult);
+        return NS_OK;
+      }
+    }      
+
+    nsCOMPtr<nsIDocShellTreeNode> docShellAsNode(do_QueryInterface(webShell));
+    nsCOMPtr<nsIDocShellTreeItem> result;
+    if (NS_OK == docShellAsNode->FindChildWithName(aName, PR_TRUE, PR_FALSE,
+      nsnull, getter_AddRefs(result))) {
+      if (result) {
+        CallQueryInterface(result, &aResult);
+        return NS_OK;
+      }
+    }
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsXPBaseWindow::FocusAvailable(nsIWebShell* aFocusedWebShell, PRBool& aFocusTaken)
+{
+  return NS_OK;
 }
 
 //-----------------------------------------------------------------
@@ -415,7 +513,8 @@ NS_IMETHODIMP nsXPBaseWindow::GetDocument(nsIDOMHTMLDocument *& aDocument)
   nsIPresShell *shell = nsnull;
   GetPresShell(shell);
   if (nsnull != shell) {
-    nsIDocument *doc = shell->GetDocument();
+    nsCOMPtr<nsIDocument> doc;
+    shell->GetDocument(getter_AddRefs(doc));
     if (doc) {
       doc->QueryInterface(kIDOMHTMLDocumentIID,(void **)&htmlDoc);
     }
@@ -426,20 +525,61 @@ NS_IMETHODIMP nsXPBaseWindow::GetDocument(nsIDOMHTMLDocument *& aDocument)
   return NS_OK;
 }
 
+//-----------------------------------------------------------------
+NS_IMETHODIMP nsXPBaseWindow::NewWebShell(PRUint32 aChromeMask,
+                                          PRBool aVisible,
+                                          nsIWebShell*& aNewWebShell)
+{
+  nsresult rv = NS_OK;
+
+  // Create new window. By default, the refcnt will be 1 because of
+  // the registration of the browser window in gBrowsers.
+  nsXPBaseWindow* dialogWindow;
+  NS_NEWXPCOM(dialogWindow, nsXPBaseWindow);
+
+  if (nsnull != dialogWindow) {
+    nsRect  bounds;
+    GetBounds(bounds);
+
+    rv = dialogWindow->Init(mWindowType, mAppShell, mDialogURL, mTitle, bounds, aChromeMask, mAllowPlugins);
+    if (NS_OK == rv) {
+      if (aVisible) {
+        dialogWindow->SetVisible(PR_TRUE);
+      }
+      nsIWebShell *shell;
+      rv = dialogWindow->GetWebShell(shell);
+      aNewWebShell = shell;
+    } else {
+      dialogWindow->Close();
+    }
+  } else {
+    rv = NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  return rv;
+}
+
+NS_IMETHODIMP
+nsXPBaseWindow::ContentShellAdded(nsIWebShell* aChildShell, nsIContent* frameNode)
+{
+  return NS_OK;
+}
+
 
 //----------------------------------------------------------------------
 NS_IMETHODIMP nsXPBaseWindow::GetPresShell(nsIPresShell*& aPresShell)
 {
   aPresShell = nsnull;
 
-  if (mDocShell) {
+  nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(mWebShell));
+  if (docShell) {
     nsIContentViewer* cv = nsnull;
-    mDocShell->GetContentViewer(&cv);
+    docShell->GetContentViewer(&cv);
     if (nsnull != cv) {
       nsIDocumentViewer* docv = nsnull;
       cv->QueryInterface(kIDocumentViewerIID, (void**) &docv);
       if (nsnull != docv) {
-        nsCOMPtr<nsPresContext> cx;
+        nsCOMPtr<nsIPresContext> cx;
         docv->GetPresContext(getter_AddRefs(cx));
         if (nsnull != cx) {
           NS_IF_ADDREF(aPresShell = cx->GetPresShell());

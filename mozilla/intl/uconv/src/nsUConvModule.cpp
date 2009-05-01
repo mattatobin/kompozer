@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,17 +23,18 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *   IBM Corporation
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsCOMPtr.h"
@@ -56,7 +57,6 @@
 #include "nsTextToSubURI.h"
 #include "nsUTF8ConverterService.h"
 #include "nsConverterInputStream.h"
-#include "nsConverterOutputStream.h"
 #include "nsPlatformCharset.h"
 
 #ifndef MOZ_USE_NATIVE_UCONV
@@ -87,6 +87,8 @@
 // ucvlatin
 #include "nsUCvLatinCID.h"
 #include "nsUCvLatinDll.h"
+#include "nsUEscapeToUnicode.h"
+#include "nsUnicodeToUEscape.h"
 #include "nsAsciiToUnicode.h"
 #include "nsISO88592ToUnicode.h"
 #include "nsISO88593ToUnicode.h"
@@ -332,6 +334,7 @@ NS_UCONV_REG_UNREG("UTF-8", NS_UTF8TOUNICODE_CID, NS_UNICODETOUTF8_CID)
 
   // ucvlatin
 NS_UCONV_REG_UNREG("us-ascii", NS_ASCIITOUNICODE_CID, NS_UNICODETOASCII_CID)
+NS_UCONV_REG_UNREG("x-u-escaped", NS_UESCAPETOUNICODE_CID, NS_UNICODETOUESCAPE_CID)
 NS_UCONV_REG_UNREG("ISO-8859-2", NS_ISO88592TOUNICODE_CID, NS_UNICODETOISO88592_CID)
 NS_UCONV_REG_UNREG("ISO-8859-3", NS_ISO88593TOUNICODE_CID, NS_UNICODETOISO88593_CID)
 NS_UCONV_REG_UNREG("ISO-8859-4", NS_ISO88594TOUNICODE_CID, NS_UNICODETOISO88594_CID)
@@ -498,6 +501,8 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsUTF16BEToUnicode)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUTF16LEToUnicode)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUTF32BEToUnicode)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUTF32LEToUnicode)
+NS_GENERIC_FACTORY_CONSTRUCTOR(nsUnicodeToUEscape)
+NS_GENERIC_FACTORY_CONSTRUCTOR(nsUEscapeToUnicode)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUnicodeToUTF7)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUnicodeToMUTF7)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUnicodeToUTF16BE)
@@ -713,7 +718,6 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsTextToSubURI)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsUTF8ConverterService)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsCharsetAlias2)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsConverterInputStream)
-NS_GENERIC_FACTORY_CONSTRUCTOR(nsConverterOutputStream)
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsPlatformCharset, Init)
 
 static const nsModuleComponentInfo components[] = 
@@ -742,10 +746,6 @@ static const nsModuleComponentInfo components[] =
   { "Unicode converter input stream", NS_CONVERTERINPUTSTREAM_CID,              
     NS_CONVERTERINPUTSTREAM_CONTRACTID, 
     nsConverterInputStreamConstructor 
-  },   
-  { "Unicode converter output stream", NS_CONVERTEROUTPUTSTREAM_CID,
-    "@mozilla.org/intl/converter-output-stream;1",
-    nsConverterOutputStreamConstructor 
   },   
 #ifdef MOZ_USE_NATIVE_UCONV
   { 
@@ -823,6 +823,11 @@ static const nsModuleComponentInfo components[] =
     DECODER_NAME_BASE "us-ascii" , NS_ASCIITOUNICODE_CID, 
     NS_UNICODEDECODER_CONTRACTID_BASE "us-ascii",
     nsAsciiToUnicodeConstructor ,
+  },
+  { 
+    DECODER_NAME_BASE "x-u-escaped" , NS_UESCAPETOUNICODE_CID, 
+    NS_UNICODEDECODER_CONTRACTID_BASE "x-u-escaped",
+    nsUEscapeToUnicodeConstructor ,
   },
   { 
     DECODER_NAME_BASE "ISO-8859-2" , NS_ISO88592TOUNICODE_CID, 
@@ -1128,6 +1133,11 @@ static const nsModuleComponentInfo components[] =
     ENCODER_NAME_BASE "us-ascii" , NS_UNICODETOASCII_CID, 
     NS_UNICODEENCODER_CONTRACTID_BASE "us-ascii",
     nsUnicodeToAsciiConstructor, 
+  },
+  { 
+    ENCODER_NAME_BASE "x-u-escaped" , NS_UNICODETOUESCAPE_CID, 
+    NS_UNICODEENCODER_CONTRACTID_BASE "x-u-escaped",
+    nsUnicodeToUEscapeConstructor, 
   },
   { 
     ENCODER_NAME_BASE "ISO-8859-2" , NS_UNICODETOISO88592_CID, 

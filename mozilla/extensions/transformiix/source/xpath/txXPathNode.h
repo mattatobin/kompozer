@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,8 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -116,40 +117,5 @@ private:
     PRUint32 mIndex;
 #endif
 };
-
-class txNamespaceManager
-{
-public:
-    static PRInt32 getNamespaceID(const nsAString& aNamespaceURI);
-    static nsresult getNamespaceURI(const PRInt32 aID, nsAString& aResult);
-};
-
-/* static */
-inline PRInt32
-txNamespaceManager::getNamespaceID(const nsAString& aNamespaceURI)
-{
-#ifdef TX_EXE
-    return txStandaloneNamespaceManager::getNamespaceID(aNamespaceURI);
-#else
-    NS_ASSERTION(gTxNameSpaceManager, "No namespace manager");
-
-    PRInt32 namespaceID = kNameSpaceID_Unknown;
-    gTxNameSpaceManager->RegisterNameSpace(aNamespaceURI, namespaceID);
-    return namespaceID;
-#endif
-}
-
-/* static */
-inline nsresult
-txNamespaceManager::getNamespaceURI(const PRInt32 aID, nsAString& aResult)
-{
-#ifdef TX_EXE
-    return txStandaloneNamespaceManager::getNamespaceURI(aID, aResult);
-#else
-    NS_ASSERTION(gTxNameSpaceManager, "No namespace manager");
-
-    return gTxNameSpaceManager->GetNameSpaceURI(aID, aResult);
-#endif
-}
 
 #endif /* txXPathNode_h__ */

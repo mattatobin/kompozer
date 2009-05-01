@@ -292,6 +292,7 @@ NS_METHOD GetSharedScriptableHelperForJSIID(PRUint32 language,
 
 /******************************************************/
 
+static JSBool gClassObjectsWereKilled = JS_FALSE;
 static JSBool gClassObjectsWereInited = JS_FALSE;
 
 NS_DECL_CI_INTERFACE_GETTER(nsJSIID)
@@ -317,6 +318,8 @@ static const nsModuleComponentInfo CI_nsJSCID =
 
 JSBool xpc_InitJSxIDClassObjects()
 {
+    if(gClassObjectsWereKilled)
+        return JS_FALSE;
     if(gClassObjectsWereInited)
         return JS_TRUE;
 
@@ -363,7 +366,7 @@ void xpc_DestroyJSxIDClassObjects()
     NS_IF_RELEASE(NS_CLASSINFO_NAME(nsJSCID));
     NS_IF_RELEASE(gSharedScriptableHelperForJSIID);
 
-    gClassObjectsWereInited = JS_FALSE;
+    gClassObjectsWereKilled = JS_TRUE;
 }
 
 /***************************************************************************/
@@ -433,14 +436,6 @@ NS_IMETHODIMP nsJSIID::GetValid(PRBool *aValid)
 
 NS_IMETHODIMP nsJSIID::Equals(nsIJSID *other, PRBool *_retval)
 {
-    if(!_retval)
-        return NS_ERROR_NULL_POINTER;
-
-    *_retval = PR_FALSE;
-
-    if(!other)
-        return NS_OK;
-
     nsID* otherID;
     if(NS_SUCCEEDED(other->GetId(&otherID)))
     {
@@ -716,16 +711,10 @@ nsJSCID::NewID(const char* str)
         }
         else
         {
-            nsCOMPtr<nsIComponentRegistrar> registrar;
-            NS_GetComponentRegistrar(getter_AddRefs(registrar));
-            if (registrar)
+            nsCID cid;
+            if(NS_SUCCEEDED(nsComponentManager::ContractIDToClassID(str, &cid)))
             {
-                nsCID *cid;
-                if(NS_SUCCEEDED(registrar->ContractIDToCID(str, &cid)))
-                {
-                    success = idObj->mDetails.InitWithName(*cid, str);
-                    nsMemory::Free(cid);
-                }
+                success = idObj->mDetails.InitWithName(cid, str);
             }
         }
         if(!success)
@@ -800,13 +789,11 @@ nsJSCID::CreateInstance(nsISupports **_retval)
     else
         iid = NS_GET_IID(nsISupports);
 
-    nsCOMPtr<nsIComponentManager> compMgr;
-    nsresult rv = NS_GetComponentManager(getter_AddRefs(compMgr));
-    if (NS_FAILED(rv))
-        return NS_ERROR_UNEXPECTED;
-
     nsCOMPtr<nsISupports> inst;
-    rv = compMgr->CreateInstance(*mDetails.GetID(), nsnull, iid, getter_AddRefs(inst));
+    nsresult rv;
+
+    rv = nsComponentManager::CreateInstance(*mDetails.GetID(), nsnull, iid,
+                                            (void**) getter_AddRefs(inst));
     NS_ASSERTION(NS_FAILED(rv) || inst, "component manager returned success, but instance is null!");
 
     if(NS_FAILED(rv) || !inst)
@@ -888,13 +875,11 @@ nsJSCID::GetService(nsISupports **_retval)
     else
         iid = NS_GET_IID(nsISupports);
 
-    nsCOMPtr<nsIServiceManager> svcMgr;
-    nsresult rv = NS_GetServiceManager(getter_AddRefs(svcMgr));
-    if (NS_FAILED(rv))
-        return rv;
-
     nsCOMPtr<nsISupports> srvc;
-    rv = svcMgr->GetService(*mDetails.GetID(), iid, getter_AddRefs(srvc));
+    nsresult rv;
+
+    rv = nsServiceManager::GetService(*mDetails.GetID(), iid,
+                                      getter_AddRefs(srvc), nsnull);
     NS_ASSERTION(NS_FAILED(rv) || srvc, "service manager returned success, but service is null!");
     if(NS_FAILED(rv) || !srvc)
         return NS_ERROR_XPC_GS_RETURNED_FAILURE;

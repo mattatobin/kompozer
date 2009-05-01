@@ -1,43 +1,27 @@
-<?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
+<?xml version="1.0"?> 
+<!-- The contents of this file are subject to the Netscape Public
+   - License Version 1.1 (the "License"); you may not use this file
+   - except in compliance with the License. You may obtain a copy of
+   - the License at http://www.mozilla.org/NPL/
+   - 
+   - Software distributed under the License is distributed on an "AS
+   - IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+   - implied. See the License for the specific language governing
+   - rights and limitations under the License.
+   - 
    - The Original Code is Mozilla Communicator client code, released
    - March 31, 1998.
-   -
-   - The Initial Developer of the Original Code is
-   - Netscape Communications Corporation.
-   - Portions created by the Initial Developer are Copyright (C) 1998-1999
-   - the Initial Developer. All Rights Reserved.
-   -
+   - 
+   - The Initial Developer of the Original Code is Netscape
+   - Communications Corporation. Portions created by Netscape are
+   - Copyright (C) 1998-1999 Netscape Communications Corporation. All
+   - Rights Reserved.
+   - 
    - Contributor(s):
    -   Blake Ross   <blakeross@telocity.com>
    -   Peter Annema <disttsc@bart.nl>
    -   Jeremy M. Dolan <jmd@pobox.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+   -->
 
 <?xul-overlay href="chrome://global/content/globalOverlay.xul"?>
 <?xul-overlay href="chrome://communicator/content/utilityOverlay.xul"?>
@@ -45,6 +29,7 @@
 <?xul-overlay href="chrome://communicator/content/tasksOverlay.xul"?>
 <?xul-overlay href="chrome://global/content/charsetOverlay.xul"?>
 <?xul-overlay href="chrome://navigator/content/platformNavigationBindings.xul"?>
+<?xul-overlay href="chrome://navigator/content/mailNavigatorOverlay.xul"?>
 
 <!DOCTYPE overlay [
 <!ENTITY % navigatorDTD SYSTEM "chrome://navigator/locale/navigator.dtd" >
@@ -86,9 +71,8 @@
     <key id="key_paste"/>
     <key id="key_delete"/>
     <key id="key_selectAll"/>
-    <key id="key_switchTextDirection"/>
-
-    <!-- View Menu -->
+  
+          <!-- View Menu -->
     <key id="key_reload"  key="&reloadCmd.commandkey;" oncommand="BrowserReload();" modifiers="accel"/>
     <key key="&reloadCmd.commandkey;" oncommand="BrowserReloadSkipCache();" modifiers="accel,shift"/>
     <key id="key_viewSource" key="&pageSourceCmd.commandkey;" command="View:PageSource" modifiers="accel"/>
@@ -106,20 +90,19 @@
     <key id="key_findTypeLinks"/>
 
     <!-- Go Menu -->
-    <key keycode="VK_BACK" command="cmd_handleBackspace"/>
-    <key keycode="VK_BACK" command="cmd_handleShiftBackspace" modifiers="shift"/>
 
     <!-- Bookmarks Menu -->
-    <key id="addBookmarkAsKb" key="&addCurPageAsCmd.commandkey;" command="Browser:AddBookmarkAs" modifiers="accel"/>
+    <key id="addBookmarkKb" key="&addCurPageCmd.commandkey;" command="Browser:AddBookmark" modifiers="accel"/>
+    <key id="addBookmarkAsKb" key="&addCurPageCmd.commandkey;" command="Browser:AddBookmarkAs" modifiers="accel,shift"/>
     <key id="manBookmarkKb" key="&manBookmarksCmd.commandkey;" command="Browser:ManageBookmark" modifiers="accel"/>
 
     <!-- Tools Menu -->
     <key id="searchInternetKb" key="&searchInternet.commandKey;" modifiers="accel,shift" command="Browser:SearchInternet"/>
 
     <!-- Misc -->
+    <key id="key_stop" keycode="VK_ESCAPE" oncommand="BrowserStop();"/>
           <!-- the amazing fishcam dept. -->
-    <key key="f" modifiers="control,alt" oncommand="loadURI('http://wp.netscape.com/fishcam/fishcam.html');"/>
-    <key id="goUpKb" keycode="VK_UP" modifiers="alt" command="Browser:Up"/>
+    <key key="f" modifiers="control,alt" oncommand="loadURI('http://home.netscape.com/fishcam/fishcam.html');"/>
     <key id="key_gotoHistory"  key="&history.commandKey;"        oncommand="toHistory();" modifiers="accel"/>
     <keyset id="viewZoomKeys"/>
     <keyset id="navigationKeys"/>  
@@ -131,14 +114,13 @@
     <command id="cmd_newNavigatorTab" oncommand="BrowserOpenTab();"/>
     <command id="cmd_newTabWithTarget" oncommand="contentAreaClick(event);"/>
     <command id="cmd_handleBackspace"  oncommand="BrowserHandleBackspace();" />
-    <command id="cmd_handleShiftBackspace"  oncommand="BrowserHandleShiftBackspace();" />
 
     <command id="cmd_newEditor"/>
     <!-- NOT IMPLEMENTED
     <command id="cmd_newEditorTemplate"/>
     <command id="cmd_newEditorDraft"/> -->
     <command id="Browser:OpenFile"  oncommand="BrowserOpenFileWindow();"/>
-    <command id="Browser:SavePage" oncommand="saveDocument(window.content.document);"/>
+    <command id="Browser:SavePage" oncommand="saveDocument(window._content.document);"/>
     <command id="Browser:EditPage" oncommand="editPageOrFrame();" observes="isImage"/>
     <command id="Browser:UploadFile" oncommand="BrowserUploadFile();"/>
     <command id="Browser:Open" oncommand="BrowserOpenWindow();"/>
@@ -158,18 +140,17 @@
     <command id="cmd_paste"/>
     <command id="cmd_delete"/>
     <command id="cmd_selectAll" observes="isImage"/>
-    <command id="cmd_switchTextDirection"/>
 
     <!-- Content area context menu -->
     <command id="cmd_copyLink"/>
-    <command id="cmd_copyImage"/>
+    <command id="cmd_copyImageLocation"/>
+    <command id="cmd_copyImageContents"/>
 
     <!-- View Menu -->
     <command id="View:PageSource" oncommand="BrowserViewSourceOfDocument(content.document);" observes="isImage"/>
     <command id="View:PageInfo"   oncommand="BrowserPageInfo();"/>
     <command id="View:FullScreen" oncommand="BrowserFullScreen();"/>
-    <command id="cmd_SwitchDocumentDirection" oncommand="SwitchDocumentDirection(window.content);" />
- 
+  
     <!-- Search Menu -->
     <command id="Browser:Find" oncommand="BrowserFind();" observes="isImage"/>
     <command id="Browser:FindAgain" oncommand="BrowserFindAgain(false);" observes="isImage"/>
@@ -185,15 +166,14 @@
              oncommand="addBookmarkAs();"/>
     <command id="Browser:AddGroupmarkAs" label="&addCurTabsAsCmd.label;"
              accesskey="&addCurTabsAsCmd.accesskey;"
-             oncommand="addGroupmarkAs(); event.stopPropagation();"/>
+             oncommand="addGroupmarkAs(); event.preventBubble();"/>
     <command id="Browser:ManageBookmark" label="&manBookmarksCmd.label;" accesskey="&manBookmarksCmd.accesskey;" 
              oncommand="BrowserEditBookmarks();" />
   
     <!-- Go Menu -->  
-    <command id="Browser:Home"    oncommand="BrowserHome(event);"/>
+    <command id="Browser:Home"    oncommand="BrowserHome();"/>
     <command id="Browser:Back"    oncommand="BrowserBack();"    observes="canGoBack"/>
     <command id="Browser:Forward" oncommand="BrowserForward();" observes="canGoForward"/>
-    <command id="Browser:Up"      oncommand="BrowserUp();"      observes="canGoUp"/>
     <commandset id="viewZoomCommands"/>
     <commandset id="tasksCommands"/>
 
@@ -205,7 +185,6 @@
   <broadcasterset id="navBroadcasters">
     <broadcaster id="canGoBack"    disabled="true"/>
     <broadcaster id="canGoForward" disabled="true"/>
-    <broadcaster id="canGoUp"      disabled="true"/>
     <broadcaster id="Communicator:WorkMode"/>
     <broadcaster id="cmd_viewnavbar" oncommand="goToggleToolbar( 'nav-bar','cmd_viewnavbar');" checked="true"/>
     <broadcaster id="cmd_viewpersonaltoolbar" oncommand="goToggleToolbar('PersonalToolbar','cmd_viewpersonaltoolbar');" checked="true"/>
@@ -217,7 +196,7 @@
   <!-- bookmarks context menu -->
   <popupset id="bookmarksPopupset">
     <popup id="bookmarks-context-menu" 
-           onpopupshowing="return BookmarksMenu.createContextMenu(event);"
+           onpopupshowing="BookmarksMenu.createContextMenu(event);"
            onpopuphidden ="BookmarksMenu.destroyContextMenu(event);"/>
   </popupset>
 
@@ -264,7 +243,7 @@
                      validate="never"
                      rdf:type="http://home.netscape.com/NC-rdf#Folder"
                      label="rdf:http://home.netscape.com/NC-rdf#Name">
-        <menupopup context="bookmarks-context-menu"/>
+        <menupopup/>
       </toolbarbutton>
     </rule>
     <rule parent="hbox">
@@ -274,6 +253,7 @@
                      status="rdf:http://home.netscape.com/WEB-rdf#status"
                      rdf:type="http://home.netscape.com/NC-rdf#Bookmark"
                      statustext="rdf:http://home.netscape.com/NC-rdf#URL"
+                     tooltip="btTooltip"
                      label="rdf:http://home.netscape.com/NC-rdf#Name"/>
     </rule>
     <rule nc:FolderGroup="true" iscontainer="true">
@@ -306,7 +286,7 @@
               validate="never"
               label="rdf:http://home.netscape.com/NC-rdf#Name"
               type="rdf:http://www.w3.org/1999/02/22-rdf-syntax-ns#type">
-          <menupopup context="bookmarks-context-menu"/>
+          <menupopup />
         </menu>
       </menupopup>
     </rule>
@@ -321,8 +301,7 @@
                   src="rdf:http://home.netscape.com/NC-rdf#Icon"
                   validate="never"
                   label="rdf:http://home.netscape.com/NC-rdf#Name" 
-                  status="rdf:http://home.netscape.com/WEB-rdf#status"
-                  statustext="rdf:http://home.netscape.com/NC-rdf#URL"/>
+                  status="rdf:http://home.netscape.com/WEB-rdf#status"/>
       </menupopup>
     </rule>
   </template>
@@ -330,7 +309,7 @@
   <!-- Menu -->
   <menubar id="main-menubar" class="chromeclass-menubar">
     <menu id="menu_File">
-      <menupopup id="menu_FilePopup" onpopupshowing="updateCloseItems();getContentAreaFrameCount();updateSavePageItems();updateFileUploadItem();">
+      <menupopup id="menu_FilePopup" onpopupshowing="updateCloseItems();getContentAreaFrameCount();updateFileUploadItem();">
         <menu id="menu_New">
           <menupopup id="menu_NewPopup">
             <!-- From utilityOverlay.xul -->
@@ -347,10 +326,8 @@
         <menuitem id="menu_closeOtherTabs" command="cmd_closeOtherTabs" label="&closeOtherTabs.label;"/>
         <menuitem id="menu_closeWindow" hidden="true" command="cmd_closeWindow" key="key_closeWindow" label="&closeWindow.label;"/>
         <menuseparator/>
-        <menuitem id="savepage" valueSaveAs="&savePageAsCmd.label;" valueSave="&savePageCmd.label;"
-                  accesskey="&savePageCmd.accesskey;" key="key_savePage" command="Browser:SavePage"/>
-        <menuitem id="saveframe" valueSaveAs="&saveFrameAsCmd.label;" valueSave="&saveFrameCmd.label;"
-                  accesskey="&saveFrameCmd.accesskey;" oncommand="saveFrameDocument();" hidden="true"/>
+        <menuitem label="&savePageCmd.label;" accesskey="&savePageCmd.accesskey;" key="key_savePage" command="Browser:SavePage"/>
+        <menuitem id="savepage" label="&saveFrameCmd.label;" accesskey="&saveFrameCmd.accesskey;" oncommand="saveFrameDocument();" hidden="true"/>
         <menuseparator id="saveMenuBlockEnd"/>
         <menuitem label="&editPageCmd.label;" accesskey="&editPageCmd.accesskey;" key="key_editPage" command="Browser:EditPage" />
         <menuseparator/>
@@ -383,9 +360,6 @@
         <menuitem id="menu_findTypeLinks"/>
         <menuitem id="menu_findTypeText"/>
 
-        <menuseparator id="textfieldDirection-separator" hidden="true"/>
-        <menuitem id="textfieldDirection-swap" hidden="true"/>
-
         <menuseparator id="menu_PrefsSeparator"/> 
         <menuitem id="menu_preferences" oncommand="goPreferences('navigator', 'chrome://communicator/content/pref/pref-navigator.xul', 'navigator')"/>
       </menupopup>
@@ -407,24 +381,21 @@
                   command="View:FullScreen" hidden="true"/>
         <menuseparator />
         <menuitem label="&stopCmd.label;" accesskey="&stopCmd.accesskey;" id="menuitem-stop" disabled="true" oncommand="BrowserStop();" key="key_stop"/>
-        <menuitem id="menuitem_reload" accesskey="&reloadCmd.accesskey;" key="key_reload" label="&reloadCmd.label;" oncommand="BrowserReload();"/>
+        <menuitem accesskey="&reloadCmd.accesskey;" key="key_reload" label="&reloadCmd.label;" oncommand="BrowserReload();"/>
         <menuseparator />
   
         <!-- overlayed from viewZoomOverlay.xul -->
         <menu id="menu_textZoom" observes="isImage"/>
 
-        <menu id="menu_UseStyleSheet" label="&useStyleSheetMenu.label;" accesskey="&useStyleSheetMenu.accesskey;" disabled="false" observes="isImage">
+        <menu label="&useStyleSheetMenu.label;" accesskey="&useStyleSheetMenu.accesskey;" disabled="false" observes="isImage">
           <menupopup onpopupshowing="stylesheetFillPopup(this);"
-                     oncommand="stylesheetSwitchAll(window.content, event.target.getAttribute('data')); setStyleDisabled(false);" type="radio">
-            <menuitem label="&useStyleSheetNone.label;" accesskey="&useStyleSheetNone.accesskey;" oncommand="setStyleDisabled(true); event.stopPropagation();" type="radio"/>
+                     oncommand="stylesheetSwitchAll(window._content, event.target.getAttribute('data')); setStyleDisabled(false);">
+            <menuitem label="&useStyleSheetNone.label;" accesskey="&useStyleSheetNone.accesskey;"
+                      oncommand="setStyleDisabled(true); event.preventBubble();" type="radio"/>
             <menuitem label="&useStyleSheetPersistentOnly.label;" accesskey="&useStyleSheetPersistentOnly.accesskey;" type="radio"/>
           </menupopup>
         </menu>
         <menu id="charsetMenu" observes="isImage"/>
-        <menuitem hidden="true" id="documentDirection-swap"
-                  label="&bidiSwitchPageDirectionItem.label;"
-                  accesskey="&bidiSwitchPageDirectionItem.accesskey;"
-                  command="cmd_SwitchDocumentDirection"/>
         <menuseparator />
         <menuitem accesskey="&pageSourceCmd.accesskey;" label="&pageSourceCmd.label;" key="key_viewSource" command="View:PageSource"/>
         <menuitem accesskey="&pageInfoCmd.accesskey;"   label="&pageInfoCmd.label;"   key="key_viewInfo"   command="View:PageInfo"/>
@@ -449,10 +420,9 @@
     </menu>
 
     <menu accesskey="&goMenu.accesskey;" label="&goMenu.label;" oncommand="gotoHistoryIndex(event);">
-      <menupopup id="goPopup" onpopupshowing="updateGoMenu(event);">
+      <menupopup onpopupshowing="updateGoMenu(event);">
         <menuitem label="&goBackCmd.label;"    accesskey="&goBackCmd.accesskey;"    key="goBackKb"    command="Browser:Back"/>
         <menuitem label="&goForwardCmd.label;" accesskey="&goForwardCmd.accesskey;" key="goForwardKb" command="Browser:Forward"/>
-        <menuitem label="&goUpCmd.label;"      accesskey="&goUpCmd.accesskey;"      key="goUpKb"      command="Browser:Up"/>
         <menuitem label="&goHomeCmd.label;"    accesskey="&goHomeCmd.accesskey;"    command="Browser:Home" key="goHome"/>
         <menuseparator/>
         <menuitem label="&historyCmd.label;" accesskey="&historyCmd.accesskey;" oncommand="toHistory()" key="key_gotoHistory"/>
@@ -463,21 +433,18 @@
     <menu id="BookmarksMenu" label="&bookmarksMenu.label;" accesskey="&bookmarksMenu.accesskey;" 
           datasources="rdf:bookmarks rdf:files rdf:localsearch rdf:internetsearch" 
           ref="NC:BookmarksRoot" flags="dont-test-empty" template="bookmarksMenuTemplate"
-          tooltip="btTooltip"
-          oncommand="BookmarksMenu.loadBookmark(event, this.database)"
-          onclick="BookmarksMenu.loadBookmarkMiddleClick(event, this.database)"
+          oncommand="BookmarksMenu.loadBookmark(event.target, this.database)"
           ondraggesture="nsDragAndDrop.startDrag(event, BookmarksMenuDNDObserver)"
-          ondragdrop="nsDragAndDrop.drop(event, BookmarksMenuDNDObserver); event.stopPropagation()"
-          ondragenter="nsDragAndDrop.dragEnter(event, BookmarksMenuDNDObserver); event.stopPropagation()"
-          ondragexit="nsDragAndDrop.dragExit(event, BookmarksMenuDNDObserver); event.stopPropagation()"
-          ondragover="nsDragAndDrop.dragOver(event, BookmarksMenuDNDObserver); event.stopPropagation()">
-      <menupopup id="menu_BookmarksPopup"
-                 context="bookmarks-context-menu"
-                 onpopupshowing="updateGroupmarkCommand();">
-        <menuitem key="addBookmarkKb"   command="Browser:AddBookmark"/>
-        <menuitem key="addBookmarkAsKb" command="Browser:AddBookmarkAs"/>
-        <menuitem                       command="Browser:AddGroupmarkAs"/>
-        <menuitem key="manBookmarkKb"   command="Browser:ManageBookmark"/>
+          ondragdrop="nsDragAndDrop.drop(event, BookmarksMenuDNDObserver); event.preventBubble()"
+          ondragenter="nsDragAndDrop.dragEnter(event, BookmarksMenuDNDObserver); event.preventBubble()"
+          ondragexit="nsDragAndDrop.dragExit(event, BookmarksMenuDNDObserver); event.preventBubble()"
+          ondragover="nsDragAndDrop.dragOver(event, BookmarksMenuDNDObserver); event.preventBubble()">
+      <menupopup onpopupshowing="updateGroupmarkMenuitem('bookmarks_groupmark');">
+        <!-- for some reason these don't work as command="" -->
+        <menuitem key="addBookmarkKb"   observes="Browser:AddBookmark"/>
+        <menuitem key="addBookmarkAsKb" observes="Browser:AddBookmarkAs"/>
+        <menuitem id="bookmarks_groupmark" observes="Browser:AddGroupmarkAs"/>
+        <menuitem key="manBookmarkKb"   observes="Browser:ManageBookmark"/>
         <menuseparator/>
       </menupopup>
     </menu>
@@ -496,7 +463,7 @@
 
   <!-- Menu for testing. disabled for release
   <menu id="debugMenu" accesskey="U" label="Debug">
-    <menupopup id="menu_Debug_Popup">
+    <menupopup>
       <menu label="Verification">
         <menupopup>
           <menuitem label="Tables" oncommand="loadURI('resource:/res/samples/test6.html');"/>
@@ -598,18 +565,18 @@
 
   <menu id="qaMenu" accesskey="Q" label="QA">
     <menupopup id="qaMenuPopup">
-      <menuitem label="Getting Involved" oncommand="loadURI('http://www.seamonkey-project.org/start/');"/>
+      <menuitem label="Getting Involved" oncommand="loadURI('http://www.mozilla.org/start/');"/>
       <menuitem label="Mozilla QA Overview" oncommand="loadURI('http://www.mozilla.org/quality/');"/>
 
       <menuseparator />
 
-      <menuitem label="Frequently Reported Bugs" oncommand="loadURI('https://bugzilla.mozilla.org/duplicates.cgi');"/>
+      <menuitem label="Frequently Reported Bugs" oncommand="loadURI('http://bugzilla.mozilla.org/duplicates.cgi');"/>
       <menuitem label="Bug Writing Guidelines" oncommand="loadURI('http://www.mozilla.org/quality/bug-writing-guidelines.html');"/>
-      <menuitem label="File a Bug" oncommand="loadURI('https://bugzilla.mozilla.org/enter_bug.cgi?format=guided');"/>
+      <menuitem label="File a Bug" oncommand="loadURI('http://bugzilla.mozilla.org/enter_bug.cgi?format=guided');"/>
 
       <menuseparator />
 
-      <menuitem label="Bugs Filed Today" oncommand="loadURI('https://bugzilla.mozilla.org/buglist.cgi?product=Core&amp;product=Mozilla+Application+Suite&amp;chfieldfrom=0d&amp;chfieldto=Now&amp;chfield=%5BBug+creation%5D');"/>
+      <menuitem label="Bugs Filed Today" oncommand="loadURI('http://bugzilla.mozilla.org/buglist.cgi?chfield=%5BBug+creation%5D&amp;chfieldfrom=0d&amp;chfieldto=Now&amp;product=Browser&amp;product=MailNews');"/>
       <menuitem label="CVS Checkins Today" oncommand="loadURI('http://bonsai.mozilla.org/cvsquery.cgi?treeid=default&amp;module=SeaMonkeyAll&amp;branch=HEAD&amp;branchtype=match&amp;sortby=Date&amp;date=day&amp;cvsroot=%2Fcvsroot');"/>
       <menuitem label="Tree Status" oncommand="loadURI('http://tinderbox.mozilla.org/showbuilds.cgi?tree=SeaMonkey');"/>
 
@@ -620,7 +587,7 @@
 
       <menuseparator />
 
-      <menuitem label="Latest Builds" oncommand="loadURI('http://ftp.mozilla.org/pub/mozilla.org/seamonkey/nightly/latest-trunk/');"/>
+      <menuitem label="Latest Builds" oncommand="loadURI('http://ftp.mozilla.org/pub/mozilla.org/mozilla/nightly/latest/');"/>
     </menupopup>
   </menu>
   end release comment --> 

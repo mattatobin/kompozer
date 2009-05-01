@@ -1,45 +1,28 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
- *   Bob Lord <lord@netscape.com>
- *   Ian McGreer <mcgreer@netscape.com>
- *   Javier Delgadillo <javi@netscape.com>
- *   Kai Engert <kengert@redhat.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *  Bob Lord <lord@netscape.com>
+ *  Ian McGreer <mcgreer@netscape.com>
+ *  Javier Delgadillo <javi@netscape.com>
+ */
 
 const nsIX509Cert = Components.interfaces.nsIX509Cert;
-const nsIX509Cert3 = Components.interfaces.nsIX509Cert3;
 const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
 const nsIX509CertDB = Components.interfaces.nsIX509CertDB;
 const nsPK11TokenDB = "@mozilla.org/security/pk11tokendb;1";
@@ -91,13 +74,14 @@ function setWindowName()
 {
   //  Get the cert from the cert database
   var certdb = Components.classes[nsX509CertDB].getService(nsIX509CertDB);
+  var windowReference=document.getElementById('certDetails');
   var myName = self.name;
   bundle = srGetStrBundle("chrome://pippki/locale/pippki.properties");
   var cert;
 
   var certDetails = bundle.GetStringFromName('certDetails');
   if (myName != "") {
-    document.title = certDetails + '"' + myName + '"'; // XXX l10n?
+    windowReference.setAttribute("title",certDetails+'"'+myName+'"');
     //  Get the token
     //  XXX ignore this for now.  NSS will find the cert on a token
     //      by "tokenname:certname", which is what we have.
@@ -111,7 +95,8 @@ function setWindowName()
     var pkiParams = window.arguments[0].QueryInterface(nsIPKIParamBlock);
     var isupport = pkiParams.getISupportAtIndex(1);
     cert = isupport.QueryInterface(nsIX509Cert);
-    document.title = certDetails + '"' + cert.windowTitle + '"'; // XXX l10n?
+    windowReference.setAttribute("title", 
+                                 certDetails+'"'+cert.windowTitle+'"');
   }
 
   //
@@ -123,13 +108,6 @@ function setWindowName()
   AddCertChain("treesetDump", chain, "dump_");
   DisplayGeneralDataFromCert(cert);
   BuildPrettyPrint(cert);
-  
-  if (cert instanceof nsIX509Cert3)
-  {
-    cert.requestUsagesArrayAsync(
-            getProxyOnUIThread(new listener(),
-                               Components.interfaces.nsICertVerificationListener));
-  }
 }
 
  
@@ -190,44 +168,14 @@ function addAttributeFromCert(nodeName, value)
   node.setAttribute('value',value)
 }
 
-
-
-function listener() {
-}
-
-listener.prototype.QueryInterface =
-  function(iid) {
-    if (iid.equals(Components.interfaces.nsISupports) ||
-        iid.equals(Components.interfaces.nsICertVerificationListener))
-        return this;
-
-    throw Components.results.NS_ERROR_NO_INTERFACE;
-  }
-
-listener.prototype.notify =
-  function(cert, result) {
-    DisplayVerificationData(cert, result);
-  }
-
-function DisplayVerificationData(cert, result)
+function DisplayGeneralDataFromCert(cert)
 {
-  if (!result || !cert)
-    return; // no results could be produced
-
-  if (!(cert instanceof Components.interfaces.nsIX509Cert))
-    return;
-
   //  Verification and usage
   var verifystr = "";
   var o1 = {};
   var o2 = {};
   var o3 = {};
-
-  if (!(result instanceof Components.interfaces.nsICertVerificationResult))
-    return;
-
-  result.getUsagesArrayResult(o1, o2, o3);
-
+  cert.getUsagesArray(false, o1, o2, o3); // do not ignore OCSP when checking
   var verifystate = o1.value;
   var count = o2.value;
   var usageList = o3.value;
@@ -256,10 +204,7 @@ function DisplayVerificationData(cert, result)
       AddUsage(usageList[i],verifyInfoBox);
     }
   }
-}
 
-function DisplayGeneralDataFromCert(cert)
-{
   //  Common Name
   addAttributeFromCert('commonname', cert.commonName);
   //  Organization
@@ -304,22 +249,4 @@ function updateCertDump()
     asn1Tree.loadASN1Structure(cert.ASN1Structure);
   }
   displaySelected();
-}
-
-function getProxyOnUIThread(aObject, aInterface) {
-    var eventQSvc = Components.
-            classes["@mozilla.org/event-queue-service;1"].
-            getService(Components.interfaces.nsIEventQueueService);
-
-    var uiQueue = eventQSvc.
-            getSpecialEventQueue(Components.interfaces.
-            nsIEventQueueService.UI_THREAD_EVENT_QUEUE);
-
-    var proxyMgr = Components.
-            classes["@mozilla.org/xpcomproxy;1"].
-            getService(Components.interfaces.nsIProxyObjectManager);
-
-    return proxyMgr.getProxyForObject(uiQueue,
-            aInterface, aObject, 5);
-    // 5 == PROXY_ALWAYS | PROXY_SYNC
 }

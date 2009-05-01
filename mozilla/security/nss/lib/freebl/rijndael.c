@@ -1,39 +1,37 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: rijndael.c,v 1.20 2005/08/09 03:09:38 nelsonb%netscape.com Exp $ */
+ * $Id: rijndael.c,v 1.16 2002/11/16 06:09:58 nelsonb%netscape.com Exp $
+ */
 
 #include "prinit.h"
 #include "prerr.h"
@@ -969,16 +967,16 @@ rijndael_decryptCBC(AESContext *cx, unsigned char *output,
  *
  ***********************************************************************/
 
-AESContext * AES_AllocateContext(void)
+/* AES_CreateContext
+ *
+ * create a new context for Rijndael operations
+ */
+AESContext *
+AES_CreateContext(const unsigned char *key, const unsigned char *iv, 
+                  int mode, int encrypt,
+                  unsigned int keysize, unsigned int blocksize)
 {
-    return PORT_ZNew(AESContext);
-}
-
-SECStatus   
-AES_InitContext(AESContext *cx, const unsigned char *key, unsigned int keysize, 
-	        const unsigned char *iv, int mode, unsigned int encrypt,
-	        unsigned int blocksize)
-{
+    AESContext *cx;
     unsigned int Nk;
     /* According to Rijndael AES Proposal, section 12.1, block and key
      * lengths between 128 and 256 bits are supported, as long as the
@@ -992,19 +990,20 @@ AES_InitContext(AESContext *cx, const unsigned char *key, unsigned int keysize,
 	blocksize > RIJNDAEL_MAX_BLOCKSIZE || 
 	blocksize % 4 != 0) {
 	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
+	return NULL;
     }
     if (mode != NSS_AES && mode != NSS_AES_CBC) {
 	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
+	return NULL;
     }
     if (mode == NSS_AES_CBC && iv == NULL) {
 	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return SECFailure;
+	return NULL;
     }
+    cx = PORT_ZNew(AESContext);
     if (!cx) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-    	return SECFailure;
+	PORT_SetError(SEC_ERROR_NO_MEMORY);
+    	return NULL;
     }
     /* Nb = (block size in bits) / 32 */
     cx->Nb = blocksize / 4;
@@ -1019,9 +1018,10 @@ AES_InitContext(AESContext *cx, const unsigned char *key, unsigned int keysize,
     } else {
 	cx->worker = (encrypt) ? &rijndael_encryptECB : &rijndael_decryptECB;
     }
-    PORT_Assert((cx->Nb * (cx->Nr + 1)) <= RIJNDAEL_MAX_EXP_KEY_SIZE);
-    if ((cx->Nb * (cx->Nr + 1)) > RIJNDAEL_MAX_EXP_KEY_SIZE) {
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
+    /* Allocate memory for the expanded key */
+    cx->expandedKey = PORT_ZNewArray(PRUint32, cx->Nb * (cx->Nr + 1));
+    if (!cx->expandedKey) {
+	PORT_SetError(SEC_ERROR_NO_MEMORY);
 	goto cleanup;
     }
     /* Generate expanded key */
@@ -1032,31 +1032,12 @@ AES_InitContext(AESContext *cx, const unsigned char *key, unsigned int keysize,
 	if (rijndael_invkey_expansion(cx, key, Nk) != SECSuccess)
 	    goto cleanup;
     }
-    return SECSuccess;
-cleanup:
-    return SECFailure;
-}
-
-
-/* AES_CreateContext
- *
- * create a new context for Rijndael operations
- */
-AESContext *
-AES_CreateContext(const unsigned char *key, const unsigned char *iv, 
-                  int mode, int encrypt,
-                  unsigned int keysize, unsigned int blocksize)
-{
-    AESContext *cx = AES_AllocateContext();
-    if (cx) {
-	SECStatus rv = AES_InitContext(cx, key, keysize, iv, mode, encrypt,
-				       blocksize);
-	if (rv != SECSuccess) {
-	    AES_DestroyContext(cx, PR_TRUE);
-	    cx = NULL;
-	}
-    }
     return cx;
+cleanup:
+    if (cx->expandedKey)
+	PORT_ZFree(cx->expandedKey, cx->Nb * (cx->Nr + 1));
+    PORT_ZFree(cx, sizeof *cx);
+    return NULL;
 }
 
 /*
@@ -1068,7 +1049,8 @@ AES_CreateContext(const unsigned char *key, const unsigned char *iv,
 void 
 AES_DestroyContext(AESContext *cx, PRBool freeit)
 {
-/*  memset(cx, 0, sizeof *cx); */
+    PORT_ZFree(cx->expandedKey, cx->Nb * (cx->Nr + 1));
+    memset(cx, 0, sizeof *cx);
     if (freeit)
 	PORT_Free(cx);
 }

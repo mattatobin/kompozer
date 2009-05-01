@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,15 +14,14 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *   Aaron Leventhal (aaronl@netscape.com)
- *   Blake Ross      (blake@cs.stanford.edu)
- *   Masayuki Nakano (masayuki@d-toybox.com)
+ * Contributor(s): Aaron Leventhal (aaronl@netscape.com)
+ *                 Blake Ross      (blake@cs.stanford.edu)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -30,11 +29,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -57,7 +56,7 @@
 #include "nsPIDOMWindow.h"
 #include "nsIDOMNSEvent.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsIPrefService.h"
 #include "nsString.h"
 #include "nsCRT.h"
@@ -67,12 +66,12 @@
 #include "nsIFrame.h"
 #include "nsFrameTraversal.h"
 #include "nsIDOMDocument.h"
+#include "nsIDOMXULDocument.h"
 #include "nsIImageDocument.h"
 #include "nsIDOMHTMLDocument.h"
 #include "nsIDOMNSHTMLDocument.h"
 #include "nsIDOMHTMLElement.h"
 #include "nsIEventStateManager.h"
-#include "nsIFocusController.h"
 #include "nsIViewManager.h"
 #include "nsIScrollableView.h"
 #include "nsIDocument.h"
@@ -81,12 +80,10 @@
 #include "nsILink.h"
 #include "nsITextContent.h"
 #include "nsTextFragment.h"
-#include "nsIDOMNSEditableElement.h"
-#include "nsIDOMNSHTMLElement.h"
-#include "nsIEditor.h"
 
 #include "nsICaret.h"
 #include "nsIScriptGlobalObject.h"
+#include "nsPIDOMWindow.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIWebNavigation.h"
 #include "nsIInterfaceRequestor.h"
@@ -102,12 +99,11 @@
 
 #include "nsTypeAheadFind.h"
 
+// XXX Finding in textboxes (show cursor?), add if (mDocShell) and if (mPresShell) checks
 NS_INTERFACE_MAP_BEGIN(nsTypeAheadFind)
   NS_INTERFACE_MAP_ENTRY(nsITypeAheadFind)
-  NS_INTERFACE_MAP_ENTRY(nsITypeAheadFind_MOZILLA_1_8_BRANCH)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsITypeAheadFind)
   NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
-  NS_INTERFACE_MAP_ENTRY(nsIObserver)
 NS_INTERFACE_MAP_END
 
 NS_IMPL_ADDREF(nsTypeAheadFind)
@@ -121,9 +117,11 @@ static NS_DEFINE_CID(kFrameTraversalCID, NS_FRAMETRAVERSAL_CID);
 nsTypeAheadFind::nsTypeAheadFind():
   mLinksOnlyPref(PR_FALSE), mStartLinksOnlyPref(PR_FALSE),
   mLinksOnly(PR_FALSE), mCaretBrowsingOn(PR_FALSE),
-  mLiteralTextSearchOnly(PR_FALSE), mDontTryExactMatch(PR_FALSE), 
-  mAllTheSameChar(PR_TRUE), mRepeatingMode(eRepeatingNone), 
-  mLastFindLength(0), mIsSoundInitialized(PR_FALSE)
+  mLiteralTextSearchOnly(PR_FALSE), mDontTryExactMatch(PR_FALSE),
+  mAllTheSameChar(PR_TRUE),
+  mRepeatingMode(eRepeatingNone), mLastFindLength(0),
+  mFocusLinks(PR_FALSE),
+  mSoundInterface(nsnull), mIsSoundInitialized(PR_FALSE)
 {
 }
 
@@ -131,7 +129,7 @@ nsTypeAheadFind::~nsTypeAheadFind()
 {
   Cancel();
 
-  nsCOMPtr<nsIPrefBranch2> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
+  nsCOMPtr<nsIPrefBranchInternal> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
   if (prefInternal) {
     prefInternal->RemoveObserver("accessibility.typeaheadfind", this);
     prefInternal->RemoveObserver("accessibility.browsewithcaret", this);
@@ -141,7 +139,7 @@ nsTypeAheadFind::~nsTypeAheadFind()
 nsresult
 nsTypeAheadFind::Init(nsIDocShell* aDocShell)
 {
-  nsCOMPtr<nsIPrefBranch2> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
+  nsCOMPtr<nsIPrefBranchInternal> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
   mSearchRange = do_CreateInstance(kRangeCID);
   mStartPointRange = do_CreateInstance(kRangeCID);
   mEndPointRange = do_CreateInstance(kRangeCID);
@@ -221,46 +219,6 @@ nsTypeAheadFind::SetDocShell(nsIDocShell* aDocShell)
   mStartFindRange = nsnull;
   mStartPointRange = do_CreateInstance(kRangeCID);
   mSearchRange = do_CreateInstance(kRangeCID);
-
-  mFoundLink = nsnull;
-  mFoundEditable = nsnull;
-  mCurrentWindow = nsnull;
-
-  mSelectionController = nsnull;
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsTypeAheadFind::SetSelectionModeAndRepaint(PRInt16 aToggle)
-{
-  nsCOMPtr<nsISelectionController> selectionController = 
-    do_QueryReferent(mSelectionController);
-  if (!selectionController) {
-    return NS_OK;
-  }
-
-  selectionController->SetDisplaySelection(aToggle);
-  selectionController->RepaintSelection(nsISelectionController::SELECTION_NORMAL);
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsTypeAheadFind::CollapseSelection()
-{
-  nsCOMPtr<nsISelectionController> selectionController = 
-    do_QueryReferent(mSelectionController);
-  if (!selectionController) {
-    return NS_OK;
-  }
-
-  nsCOMPtr<nsISelection> selection;
-  selectionController->GetSelection(nsISelectionController::SELECTION_NORMAL,
-                                     getter_AddRefs(selection));
-  if (selection)
-    selection->CollapseToStart();
-
   return NS_OK;
 }
 
@@ -316,18 +274,14 @@ nsTypeAheadFind::PlayNotFoundSound()
 nsresult
 nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
                            PRBool aIsRepeatingSameChar, PRBool aIsLinksOnly,
-                           PRBool aIsFirstVisiblePreferred, PRBool aFindNext,
-                           PRUint16* aResult)
+                           PRBool aIsFirstVisiblePreferred, PRBool aFindNext, PRUint16* aResult)
 {
   *aResult = FIND_NOTFOUND;
-  mFoundLink = nsnull;
-  mFoundEditable = nsnull;
-  mCurrentWindow = nsnull;
-  nsCOMPtr<nsIPresShell> startingPresShell (GetPresShell());
+  nsCOMPtr<nsISelection> selection;
+  nsCOMPtr<nsISelectionController> selectionController;
+  nsCOMPtr<nsIPresShell> startingPresShell (do_QueryReferent(mPresShell));
   if (!startingPresShell) {    
     nsCOMPtr<nsIDocShell> ds = do_QueryReferent(mDocShell);
-    NS_ENSURE_TRUE(ds, NS_ERROR_FAILURE);
-
     ds->GetPresShell(getter_AddRefs(startingPresShell));
     mPresShell = do_GetWeakReference(startingPresShell);    
   }  
@@ -341,22 +295,14 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
       return NS_ERROR_FAILURE;
   }
 
-  nsRefPtr<nsPresContext> presContext = presShell->GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  presShell->GetPresContext(getter_AddRefs(presContext));
 
   if (!presContext)
     return NS_ERROR_FAILURE;
 
-  nsCOMPtr<nsISelection> selection;
-  nsCOMPtr<nsISelectionController> selectionController = 
-    do_QueryReferent(mSelectionController);
-  if (!selectionController) {
-    GetSelection(presShell, getter_AddRefs(selectionController),
-                 getter_AddRefs(selection)); // cache for reuse
-    mSelectionController = do_GetWeakReference(selectionController);
-  } else {
-    selectionController->GetSelection(
-      nsISelectionController::SELECTION_NORMAL, getter_AddRefs(selection));
-  }
+  GetSelection(presShell, getter_AddRefs(selectionController),
+               getter_AddRefs(selection)); // cache for reuse
  
   nsCOMPtr<nsISupports> startingContainer = presContext->GetContainer();
   nsCOMPtr<nsIDocShellTreeItem> treeItem(do_QueryInterface(startingContainer));
@@ -398,12 +344,9 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
   // ------------ Get ranges ready ----------------
   nsCOMPtr<nsIDOMRange> returnRange;
   nsCOMPtr<nsIPresShell> focusedPS;
-  if (NS_FAILED(GetSearchContainers(currentContainer,
-                                    (!aIsFirstVisiblePreferred ||
-                                     mStartFindRange) ?
-                                    selectionController.get() : nsnull,
-                                    aIsRepeatingSameChar,
+  if (NS_FAILED(GetSearchContainers(currentContainer, aIsRepeatingSameChar,
                                     aIsFirstVisiblePreferred, 
+                                    !aIsFirstVisiblePreferred || mStartFindRange,
                                     getter_AddRefs(presShell),
                                     getter_AddRefs(presContext)))) {
     return NS_ERROR_FAILURE;
@@ -442,11 +385,9 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
                               &isStartingLink);
       }
 
-      PRBool usesIndependentSelection;
       if (!IsRangeVisible(presShell, presContext, returnRange,
                           aIsFirstVisiblePreferred, PR_FALSE,
-                          getter_AddRefs(mStartPointRange), 
-                          &usesIndependentSelection) ||
+                          getter_AddRefs(mStartPointRange)) ||
           (aIsRepeatingSameChar && !isStartingLink) ||
           (aIsLinksOnly && !isInsideLink) ||
           (mStartLinksOnlyPref && aIsLinksOnly && !isStartingLink)) {
@@ -461,78 +402,18 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
       }
 
       // ------ Success! -------
-      // Hide old selection (new one may be on a different controller)
-      if (selection) {
-        selection->CollapseToStart();
-        SetSelectionModeAndRepaint(nsISelectionController::SELECTION_ON);
-      }
-
       // Make sure new document is selected
       if (presShell != startingPresShell) {
         // We are in a new document (because of frames/iframes)
-        mPresShell = do_GetWeakReference(presShell);
-      }
+        if (selection)
+          selection->CollapseToStart(); // Hide old doc's selection
 
-      if (usesIndependentSelection) {
-        // We may be inside an editable element, and therefore the selection
-        // may be controlled by a different selection controller.  Walk up the
-        // chain of parent nodes to see if we find one.
-        nsCOMPtr<nsIDOMNode> node;
-        returnRange->GetStartContainer(getter_AddRefs(node));
-        while (node) {
-          nsCOMPtr<nsIDOMNSEditableElement> editable = do_QueryInterface(node);
-          if (editable) {
-            // Inside an editable element.  Get the correct selection 
-            // controller and selection.
-            nsCOMPtr<nsIEditor> editor;
-            editable->GetEditor(getter_AddRefs(editor));
-            NS_ASSERTION(editor, "Editable element has no editor!");
-            if (!editor) {
-              break;
-            }
-            editor->GetSelectionController(
-              getter_AddRefs(selectionController));
-            if (selectionController) {
-              selectionController->GetSelection(
-                nsISelectionController::SELECTION_NORMAL, 
-                getter_AddRefs(selection));
-            }
-            mFoundEditable = do_QueryInterface(node);
-
-            // Check if find field is focused, if so do nothing
-            if (FindFieldHasFocus(presContext)) {
-              break;
-            }
-
-            // Otherwise move focus/caret to editable element
-            nsCOMPtr<nsIContent> content = do_QueryInterface(mFoundEditable);
-            if (content) {
-              content->SetFocus(presContext);
-              presContext->EventStateManager()->MoveCaretToFocus();
-            }
-            break;
-          }
-          nsIDOMNode* tmp = node;
-          tmp->GetParentNode(getter_AddRefs(node));
-        }
-
-        // If we reach here without setting mFoundEditable, then something
-        // besides editable elements can cause us to have an independent
-        // selection controller.  I don't know whether this is possible.
-        // Currently, we simply fall back to grabbing the document's selection
-        // controller in this case.  Perhaps we should reject this find match
-        // and search again.
-        NS_ASSERTION(mFoundEditable, "Independent selection controller on "
-                     "non-editable element!");
-      }
-
-      if (!mFoundEditable) {
-        // Not using a separate selection controller, so just get the
-        // document's controller and selection.
+        // Get selection controller and selection for new frame/iframe
         GetSelection(presShell, getter_AddRefs(selectionController), 
                      getter_AddRefs(selection));
+
+        mPresShell = do_GetWeakReference(presShell);
       }
-      mSelectionController = do_GetWeakReference(selectionController);
 
       // Select the found text
       if (selection) {
@@ -540,44 +421,18 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
         selection->AddRange(returnRange);
       }
 
-      if (!mFoundEditable) {
-        currentDocShell->SetHasFocus(PR_TRUE);  // What does this do?
+      if (selectionController)
+        selectionController->ScrollSelectionIntoView(nsISelectionController::SELECTION_NORMAL, 
+                                                   nsISelectionController::SELECTION_FOCUS_REGION, PR_TRUE);
+      currentDocShell->SetHasFocus(PR_TRUE);
 
-        // Keep track of whether we've found a link, so we can focus it, jump
-        // to its target, etc.
+      if (mFocusLinks) {
         nsIEventStateManager *esm = presContext->EventStateManager();
         PRBool isSelectionWithFocus;
         esm->MoveFocusToCaret(PR_TRUE, &isSelectionWithFocus);
-        if (isSelectionWithFocus) {
-          nsCOMPtr<nsIContent> lastFocusedContent;
-          esm->GetLastFocusedContent(getter_AddRefs(lastFocusedContent));
-          nsCOMPtr<nsIDOMElement>
-            lastFocusedElement(do_QueryInterface(lastFocusedContent));
-          mFoundLink = lastFocusedElement;
-        }
       }
 
-      // Change selection color to ATTENTION and scroll to it.  Careful: we
-      // must wait until after we goof with focus above before changing to
-      // ATTENTION, or when we MoveFocusToCaret() and the selection is not on a
-      // link, we'll blur, which will lose the ATTENTION.
-      if (selectionController) {
-        SetSelectionModeAndRepaint(nsISelectionController::SELECTION_ATTENTION);
-        selectionController->ScrollSelectionIntoView(
-          nsISelectionController::SELECTION_NORMAL, 
-          nsISelectionController::SELECTION_FOCUS_REGION, PR_TRUE);
-      }
-
-      nsCOMPtr<nsIDocument> doc =
-        do_QueryInterface(presShell->GetDocument());
-      NS_ASSERTION(doc, "Wow, presShell doesn't have document!");
-      mCurrentWindow = do_QueryInterface(doc->GetScriptGlobalObject());
-
-      if (hasWrapped) {
-        *aResult = FIND_WRAPPED;
-      } else {
-        *aResult = FIND_FOUND;
-      }
+      *aResult = hasWrapped ? FIND_WRAPPED : FIND_FOUND;
 
       return NS_OK;
     }
@@ -621,10 +476,9 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell,
     }
 
     if (continueLoop) {
-      if (NS_FAILED(GetSearchContainers(currentContainer,
-                                        nsnull,
+      if (NS_FAILED(GetSearchContainers(currentContainer,                                        
                                         aIsRepeatingSameChar,
-                                        aIsFirstVisiblePreferred,
+                                        aIsFirstVisiblePreferred, PR_FALSE,
                                         getter_AddRefs(presShell),
                                         getter_AddRefs(presContext)))) {
         continue;
@@ -657,51 +511,27 @@ nsTypeAheadFind::GetSearchString(nsAString& aSearchString)
 }
 
 NS_IMETHODIMP
-nsTypeAheadFind::GetFoundLink(nsIDOMElement** aFoundLink)
-{
-  NS_ENSURE_ARG_POINTER(aFoundLink);
-  *aFoundLink = mFoundLink;
-  NS_IF_ADDREF(*aFoundLink);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsTypeAheadFind::GetFoundEditable(nsIDOMElement** aFoundEditable)
-{
-  NS_ENSURE_ARG_POINTER(aFoundEditable);
-  *aFoundEditable = mFoundEditable;
-  NS_IF_ADDREF(*aFoundEditable);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsTypeAheadFind::GetCurrentWindow(nsIDOMWindow** aCurrentWindow)
-{
-  NS_ENSURE_ARG_POINTER(aCurrentWindow);
-  *aCurrentWindow = mCurrentWindow;
-  NS_IF_ADDREF(*aCurrentWindow);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
 nsTypeAheadFind::GetFocusLinks(PRBool* aFocusLinks)
 {
+  NS_ENSURE_ARG(aFocusLinks);
+  *aFocusLinks = mFocusLinks;
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsTypeAheadFind::SetFocusLinks(PRBool aFocusLinks)
 {
+  mFocusLinks = aFocusLinks;
   return NS_OK;
 }
 
 nsresult
-nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
-                                     nsISelectionController *aSelectionController,
+nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,                                     
                                      PRBool aIsRepeatingSameChar,
                                      PRBool aIsFirstVisiblePreferred,
+                                     PRBool aCanUseDocSelection,                                     
                                      nsIPresShell **aPresShell,
-                                     nsPresContext **aPresContext)
+                                     nsIPresContext **aPresContext)
 {
   NS_ENSURE_ARG_POINTER(aContainer);
   NS_ENSURE_ARG_POINTER(aPresShell);
@@ -714,16 +544,17 @@ nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
   if (!docShell)
     return NS_ERROR_FAILURE;
 
+  nsCOMPtr<nsIPresContext> presContext;
   nsCOMPtr<nsIPresShell> presShell;
-  docShell->GetPresShell(getter_AddRefs(presShell));
 
-  nsRefPtr<nsPresContext> presContext;
+  docShell->GetPresShell(getter_AddRefs(presShell));
   docShell->GetPresContext(getter_AddRefs(presContext));
 
   if (!presShell || !presContext)
     return NS_ERROR_FAILURE;
 
-  nsIDocument* doc = presShell->GetDocument();
+  nsCOMPtr<nsIDocument> doc;
+  presShell->GetDocument(getter_AddRefs(doc));
 
   if (!doc)
     return NS_ERROR_FAILURE;
@@ -754,11 +585,11 @@ nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
   // Consider current selection as null if
   // it's not in the currently focused document
   nsCOMPtr<nsIDOMRange> currentSelectionRange;
-  nsCOMPtr<nsIPresShell> selectionPresShell = GetPresShell();
-  if (aSelectionController && selectionPresShell && selectionPresShell == presShell) {
+  nsCOMPtr<nsIPresShell> selectionPresShell (do_QueryReferent(mPresShell));
+  if (aCanUseDocSelection && selectionPresShell && selectionPresShell == presShell) {
     nsCOMPtr<nsISelection> selection;
-    aSelectionController->GetSelection(
-      nsISelectionController::SELECTION_NORMAL, getter_AddRefs(selection));
+    nsCOMPtr<nsISelectionController> selectionController;
+    GetSelection(presShell, getter_AddRefs(selectionController), getter_AddRefs(selection));
     if (selection)
       selection->GetRangeAt(0, getter_AddRefs(currentSelectionRange));
   }
@@ -769,7 +600,7 @@ nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
     // IsRangeVisible. It returns the first visible range after searchRange
     IsRangeVisible(presShell, presContext, mSearchRange, 
                    aIsFirstVisiblePreferred, PR_TRUE, 
-                   getter_AddRefs(mStartPointRange), nsnull);
+                   getter_AddRefs(mStartPointRange));
   }
   else {
     PRInt32 startOffset;
@@ -836,7 +667,8 @@ nsTypeAheadFind::RangeStartsInsideLink(nsIDOMRange *aRange,
 
     if (textContent) {
       // look for non whitespace character before start offset
-      const nsTextFragment *textFrag = textContent->Text();
+      const nsTextFragment *textFrag;
+      textContent->GetText(&textFrag);
 
       for (PRInt32 index = 0; index < startOffset; index++) {
         if (!XP_IS_SPACE(textFrag->CharAt(index))) {
@@ -892,7 +724,9 @@ nsTypeAheadFind::RangeStartsInsideLink(nsIDOMRange *aRange,
 
     if (textContent) {
       // We don't want to look at a whitespace-only first child
-      if (textContent->IsOnlyWhitespace())
+      PRBool isOnlyWhitespace;
+      textContent->IsOnlyWhitespace(&isOnlyWhitespace);
+      if (isOnlyWhitespace)
         parentsFirstChild = parent->GetChildAt(1);
     }
 
@@ -911,13 +745,13 @@ nsTypeAheadFind::RangeStartsInsideLink(nsIDOMRange *aRange,
 NS_IMETHODIMP
 nsTypeAheadFind::FindPrevious(PRUint16* aResult)
 {
-  return FindInternal(PR_TRUE, aResult);
+  return FindInternal(true, aResult);
 }
 
 NS_IMETHODIMP
 nsTypeAheadFind::FindNext(PRUint16* aResult)
 {
-  return FindInternal(PR_FALSE, aResult); 
+  return FindInternal(false, aResult); 
 }
 
 nsresult
@@ -940,8 +774,7 @@ nsTypeAheadFind::FindInternal(PRBool aFindBackwards, PRUint16* aResult)
   }
   mLiteralTextSearchOnly = PR_TRUE;
 
-  if (NS_FAILED(FindItNow(nsnull, repeatingSameChar, mLinksOnly, PR_FALSE,
-                          !aFindBackwards, aResult)))
+  if (NS_FAILED(FindItNow(nsnull, repeatingSameChar, mLinksOnly, PR_FALSE, !aFindBackwards, aResult)))
     mRepeatingMode = eRepeatingNone;
 
   return NS_OK;
@@ -961,36 +794,24 @@ nsTypeAheadFind::Cancel()
   mStartFindRange = nsnull;
   mAllTheSameChar = PR_TRUE; // Until at least 2 different chars are typed
 
-  mSelectionController = nsnull;
-
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly,
-                      PRUint16* aResult)
+nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly, PRUint16* aResult)
 {
   *aResult = FIND_NOTFOUND;
 
-  nsCOMPtr<nsIPresShell> presShell (GetPresShell());
+  nsCOMPtr<nsISelection> selection;
+  nsCOMPtr<nsISelectionController> selectionController;
+  nsCOMPtr<nsIPresShell> presShell (do_QueryReferent(mPresShell));
   if (!presShell) {    
     nsCOMPtr<nsIDocShell> ds (do_QueryReferent(mDocShell));
-    NS_ENSURE_TRUE(ds, NS_ERROR_FAILURE);
-
     ds->GetPresShell(getter_AddRefs(presShell));
     mPresShell = do_GetWeakReference(presShell);    
   }  
-  nsCOMPtr<nsISelection> selection;
-  nsCOMPtr<nsISelectionController> selectionController = 
-    do_QueryReferent(mSelectionController);
-  if (!selectionController) {
-    GetSelection(presShell, getter_AddRefs(selectionController),
-                 getter_AddRefs(selection)); // cache for reuse
-    mSelectionController = do_GetWeakReference(selectionController);
-  } else {
-    selectionController->GetSelection(
-      nsISelectionController::SELECTION_NORMAL, getter_AddRefs(selection));
-  }
+  GetSelection(presShell, getter_AddRefs(selectionController),
+               getter_AddRefs(selection)); // cache for reuse
 
   if (selection)
     selection->CollapseToStart();
@@ -1069,9 +890,9 @@ nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly,
     // If you can see the selection (not collapsed or thru caret browsing),
     // or if already focused on a page element, start there.
     // Otherwise we're going to start at the first visible element
-    PRBool isSelectionCollapsed = PR_TRUE;
-    if (selection)
-      selection->GetIsCollapsed(&isSelectionCollapsed);
+    NS_ENSURE_TRUE(selection, NS_ERROR_FAILURE);
+    PRBool isSelectionCollapsed;
+    selection->GetIsCollapsed(&isSelectionCollapsed);
 
     // If true, we will scan from top left of visible area
     // If false, we will scan from start of selection
@@ -1081,7 +902,8 @@ nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly,
       // If not, make sure the selection is in sync with the focus, so we can 
       // start our search from there.
       nsCOMPtr<nsIContent> focusedContent;
-      nsPresContext* presContext = presShell->GetPresContext();
+      nsCOMPtr<nsIPresContext> presContext;
+      presShell->GetPresContext(getter_AddRefs(presContext));
       NS_ENSURE_TRUE(presContext, NS_OK);
 
       nsIEventStateManager *esm = presContext->EventStateManager();
@@ -1100,9 +922,17 @@ nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly,
     // Regular find, not repeated char find
 
     // Prefer to find exact match
-    rv = FindItNow(nsnull, PR_FALSE, mLinksOnly, isFirstVisiblePreferred,
-                   PR_FALSE, aResult);
+    rv = FindItNow(nsnull, PR_FALSE, mLinksOnly, isFirstVisiblePreferred, PR_FALSE, aResult);
   }
+
+#ifndef NO_LINK_CYCLE_ON_SAME_CHAR
+  if (NS_FAILED(rv) && !mLiteralTextSearchOnly && mAllTheSameChar && 
+      mTypeAheadBuffer.Length() > 1) {
+    mRepeatingMode = eRepeatingChar;
+    mDontTryExactMatch = PR_TRUE;  // Repeated character find mode
+    rv = FindItNow(nsnull, PR_TRUE, PR_TRUE, isFirstVisiblePreferred, PR_FALSE, aResult);
+  }
+#endif
 
   // ---------Handle success or failure ---------------
   if (NS_SUCCEEDED(rv)) {
@@ -1111,12 +941,11 @@ nsTypeAheadFind::Find(const nsAString& aSearchString, PRBool aLinksOnly,
       // (mStartFindRange)
 
       mStartFindRange = nsnull;
-      if (selection) {
-        nsCOMPtr<nsIDOMRange> startFindRange;
-        selection->GetRangeAt(0, getter_AddRefs(startFindRange));
-        if (startFindRange)
-          startFindRange->CloneRange(getter_AddRefs(mStartFindRange));
-      }
+      nsCOMPtr<nsIDOMRange> startFindRange;
+      selection->GetRangeAt(0, getter_AddRefs(startFindRange));
+
+      if (startFindRange)
+        startFindRange->CloneRange(getter_AddRefs(mStartFindRange));
     }
   }
   else {
@@ -1142,9 +971,11 @@ nsTypeAheadFind::GetSelection(nsIPresShell *aPresShell,
   // if aCurrentNode is nsnull, get selection for document
   *aDOMSel = nsnull;
 
-  nsPresContext* presContext = aPresShell->GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  aPresShell->GetPresContext(getter_AddRefs(presContext));
 
-  nsIFrame *frame = aPresShell->GetRootFrame();
+  nsIFrame *frame = nsnull;
+  aPresShell->GetRootFrame(&frame);
 
   if (presContext && frame) {
     frame->GetSelectionController(presContext, aSelCon);
@@ -1155,48 +986,13 @@ nsTypeAheadFind::GetSelection(nsIPresShell *aPresShell,
   }
 }
 
-PRBool
-nsTypeAheadFind::FindFieldHasFocus(nsPresContext *aPresContext)
-{
-  NS_ENSURE_ARG_POINTER(aPresContext);
-
-  nsCOMPtr<nsISupports> container = aPresContext->GetContainer();
-  nsCOMPtr<nsPIDOMWindow> window = do_GetInterface(container);
-  if (!window) {
-    return PR_FALSE;
-  }
-
-  nsIFocusController* focusController = window->GetRootFocusController();
-  if (!focusController) {
-    return PR_FALSE;
-  }
-
-  nsCOMPtr<nsIDOMElement> focusedElement;
-  focusController->GetFocusedElement(getter_AddRefs(focusedElement));
-  nsCOMPtr<nsIContent> content = do_QueryInterface(focusedElement);
-  if (!content) {
-    return PR_FALSE;
-  }
-
-  nsCOMPtr<nsIDOMElement> boundElement =
-    do_QueryInterface(content->GetBindingParent());
-  if (!boundElement) {
-    return PR_FALSE;
-  }
-
-  nsAutoString idStr;
-  return (NS_SUCCEEDED(boundElement->GetAttribute(NS_LITERAL_STRING("id"),
-                                                  idStr)) &&
-          idStr.EqualsLiteral("find-field"));
-}
 
 PRBool
 nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
-                                nsPresContext *aPresContext,
+                                nsIPresContext *aPresContext,
                                 nsIDOMRange *aRange, PRBool aMustBeInViewPort,
                                 PRBool aGetTopVisibleLeaf,
-                                nsIDOMRange **aFirstVisibleRange,
-                                PRBool *aUsesIndependentSelection)
+                                nsIDOMRange **aFirstVisibleRange)
 {
   NS_ENSURE_ARG_POINTER(aPresShell);
   NS_ENSURE_ARG_POINTER(aPresContext);
@@ -1223,12 +1019,10 @@ nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
   if (!frame->GetStyleVisibility()->IsVisible())
     return PR_FALSE;
 
-  // Detect if we are _inside_ a text control, or something else with its own
-  // selection controller.
-  if (aUsesIndependentSelection) {
-    *aUsesIndependentSelection = 
-      (frame->GetStateBits() & NS_FRAME_INDEPENDENT_SELECTION);
-  }
+  // Detect if we are _inside_ a text control.
+  // bug 189039 - FAYT doesn't want to find inside text boxes
+  if (NS_FRAME_INDEPENDENT_SELECTION & frame->GetStateBits())
+    return PR_FALSE;
 
   // ---- We have a frame ----
   if (!aMustBeInViewPort)   
@@ -1242,7 +1036,8 @@ nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
     if (startRangeOffset < endFrameOffset)
       break;
 
-    nsIFrame *nextInFlowFrame = frame->GetNextInFlow();
+    nsIFrame *nextInFlowFrame = nsnull;
+    frame->GetNextInFlow(&nextInFlowFrame);
     if (nextInFlowFrame)
       frame = nextInFlowFrame;
     else
@@ -1268,7 +1063,7 @@ nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
 
   if (!aGetTopVisibleLeaf) {
     nsRect relFrameRect = frame->GetRect();
-    frame->GetOffsetFromView(frameOffset, &containingView);
+    frame->GetOffsetFromView(aPresContext, frameOffset, &containingView);
     if (!containingView)      
       return PR_FALSE;  // no view -- not visible    
 
@@ -1305,7 +1100,7 @@ nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
       return PR_FALSE;
 
     nsRect relFrameRect = frame->GetRect();
-    frame->GetOffsetFromView(frameOffset, &containingView);
+    frame->GetOffsetFromView(aPresContext, frameOffset, &containingView);
     if (containingView) {
       relFrameRect.x = frameOffset.x;
       relFrameRect.y = frameOffset.y;
@@ -1327,22 +1122,4 @@ nsTypeAheadFind::IsRangeVisible(nsIPresShell *aPresShell,
   }
 
   return PR_FALSE;
-}
-
-already_AddRefed<nsIPresShell>
-nsTypeAheadFind::GetPresShell()
-{
-  if (!mPresShell)
-    return nsnull;
-
-  nsIPresShell *shell = nsnull;
-  CallQueryReferent(mPresShell.get(), &shell);
-  if (shell) {
-    nsPresContext *pc = shell->GetPresContext();
-    if (!pc || !nsCOMPtr<nsISupports>(pc->GetContainer())) {
-      NS_RELEASE(shell);
-    }
-  }
-
-  return shell;
 }

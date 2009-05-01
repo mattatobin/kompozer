@@ -99,8 +99,7 @@ static JSBool JS_DLL_CALLBACK jsj_GC_callback(JSContext *cx, JSGCStatus status)
             JavaObjectWrapper* java_wrapper = deferred_wrappers;
             while (java_wrapper) {
                 deferred_wrappers = java_wrapper->u.next;
-                if (java_wrapper->java_obj)
-                    (*jEnv)->DeleteGlobalRef(jEnv, java_wrapper->java_obj);
+                (*jEnv)->DeleteGlobalRef(jEnv, java_wrapper->java_obj);
                 jsj_ReleaseJavaClassDescriptor(cx, jEnv, java_wrapper->class_descriptor);
                 JS_free(cx, java_wrapper);
                 java_wrapper = deferred_wrappers;
@@ -301,22 +300,22 @@ JavaObject_finalize(JSContext *cx, JSObject *obj)
         return;
     java_obj = java_wrapper->java_obj;
 
+    jsj_env = jsj_EnterJava(cx, &jEnv);
+    if (!jEnv)
+        return;
+
     if (java_obj) {
         remove_java_obj_reflection_from_hashtable(java_obj, java_wrapper->u.hash_code);
+
         /* defer releasing global refs until it is safe to do so. */
         java_wrapper->u.next = deferred_wrappers;
         deferred_wrappers = java_wrapper;
     } else {
-        jsj_env = jsj_EnterJava(cx, &jEnv);
-        if (jEnv) {
-            jsj_ReleaseJavaClassDescriptor(cx, jEnv, java_wrapper->class_descriptor);
-            JS_free(cx, java_wrapper);
-            jsj_ExitJava(jsj_env);
-        } else {
-            java_wrapper->u.next = deferred_wrappers;
-            deferred_wrappers = java_wrapper;
-        }
+        jsj_ReleaseJavaClassDescriptor(cx, jEnv, java_wrapper->class_descriptor);
+        JS_free(cx, java_wrapper);
     }
+
+    jsj_ExitJava(jsj_env);
 }
 
 /* Trivial helper for jsj_DiscardJavaObjReflections(), below */
@@ -804,7 +803,11 @@ no_such_field:
 
 JS_STATIC_DLL_CALLBACK(JSBool)
 JavaObject_lookupProperty(JSContext *cx, JSObject *obj, jsid id,
-                         JSObject **objp, JSProperty **propp)
+                         JSObject **objp, JSProperty **propp
+#if defined JS_THREADSAFE && defined DEBUG
+                            , const char *file, uintN line
+#endif
+                            )
 {
     JNIEnv *jEnv;
     JSErrorReporter old_reporter;
@@ -1021,7 +1024,7 @@ jsj_wrapper_getRequiredSlot(JSContext *cx, JSObject *obj, uint32 slot)
     return obj->slots[slot];
 }
 
-JSBool JS_DLL_CALLBACK
+void JS_DLL_CALLBACK
 jsj_wrapper_setRequiredSlot(JSContext *cx, JSObject *obj, uint32 slot, jsval v)
 {
     JS_ASSERT(slot < JSJ_SLOT_COUNT);
@@ -1029,7 +1032,6 @@ jsj_wrapper_setRequiredSlot(JSContext *cx, JSObject *obj, uint32 slot, jsval v)
     JS_ASSERT(obj->map->nslots == JSJ_SLOT_COUNT);
     JS_ASSERT(obj->map->freeslot == JSJ_SLOT_COUNT);
     obj->slots[slot] = v;
-    return JS_TRUE;
 }
 
 JSObjectOps JavaObject_ops = {

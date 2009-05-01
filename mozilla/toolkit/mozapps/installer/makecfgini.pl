@@ -1,43 +1,26 @@
 #!c:\perl\bin\perl
 # 
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
+# The contents of this file are subject to the Netscape Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/NPL/
+#  
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
+#  
 # The Original Code is Mozilla Communicator client code, released
 # March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998-1999
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Sean Su <ssu@netscape.com>
-#   Howard Chu <hyc@symas.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# 
+# The Initial Developer of the Original Code is Netscape
+# Communications Corporation. Portions created by Netscape are
+# Copyright (C) 1998-1999 Netscape Communications Corporation. All
+# Rights Reserved.
+# 
+# Contributor(s): 
+# Sean Su <ssu@netscape.com>
+# 
 
 #
 # This perl script parses the input file for special variables
@@ -109,6 +92,8 @@ $nameProduct      = $ENV{WIZ_nameProduct};
 $shortNameProduct = $ENV{WIZ_shortNameProduct};
 $nameProductInternal = $ENV{WIZ_nameProductInternal};
 $fileMainExe      = $ENV{WIZ_fileMainExe};
+$fileUninstall    = $ENV{WIZ_fileUninstall};
+$fileUninstallZip = $ENV{WIZ_fileUninstallZip};
 $greBuildID       = $ENV{WIZ_greBuildID};
 $greFileVersion   = $ENV{WIZ_greFileVersion};
 $greUniqueID      = $ENV{WIZ_greUniqueID};
@@ -155,19 +140,26 @@ while($line = <fpInIt>)
         chop($componentName);
       }
 
-      $installSize = OutputInstallSize("$inStagePath/$componentName");
-
-      # special oji consideration here.  Since it's an installer that 
-      # seamonkey installer will be calling, the disk space allocation
-      # needs to be adjusted by an expansion factor of 3.62.
-      if($componentName =~ /oji/i)
+      if($componentName =~ /\$UninstallFileZip\$/i)
       {
-        $installSize = int($installSize * 3.62);
+        $installSize = OutputInstallSizeArchive("$inXpiPath/$fileUninstallZip") * 2;
       }
-
-      if($componentName =~ /gre/i)
+      else
       {
-        $installSize = int($installSize * 4.48);
+        $installSize = OutputInstallSize("$inStagePath/$componentName");
+
+        # special oji consideration here.  Since it's an installer that 
+        # seamonkey installer will be calling, the disk space allocation
+        # needs to be adjusted by an expansion factor of 3.62.
+        if($componentName =~ /oji/i)
+        {
+          $installSize = int($installSize * 3.62);
+        }
+
+        if($componentName =~ /gre/i)
+        {
+          $installSize = int($installSize * 4.48);
+        }
       }
     }
 
@@ -199,6 +191,7 @@ while($line = <fpInIt>)
       else {
         chop($componentName);
       }
+      $componentName      =~ s/\$UninstallFileZip\$/$fileUninstallZip/gi;
       $installSizeArchive = OutputInstallSizeArchive("$inXpiPath/$componentName");
     }
 
@@ -242,6 +235,8 @@ while($line = <fpInIt>)
     $line =~ s/\$ProductNameInternal\$/$nameProductInternal/gi;
     $line =~ s/\$ProductShortName\$/$shortNameProduct/gi;
     $line =~ s/\$MainExeFile\$/$fileMainExe/gi;
+    $line =~ s/\$UninstallFile\$/$fileUninstall/gi;
+    $line =~ s/\$UninstallFileZip\$/$fileUninstallZip/gi;
     $line =~ s/\$GreBuildID\$/$greBuildID/gi;
     $line =~ s/\$GreFileVersion\$/$greFileVersion/gi;
     $line =~ s/\$GreUniqueID\$/$greUniqueID/gi;
@@ -299,16 +294,10 @@ sub OutputInstallSize()
 
   print "   calculating size for $inPath\n";
 
-  my ($inPathWin);
-  if($^O =~ msys)
-  {
-    $inPathWin = $inPath;
-  } else {
-    $inPathWin = `cygpath -wa $inPath`;
+  my ($inPathWin) = `cygpath -wa $inPath`;
   chomp($inPathWin);
   $inPathWin =~ s/\\/\\\\/g;
-  }
-  $installSize    = `$ENV{WIZ_distInstallPath}/ds32.exe -D -L0 -A -S -C 32768 $inPathWin`;
+  $installSize    = `$ENV{WIZ_distInstallPath}/ds32.exe /D /L0 /A /S /C 32768 $inPathWin`;
   $installSize   += 32768; # take into account install.js
   $installSize    = int($installSize / 1024);
   $installSize   += 1;

@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is the TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -21,7 +21,7 @@
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -40,8 +40,7 @@
 #include "txRtfHandler.h"
 
 txResultTreeFragment::txResultTreeFragment(nsAutoPtr<txResultBuffer>& aBuffer)
-    : txAExprResult(nsnull),
-      mBuffer(aBuffer)
+    : txAExprResult(nsnull), mBuffer(aBuffer)
 {
 }
 
@@ -82,7 +81,7 @@ double txResultTreeFragment::numberValue()
     return Double::toDouble(mBuffer->mStringValue);
 }
 
-nsresult txResultTreeFragment::flushToHandler(txAXMLEventHandler** aHandler)
+nsresult txResultTreeFragment::flushToHandler(txAXMLEventHandler* aHandler)
 {
     if (!mBuffer) {
         return NS_ERROR_FAILURE;
@@ -110,7 +109,7 @@ txRtfHandler::getAsRTF(txAExprResult** aResult)
     return NS_OK;
 }
 
-void txRtfHandler::endDocument(nsresult aResult)
+void txRtfHandler::endDocument()
 {
 }
 

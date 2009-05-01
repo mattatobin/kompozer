@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT Processor.
  *
  * The Initial Developer of the Original Code is
  * Axel Hecht.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Axel Hecht <axel@pike.org>
+ *  Axel Hecht <axel@pike.org>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -45,6 +45,7 @@
 #include "XSLTFunctions.h"
 #ifndef TX_EXE
 #include "nsIContent.h"
+#include "nsINodeInfo.h"
 #endif
 
 /*
@@ -129,25 +130,27 @@ nsresult txUnionPattern::getSimplePatterns(txList& aList)
     return NS_OK;
 }
 
-#ifdef TX_TO_STRING
-void
-txUnionPattern::toString(nsAString& aDest)
+/*
+ * The String representation will be appended to any data in the
+ * destination String, to allow cascading calls to other
+ * toString() methods for mLocPathPatterns.
+ */
+void txUnionPattern::toString(nsAString& aDest)
 {
 #ifdef DEBUG
-    aDest.AppendLiteral("txUnionPattern{");
+    aDest.Append(NS_LITERAL_STRING("txUnionPattern{"));
 #endif
     txListIterator iter(&mLocPathPatterns);
     if (iter.hasNext())
         ((txPattern*)iter.next())->toString(aDest);
     while (iter.hasNext()) {
-        aDest.AppendLiteral(" | ");
+        aDest.Append(NS_LITERAL_STRING(" | "));
         ((txPattern*)iter.next())->toString(aDest);
     }
 #ifdef DEBUG
     aDest.Append(PRUnichar('}'));
 #endif
-}
-#endif
+} // toString
 
 
 /*
@@ -254,13 +257,11 @@ double txLocPathPattern::getDefaultPriority()
     return ((Step*)mSteps.get(0))->pattern->getDefaultPriority();
 }
 
-#ifdef TX_TO_STRING
-void
-txLocPathPattern::toString(nsAString& aDest)
+void txLocPathPattern::toString(nsAString& aDest)
 {
     txListIterator iter(&mSteps);
 #ifdef DEBUG
-    aDest.AppendLiteral("txLocPathPattern{");
+    aDest.Append(NS_LITERAL_STRING("txLocPathPattern{"));
 #endif
     Step* step;
     step = (Step*)iter.next();
@@ -271,14 +272,13 @@ txLocPathPattern::toString(nsAString& aDest)
         if (step->isChild)
             aDest.Append(PRUnichar('/'));
         else
-            aDest.AppendLiteral("//");
+            aDest.Append(NS_LITERAL_STRING("//"));
         step->pattern->toString(aDest);
     }
 #ifdef DEBUG
     aDest.Append(PRUnichar('}'));
 #endif
-}
-#endif
+} // txLocPathPattern::toString
 
 /*
  * txRootPattern
@@ -292,7 +292,7 @@ txRootPattern::~txRootPattern()
 
 MBool txRootPattern::matches(const txXPathNode& aNode, txIMatchContext* aContext)
 {
-    return txXPathNodeUtils::isRoot(aNode);
+    return (txXPathNodeUtils::getNodeType(aNode) == txXPathNodeType::DOCUMENT_NODE);
 }
 
 double txRootPattern::getDefaultPriority()
@@ -300,12 +300,10 @@ double txRootPattern::getDefaultPriority()
     return 0.5;
 }
 
-#ifdef TX_TO_STRING
-void
-txRootPattern::toString(nsAString& aDest)
+void txRootPattern::toString(nsAString& aDest)
 {
 #ifdef DEBUG
-    aDest.AppendLiteral("txRootPattern{");
+    aDest.Append(NS_LITERAL_STRING("txRootPattern{"));
 #endif
     if (mSerialize)
         aDest.Append(PRUnichar('/'));
@@ -313,7 +311,6 @@ txRootPattern::toString(nsAString& aDest)
     aDest.Append(PRUnichar('}'));
 #endif
 }
-#endif
 
 /*
  * txIdPattern
@@ -346,8 +343,8 @@ txIdPattern::~txIdPattern()
 
 MBool txIdPattern::matches(const txXPathNode& aNode, txIMatchContext* aContext)
 {
-    if (!txXPathNodeUtils::isElement(aNode)) {
-        return PR_FALSE;
+    if (txXPathNodeUtils::getNodeType(aNode) != txXPathNodeType::ELEMENT_NODE) {
+        return MB_FALSE;
     }
 
     // Get a ID attribute, if there is
@@ -383,14 +380,12 @@ double txIdPattern::getDefaultPriority()
     return 0.5;
 }
 
-#ifdef TX_TO_STRING
-void
-txIdPattern::toString(nsAString& aDest)
+void txIdPattern::toString(nsAString& aDest)
 {
 #ifdef DEBUG
-    aDest.AppendLiteral("txIdPattern{");
+    aDest.Append(NS_LITERAL_STRING("txIdPattern{"));
 #endif
-    aDest.AppendLiteral("id('");
+    aDest.Append(NS_LITERAL_STRING("id('"));
     PRUint32 k, count = mIds.Count() - 1;
     for (k = 0; k < count; ++k) {
         aDest.Append(*mIds[k]);
@@ -402,7 +397,6 @@ txIdPattern::toString(nsAString& aDest)
     aDest.Append(PRUnichar('}'));
 #endif
 }
-#endif
 
 /*
  * txKeyPattern
@@ -436,14 +430,12 @@ double txKeyPattern::getDefaultPriority()
     return 0.5;
 }
 
-#ifdef TX_TO_STRING
-void
-txKeyPattern::toString(nsAString& aDest)
+void txKeyPattern::toString(nsAString& aDest)
 {
 #ifdef DEBUG
-    aDest.AppendLiteral("txKeyPattern{");
+    aDest.Append(NS_LITERAL_STRING("txKeyPattern{"));
 #endif
-    aDest.AppendLiteral("key('");
+    aDest.Append(NS_LITERAL_STRING("key('"));
     nsAutoString tmp;
     if (mPrefix) {
         mPrefix->ToString(tmp);
@@ -452,14 +444,13 @@ txKeyPattern::toString(nsAString& aDest)
     }
     mName.mLocalName->ToString(tmp);
     aDest.Append(tmp);
-    aDest.AppendLiteral(", ");
+    aDest.Append(NS_LITERAL_STRING(", "));
     aDest.Append(mValue);
     aDest.Append(NS_LITERAL_STRING("')"));
 #ifdef DEBUG
     aDest.Append(PRUnichar('}'));
 #endif
 }
-#endif
 
 /*
  * txStepPattern
@@ -480,8 +471,7 @@ MBool txStepPattern::matches(const txXPathNode& aNode, txIMatchContext* aContext
         return MB_FALSE;
 
     txXPathTreeWalker walker(aNode);
-    if ((!mIsAttr &&
-         txXPathNodeUtils::isAttribute(walker.getCurrentPosition())) ||
+    if ((!mIsAttr && walker.getNodeType() == txXPathNodeType::ATTRIBUTE_NODE) ||
         !walker.moveToParent()) {
         return MB_FALSE;
     }
@@ -586,12 +576,10 @@ double txStepPattern::getDefaultPriority()
     return 0.5;
 }
 
-#ifdef TX_TO_STRING
-void
-txStepPattern::toString(nsAString& aDest)
+void txStepPattern::toString(nsAString& aDest)
 {
 #ifdef DEBUG
-    aDest.AppendLiteral("txStepPattern{");
+    aDest.Append(NS_LITERAL_STRING("txStepPattern{"));
 #endif
     if (mIsAttr)
         aDest.Append(PRUnichar('@'));
@@ -603,4 +591,3 @@ txStepPattern::toString(nsAString& aDest)
     aDest.Append(PRUnichar('}'));
 #endif
 }
-#endif

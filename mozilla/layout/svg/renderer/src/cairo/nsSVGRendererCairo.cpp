@@ -1,10 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
+/* ----- BEGIN LICENSE BLOCK -----
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
@@ -26,18 +26,20 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
  * the terms of any one of the MPL, the GPL or the LGPL.
  *
- * ***** END LICENSE BLOCK ***** */
+ * ----- END LICENSE BLOCK ----- */
+
+#include <cairo.h>
 
 #include "nsCOMPtr.h"
 #include "nsISVGRenderer.h"
@@ -46,10 +48,9 @@
 #include "nsSVGCairoGlyphMetrics.h"
 #include "nsSVGCairoCanvas.h"
 #include "nsSVGCairoRegion.h"
-#include "nsSVGCairoSurface.h"
-#include "cairo.h"
 
-cairo_surface_t *gSVGCairoDummySurface = nsnull;
+void NS_InitSVGCairoGlyphMetricsGlobals();
+void NS_FreeSVGCairoGlyphMetricsGlobals();
 
 /**
  * \addtogroup cairo_renderer Cairo Rendering Engine
@@ -63,10 +64,12 @@ class nsSVGRendererCairo : public nsISVGRenderer
 {
 protected:
   friend nsresult NS_NewSVGRendererCairo(nsISVGRenderer** aResult);
+  friend void NS_InitSVGRendererCairoGlobals();
+  friend void NS_FreeSVGRendererCairoGlobals();
   
-public:
   nsSVGRendererCairo();
 
+public:
   // nsISupports interface
   NS_DECL_ISUPPORTS
 
@@ -83,9 +86,6 @@ private:
 
 nsSVGRendererCairo::nsSVGRendererCairo()
 {
-  if (!gSVGCairoDummySurface)
-    gSVGCairoDummySurface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                                       1, 1);
 }
 
 nsresult
@@ -102,6 +102,14 @@ NS_NewSVGRendererCairo(nsISVGRenderer** aResult)
   NS_ADDREF(result);
   *aResult = result;
   return NS_OK;
+}
+
+void NS_InitSVGRendererCairoGlobals()
+{
+}
+
+void NS_FreeSVGRendererCairoGlobals()
+{
 }
 
 //----------------------------------------------------------------------
@@ -137,10 +145,10 @@ nsSVGRendererCairo::CreateGlyphGeometry(nsISVGGlyphGeometrySource *src,
 }
 
 /** Implements [noscript] nsISVGRendererCanvas createCanvas(in nsIRenderingContext ctx,
-    in nsPresContext presContext, const in nsRectRef dirtyRect); */
+    in nsIPresContext presContext, const in nsRectRef dirtyRect); */
 NS_IMETHODIMP
 nsSVGRendererCairo::CreateCanvas(nsIRenderingContext *ctx,
-                                 nsPresContext *presContext,
+                                 nsIPresContext *presContext,
                                  const nsRect & dirtyRect,
                                  nsISVGRendererCanvas **_retval)
 {
@@ -153,12 +161,4 @@ nsSVGRendererCairo::CreateRectRegion(float x, float y, float width, float height
                                      nsISVGRendererRegion **_retval)
 {
   return NS_NewSVGCairoRectRegion(_retval, x, y, width, height);
-}
-
-/** Implements nsISVGRendererSurface createSurface(in float width, in float height); */
-NS_IMETHODIMP
-nsSVGRendererCairo::CreateSurface(PRUint32 width, PRUint32 height,
-                                  nsISVGRendererSurface **_retval)
-{
-  return NS_NewSVGCairoSurface(_retval, width, height);
 }

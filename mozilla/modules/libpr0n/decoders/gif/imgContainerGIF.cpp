@@ -1,44 +1,28 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation. Portions created by Netscape are
+ * Copyright (C) 2001 Netscape Communications Corporation. All
+ * Rights Reserved.
  *
  * Contributor(s):
  *   Stuart Parmenter <pavlov@netscape.com>
  *   Chris Saari <saari@netscape.com>
  *   Asko Tontti <atontti@cc.hut.fi>
  *   Arron Mogge <paper@animecity.nu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "imgContainerGIF.h"
 
@@ -74,9 +58,9 @@ imgContainerGIF::~imgContainerGIF()
 }
 
 //******************************************************************************
-/* void init (in PRInt32 aWidth, in PRInt32 aHeight,
+/* void init (in nscoord aWidth, in nscoord aHeight,
               in imgIContainerObserver aObserver); */
-NS_IMETHODIMP imgContainerGIF::Init(PRInt32 aWidth, PRInt32 aHeight,
+NS_IMETHODIMP imgContainerGIF::Init(nscoord aWidth, nscoord aHeight,
                                     imgIContainerObserver *aObserver)
 {
   if (aWidth <= 0 || aHeight <= 0) {
@@ -100,16 +84,16 @@ NS_IMETHODIMP imgContainerGIF::GetPreferredAlphaChannelFormat(gfx_format *aForma
 }
 
 //******************************************************************************
-/* readonly attribute PRInt32 width; */
-NS_IMETHODIMP imgContainerGIF::GetWidth(PRInt32 *aWidth)
+/* readonly attribute nscoord width; */
+NS_IMETHODIMP imgContainerGIF::GetWidth(nscoord *aWidth)
 {
   *aWidth = mSize.width;
   return NS_OK;
 }
 
 //******************************************************************************
-/* readonly attribute PRInt32 height; */
-NS_IMETHODIMP imgContainerGIF::GetHeight(PRInt32 *aHeight)
+/* readonly attribute nscoord height; */
+NS_IMETHODIMP imgContainerGIF::GetHeight(nscoord *aHeight)
 {
   *aHeight = mSize.height;
   return NS_OK;
@@ -139,8 +123,6 @@ NS_IMETHODIMP imgContainerGIF::GetNumFrames(PRUint32 *aNumFrames)
 NS_IMETHODIMP imgContainerGIF::GetFrameAt(PRUint32 index,
                                           gfxIImageFrame **_retval)
 {
-  NS_ENSURE_ARG(index < mFrames.Count());
-
   if (!(*_retval = mFrames[index]))
     return NS_ERROR_FAILURE;
 
@@ -171,7 +153,7 @@ NS_IMETHODIMP imgContainerGIF::AppendFrame(gfxIImageFrame *item)
     // Calculate mFirstFrameRefreshArea
     // Some gifs are huge but only have a small area that they animate
     // We only need to refresh that small area when Frame 0 comes around again
-    nsIntRect itemRect;
+    nsRect itemRect;
     item->GetRect(itemRect);
     mFirstFrameRefreshArea.UnionRect(mFirstFrameRefreshArea, itemRect);
   }
@@ -431,7 +413,7 @@ NS_IMETHODIMP imgContainerGIF::Notify(nsITimer *timer)
   else
     StopAnimation();
 
-  nsIntRect dirtyRect;
+  nsRect dirtyRect;
   gfxIImageFrame *frameToUse = nsnull;
 
   if (nextFrameIndex == 0) {
@@ -462,7 +444,7 @@ NS_IMETHODIMP imgContainerGIF::Notify(nsITimer *timer)
 // DoComposite gets called when the timer for animation get fired and we have to
 // update the composited frame of the animation.
 nsresult imgContainerGIF::DoComposite(gfxIImageFrame** aFrameToUse,
-                                      nsIntRect* aDirtyRect,
+                                      nsRect* aDirtyRect,
                                       gfxIImageFrame* aPrevFrame,
                                       gfxIImageFrame* aNextFrame,
                                       PRInt32 aNextFrameIndex)
@@ -487,7 +469,7 @@ nsresult imgContainerGIF::DoComposite(gfxIImageFrame** aFrameToUse,
     return NS_OK;
   }
 
-  nsIntRect prevFrameRect;
+  nsRect prevFrameRect;
   aPrevFrame->GetRect(prevFrameRect);
   PRBool isFullPrevFrame = (prevFrameRect.x == 0 && prevFrameRect.y == 0 &&
                             prevFrameRect.width == mSize.width &&
@@ -502,7 +484,7 @@ nsresult imgContainerGIF::DoComposite(gfxIImageFrame** aFrameToUse,
   }
 
   PRInt32 nextFrameDisposalMethod;
-  nsIntRect nextFrameRect;
+  nsRect nextFrameRect;
   aNextFrame->GetFrameDisposalMethod(&nextFrameDisposalMethod);
   aNextFrame->GetRect(nextFrameRect);
   PRBool isFullNextFrame = (nextFrameRect.x == 0 && nextFrameRect.y == 0 &&
@@ -705,7 +687,8 @@ void imgContainerGIF::BuildCompositeMask(gfxIImageFrame *aCompositingFrame,
     return;
   }
 
-  PRInt32 widthOverlay, heightOverlay;
+  nscoord widthOverlay;
+  nscoord heightOverlay;
   PRInt32 overlayXOffset, overlayYOffset;
   aOverlayFrame->GetWidth(&widthOverlay);
   aOverlayFrame->GetHeight(&heightOverlay);
@@ -727,7 +710,8 @@ void imgContainerGIF::BuildCompositeMask(gfxIImageFrame *aCompositingFrame,
   aOverlayFrame->GetAlphaBytesPerRow(&abprOverlay);
 
   // Only the composite's width & height are needed.  x & y should always be 0.
-  PRInt32 widthComposite, heightComposite;
+  nscoord widthComposite;
+  nscoord heightComposite;
   aCompositingFrame->GetWidth(&widthComposite);
   aCompositingFrame->GetHeight(&heightComposite);
 
@@ -753,15 +737,15 @@ void imgContainerGIF::BuildCompositeMask(gfxIImageFrame *aCompositingFrame,
   const PRUint32 height = PR_MIN(heightOverlay,
                                  heightComposite - overlayYOffset);
 
-#ifdef MOZ_PLATFORM_IMAGES_BOTTOM_TO_TOP
-  // Account for bottom-up storage
+// Windows and OS/2 have the funky bottom up data storage we need to account for
+#if defined(XP_WIN) || defined(XP_OS2)
   PRInt32 offset = ((heightComposite - 1) - overlayYOffset) * abprComposite;
 #else
   PRInt32 offset = overlayYOffset * abprComposite;
 #endif
   PRUint8* alphaLine = compositingAlphaData + offset + (overlayXOffset >> 3);
 
-#ifdef MOZ_PLATFORM_IMAGES_BOTTOM_TO_TOP
+#if defined(XP_WIN) || defined(XP_OS2)
   offset = (heightOverlay - 1) * abprOverlay;
 #else
   offset = 0;
@@ -822,7 +806,7 @@ void imgContainerGIF::BuildCompositeMask(gfxIImageFrame *aCompositingFrame,
       }
     }
 
-#ifdef MOZ_PLATFORM_IMAGES_BOTTOM_TO_TOP
+#if defined(XP_WIN) || defined(XP_OS2)
     alphaLine   -= abprComposite;
     overlayLine -= abprOverlay;
 #else
@@ -855,8 +839,8 @@ void imgContainerGIF::SetMaskVisibility(gfxIImageFrame *aFrame,
     return;
   }
 
-  PRInt32 frameWidth;
-  PRInt32 frameHeight;
+  nscoord frameWidth;
+  nscoord frameHeight;
   aFrame->GetWidth(&frameWidth);
   aFrame->GetHeight(&frameHeight);
 
@@ -879,8 +863,8 @@ void imgContainerGIF::SetMaskVisibility(gfxIImageFrame *aFrame,
   PRUint32 abpr;
   aFrame->GetAlphaBytesPerRow(&abpr);
 
-#ifdef MOZ_PLATFORM_IMAGES_BOTTOM_TO_TOP
-  // Account for bottom-up storage.
+// Windows and OS/2 have the funky bottom up data storage we need to account for
+#if defined(XP_WIN) || defined(XP_OS2)
   // Start at the bottom (top in memory), go to the top (bottom in memory)
   PRUint8* alphaLine = alphaData + ((frameHeight - aY - height) * abpr) +
                        (aX >> 3);
@@ -981,13 +965,13 @@ void imgContainerGIF::BlackenFrame(gfxIImageFrame *aFrame)
 
   nsCOMPtr<nsIInterfaceRequestor> ireq(do_QueryInterface(aFrame));
   if (ireq) {
-    PRInt32 width;
-    PRInt32 height;
+    nscoord width;
+    nscoord height;
     aFrame->GetWidth(&width);
     aFrame->GetHeight(&height);
 
     nsCOMPtr<nsIImage> img(do_GetInterface(ireq));
-    nsIntRect r(0, 0, width, height);
+    nsRect r(0, 0, width, height);
 
     img->ImageUpdated(nsnull, nsImageUpdateFlags_kBitsChanged, &r);
   }
@@ -1005,8 +989,8 @@ void imgContainerGIF::BlackenFrame(gfxIImageFrame *aFrame,
 
   aFrame->LockImageData();
 
-  PRInt32 widthFrame;
-  PRInt32 heightFrame;
+  nscoord widthFrame;
+  nscoord heightFrame;
   aFrame->GetWidth(&widthFrame);
   aFrame->GetHeight(&heightFrame);
 
@@ -1094,7 +1078,7 @@ PRBool imgContainerGIF::CopyFrameImage(gfxIImageFrame *aSrcFrame,
   nsCOMPtr<nsIImage> img(do_GetInterface(ireq));
   if (!img)
     return PR_FALSE;
-  nsIntRect r;
+  nsRect r;
   aDstFrame->GetRect(r);
   img->ImageUpdated(nsnull, nsImageUpdateFlags_kBitsChanged, &r);
 

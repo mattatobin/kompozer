@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,26 +14,26 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *   Daniel Glazman <glazman@netscape.com>
- *   Mats Palmgren <mats.palmgren@bredband.net>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -106,7 +106,32 @@ nsPlaintextEditor::~nsPlaintextEditor()
   
   // Remove event listeners. Note that if we had an HTML editor,
   //  it installed its own instead of these
-  RemoveEventListeners();
+  nsCOMPtr<nsIDOMEventReceiver> erP;
+  nsresult result = GetDOMEventReceiver(getter_AddRefs(erP));
+  if (NS_SUCCEEDED(result) && erP) 
+  {
+    nsCOMPtr<nsIDOM3EventTarget> dom3Targ(do_QueryInterface(erP));
+    nsCOMPtr<nsIDOMEventGroup> sysGroup;
+    if (NS_SUCCEEDED(erP->GetSystemEventGroup(getter_AddRefs(sysGroup)))) {
+      result = dom3Targ->RemoveGroupedEventListener(NS_LITERAL_STRING("keypress"), mKeyListenerP, PR_FALSE, sysGroup);
+    }
+
+    if (mMouseListenerP) {
+      erP->RemoveEventListenerByIID(mMouseListenerP, NS_GET_IID(nsIDOMMouseListener));
+    }
+    if (mTextListenerP) {
+      erP->RemoveEventListenerByIID(mTextListenerP, NS_GET_IID(nsIDOMTextListener));
+    }
+     if (mCompositionListenerP) {
+      erP->RemoveEventListenerByIID(mCompositionListenerP, NS_GET_IID(nsIDOMCompositionListener));
+    }
+    if (mFocusListenerP) {
+      erP->RemoveEventListenerByIID(mFocusListenerP, NS_GET_IID(nsIDOMFocusListener));
+    }
+    if (mDragListenerP) {
+        erP->RemoveEventListenerByIID(mDragListenerP, NS_GET_IID(nsIDOMDragListener));
+    }
+  }
 }
 
 NS_IMPL_ADDREF_INHERITED(nsPlaintextEditor, nsEditor)
@@ -135,9 +160,8 @@ NS_IMETHODIMP nsPlaintextEditor::Init(nsIDOMDocument *aDoc,
     // Init the base editor
     res = nsEditor::Init(aDoc, aPresShell, aRoot, aSelCon, aFlags);
   }
-  
-  if (NS_FAILED(rulesRes)) return rulesRes;
-  return res;
+
+  return rulesRes;
 }
 
 void 
@@ -253,46 +277,119 @@ nsPlaintextEditor::SetDocumentCharacterSet(const nsACString & characterSet)
   return result; 
 } 
 
-nsresult
-nsPlaintextEditor::CreateEventListeners()
+NS_IMETHODIMP 
+nsPlaintextEditor::PostCreate()
 {
-  nsresult rv = NS_OK;
+  nsresult result = InstallEventListeners();
+  if (NS_FAILED(result)) return result;
 
-  if (!mMouseListenerP) {
-    // get a mouse listener
-    rv |= NS_NewEditorMouseListener(getter_AddRefs(mMouseListenerP), this);
+  return nsEditor::PostCreate();
+}
+
+NS_IMETHODIMP 
+nsPlaintextEditor::InstallEventListeners()
+{
+  NS_ASSERTION(mDocWeak, "no document set on this editor");
+  if (!mDocWeak) return NS_ERROR_NOT_INITIALIZED;
+
+  if (!mPresShellWeak) return NS_ERROR_NOT_INITIALIZED;
+
+  nsresult result;
+  // get a key listener
+  result = NS_NewEditorKeyListener(getter_AddRefs(mKeyListenerP), this);
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+    return result;
+  }
+  
+  // get a mouse listener
+  result = NS_NewEditorMouseListener(getter_AddRefs(mMouseListenerP), this);
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+    return result;
   }
 
-  if (!mKeyListenerP) {
-    // get a key listener
-    rv |= NS_NewEditorKeyListener(getter_AddRefs(mKeyListenerP), this);
+  // get a text listener
+  result = NS_NewEditorTextListener(getter_AddRefs(mTextListenerP),this);
+  if (NS_FAILED(result)) { 
+#ifdef DEBUG_TAGUE
+printf("nsTextEditor.cpp: failed to get TextEvent Listener\n");
+#endif
+    HandleEventListenerError();
+    return result;
   }
 
-  if (!mTextListenerP) {
-    // get a text listener
-    rv |= NS_NewEditorTextListener(getter_AddRefs(mTextListenerP), this);
+  // get a composition listener
+  result = NS_NewEditorCompositionListener(getter_AddRefs(mCompositionListenerP),this);
+  if (NS_FAILED(result)) { 
+#ifdef DEBUG_TAGUE
+printf("nsTextEditor.cpp: failed to get TextEvent Listener\n");
+#endif
+    HandleEventListenerError();
+    return result;
   }
 
-  if (!mCompositionListenerP) {
-    // get a composition listener
-    rv |=
-      NS_NewEditorCompositionListener(getter_AddRefs(mCompositionListenerP),
-                                      this);
+  // get a drag listener
+  nsCOMPtr<nsIPresShell> presShell = do_QueryReferent(mPresShellWeak);
+  result = NS_NewEditorDragListener(getter_AddRefs(mDragListenerP), presShell, this);
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+    return result;
   }
 
-  if (!mDragListenerP) {
-    // get a drag listener
-    nsCOMPtr<nsIPresShell> presShell = do_QueryReferent(mPresShellWeak);
-    rv |= NS_NewEditorDragListener(getter_AddRefs(mDragListenerP), presShell,
-                                   this);
+  // get a focus listener
+  result = NS_NewEditorFocusListener(getter_AddRefs(mFocusListenerP), this);
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+    return result;
   }
 
-  if (!mFocusListenerP) {
-    // get a focus listener
-    rv |= NS_NewEditorFocusListener(getter_AddRefs(mFocusListenerP), this);
+  nsCOMPtr<nsIDOMEventReceiver> erP;
+  result = GetDOMEventReceiver(getter_AddRefs(erP));
+
+  //end hack
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+    return result;
   }
 
-  return rv;
+  // register the event listeners with the DOM event reveiver
+  nsCOMPtr<nsIDOM3EventTarget> dom3Targ(do_QueryInterface(erP));
+  nsCOMPtr<nsIDOMEventGroup> sysGroup;
+  if (NS_SUCCEEDED(erP->GetSystemEventGroup(getter_AddRefs(sysGroup)))) {
+    result = dom3Targ->AddGroupedEventListener(NS_LITERAL_STRING("keypress"), mKeyListenerP, PR_FALSE, sysGroup);
+    NS_ASSERTION(NS_SUCCEEDED(result), "failed to register key listener in system group");
+  }
+
+  if (NS_SUCCEEDED(result))
+  {
+    result = erP->AddEventListenerByIID(mMouseListenerP, NS_GET_IID(nsIDOMMouseListener));
+    NS_ASSERTION(NS_SUCCEEDED(result), "failed to register mouse listener");
+    if (NS_SUCCEEDED(result))
+    {
+      result = erP->AddEventListenerByIID(mFocusListenerP, NS_GET_IID(nsIDOMFocusListener));
+      NS_ASSERTION(NS_SUCCEEDED(result), "failed to register focus listener");
+      if (NS_SUCCEEDED(result))
+      {
+        result = erP->AddEventListenerByIID(mTextListenerP, NS_GET_IID(nsIDOMTextListener));
+        NS_ASSERTION(NS_SUCCEEDED(result), "failed to register text listener");
+        if (NS_SUCCEEDED(result))
+        {
+          result = erP->AddEventListenerByIID(mCompositionListenerP, NS_GET_IID(nsIDOMCompositionListener));
+          NS_ASSERTION(NS_SUCCEEDED(result), "failed to register composition listener");
+          if (NS_SUCCEEDED(result))
+          {
+            result = erP->AddEventListenerByIID(mDragListenerP, NS_GET_IID(nsIDOMDragListener));
+            NS_ASSERTION(NS_SUCCEEDED(result), "failed to register drag listener");
+          }
+        }
+      }
+    }
+  }
+  if (NS_FAILED(result)) {
+    HandleEventListenerError();
+  }
+  return result;
 }
 
 NS_IMETHODIMP 
@@ -386,8 +483,8 @@ NS_IMETHODIMP nsPlaintextEditor::HandleKeyPress(nsIDOMKeyEvent* aKeyEvent)
 }
 
 /* This routine is needed to provide a bottleneck for typing for logging
-   purposes.  Can't use HandleKeyPress() (above) for that since it takes
-   a nsIDOMKeyEvent* parameter.  So instead we pass enough info through
+   purposes.  Can't use EditorKeyPress() (above) for that since it takes
+   a nsIDOMUIEvent* parameter.  So instead we pass enough info through
    to TypedText() to determine what action to take, but without passing
    an event.
    */
@@ -531,87 +628,168 @@ NS_IMETHODIMP nsPlaintextEditor::InsertBR(nsCOMPtr<nsIDOMNode> *outBRNode)
   return selection->Collapse(selNode, selOffset+1);
 }
 
-nsresult
-nsPlaintextEditor::GetTextSelectionOffsets(nsISelection *aSelection,
-                                           PRUint32 &aOutStartOffset, 
-                                           PRUint32 &aOutEndOffset)
+nsresult nsPlaintextEditor::GetTextSelectionOffsets(nsISelection *aSelection,
+                                               PRInt32 &aOutStartOffset, 
+                                               PRInt32 &aOutEndOffset)
 {
-  NS_ASSERTION(aSelection, "null selection");
+  if(!aSelection) { return NS_ERROR_NULL_POINTER; }
+  // initialize out params
+  aOutStartOffset = 0; // default to first char in selection
+  aOutEndOffset = -1;  // default to total length of text in selection
 
-  nsresult rv;
-  nsCOMPtr<nsIDOMNode> startNode, endNode;
-  PRInt32 startNodeOffset, endNodeOffset;
+  nsCOMPtr<nsIDOMNode> startNode, endNode, parentNode;
+  PRInt32 startOffset, endOffset;
   aSelection->GetAnchorNode(getter_AddRefs(startNode));
-  aSelection->GetAnchorOffset(&startNodeOffset);
+  aSelection->GetAnchorOffset(&startOffset);
   aSelection->GetFocusNode(getter_AddRefs(endNode));
-  aSelection->GetFocusOffset(&endNodeOffset);
+  aSelection->GetFocusOffset(&endOffset);
 
-  nsIDOMElement* rootNode = GetRoot();
-  NS_ENSURE_TRUE(rootNode, NS_ERROR_NULL_POINTER);
+  nsCOMPtr<nsIEnumerator> enumerator;
+  nsCOMPtr<nsISelectionPrivate> selPriv(do_QueryInterface(aSelection));
+  nsresult result = selPriv->GetEnumerator(getter_AddRefs(enumerator));
+  if (NS_FAILED(result)) return result;
+  if (!enumerator) return NS_ERROR_NULL_POINTER;
 
-  PRInt32 startOffset = -1;
-  PRInt32 endOffset = -1;
+  // don't use "result" in this block
+  enumerator->First(); 
+  nsCOMPtr<nsISupports> currentItem;
+  nsresult findParentResult = enumerator->CurrentItem(getter_AddRefs(currentItem));
+  if ((NS_SUCCEEDED(findParentResult)) && (currentItem))
+  {
+    nsCOMPtr<nsIDOMRange> range( do_QueryInterface(currentItem) );
+    range->GetCommonAncestorContainer(getter_AddRefs(parentNode));
+  }
+  else 
+  {
+    parentNode = do_QueryInterface(startNode);
+  }
 
-  nsCOMPtr<nsIContentIterator> iter =
-    do_CreateInstance("@mozilla.org/content/post-content-iterator;1", &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+
+  return GetAbsoluteOffsetsForPoints(startNode, startOffset, 
+                                     endNode, endOffset, 
+                                     parentNode,
+                                     aOutStartOffset, aOutEndOffset);
+}
+
+nsresult
+nsPlaintextEditor::GetAbsoluteOffsetsForPoints(nsIDOMNode *aInStartNode,
+                                          PRInt32 aInStartOffset,
+                                          nsIDOMNode *aInEndNode,
+                                          PRInt32 aInEndOffset,
+                                          nsIDOMNode *aInCommonParentNode,
+                                          PRInt32 &aOutStartOffset, 
+                                          PRInt32 &aOutEndOffset)
+{
+  if(!aInStartNode || !aInEndNode || !aInCommonParentNode)
+    return NS_ERROR_NULL_POINTER;
+
+  // initialize out params
+  aOutStartOffset = 0; // default to first char in selection
+  aOutEndOffset = -1;  // default to total length of text in selection
+
+  nsresult result;
+  nsCOMPtr<nsIContentIterator> iter = do_CreateInstance(
+                     "@mozilla.org/content/post-content-iterator;1", &result);
+  if (NS_FAILED(result)) return result;
+  if (!iter) return NS_ERROR_NULL_POINTER;
     
-#ifdef NS_DEBUG
-  PRInt32 nodeCount = 0; // only needed for the assertions below
-#endif
-  PRUint32 totalLength = 0;
-  nsCOMPtr<nsIContent> rootContent = do_QueryInterface(rootNode);
-  iter->Init(rootContent);
-  for (; !iter->IsDone() && (startOffset == -1 || endOffset == -1); iter->Next()) {
-    nsCOMPtr<nsIDOMNode> currentNode = do_QueryInterface(iter->GetCurrentNode());
-    nsCOMPtr<nsIDOMCharacterData> textNode = do_QueryInterface(currentNode);
-    if (textNode) {
-      // Note that sometimes we have an empty #text-node as start/endNode,
-      // which we regard as not editable because the frame width == 0,
-      // see nsEditor::IsEditable().
-      PRBool editable = IsEditable(currentNode);
-      if (currentNode == startNode) {
-        startOffset = totalLength + (editable ? startNodeOffset : 0);
-      }
-      if (currentNode == endNode) {
-        endOffset = totalLength + (editable ? endNodeOffset : 0);
-      }
-      if (editable) {
+  PRUint32 totalLength=0;
+  nsCOMPtr<nsIDOMCharacterData>textNode;
+  nsCOMPtr<nsIContent>blockParentContent = do_QueryInterface(aInCommonParentNode);
+  iter->Init(blockParentContent);
+  // loop through the content iterator for each content node
+  while (!iter->IsDone())
+  {
+    textNode = do_QueryInterface(iter->GetCurrentNode());
+    if (textNode)
+    {
+      nsCOMPtr<nsIDOMNode>currentNode = do_QueryInterface(textNode);
+      if (!currentNode) {return NS_ERROR_NO_INTERFACE;}
+      if (IsEditable(currentNode))
+      {
+        if (currentNode.get() == aInStartNode)
+        {
+          aOutStartOffset = totalLength + aInStartOffset;
+        }
+        if (currentNode.get() == aInEndNode)
+        {
+          aOutEndOffset = totalLength + aInEndOffset;
+          break;
+        }
         PRUint32 length;
         textNode->GetLength(&length);
         totalLength += length;
       }
     }
-#ifdef NS_DEBUG
-    ++nodeCount;
-#endif
+    iter->Next();
+  }
+  if (-1==aOutEndOffset) {
+    aOutEndOffset = totalLength;
   }
 
-  if (endOffset == -1) {
-    NS_ASSERTION(endNode == rootNode, "failed to find the end node");
-    NS_ASSERTION(endNodeOffset == nodeCount-1 || endNodeOffset == 0,
-                 "invalid end node offset");
-    endOffset = endNodeOffset == 0 ? 0 : totalLength;
+  // guarantee that aOutStartOffset <= aOutEndOffset
+  if (aOutEndOffset<aOutStartOffset) 
+  {
+    PRInt32 temp = aOutStartOffset;
+    aOutStartOffset= aOutEndOffset;
+    aOutEndOffset = temp;
   }
-  if (startOffset == -1) {
-    NS_ASSERTION(startNode == rootNode, "failed to find the start node");
-    NS_ASSERTION(startNodeOffset == nodeCount-1 || startNodeOffset == 0,
-                 "invalid start node offset");
-    startOffset = startNodeOffset == 0 ? 0 : totalLength;
-  }
-
-  // Make sure aOutStartOffset <= aOutEndOffset.
-  if (startOffset <= endOffset) {
-    aOutStartOffset = startOffset;
-    aOutEndOffset = endOffset;
-  }
-  else {
-    aOutStartOffset = endOffset;
-    aOutEndOffset = startOffset;
-  }
-
-  return NS_OK;
+  NS_POSTCONDITION(aOutStartOffset <= aOutEndOffset, "start > end");
+  return result;
 }
+
+nsresult 
+nsPlaintextEditor::GetDOMEventReceiver(nsIDOMEventReceiver **aEventReceiver) 
+{ 
+  if (!aEventReceiver) 
+    return NS_ERROR_NULL_POINTER; 
+
+  *aEventReceiver = 0; 
+
+  nsCOMPtr<nsIDOMElement> rootElement; 
+  nsresult result = GetRootElement(getter_AddRefs(rootElement)); 
+  if (NS_FAILED(result)) 
+    return result; 
+
+  if (!rootElement) 
+    return NS_ERROR_FAILURE; 
+
+  // Now hack to make sure we are not anonymous content. 
+  // If we are grab the parent of root element for our observer. 
+
+  nsCOMPtr<nsIContent> content = do_QueryInterface(rootElement); 
+  if (content) 
+  { 
+    nsCOMPtr<nsIContent> parent = content->GetParent();
+    if (parent)
+    { 
+      if (parent->IndexOf(content) < 0 ) 
+      { 
+        rootElement = do_QueryInterface(parent); //this will put listener on the form element basically 
+        result = CallQueryInterface(rootElement, aEventReceiver);
+      } 
+      else 
+        rootElement = 0; // Let the event receiver work on the document instead of the root element 
+    } 
+  } 
+  else 
+    rootElement = 0; 
+
+  if (!rootElement && mDocWeak) 
+  { 
+    // Don't use getDocument here, because we have no way of knowing if 
+    // Init() was ever called.  So we need to get the document ourselves, 
+    // if it exists. 
+
+    nsCOMPtr<nsIDOMDocument> domdoc = do_QueryReferent(mDocWeak); 
+    if (!domdoc) 
+      return NS_ERROR_FAILURE; 
+
+    result = domdoc->QueryInterface(NS_GET_IID(nsIDOMEventReceiver), (void **)aEventReceiver); 
+  } 
+
+  return result; 
+} 
 
 NS_IMETHODIMP nsPlaintextEditor::DeleteSelection(nsIEditor::EDirection aAction)
 {
@@ -673,7 +851,13 @@ NS_IMETHODIMP nsPlaintextEditor::DeleteSelection(nsIEditor::EDirection aAction)
           result = NS_OK;
           break;
     }
-    NS_ENSURE_SUCCESS(result, result);
+    if (NS_FAILED(result))
+    {
+#ifdef DEBUG
+      printf("Selection controller interface didn't work!\n");
+#endif
+      return result;
+    }
   }
 
   // pre-process
@@ -825,8 +1009,6 @@ NS_IMETHODIMP nsPlaintextEditor::InsertLineBreak()
 NS_IMETHODIMP
 nsPlaintextEditor::BeginComposition(nsTextEventReply* aReply)
 {
-  NS_ENSURE_TRUE(!mInIMEMode, NS_OK);
-
   if(mFlags & nsIPlaintextEditor::eEditorPasswordMask)  {
     if (mRules) {
       nsIEditRules *p = mRules.get();
@@ -856,40 +1038,46 @@ nsPlaintextEditor::GetDocumentIsEmpty(PRBool *aDocumentIsEmpty)
 NS_IMETHODIMP
 nsPlaintextEditor::GetTextLength(PRInt32 *aCount)
 {
-  NS_ASSERTION(aCount, "null pointer");
-
+  if (!aCount) { return NS_ERROR_NULL_POINTER; }
   // initialize out params
   *aCount = 0;
   
-  // special-case for empty document, to account for the bogus node
+  // special-case for empty document, to account for the bogus text node
   PRBool docEmpty;
-  nsresult rv = GetDocumentIsEmpty(&docEmpty);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsresult result = GetDocumentIsEmpty(&docEmpty);
+  if (NS_FAILED(result)) return result;
   if (docEmpty)
     return NS_OK;
+  
+  // get the body node
+  nsCOMPtr<nsIDOMElement> bodyElement;
+  result = GetRootElement(getter_AddRefs(bodyElement));
+  if (NS_FAILED(result)) { return result; }
+  if (!bodyElement) { return NS_ERROR_NULL_POINTER; }
 
-  nsIDOMElement* rootNode = GetRoot();
-  NS_ENSURE_TRUE(rootNode, NS_ERROR_NULL_POINTER);
+  // get the offsets of the first and last children of the body node
+  nsCOMPtr<nsIDOMNode>lastChild;
+  result = bodyElement->GetLastChild(getter_AddRefs(lastChild));
+  if (NS_FAILED(result)) { return result; }
+  if (!lastChild) { return NS_ERROR_NULL_POINTER; }
+  PRInt32 numBodyChildren = 0;
+  result = GetChildOffset(lastChild, bodyElement, numBodyChildren);
+  if (NS_FAILED(result)) { return result; }
 
-  nsCOMPtr<nsIContentIterator> iter =
-    do_CreateInstance("@mozilla.org/content/post-content-iterator;1", &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRUint32 totalLength = 0;
-  nsCOMPtr<nsIContent> rootContent = do_QueryInterface(rootNode);
-  iter->Init(rootContent);
-  for (; !iter->IsDone(); iter->Next()) {
-    nsCOMPtr<nsIDOMNode> currentNode = do_QueryInterface(iter->GetCurrentNode());
-    nsCOMPtr<nsIDOMCharacterData> textNode = do_QueryInterface(currentNode);
-    if (textNode && IsEditable(currentNode)) {
-      PRUint32 length;
-      textNode->GetLength(&length);
-      totalLength += length;
+  // count
+  PRInt32 start, end;
+  result = GetAbsoluteOffsetsForPoints(bodyElement, 0, 
+                                       bodyElement, numBodyChildren, 
+                                       bodyElement, start, end);
+  if (NS_SUCCEEDED(result))
+  {
+    NS_ASSERTION(0==start, "GetAbsoluteOffsetsForPoints failed to set start correctly.");
+    NS_ASSERTION(0<=end, "GetAbsoluteOffsetsForPoints failed to set end correctly.");
+    if (0<=end) {
+      *aCount = end;
     }
   }
-
-  *aCount = totalLength;
-  return NS_OK;
+  return result;
 }
 
 NS_IMETHODIMP
@@ -919,6 +1107,7 @@ nsPlaintextEditor::GetWrapWidth(PRInt32 *aWrapColumn)
 
   *aWrapColumn = mWrapColumn;
   return NS_OK;
+
 }
 
 //
@@ -956,14 +1145,15 @@ nsPlaintextEditor::SetWrapWidth(PRInt32 aWrapColumn)
 
   // Ought to set a style sheet here ...
   // Probably should keep around an mPlaintextStyleSheet for this purpose.
-  nsIDOMElement *rootElement = GetRoot();
-  if (!rootElement)
-    return NS_ERROR_NULL_POINTER;
+  nsCOMPtr<nsIDOMElement> bodyElement;
+  nsresult res = GetRootElement(getter_AddRefs(bodyElement));
+  if (NS_FAILED(res)) return res;
+  if (!bodyElement) return NS_ERROR_NULL_POINTER;
 
-  // Get the current style for this root element:
+  // Get the current style for this body element:
   NS_NAMED_LITERAL_STRING(styleName, "style");
   nsAutoString styleValue;
-  nsresult res = rootElement->GetAttribute(styleName, styleValue);
+  res = bodyElement->GetAttribute(styleName, styleValue);
   if (NS_FAILED(res)) return res;
 
   // We'll replace styles for these values:
@@ -976,14 +1166,14 @@ nsPlaintextEditor::SetWrapWidth(PRInt32 aWrapColumn)
   if (!styleValue.IsEmpty())
   {
     styleValue.Trim("; \t", PR_FALSE, PR_TRUE);
-    styleValue.AppendLiteral("; ");
+    styleValue.Append(NS_LITERAL_STRING("; "));
   }
 
   // Make sure we have fixed-width font.  This should be done for us,
   // but it isn't, see bug 22502, so we have to add "font: -moz-fixed;".
   // Only do this if we're wrapping.
   if ((flags & eEditorEnableWrapHackMask) && aWrapColumn >= 0)
-    styleValue.AppendLiteral("font-family: -moz-fixed; ");
+    styleValue.Append(NS_LITERAL_STRING("font-family: -moz-fixed; "));
 
   // If "mail.compose.wrap_to_window_width" is set, and we're a mail editor,
   // then remember our wrap width (for output purposes) but set the visual
@@ -1002,16 +1192,16 @@ nsPlaintextEditor::SetWrapWidth(PRInt32 aWrapColumn)
   // and now we're ready to set the new whitespace/wrapping style.
   if (aWrapColumn > 0 && !mWrapToWindow)        // Wrap to a fixed column
   {
-    styleValue.AppendLiteral("white-space: -moz-pre-wrap; width: ");
+    styleValue.Append(NS_LITERAL_STRING("white-space: -moz-pre-wrap; width: "));
     styleValue.AppendInt(aWrapColumn);
-    styleValue.AppendLiteral("ch;");
+    styleValue.Append(NS_LITERAL_STRING("ch;"));
   }
   else if (mWrapToWindow || aWrapColumn == 0)
-    styleValue.AppendLiteral("white-space: -moz-pre-wrap;");
+    styleValue.Append(NS_LITERAL_STRING("white-space: -moz-pre-wrap;"));
   else
-    styleValue.AppendLiteral("white-space: pre;");
+    styleValue.Append(NS_LITERAL_STRING("white-space: pre;"));
 
-  return rootElement->SetAttribute(styleName, styleValue);
+  return bodyElement->SetAttribute(styleName, styleValue);
 }
 
 
@@ -1042,6 +1232,7 @@ nsPlaintextEditor::Undo(PRUint32 aCount)
     result = nsEditor::Undo(aCount);
     result = mRules->DidDoAction(selection, &ruleInfo, result);
   } 
+
    
   return result;
 }
@@ -1140,12 +1331,15 @@ nsPlaintextEditor::GetAndInitDocEncoder(const nsAString& aFormatType,
   nsCOMPtr<nsIDocumentEncoder> docEncoder (do_CreateInstance(formatType.get(), &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsIDocument *doc = presShell->GetDocument();
+  nsCOMPtr<nsIDocument> doc;
+  rv = presShell->GetDocument(getter_AddRefs(doc));
+  NS_ENSURE_SUCCESS(rv, rv);
+
   rv = docEncoder->Init(doc, aFormatType, aFlags);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!aCharset.IsEmpty()
-    && !(aCharset.EqualsLiteral("null")))
+    && !(aCharset.Equals(NS_LITERAL_CSTRING("null"))))
     docEncoder->SetCharset(aCharset);
 
   PRInt32 wc;
@@ -1156,7 +1350,8 @@ nsPlaintextEditor::GetAndInitDocEncoder(const nsAString& aFormatType,
   // Set the selection, if appropriate.
   // We do this either if the OutputSelectionOnly flag is set,
   // in which case we use our existing selection ...
-  if (aFlags & nsIDocumentEncoder::OutputSelectionOnly)
+  if (aFlags & (nsIDocumentEncoder::OutputSelectionOnly |
+                nsIDocumentEncoder::OutputForColoredSourceView))
   {
     nsCOMPtr<nsISelection> selection;
     rv = GetSelection(getter_AddRefs(selection));
@@ -1168,17 +1363,37 @@ nsPlaintextEditor::GetAndInitDocEncoder(const nsAString& aFormatType,
   // in which case we set the selection to encompass the root.
   else
   {
-    nsIDOMElement *rootElement = GetRoot();
+    nsCOMPtr<nsIDOMElement> rootElement;
+    GetRootElement(getter_AddRefs(rootElement));
     NS_ENSURE_TRUE(rootElement, NS_ERROR_FAILURE);
     if (!nsTextEditUtils::IsBody(rootElement))
     {
+      // XXX Why does this use range rather than selection collapse/extend?
       nsCOMPtr<nsIDOMRange> range (do_CreateInstance("@mozilla.org/content/range;1", &rv));
-      NS_ENSURE_SUCCESS(rv, rv);
+      if (NS_FAILED(rv)) return rv;
+      if (!range) return NS_ERROR_FAILURE;
+      nsCOMPtr<nsISelection> selection (do_CreateInstance(
+                                "@mozilla.org/content/dom-selection;1", &rv));
+      if (NS_FAILED(rv)) return rv;
+      if (!selection) return NS_ERROR_FAILURE;
 
-      rv = range->SelectNodeContents(rootElement);
-      NS_ENSURE_SUCCESS(rv, rv);
+      // get the independent selection interface
+      nsCOMPtr<nsISelectionPrivate> selPriv(do_QueryInterface(selection));
+      if (selPriv)
+        selPriv->SetPresShell(presShell);
 
-      rv = docEncoder->SetRange(range);
+      nsCOMPtr<nsIContent> content(do_QueryInterface(rootElement));
+      if (content)
+      {
+        PRInt32 children = content->GetChildCount();
+
+        range->SetStart(rootElement, 0);
+        range->SetEnd(rootElement, children);
+
+        if (NS_FAILED(selection->AddRange(range)))
+          return NS_ERROR_FAILURE;
+      }
+      rv = docEncoder->SetSelection(selection);
       NS_ENSURE_SUCCESS(rv, rv);
     }
   }
@@ -1211,7 +1426,7 @@ nsPlaintextEditor::OutputToString(const nsAString& aFormatType,
   nsCAutoString charsetStr;
   rv = GetDocumentCharacterSet(charsetStr);
   if(NS_FAILED(rv) || charsetStr.IsEmpty())
-    charsetStr.AssignLiteral("ISO-8859-1");
+    charsetStr = NS_LITERAL_CSTRING("ISO-8859-1");
 
   nsCOMPtr<nsIDocumentEncoder> encoder;
   rv = GetAndInitDocEncoder(aFormatType, aFlags, charsetStr, getter_AddRefs(encoder));
@@ -1231,7 +1446,7 @@ nsPlaintextEditor::OutputToStream(nsIOutputStream* aOutputStream,
   // special-case for empty document when requesting plain text,
   // to account for the bogus text node.
   // XXX Should there be a similar test in OutputToString?
-  if (aFormatType.EqualsLiteral("text/plain"))
+  if (aFormatType == NS_LITERAL_STRING("text/plain"))
   {
     PRBool docEmpty;
     rv = GetDocumentIsEmpty(&docEmpty);
@@ -1311,7 +1526,7 @@ nsPlaintextEditor::PasteAsQuotation(PRInt32 aSelectionType)
         rv = InsertAsQuotation(stuffToPaste, 0);
       }
     }
-    NS_Free(flav);
+    nsCRT::free(flav);
   }
 
   return rv;
@@ -1480,6 +1695,7 @@ nsPlaintextEditor::StripCites()
   if (NS_FAILED(rv)) return rv;
 
   nsCOMPtr<nsICiter> citer = dont_AddRef(MakeACiter());
+  if (NS_FAILED(rv)) return rv;
   if (!citer) return NS_ERROR_UNEXPECTED;
 
   nsString stripped;
@@ -1512,106 +1728,93 @@ nsPlaintextEditor::GetEmbeddedObjects(nsISupportsArray** aNodeList)
 NS_IMETHODIMP
 nsPlaintextEditor::SetCompositionString(const nsAString& aCompositionString, nsIPrivateTextRangeList* aTextRangeList,nsTextEventReply* aReply)
 {
-  if (!aTextRangeList && !aCompositionString.IsEmpty())
-  {
-    NS_ERROR("aTextRangeList is null but the composition string is not null");
+  NS_ASSERTION(aTextRangeList, "null ptr");
+  if (!aTextRangeList)
     return NS_ERROR_NULL_POINTER;
+
+  // workaround for windows ime bug 23558: we get every ime event twice. 
+  // for escape keypress, this causes an empty string to be passed
+  // twice, which freaks out the editor.  This is to detect and avoid that
+  // situation:
+  if (aCompositionString.IsEmpty() && !mIMETextNode) 
+  {
+    return NS_OK;
   }
+  
+  mIMETextRangeList = aTextRangeList;
 
   nsCOMPtr<nsIPresShell> ps = do_QueryReferent(mPresShellWeak);
   if (!ps) 
     return NS_ERROR_NOT_INITIALIZED;
+
+  // XXX_kin: BEGIN HACK! HACK! HACK!
+  // XXX_kin:
+  // XXX_kin: This is lame! The IME stuff needs caret coordinates
+  // XXX_kin: synchronously, but the editor could be using async
+  // XXX_kin: updates (reflows and paints) for performance reasons.
+  // XXX_kin: In order to give IME what it needs, we have to temporarily
+  // XXX_kin: switch to sync updating during this call so that the
+  // XXX_kin: nsAutoPlaceHolderBatch can force sync reflows, paints,
+  // XXX_kin: and selection scrolling, so that we get back accurate
+  // XXX_kin: caret coordinates.
+
+  PRUint32 flags = 0;
+  PRBool restoreFlags = PR_FALSE;
+
+  if (NS_SUCCEEDED(GetFlags(&flags)) &&
+     (flags & nsIPlaintextEditor::eEditorUseAsyncUpdatesMask))
+  {
+    if (NS_SUCCEEDED(SetFlags(flags & (~nsIPlaintextEditor::eEditorUseAsyncUpdatesMask))))
+       restoreFlags = PR_TRUE;
+  }
+
+  // XXX_kin: END HACK! HACK! HACK!
 
   nsCOMPtr<nsISelection> selection;
   nsresult result = GetSelection(getter_AddRefs(selection));
   if (NS_FAILED(result)) return result;
 
   nsCOMPtr<nsICaret>  caretP;
-  ps->GetCaret(getter_AddRefs(caretP));
-
-  // We should return caret position if it is possible. Because this event
-  // dispatcher always expects to be returned the correct caret position.
-  // But in following cases, we don't need to process the composition string,
-  // so, we only need to return the caret position.
-
-  // aCompositionString.IsEmpty() && !mIMETextNode:
-  //   Workaround for Windows IME bug 23558: We get every IME event twice.
-  //   For escape keypress, this causes an empty string to be passed
-  //   twice, which freaks out the editor.
-
-  // aCompositionString.IsEmpty() && !aTextRangeList:
-  //   Some Chinese IMEs for Linux are always composition string and text range
-  //   list are empty when listing the Chinese characters. In this case,
-  //   we don't need to process composition string too. See bug 271815.
-
-  if (!aCompositionString.IsEmpty() || (mIMETextNode && aTextRangeList))
+  
+  // we need the nsAutoPlaceHolderBatch destructor called before hitting
+  // GetCaretCoordinates so the states in Frame system sync with content
+  // therefore, we put the nsAutoPlaceHolderBatch into a inner block
   {
-    mIMETextRangeList = aTextRangeList;
+    nsAutoPlaceHolderBatch batch(this, gIMETxnName);
 
-    // XXX_kin: BEGIN HACK! HACK! HACK!
-    // XXX_kin:
-    // XXX_kin: This is lame! The IME stuff needs caret coordinates
-    // XXX_kin: synchronously, but the editor could be using async
-    // XXX_kin: updates (reflows and paints) for performance reasons.
-    // XXX_kin: In order to give IME what it needs, we have to temporarily
-    // XXX_kin: switch to sync updating during this call so that the
-    // XXX_kin: nsAutoPlaceHolderBatch can force sync reflows, paints,
-    // XXX_kin: and selection scrolling, so that we get back accurate
-    // XXX_kin: caret coordinates.
+    SetIsIMEComposing(); // We set mIsIMEComposing properly.
 
-    PRUint32 flags = 0;
-    PRBool restoreFlags = PR_FALSE;
+    result = InsertText(aCompositionString);
 
-    if (NS_SUCCEEDED(GetFlags(&flags)) &&
-        (flags & nsIPlaintextEditor::eEditorUseAsyncUpdatesMask))
+    mIMEBufferLength = aCompositionString.Length();
+
+    ps->GetCaret(getter_AddRefs(caretP));
+    if (caretP)
+      caretP->SetCaretDOMSelection(selection);
+
+    // second part of 23558 fix:
+    if (aCompositionString.IsEmpty()) 
     {
-      if (NS_SUCCEEDED(SetFlags(
-          flags & (~nsIPlaintextEditor::eEditorUseAsyncUpdatesMask))))
-        restoreFlags = PR_TRUE;
+      mIMETextNode = nsnull;
     }
-
-    // XXX_kin: END HACK! HACK! HACK!
-
-    // we need the nsAutoPlaceHolderBatch destructor called before hitting
-    // GetCaretCoordinates so the states in Frame system sync with content
-    // therefore, we put the nsAutoPlaceHolderBatch into a inner block
-    {
-      nsAutoPlaceHolderBatch batch(this, gIMETxnName);
-
-      SetIsIMEComposing(); // We set mIsIMEComposing properly.
-
-      result = InsertText(aCompositionString);
-
-      mIMEBufferLength = aCompositionString.Length();
-
-      if (caretP)
-        caretP->SetCaretDOMSelection(selection);
-
-      // second part of 23558 fix:
-      if (aCompositionString.IsEmpty())
-        mIMETextNode = nsnull;
-    }
-
-    // XXX_kin: BEGIN HACK! HACK! HACK!
-    // XXX_kin:
-    // XXX_kin: Restore the previous set of flags!
-
-    if (restoreFlags)
-      SetFlags(flags);
-
-    // XXX_kin: END HACK! HACK! HACK!
   }
+
+  // XXX_kin: BEGIN HACK! HACK! HACK!
+  // XXX_kin:
+  // XXX_kin: Restore the previous set of flags!
+
+  if (restoreFlags)
+    SetFlags(flags);
+
+  // XXX_kin: END HACK! HACK! HACK!
 
   if (caretP)
   {
-    result = caretP->GetCaretCoordinates(nsICaret::eIMECoordinates,
-                                         selection,
-                                         &(aReply->mCursorPosition),
-                                         &(aReply->mCursorIsCollapsed),
-                                         nsnull);
+    result = caretP->GetCaretCoordinates(nsICaret::eIMECoordinates, selection,
+              &(aReply->mCursorPosition), &(aReply->mCursorIsCollapsed), nsnull);
     NS_ASSERTION(NS_SUCCEEDED(result), "cannot get caret position");
   }
-
+  
   return result;
 }
 
@@ -1623,7 +1826,7 @@ nsPlaintextEditor::GetReconversionString(nsReconversionEventReply* aReply)
   if (NS_FAILED(res)) return res;
   if (!selection) return NS_ERROR_FAILURE;
 
-  // XXX get the first range in the selection.  Since it is
+  // get the first range in the selection.  Since it is
   // unclear what to do if reconversion happens with a 
   // multirange selection, we will ignore any additional ranges.
   
@@ -1641,9 +1844,6 @@ nsPlaintextEditor::GetReconversionString(nsReconversionEventReply* aReply)
                                                                 (textValue.Length() + 1) * sizeof(PRUnichar));
   if (!aReply->mReconversionString)
     return NS_ERROR_OUT_OF_MEMORY;
-
-  if (textValue.IsEmpty())
-    return NS_OK;
 
   // delete the selection
   return DeleteSelection(eNone);
@@ -1684,18 +1884,19 @@ NS_IMETHODIMP
 nsPlaintextEditor::SelectEntireDocument(nsISelection *aSelection)
 {
   if (!aSelection || !mRules) { return NS_ERROR_NULL_POINTER; }
-
+  
   // is doc empty?
   PRBool bDocIsEmpty;
   if (NS_SUCCEEDED(mRules->DocumentIsEmpty(&bDocIsEmpty)) && bDocIsEmpty)
   {
-    // get root node
-    nsIDOMElement *rootElement = GetRoot();
-    if (!rootElement)
-      return NS_ERROR_FAILURE;
+    // get body node
+    nsCOMPtr<nsIDOMElement>bodyElement;
+    nsresult res = GetRootElement(getter_AddRefs(bodyElement));
+    if (NS_FAILED(res)) return res;
+    if (!bodyElement) return NS_ERROR_FAILURE;
 
     // if it's empty don't select entire doc - that would select the bogus node
-    return aSelection->Collapse(rootElement, 0);
+    return aSelection->Collapse(bodyElement, 0);
   }
 
   return nsEditor::SelectEntireDocument(aSelection);
@@ -1728,6 +1929,21 @@ NS_IMETHODIMP nsPlaintextEditor::GetLayoutObject(nsIDOMNode *aNode, nsISupports 
   }
 
   return result;
+}
+
+#ifdef XP_MAC
+#pragma mark -
+#endif
+
+void nsPlaintextEditor::HandleEventListenerError()
+{
+  // null out the nsCOMPtrs
+  mKeyListenerP = nsnull;
+  mMouseListenerP = nsnull;
+  mTextListenerP = nsnull;
+  mDragListenerP = nsnull;
+  mCompositionListenerP = nsnull;
+  mFocusListenerP = nsnull;
 }
 
 #ifdef XP_MAC

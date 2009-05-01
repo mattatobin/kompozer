@@ -146,7 +146,7 @@
 */
 
 enum {
-    kMyMaxV = 292,
+    kMyMaxV = 216,
     kMyMaxH = 478
 };
 
@@ -175,30 +175,9 @@ typedef struct {
     ControlRef shrinkToFitCheck;
     ControlRef printBGColorsCheck;
     ControlRef printBGImagesCheck;
-    ControlRef headerLeftPopup;
-    ControlRef headerCenterPopup;
-    ControlRef headerRightPopup;
-    ControlRef footerLeftPopup;
-    ControlRef footerCenterPopup;
-    ControlRef footerRightPopup;
 } MyControls;
 
-typedef struct {
-  // State info supplied by printing app
-  Boolean mHaveSelection;
-  Boolean mHaveFrames;
-  Boolean mHaveFrameSelected;
-  // The UI of the PDE allows control of these
-  Boolean mPrintFrameAsIs;
-  Boolean mPrintSelectedFrame;
-  Boolean mPrintFramesSeparately;
-  Boolean mPrintSelection;
-  Boolean mShrinkToFit;
-  Boolean mPrintBGColors;
-  Boolean mPrintBGImages;
-  CFStringRef mHeaderLeft, mHeaderCenter, mHeaderRight;
-  CFStringRef mFooterLeft, mFooterCenter, mFooterRight;
-} MySettings;
+typedef nsPrintExtensions MySettings;
 
 typedef struct {
     MyControls controls;

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -44,17 +45,12 @@
 #include "nsContentUtils.h"
 #include "nsUnicharUtils.h"
 #include "nsDOMString.h"
-#include "nsIDocument.h"
-#include "nsIDOMDocument.h"
-#include "nsCOMArray.h"
 
 //----------------------------------------------------------------------
-PRBool nsDOMAttribute::sInitialized;
 
-nsDOMAttribute::nsDOMAttribute(nsDOMAttributeMap *aAttrMap,
-                               nsINodeInfo       *aNodeInfo,
-                               const nsAString   &aValue)
-  : nsIAttribute(aAttrMap, aNodeInfo), mValue(aValue), mChild(nsnull),
+nsDOMAttribute::nsDOMAttribute(nsIContent* aContent, nsINodeInfo *aNodeInfo,
+                               const nsAString& aValue)
+  : nsIAttribute(aContent, aNodeInfo), mValue(aValue), mChild(nsnull),
     mChildList(nsnull)
 {
   NS_ABORT_IF_FALSE(mNodeInfo, "We must get a nodeinfo here!");
@@ -66,15 +62,8 @@ nsDOMAttribute::nsDOMAttribute(nsDOMAttributeMap *aAttrMap,
 
 nsDOMAttribute::~nsDOMAttribute()
 {
-  nsIDocument *doc = GetOwnerDoc();
-  if (doc)
-    doc->PropertyTable()->DeleteAllPropertiesFor(this);
-
   NS_IF_RELEASE(mChild);
-  if (mChildList) {
-    mChildList->DropReference();
-    NS_RELEASE(mChildList);
-  }
+  NS_IF_RELEASE(mChildList);
 }
 
 
@@ -82,7 +71,6 @@ nsDOMAttribute::~nsDOMAttribute()
 NS_INTERFACE_MAP_BEGIN(nsDOMAttribute)
   NS_INTERFACE_MAP_ENTRY(nsIDOMAttr)
   NS_INTERFACE_MAP_ENTRY(nsIAttribute)
-  NS_INTERFACE_MAP_ENTRY(nsIDOMGCParticipant)
   NS_INTERFACE_MAP_ENTRY(nsIDOMNode)
   NS_INTERFACE_MAP_ENTRY(nsIDOM3Node)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDOMAttr)
@@ -93,47 +81,6 @@ NS_INTERFACE_MAP_END
 NS_IMPL_ADDREF(nsDOMAttribute)
 NS_IMPL_RELEASE(nsDOMAttribute)
 
-// nsIDOMGCParticipant methods
-nsIDOMGCParticipant*
-nsDOMAttribute::GetSCCIndex()
-{
-  nsIContent *owner = GetContentInternal();
-
-  return owner ? owner->GetSCCIndex() : this;
-}
-
-void
-nsDOMAttribute::AppendReachableList(nsCOMArray<nsIDOMGCParticipant>& aArray)
-{
-  NS_ASSERTION(GetContentInternal() == nsnull,
-               "shouldn't be an SCC index if we're in an element");
-
-  // This node is the root of a subtree that's been removed from the
-  // document (since AppendReachableList is only called on SCC index
-  // nodes).  The document is reachable from it (through
-  // .ownerDocument), but it's not reachable from the document.
-  nsCOMPtr<nsIDOMGCParticipant> participant = do_QueryInterface(GetOwnerDoc());
-  aArray.AppendObject(participant);
-}
-
-void
-nsDOMAttribute::SetMap(nsDOMAttributeMap *aMap)
-{
-  if (mAttrMap && !aMap && sInitialized) {
-    // We're breaking a relationship with content and not getting a new one,
-    // need to locally cache value. GetValue() does that.
-    nsAutoString tmp;
-    GetValue(tmp);
-  }
-  
-  mAttrMap = aMap;
-}
-
-nsIContent*
-nsDOMAttribute::GetContent() const
-{
-  return GetContentInternal();
-}
 
 nsresult
 nsDOMAttribute::GetName(nsAString& aName)
@@ -145,12 +92,11 @@ nsDOMAttribute::GetName(nsAString& aName)
 nsresult
 nsDOMAttribute::GetValue(nsAString& aValue)
 {
-  nsIContent* content = GetContentInternal();
-  if (content) {
+  if (mContent) {
     nsAutoString tmpValue;
-    nsresult attrResult = content->GetAttr(mNodeInfo->NamespaceID(),
-                                           mNodeInfo->NameAtom(),
-                                           tmpValue);
+    nsresult attrResult = mContent->GetAttr(mNodeInfo->NamespaceID(),
+                                            mNodeInfo->NameAtom(),
+                                            tmpValue);
     if (NS_CONTENT_ATTR_NOT_THERE != attrResult) {
       mValue = tmpValue;
     }
@@ -164,18 +110,14 @@ nsDOMAttribute::GetValue(nsAString& aValue)
 nsresult
 nsDOMAttribute::SetValue(const nsAString& aValue)
 {
-  nsresult rv = NS_OK;
-  nsIContent* content = GetContentInternal();
-  if (content) {
-    rv = content->SetAttr(mNodeInfo->NamespaceID(),
-                          mNodeInfo->NameAtom(),
-                          mNodeInfo->GetPrefixAtom(),
-                          aValue,
-                          PR_TRUE);
+  nsresult result = NS_OK;
+  if (mContent) {
+    result = mContent->SetAttr(mNodeInfo->NamespaceID(), mNodeInfo->NameAtom(),
+                               mNodeInfo->GetPrefixAtom(), aValue, PR_TRUE);
   }
-  mValue = aValue;
+  mValue=aValue;
 
-  return rv;
+  return result;
 }
 
 nsresult
@@ -183,9 +125,13 @@ nsDOMAttribute::GetSpecified(PRBool* aSpecified)
 {
   NS_ENSURE_ARG_POINTER(aSpecified);
 
-  nsIContent* content = GetContentInternal();
-  *aSpecified = content && content->HasAttr(mNodeInfo->NamespaceID(),
-                                            mNodeInfo->NameAtom());
+  if (!mContent) {
+    *aSpecified = PR_FALSE;
+    return NS_OK;
+  }
+
+  *aSpecified = mContent->HasAttr(mNodeInfo->NamespaceID(),
+                                  mNodeInfo->NameAtom());
 
   return NS_OK;
 }
@@ -195,11 +141,8 @@ nsDOMAttribute::GetOwnerElement(nsIDOMElement** aOwnerElement)
 {
   NS_ENSURE_ARG_POINTER(aOwnerElement);
 
-  nsIContent* content = GetContentInternal();
-  PRBool hasAttr = content && content->HasAttr(mNodeInfo->NamespaceID(),
-                                               mNodeInfo->NameAtom());
-  if (hasAttr) {
-    return CallQueryInterface(content, aOwnerElement);
+  if (mContent) {
+    return CallQueryInterface(mContent, aOwnerElement);
   }
 
   *aOwnerElement = nsnull;
@@ -263,7 +206,7 @@ nsDOMAttribute::HasChildNodes(PRBool* aHasChildNodes)
   if (mChild) {
     *aHasChildNodes = PR_TRUE;
   }
-  else {
+  else if (mContent) {
     nsAutoString value;
 
     GetValue(value);
@@ -298,12 +241,11 @@ nsDOMAttribute::GetFirstChild(nsIDOMNode** aFirstChild)
   if (!value.IsEmpty()) {
     if (!mChild) {
       nsCOMPtr<nsITextContent> content;
-      result = NS_NewTextNode(getter_AddRefs(content),
-                              mNodeInfo->NodeInfoManager());
+
+      result = NS_NewTextNode(getter_AddRefs(content));
       if (NS_FAILED(result)) {
         return result;
       }
-      // XXX We should be setting |this| as the parent of the textnode!
       result = CallQueryInterface(content, &mChild);
     }
     mChild->SetData(value);
@@ -377,9 +319,15 @@ nsDOMAttribute::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
 {
   nsDOMAttribute* newAttr;
 
-  nsAutoString value;
-  GetValue(value);
-  newAttr = new nsDOMAttribute(nsnull, mNodeInfo, value);
+  if (mContent) {
+    nsAutoString value;
+    mContent->GetAttr(mNodeInfo->NamespaceID(),
+                      mNodeInfo->NameAtom(), value);
+    newAttr = new nsDOMAttribute(nsnull, mNodeInfo, value);
+  }
+  else {
+    newAttr = new nsDOMAttribute(nsnull, mNodeInfo, mValue);
+  }
 
   if (!newAttr) {
     return NS_ERROR_OUT_OF_MEMORY;
@@ -391,24 +339,18 @@ nsDOMAttribute::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
 NS_IMETHODIMP
 nsDOMAttribute::GetOwnerDocument(nsIDOMDocument** aOwnerDocument)
 {
-  *aOwnerDocument = nsnull;
-
-  nsresult rv = NS_OK;
-  nsIContent* content = GetContentInternal();
-  if (content) {
-    nsCOMPtr<nsIDOMNode> node = do_QueryInterface(content, &rv);
-    if (NS_SUCCEEDED(rv)) {
-      rv = node->GetOwnerDocument(aOwnerDocument);
+  nsresult result = NS_OK;
+  if (mContent) {
+    nsCOMPtr<nsIDOMNode> node = do_QueryInterface(mContent, &result);
+    if (NS_SUCCEEDED(result)) {
+      result = node->GetOwnerDocument(aOwnerDocument);
     }
   }
   else {
-    nsIDocument *document = mNodeInfo->GetDocument();
-    if (document) {
-      rv = CallQueryInterface(document, aOwnerDocument);
-    }
+    *aOwnerDocument = nsnull;
   }
 
-  return rv;
+  return result;
 }
 
 NS_IMETHODIMP
@@ -430,30 +372,28 @@ nsDOMAttribute::SetPrefix(const nsAString& aPrefix)
   nsCOMPtr<nsINodeInfo> newNodeInfo;
   nsCOMPtr<nsIAtom> prefix;
 
-  if (!aPrefix.IsEmpty()) {
+  if (!aPrefix.IsEmpty() && !DOMStringIsNull(aPrefix)) {
     prefix = do_GetAtom(aPrefix);
   }
 
-  nsresult rv = nsContentUtils::PrefixChanged(mNodeInfo, prefix,
-                                              getter_AddRefs(newNodeInfo));
+  nsresult rv = mNodeInfo->PrefixChanged(prefix, getter_AddRefs(newNodeInfo));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsIContent* content = GetContentInternal();
-  if (content) {
+  if (mContent) {
     nsIAtom *name = mNodeInfo->NameAtom();
     PRInt32 nameSpaceID = mNodeInfo->NamespaceID();
 
     nsAutoString tmpValue;
-    rv = content->GetAttr(nameSpaceID, name, tmpValue);
+    rv = mContent->GetAttr(nameSpaceID, name, tmpValue);
     if (rv == NS_CONTENT_ATTR_HAS_VALUE) {
-      content->UnsetAttr(nameSpaceID, name, PR_TRUE);
+      mContent->UnsetAttr(nameSpaceID, name, PR_TRUE);
 
-      content->SetAttr(newNodeInfo->NamespaceID(), newNodeInfo->NameAtom(),
-                       newNodeInfo->GetPrefixAtom(), tmpValue, PR_TRUE);
+      mContent->SetAttr(newNodeInfo->NamespaceID(), newNodeInfo->NameAtom(),
+                        newNodeInfo->GetPrefixAtom(), tmpValue, PR_TRUE);
     }
   }
 
-  mNodeInfo.swap(newNodeInfo);
+  newNodeInfo.swap(mNodeInfo);
 
   return NS_OK;
 }
@@ -477,8 +417,7 @@ nsDOMAttribute::IsSupported(const nsAString& aFeature,
                             const nsAString& aVersion,
                             PRBool* aReturn)
 {
-  return nsGenericElement::InternalIsSupported(NS_STATIC_CAST(nsIDOMAttr*, this), 
-                                               aFeature, aVersion, aReturn);
+  return nsGenericElement::InternalIsSupported(aFeature, aVersion, aReturn);
 }
 
 NS_IMETHODIMP
@@ -486,7 +425,7 @@ nsDOMAttribute::GetBaseURI(nsAString &aURI)
 {
   aURI.Truncate();
   nsresult rv = NS_OK;
-  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(GetContentInternal()));
+  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(mContent));
   if (node)
     rv = node->GetBaseURI(aURI);
   return rv;
@@ -615,10 +554,46 @@ NS_IMETHODIMP
 nsDOMAttribute::IsSameNode(nsIDOMNode* aOther,
                            PRBool* aReturn)
 {
-  NS_ASSERTION(aReturn, "IsSameNode() called with aReturn == nsnull!");
-  
-  *aReturn = SameCOMIdentity(NS_STATIC_CAST(nsIDOMNode*, this), aOther);
+  PRBool sameNode = PR_FALSE;
 
+  // XXXcaa Comparing pointers on two attributes is not yet reliable.
+  // When bug 93614 is fixed, this should be changed to simple pointer
+  // comparisons. But for now, check owner elements and node names.
+  PRUint16 otherType = 0;
+  aOther->GetNodeType(&otherType);
+  if (nsIDOMNode::ATTRIBUTE_NODE == otherType) {
+    nsCOMPtr<nsIDOMElement> nodeOwner;
+    GetOwnerElement(getter_AddRefs(nodeOwner));
+    nsCOMPtr<nsIDOMAttr> other(do_QueryInterface(aOther));
+    nsCOMPtr<nsIDOMElement> otherOwner;
+    other->GetOwnerElement(getter_AddRefs(otherOwner));
+
+    // Do these attributes belong to the same element?
+    if (nodeOwner == otherOwner) {
+      PRBool ci = PR_FALSE;
+      nsCOMPtr<nsIContent> content(do_QueryInterface(nodeOwner));
+      // Check to see if we're in HTML.
+      if (content->IsContentOfType(nsIContent::eHTML)) {
+        nsINodeInfo *ni = content->GetNodeInfo();
+        if (ni) {
+          // If there is no namespace, we're in HTML (as opposed to XHTML)
+          // and we'll need to compare node names case insensitively.
+          ci = ni->NamespaceEquals(kNameSpaceID_None);
+        }
+      }
+
+      nsAutoString nodeName;
+      nsAutoString otherName;
+      GetNodeName(nodeName);
+      aOther->GetNodeName(otherName);
+      // Compare node names
+      sameNode = ci ? nodeName.Equals(otherName,
+                                      nsCaseInsensitiveStringComparator())
+                    : nodeName.Equals(otherName);
+    }
+  }
+
+  *aReturn = sameNode;
   return NS_OK;
 }
 
@@ -635,12 +610,9 @@ NS_IMETHODIMP
 nsDOMAttribute::IsDefaultNamespace(const nsAString& aNamespaceURI,
                                    PRBool* aReturn)
 {
-  *aReturn = PR_FALSE;
-  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(GetContentInternal()));
-  if (node) {
-    return node->IsDefaultNamespace(aNamespaceURI, aReturn);
-  }
-  return NS_OK;
+  NS_NOTYETIMPLEMENTED("nsDOMAttribute::IsDefaultNamespace()");
+
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
@@ -661,8 +633,9 @@ nsDOMAttribute::GetFeature(const nsAString& aFeature,
                            const nsAString& aVersion,
                            nsISupports** aReturn)
 {
-  return nsGenericElement::InternalGetFeature(NS_STATIC_CAST(nsIDOMAttr*, this), 
-                                              aFeature, aVersion, aReturn);
+  NS_NOTYETIMPLEMENTED("nsDocument::GetFeature()");
+
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
@@ -691,7 +664,7 @@ nsDOMAttribute::LookupPrefix(const nsAString& aNamespaceURI,
 {
   aPrefix.Truncate();
 
-  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(GetContentInternal()));
+  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(mContent));
   if (node) {
     return node->LookupPrefix(aNamespaceURI, aPrefix);
   }
@@ -705,65 +678,10 @@ nsDOMAttribute::LookupNamespaceURI(const nsAString& aNamespacePrefix,
 {
   aNamespaceURI.Truncate();
   nsresult rv = NS_OK;
-  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(GetContentInternal()));
+  nsCOMPtr<nsIDOM3Node> node(do_QueryInterface(mContent));
   if (node)
     rv = node->LookupNamespaceURI(aNamespacePrefix, aNamespaceURI);
   return rv;
-}
-
-void*
-nsDOMAttribute::GetProperty(nsIAtom* aPropertyName, nsresult* aStatus)
-{
-  nsIDocument *doc = GetOwnerDoc();
-  if (!doc)
-    return nsnull;
-
-  return doc->PropertyTable()->GetProperty(this, aPropertyName, aStatus);
-}
-
-nsresult
-nsDOMAttribute::SetProperty(nsIAtom            *aPropertyName,
-                            void               *aValue,
-                            NSPropertyDtorFunc  aDtor)
-{
-  nsIDocument *doc = GetOwnerDoc();
-  if (!doc)
-    return NS_ERROR_FAILURE;
-
-  return doc->PropertyTable()->SetProperty(this, aPropertyName, aValue, aDtor,
-                                           nsnull);
-}
-
-nsresult
-nsDOMAttribute::DeleteProperty(nsIAtom* aPropertyName)
-{
-  nsIDocument *doc = GetOwnerDoc();
-  if (!doc)
-    return nsnull;
-
-  return doc->PropertyTable()->DeleteProperty(this, aPropertyName);
-}
-
-void*
-nsDOMAttribute::UnsetProperty(nsIAtom* aPropertyName, nsresult* aStatus)
-{
-  nsIDocument *doc = GetOwnerDoc();
-  if (!doc)
-    return nsnull;
-
-  return doc->PropertyTable()->UnsetProperty(this, aPropertyName, aStatus);
-}
-
-void
-nsDOMAttribute::Initialize()
-{
-  sInitialized = PR_TRUE;
-}
-
-void
-nsDOMAttribute::Shutdown()
-{
-  sInitialized = PR_FALSE;
 }
 
 //----------------------------------------------------------------------

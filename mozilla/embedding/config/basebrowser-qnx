@@ -1,17 +1,14 @@
+; Base Embedding Package File for linux
 ;
-; Base Embedding Package File for QNX
+;
 ;
 
 [Embed]
-LICENSE
 
 ; 
 ; Sample App + launch script
 ; 
-kwww
-TestPhEmbed
-mozserver
-libphembedmoz.so
+TestGtkEmbed
 run-mozilla.sh
 
 ; 
@@ -30,7 +27,6 @@ libmozjs.so
 ; XPCOM:
 ; 
 libxpcom.so 
-libxpcom_core.so 
 components/xpcom_base.xpt
 components/xpcom_components.xpt
 components/xpcom_ds.xpt
@@ -38,6 +34,7 @@ components/xpcom_io.xpt
 components/xpcom_threads.xpt
 components/xpcom_xpti.xpt
 libxpcom_compat.so
+components/libxpcom_compat_c.so
 components/xpcom_obsolete.xpt
 
 ; xpconnect
@@ -49,8 +46,9 @@ components/xpconnect.xpt
 ; 
 
 libgkgfx.so 
-libgfxpsshar.so
-;;components/libgfxps.so
+libxlibrgb.so
+components/libgfxps.so
+components/libgfxxprint.so
 components/gfx.xpt 
 components/widget.xpt
 
@@ -61,11 +59,11 @@ components/libwidget_photon.so
 components/libgfx_photon.so
 
 ; layout
+libmoz_art_lgpl.so
 res/dtd/xhtml11.dtd
 components/libgklayout.so                   
 components/libhtmlpars.so                 
 components/layout_base.xpt              
-components/layout_printing.xpt              
 components/layout_xul.xpt
 components/layout_xul_tree.xpt               
 components/content_base.xpt
@@ -90,7 +88,7 @@ components/libcaps.so
 components/caps.xpt                     
 
 ; cookies
-;components/libcookie.so                   
+components/libcookie.so                   
 
 ; docshell
 ; embedding glue:
@@ -114,6 +112,7 @@ components/pref.xpt
 components/libpref.so
 
 ; profile
+components/libprofile.so                  
 components/profile.xpt
 
 ; session history
@@ -153,6 +152,9 @@ components/dom_views.xpt
 components/dom_xbl.xpt
 components/dom_xul.xpt
 
+; "javascript:" URLs
+components/jsurl.xpt
+
 ; editor
 components/libeditor.so                   
 components/editor.xpt
@@ -168,6 +170,7 @@ components/necko_about.xpt
 components/necko_data.xpt               
 components/necko_dns.xpt                
 components/necko_http.xpt               
+components/necko_jar.xpt                
 components/necko_res.xpt                
 components/necko_strconv.xpt
 
@@ -175,6 +178,7 @@ components/necko_strconv.xpt
 components/necko_cache.xpt
 
 ; optional for FTP support
+components/libnecko2.so                   
 components/necko_ftp.xpt                
 
 ; plugins
@@ -184,8 +188,8 @@ components/plugin.xpt
 
 ; wallet
 ; Optional - only if you need password persistence
-;components/libwallet.so
-;components/wallet.xpt                  
+components/libwallet.so
+components/wallet.xpt                  
 
 ; download progress
 ; Optional - you can implement your own download progress dialog
@@ -196,22 +200,22 @@ components/plugin.xpt
 
 ; psm2
 ; Optional - only if you need HTTPS support
+components/libpipboot.so
 components/pipboot.xpt
 components/libpipnss.so
 components/pipnss.xpt
-;;chrome/pipnss.jar
+chrome/pipnss.jar
+defaults/pref/security-prefs.js
 libnss3.so
 libsmime3.so
 libsoftokn3.chk
 libsoftokn3.so
-libfreebl3.chk
-libfreebl3.so
 libssl3.so
 libnssckbi.so
 
 ; xmlextras, optional for XMLHttpRequest support
-;components/libxmlextras.so
-;components/xmlextras.xpt
+components/libxmlextras.so
+components/xmlextras.xpt
 
 res/language.properties
 res/langGroups.properties
@@ -224,16 +228,9 @@ res/unixcharset.properties
 greprefs/*
 
 ;
-; Chrome
+; Widget-Toolkit and Res (consult hyatt@netscape.com before modifying):
 ; 
-chrome/toolkit.jar
-chrome/toolkit.manifest
-chrome/classic.jar
-chrome/classic.manifest
-chrome/en-US.jar
-chrome/en-US.manifest
-chrome/browser.jar
-chrome/browser.manifest
+chrome/embed.jar
 
 ; 
 ; res:
@@ -241,14 +238,16 @@ chrome/browser.manifest
 res/html.css   
 res/quirk.css
 res/viewsource.css
-res/hiddenWindow.html
 res/ua.css
 res/forms.css
+res/platform-forms.css
 res/arrow.gif
 res/arrowd.gif
 res/loading-image.gif
 res/broken-image.gif
+res/builtin/*
 res/entityTables/html40Special.properties
+res/entityTables/htmlEntityVersion.properties
 res/entityTables/html40Latin1.properties
 res/entityTables/html40Symbols.properties
 res/entityTables/transliterate.properties
@@ -270,28 +269,7 @@ res/entityTables/transliterate.properties
 ;res/fonts/mathfontSymbol.properties
 ;components/libucvmath.so
 
-; defaults
-defaults/autoconfig/platform.js
-defaults/autoconfig/prefcalls.js
-defaults/pref/channel-prefs.js
-defaults/pref/firefox-branding.js
-defaults/pref/firefox-l10n.js
-defaults/pref/firefox.js
-defaults/pref/reporter.js
-defaults/profile/bookmarks.html
-defaults/profile/chrome/userChrome-example.css
-defaults/profile/chrome/userContent-example.css
-defaults/profile/localstore.rdf
-defaults/profile/mimeTypes.rdf
-defaults/profile/prefs.js
-defaults/profile/search.rdf
+; p3p
+components/libp3p.so
+components/p3p.xpt
 
-; Needed, or else FTP crashes
-components/libappcomps.so
-
-; Needed, or else kwww crashes. Test case: Go to www.google.ca.
-; Then click "Go to google.com", then click "Go to Google Canada". Repeat.
-; You will get a nasty stack corruption that is next to impossible to
-; debug. I even tried gcc -finstrument-functions.
-components/libtoolkitcomps.so
-components/libmork.so

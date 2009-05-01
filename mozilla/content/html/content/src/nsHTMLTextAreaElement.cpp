@@ -1,12 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set sw=2 ts=2 et tw=80: */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -15,7 +14,7 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,26 +22,24 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsIDOMHTMLTextAreaElement.h"
 #include "nsIDOMNSHTMLTextAreaElement.h"
 #include "nsITextControlElement.h"
-#include "nsIDOMNSEditableElement.h"
 #include "nsIControllers.h"
-#include "nsIFocusController.h"
-#include "nsPIDOMWindow.h"
 #include "nsContentCID.h"
 #include "nsCOMPtr.h"
 #include "nsIComponentManager.h"
@@ -51,10 +48,11 @@
 #include "nsIForm.h"
 #include "nsIFormSubmission.h"
 #include "nsIDOMEventReceiver.h"
+#include "nsIHTMLContent.h"
 #include "nsGenericHTMLElement.h"
 #include "nsHTMLAtoms.h"
 #include "nsStyleConsts.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsMappedAttributes.h"
 #include "nsIFormControlFrame.h"
 #include "nsITextControlFrame.h"
@@ -67,10 +65,11 @@
 #include "nsIPrivateDOMEvent.h"
 #include "nsGUIEvent.h"
 #include "nsLinebreakConverter.h"
-#include "nsPresState.h"
+#include "nsIPresState.h"
 #include "nsIDOMText.h"
 #include "nsReadableUtils.h"
 #include "nsITextContent.h"
+#include "nsIEditor.h"
 
 static NS_DEFINE_CID(kXULControllersCID,  NS_XULCONTROLLERS_CID);
 
@@ -78,11 +77,10 @@ static NS_DEFINE_CID(kXULControllersCID,  NS_XULCONTROLLERS_CID);
 class nsHTMLTextAreaElement : public nsGenericHTMLFormElement,
                               public nsIDOMHTMLTextAreaElement,
                               public nsIDOMNSHTMLTextAreaElement,
-                              public nsITextControlElement,
-                              public nsIDOMNSEditableElement
+                              public nsITextControlElement
 {
 public:
-  nsHTMLTextAreaElement(nsINodeInfo *aNodeInfo, PRBool aFromParser = PR_FALSE);
+  nsHTMLTextAreaElement(PRBool aFromParser = PR_FALSE);
   virtual ~nsHTMLTextAreaElement();
 
   // nsISupports
@@ -103,16 +101,13 @@ public:
   // nsIDOMNSHTMLTextAreaElement
   NS_DECL_NSIDOMNSHTMLTEXTAREAELEMENT
 
-  // nsIDOMNSEditableElement
-  NS_FORWARD_NSIDOMNSEDITABLEELEMENT(nsGenericHTMLElement::)
-
   // nsIFormControl
-  NS_IMETHOD_(PRInt32) GetType() const { return NS_FORM_TEXTAREA; }
+  NS_IMETHOD_(PRInt32) GetType() { return NS_FORM_TEXTAREA; }
   NS_IMETHOD Reset();
   NS_IMETHOD SubmitNamesValues(nsIFormSubmission* aFormSubmission,
                                nsIContent* aSubmitElement);
   NS_IMETHOD SaveState();
-  virtual PRBool RestoreState(nsPresState* aState);
+  NS_IMETHOD RestoreState(nsIPresState* aState);
 
   // nsITextControlElemet
   NS_IMETHOD TakeTextFrameValue(const nsAString& aValue);
@@ -120,21 +115,29 @@ public:
 
   // nsIContent
   virtual nsresult InsertChildAt(nsIContent* aKid, PRUint32 aIndex,
-                                 PRBool aNotify);
-  virtual nsresult AppendChildTo(nsIContent* aKid, PRBool aNotify);
+                                 PRBool aNotify, PRBool aDeepSetDocument);
+  virtual nsresult ReplaceChildAt(nsIContent* aKid, PRUint32 aIndex,
+                                  PRBool aNotify, PRBool aDeepSetDocument);
+  virtual nsresult AppendChildTo(nsIContent* aKid, PRBool aNotify,
+                                 PRBool aDeepSetDocument);
   virtual nsresult RemoveChildAt(PRUint32 aIndex, PRBool aNotify);
   virtual PRBool ParseAttribute(nsIAtom* aAttribute,
                                 const nsAString& aValue,
                                 nsAttrValue& aResult);
-  virtual nsMapRuleToAttributesFunc GetAttributeMappingFunction() const;
-  virtual nsChangeHint GetAttributeChangeHint(const nsIAtom* aAttribute,
-                                              PRInt32 aModType) const;
+  NS_IMETHOD GetAttributeMappingFunction(nsMapRuleToAttributesFunc& aMapRuleFunc) const;
+  NS_IMETHOD GetAttributeChangeHint(const nsIAtom* aAttribute,
+                                    PRInt32 aModType,
+                                    nsChangeHint& aHint) const;
   NS_IMETHOD_(PRBool) IsAttributeMapped(const nsIAtom* aAttribute) const;
-  virtual nsresult HandleDOMEvent(nsPresContext* aPresContext,
+  virtual nsresult HandleDOMEvent(nsIPresContext* aPresContext,
                                   nsEvent* aEvent, nsIDOMEvent** aDOMEvent,
                                   PRUint32 aFlags,
                                   nsEventStatus* aEventStatus);
-  virtual void SetFocus(nsPresContext* aPresContext);
+  virtual void SetFocus(nsIPresContext* aPresContext);
+  virtual void RemoveFocus(nsIPresContext* aPresContext);
+
+  virtual nsresult GetInnerHTML(nsAString& aInnerHTML);
+  virtual nsresult SetInnerHTML(const nsAString& aInnerHTML);
 
   virtual void DoneAddingChildren();
   virtual PRBool IsDoneAddingChildren();
@@ -151,7 +154,7 @@ protected:
       created by a parser */
   PRPackedBool             mDoneAddingChildren;
 
-  NS_IMETHOD SelectAll(nsPresContext* aPresContext);
+  NS_IMETHOD SelectAll(nsIPresContext* aPresContext);
   /**
    * Get the value, whether it is from the content or the frame.
    * @param aValue the value [out]
@@ -166,14 +169,35 @@ protected:
   nsresult GetSelectionRange(PRInt32* aSelectionStart, PRInt32* aSelectionEnd);
 };
 
+nsresult
+NS_NewHTMLTextAreaElement(nsIHTMLContent** aInstancePtrResult,
+                          nsINodeInfo *aNodeInfo, PRBool aFromParser)
+{
+  NS_ENSURE_ARG_POINTER(aInstancePtrResult);
 
-NS_IMPL_NS_NEW_HTML_ELEMENT_CHECK_PARSER(TextArea)
+  nsHTMLTextAreaElement* it = new nsHTMLTextAreaElement(aFromParser);
+
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsresult rv = NS_STATIC_CAST(nsGenericElement *, it)->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    delete it;
+
+    return rv;
+  }
+
+  *aInstancePtrResult = NS_STATIC_CAST(nsIHTMLContent *, it);
+  NS_ADDREF(*aInstancePtrResult);
+
+  return NS_OK;
+}
 
 
-nsHTMLTextAreaElement::nsHTMLTextAreaElement(nsINodeInfo *aNodeInfo,
-                                             PRBool aFromParser)
-  : nsGenericHTMLFormElement(aNodeInfo),
-    mValue(nsnull),
+nsHTMLTextAreaElement::nsHTMLTextAreaElement(PRBool aFromParser)
+  : mValue(nsnull),
     mValueChanged(PR_FALSE),
     mHandlingSelect(PR_FALSE),
     mDoneAddingChildren(!aFromParser)
@@ -198,16 +222,39 @@ NS_HTML_CONTENT_INTERFACE_MAP_BEGIN(nsHTMLTextAreaElement,
   NS_INTERFACE_MAP_ENTRY(nsIDOMHTMLTextAreaElement)
   NS_INTERFACE_MAP_ENTRY(nsIDOMNSHTMLTextAreaElement)
   NS_INTERFACE_MAP_ENTRY(nsITextControlElement)
-  NS_INTERFACE_MAP_ENTRY(nsIDOMNSEditableElement)
   NS_INTERFACE_MAP_ENTRY_CONTENT_CLASSINFO(HTMLTextAreaElement)
 NS_HTML_CONTENT_INTERFACE_MAP_END
 
 
 // nsIDOMHTMLTextAreaElement
 
+nsresult
+nsHTMLTextAreaElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  NS_ENSURE_ARG_POINTER(aReturn);
+  *aReturn = nsnull;
 
-NS_IMPL_DOM_CLONENODE(nsHTMLTextAreaElement)
+  nsHTMLTextAreaElement* it = new nsHTMLTextAreaElement();
 
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsCOMPtr<nsIDOMNode> kungFuDeathGrip(it);
+
+  nsresult rv = NS_STATIC_CAST(nsGenericElement *, it)->Init(mNodeInfo);
+
+  if (NS_FAILED(rv))
+    return rv;
+
+  CopyInnerTo(it, aDeep);
+
+  *aReturn = NS_STATIC_CAST(nsIDOMNode *, it);
+
+  NS_ADDREF(*aReturn);
+
+  return NS_OK;
+}
 
 NS_IMETHODIMP
 nsHTMLTextAreaElement::GetForm(nsIDOMHTMLFormElement** aForm)
@@ -221,9 +268,7 @@ nsHTMLTextAreaElement::GetForm(nsIDOMHTMLFormElement** aForm)
 NS_IMETHODIMP
 nsHTMLTextAreaElement::Blur()
 {
-  if (ShouldFocus(this)) {
-    SetElementFocus(PR_FALSE);
-  }
+  SetElementFocus(PR_FALSE);
 
   return NS_OK;
 }
@@ -239,7 +284,7 @@ nsHTMLTextAreaElement::Focus()
 }
 
 void
-nsHTMLTextAreaElement::SetFocus(nsPresContext* aPresContext)
+nsHTMLTextAreaElement::SetFocus(nsIPresContext* aPresContext)
 {
   if (!aPresContext)
     return;
@@ -253,27 +298,6 @@ nsHTMLTextAreaElement::SetFocus(nsPresContext* aPresContext)
     return;
   }
 
-  // We can't be focus'd if we aren't in a document
-  nsIDocument* doc = GetCurrentDoc();
-  if (!doc)
-    return;
-
-  // If the window is not active, do not allow the focus to bring the
-  // window to the front.  We update the focus controller, but do
-  // nothing else.
-  nsPIDOMWindow* win = doc->GetWindow();
-  if (win) {
-    nsIFocusController *focusController = win->GetRootFocusController();
-    PRBool isActive = PR_FALSE;
-    focusController->GetActive(&isActive);
-    if (!isActive) {
-      focusController->SetFocusedWindow(win);
-      focusController->SetFocusedElement(this);
-
-      return;
-    }
-  }
-
   aPresContext->EventStateManager()->SetContentState(this,
                                                      NS_EVENT_STATE_FOCUS);
 
@@ -284,6 +308,27 @@ nsHTMLTextAreaElement::SetFocus(nsPresContext* aPresContext)
     formControlFrame->ScrollIntoView(aPresContext);
     // Could call SelectAll(aPresContext) here to automatically
     // select text when we receive focus.
+  }
+}
+
+void
+nsHTMLTextAreaElement::RemoveFocus(nsIPresContext* aPresContext)
+{
+  if (!aPresContext)
+    return;
+
+  // If we are disabled, we probably shouldn't have focus in the
+  // first place, so allow it to be removed.
+
+  nsIFormControlFrame* formControlFrame = GetFormControlFrame(PR_FALSE);
+
+  if (formControlFrame) {
+    formControlFrame->SetFocus(PR_FALSE, PR_FALSE);
+  }
+
+  if (mDocument) {
+    aPresContext->EventStateManager()->SetContentState(nsnull,
+                                                       NS_EVENT_STATE_FOCUS);
   }
 }
 
@@ -300,37 +345,16 @@ nsHTMLTextAreaElement::Select()
     return rv;
   }
 
-  // We can't be focus'd if we aren't in a document
-  nsIDocument* doc = GetCurrentDoc();
-  if (!doc)
-    return rv;
-
-  // If the window is not active, do not allow the focus to bring the
-  // window to the front.  We update the focus controller, but do
-  // nothing else.
-  nsPIDOMWindow* win = doc->GetWindow();
-  if (win) {
-    nsIFocusController *focusController = win->GetRootFocusController();
-    PRBool isActive = PR_FALSE;
-    focusController->GetActive(&isActive);
-    if (!isActive) {
-      focusController->SetFocusedWindow(win);
-      focusController->SetFocusedElement(this);
-
-      return rv;
-    }
-  }
-
   // XXX Bug?  We have to give the input focus before contents can be
   // selected
 
   // Just like SetFocus() but without the ScrollIntoView()!
-  nsCOMPtr<nsPresContext> presContext = GetPresContext();
+  nsCOMPtr<nsIPresContext> presContext;
+  GetPresContext(this, getter_AddRefs(presContext)); 
 
   nsEventStatus status = nsEventStatus_eIgnore;
-  nsGUIEvent event(PR_TRUE, NS_FORM_SELECTED, nsnull);
-  rv = HandleDOMEvent(presContext, &event, nsnull, NS_EVENT_FLAG_INIT,
-                      &status);
+  nsGUIEvent event(NS_FORM_SELECTED);
+  rv = HandleDOMEvent(presContext, &event, nsnull, NS_EVENT_FLAG_INIT, &status);
 
   // If the DOM event was not canceled (e.g. by a JS event handler
   // returning false)
@@ -358,13 +382,13 @@ nsHTMLTextAreaElement::Select()
 }
 
 NS_IMETHODIMP
-nsHTMLTextAreaElement::SelectAll(nsPresContext* aPresContext)
+nsHTMLTextAreaElement::SelectAll(nsIPresContext* aPresContext)
 {
   nsIFormControlFrame* formControlFrame = GetFormControlFrame(PR_TRUE);
 
   if (formControlFrame) {
     formControlFrame->SetProperty(aPresContext, nsHTMLAtoms::select,
-                                  EmptyString());
+                                  nsString());
   }
 
   return NS_OK;
@@ -376,13 +400,13 @@ NS_IMPL_BOOL_ATTR(nsHTMLTextAreaElement, Disabled, disabled)
 NS_IMPL_STRING_ATTR(nsHTMLTextAreaElement, Name, name)
 NS_IMPL_BOOL_ATTR(nsHTMLTextAreaElement, ReadOnly, readonly)
 NS_IMPL_INT_ATTR(nsHTMLTextAreaElement, Rows, rows)
-NS_IMPL_INT_ATTR_DEFAULT_VALUE(nsHTMLTextAreaElement, TabIndex, tabindex, 0)
+NS_IMPL_INT_ATTR(nsHTMLTextAreaElement, TabIndex, tabindex)
   
 
 NS_IMETHODIMP 
 nsHTMLTextAreaElement::GetType(nsAString& aType)
 {
-  aType.AssignLiteral("textarea");
+  aType.Assign(NS_LITERAL_STRING("textarea"));
 
   return NS_OK;
 }
@@ -456,8 +480,10 @@ nsHTMLTextAreaElement::SetValueInternal(const nsAString& aValue,
     textControlFrame->OwnsValue(&frameOwnsValue);
   }
   if (frameOwnsValue) {
-    formControlFrame->SetProperty(GetPresContext(),
-                                  nsHTMLAtoms::value, aValue);
+    nsCOMPtr<nsIPresContext> presContext;
+    GetPresContext(this, getter_AddRefs(presContext));
+
+    formControlFrame->SetProperty(presContext, nsHTMLAtoms::value, aValue);
   }
   else {
     if (mValue) {
@@ -493,38 +519,49 @@ nsHTMLTextAreaElement::SetValueChanged(PRBool aValueChanged)
 NS_IMETHODIMP
 nsHTMLTextAreaElement::GetDefaultValue(nsAString& aDefaultValue)
 {
-  GetContentsAsText(aDefaultValue);
-  return NS_OK;
+  return GetContentsAsText(aDefaultValue);
 }  
 
 NS_IMETHODIMP
 nsHTMLTextAreaElement::SetDefaultValue(const nsAString& aDefaultValue)
 {
-  nsresult rv = ReplaceContentsWithText(aDefaultValue, PR_TRUE);
-  if (NS_SUCCEEDED(rv) && !mValueChanged) {
-    Reset();
-  }
-  return rv;
+  return ReplaceContentsWithText(aDefaultValue, PR_TRUE);
 }
 
 nsresult
 nsHTMLTextAreaElement::InsertChildAt(nsIContent* aKid, PRUint32 aIndex,
-                                     PRBool aNotify)
+                                     PRBool aNotify, PRBool aDeepSetDocument)
 {
   nsresult rv;
-  rv = nsGenericHTMLFormElement::InsertChildAt(aKid, aIndex, aNotify);
-  if (!mValueChanged && mDoneAddingChildren) {
+  rv = nsGenericHTMLFormElement::InsertChildAt(aKid, aIndex, aNotify,
+                                               aDeepSetDocument);
+  if (!mValueChanged) {
     Reset();
   }
   return rv;
 }
 
 nsresult
-nsHTMLTextAreaElement::AppendChildTo(nsIContent* aKid, PRBool aNotify)
+nsHTMLTextAreaElement::ReplaceChildAt(nsIContent* aKid, PRUint32 aIndex,
+                                      PRBool aNotify, PRBool aDeepSetDocument)
 {
   nsresult rv;
-  rv = nsGenericHTMLFormElement::AppendChildTo(aKid, aNotify);
-  if (!mValueChanged && mDoneAddingChildren) {
+  rv = nsGenericHTMLFormElement::ReplaceChildAt(aKid, aIndex, aNotify,
+                                                aDeepSetDocument);
+  if (!mValueChanged) {
+    Reset();
+  }
+  return rv;
+}
+
+nsresult
+nsHTMLTextAreaElement::AppendChildTo(nsIContent* aKid, PRBool aNotify,
+                                     PRBool aDeepSetDocument)
+{
+  nsresult rv;
+  rv = nsGenericHTMLFormElement::AppendChildTo(aKid, aNotify,
+                                               aDeepSetDocument);
+  if (!mValueChanged) {
     Reset();
   }
   return rv;
@@ -536,8 +573,6 @@ nsHTMLTextAreaElement::RemoveChildAt(PRUint32 aIndex, PRBool aNotify)
   nsresult rv;
   rv = nsGenericHTMLFormElement::RemoveChildAt(aIndex, aNotify);
   if (!mValueChanged) {
-    NS_ASSERTION(mDoneAddingChildren,
-                 "The HTML content sink shouldn't call this");
     Reset();
   }
   return rv;
@@ -554,6 +589,10 @@ nsHTMLTextAreaElement::ParseAttribute(nsIAtom* aAttribute,
   if (aAttribute == nsHTMLAtoms::rows) {
     return aResult.ParseIntWithBounds(aValue, 0);
   }
+  if (aAttribute == nsHTMLAtoms::tabindex) {
+    return aResult.ParseIntWithBounds(aValue, 0, 32767);
+  }
+
   return nsGenericHTMLElement::ParseAttribute(aAttribute, aValue, aResult);
 }
 
@@ -565,17 +604,23 @@ MapAttributesIntoRule(const nsMappedAttributes* aAttributes,
   nsGenericHTMLFormElement::MapCommonAttributesInto(aAttributes, aData);
 }
 
-nsChangeHint
+NS_IMETHODIMP
 nsHTMLTextAreaElement::GetAttributeChangeHint(const nsIAtom* aAttribute,
-                                              PRInt32 aModType) const
+                                              PRInt32 aModType,
+                                              nsChangeHint& aHint) const
 {
-  nsChangeHint retval =
-      nsGenericHTMLFormElement::GetAttributeChangeHint(aAttribute, aModType);
+  // XXX Bug 50280 - It is unclear why we need to do this here for 
+  // rows and cols and why the AttributeChanged method in
+  // nsTextControlFrame does take care of the entire problem, but
+  // it doesn't and this makes things better
+  nsresult rv =
+    nsGenericHTMLFormElement::GetAttributeChangeHint(aAttribute, aModType,
+                                                     aHint);
   if (aAttribute == nsHTMLAtoms::rows ||
       aAttribute == nsHTMLAtoms::cols) {
-    NS_UpdateHint(retval, NS_STYLE_HINT_REFLOW);
+    NS_UpdateHint(aHint, NS_STYLE_HINT_REFLOW);
   }
-  return retval;
+  return rv;
 }
 
 NS_IMETHODIMP_(PRBool)
@@ -589,15 +634,16 @@ nsHTMLTextAreaElement::IsAttributeMapped(const nsIAtom* aAttribute) const
   return FindAttributeDependence(aAttribute, map, NS_ARRAY_LENGTH(map));
 }
 
-nsMapRuleToAttributesFunc
-nsHTMLTextAreaElement::GetAttributeMappingFunction() const
+NS_IMETHODIMP
+nsHTMLTextAreaElement::GetAttributeMappingFunction(nsMapRuleToAttributesFunc& aMapRuleFunc) const
 {
-  return &MapAttributesIntoRule;
+  aMapRuleFunc = &MapAttributesIntoRule;
+  return NS_OK;
 }
 
 
 nsresult
-nsHTMLTextAreaElement::HandleDOMEvent(nsPresContext* aPresContext,
+nsHTMLTextAreaElement::HandleDOMEvent(nsIPresContext* aPresContext,
                                       nsEvent* aEvent,
                                       nsIDOMEvent** aDOMEvent,
                                       PRUint32 aFlags,
@@ -660,23 +706,26 @@ nsHTMLTextAreaElement::HandleDOMEvent(nsPresContext* aPresContext,
 void
 nsHTMLTextAreaElement::DoneAddingChildren()
 {
-  if (!mValueChanged) {
-    if (!mDoneAddingChildren) {
-      // Reset now that we're done adding children if the content sink tried to
-      // sneak some text in without calling AppendChildTo.
-      Reset();
-    }
-
-    RestoreFormControlState(this, this);
-  }
-
   mDoneAddingChildren = PR_TRUE;
+  RestoreFormControlState(this, this);
 }
 
 PRBool
 nsHTMLTextAreaElement::IsDoneAddingChildren()
 {
   return mDoneAddingChildren;
+}
+
+nsresult
+nsHTMLTextAreaElement::GetInnerHTML(nsAString& aInnerHTML)
+{
+  return GetContentsAsText(aInnerHTML);
+}
+
+nsresult
+nsHTMLTextAreaElement::SetInnerHTML(const nsAString& aInnerHTML)
+{
+  return ReplaceContentsWithText(aInnerHTML, PR_TRUE);
 }
 
 // Controllers Methods
@@ -803,6 +852,25 @@ nsHTMLTextAreaElement::SetSelectionRange(PRInt32 aSelectionStart, PRInt32 aSelec
   return rv;
 } 
 
+NS_IMETHODIMP
+nsHTMLTextAreaElement::GetEditor(nsIEditor **editor)
+{ 
+  nsresult rv = NS_ERROR_FAILURE;
+  nsIFormControlFrame* formControlFrame = GetFormControlFrame(PR_TRUE);
+
+  if (formControlFrame){
+    nsITextControlFrame* textControlFrame = nsnull;
+    CallQueryInterface(formControlFrame, &textControlFrame);
+
+    if (textControlFrame)
+      rv = textControlFrame->GetEditor(editor);
+  }
+
+  return rv;
+
+  return NS_OK;
+} 
+
 nsresult
 nsHTMLTextAreaElement::Reset()
 {
@@ -866,8 +934,8 @@ nsHTMLTextAreaElement::SaveState()
 
   // Only save if value != defaultValue (bug 62713)
   if (mValueChanged) {
-    nsPresState *state = nsnull;
-    rv = GetPrimaryPresState(this, &state);
+    nsCOMPtr<nsIPresState> state;
+    rv = GetPrimaryPresState(this, getter_AddRefs(state));
     if (state) {
       nsAutoString value;
       GetValueInternal(value, PR_TRUE);
@@ -885,16 +953,15 @@ nsHTMLTextAreaElement::SaveState()
   return rv;
 }
 
-PRBool
-nsHTMLTextAreaElement::RestoreState(nsPresState* aState)
+NS_IMETHODIMP
+nsHTMLTextAreaElement::RestoreState(nsIPresState* aState)
 {
+  nsresult rv = NS_OK;
+
   nsAutoString value;
-#ifdef DEBUG
-  nsresult rv =
-#endif
-    aState->GetStateProperty(NS_LITERAL_STRING("value"), value);
+  rv = aState->GetStateProperty(NS_LITERAL_STRING("value"), value);
   NS_ASSERTION(NS_SUCCEEDED(rv), "value restore failed!");
   SetValue(value);
 
-  return PR_FALSE;
+  return rv;
 }

@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,25 +14,24 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
- * Contributor(s):
- *   Bradley Baetz <bbaetz@student.usyd.edu.au>
+ * Contributor(s): Bradley Baetz <bbaetz@student.usyd.edu.au>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -40,7 +39,6 @@
 #define __nsFtpState__h_
 
 #include "ftpCore.h"
-#include "nsInt64.h"
 #include "nsIThread.h"
 #include "nsIRunnable.h"
 #include "nsISocketTransportService.h"
@@ -53,15 +51,16 @@
 #include "nsIFTPChannel.h"
 #include "nsIProtocolHandler.h"
 #include "nsCOMPtr.h"
+#include "nsXPIDLString.h"
 #include "nsIInputStream.h"
 #include "nsIOutputStream.h"
 #include "nsAutoLock.h"
-#include "nsAutoPtr.h"
 #include "nsIEventQueueService.h"
 #include "nsIPrompt.h"
 #include "nsIAuthPrompt.h"
 #include "nsITransport.h"
 #include "nsIProxyInfo.h"
+#include "nsIResumableEntityID.h"
 
 #include "nsFtpControlConnection.h"
 
@@ -98,14 +97,18 @@ typedef enum _FTP_STATE {
     FTP_S_STOR, FTP_R_STOR,
     FTP_S_LIST, FTP_R_LIST,
     FTP_S_PASV, FTP_R_PASV,
-    FTP_S_PWD,  FTP_R_PWD
+    FTP_S_PWD,  FTP_R_PWD,
+    FTP_S_DELE, FTP_R_DELE,
+    FTP_S_MKD,  FTP_R_MKD,
+    FTP_S_RMD,  FTP_R_RMD,
+    FTP_S_RNFR, FTP_R_RNFR,
+    FTP_S_RNTO, FTP_R_RNTO
 } FTP_STATE;
 
 // higher level ftp actions
-typedef enum _FTP_ACTION {GET, PUT} FTP_ACTION;
+typedef enum _FTP_ACTION {GET, PUT, DEL, MKDIR, RMDIR, RENAME} FTP_ACTION;
 
 class DataRequestForwarder;
-class nsFTPChannel;
 
 class nsFtpState : public nsIStreamListener,
                    public nsIRequest {
@@ -118,16 +121,19 @@ public:
     nsFtpState();
     virtual ~nsFtpState();
 
-    nsresult Init(nsFTPChannel *aChannel, 
+    nsresult Init(nsIFTPChannel *aChannel, 
+                  nsIPrompt *aPrompter, 
+                  nsIAuthPrompt *aAuthPrompter, 
+                  nsIFTPEventSink *sink, 
                   nsICacheEntryDescriptor* cacheEntry,
                   nsIProxyInfo* proxyInfo,
-                  PRUint64 startPos,
-                  const nsACString& entity);
+                  PRUint32 startPos,
+                  nsIResumableEntityID* entity);
 
     // use this to provide a stream to be written to the server.
     nsresult SetWriteStream(nsIInputStream* aInStream);
 
-    nsresult GetEntityID(nsACString& aEntityID);
+    nsresult GetEntityID(nsIResumableEntityID* *aEntityID);
 
     nsresult Connect();
 
@@ -135,6 +141,32 @@ public:
     // and when the data pipe has finished.
     void DataConnectionEstablished();    
     void DataConnectionComplete();
+
+
+    inline void ScheduleForFileDeletion(PRBool aEnabled) {
+      if (aEnabled)
+        mAction = DEL;
+    }
+    
+    inline void ScheduleForDirCreation(PRBool aEnabled) {
+      if (aEnabled)
+        mAction = MKDIR;
+    }
+
+    inline void ScheduleForDirRemoval(PRBool aEnabled) {
+      if (aEnabled)
+        mAction = RMDIR;
+    }
+
+    inline void ScheduleForRenaming(PRBool aEnabled, const nsAutoString & aNewPath) {
+      if (aEnabled)
+      {
+        mAction = RENAME;
+        mNewPath = ToNewCString(aNewPath);
+      }
+    }
+
+
 private:
     ///////////////////////////////////
     // BEGIN: STATE METHODS
@@ -155,6 +187,13 @@ private:
     nsresult        S_stor(); FTP_STATE       R_stor();
     nsresult        S_pasv(); FTP_STATE       R_pasv();
     nsresult        S_pwd();  FTP_STATE       R_pwd();
+
+    nsresult        S_dele(); FTP_STATE       R_dele();
+    nsresult        S_mkd();  FTP_STATE       R_mkd();
+    nsresult        S_rmd();  FTP_STATE       R_rmd();
+
+    nsresult        S_rnfr(); FTP_STATE       R_rnfr();
+    nsresult        S_rnto(); FTP_STATE       R_rnto();
     // END: STATE METHODS
     ///////////////////////////////////
 
@@ -172,6 +211,8 @@ private:
     nsresult BuildStreamConverter(nsIStreamListener** convertStreamListener);
     nsresult SetContentType();
     PRBool CanReadEntry();
+
+    nsresult SingleAbsolutePathCommand(FTP_ACTION aAction);
 
     ///////////////////////////////////
     // Private members
@@ -192,11 +233,11 @@ private:
     nsCOMPtr<nsISocketTransport>    mDPipe;                   // the data transport
     nsCOMPtr<nsIRequest>            mDPipeRequest;
     DataRequestForwarder*           mDRequestForwarder;
-    PRUint64                        mFileSize;
-    nsCString                       mModTime;
+    PRUint32                        mFileSize;
+    PRTime                          mModTime;
 
         // ****** consumer vars
-    nsRefPtr<nsFTPChannel>          mChannel;         // our owning FTP channel we pass through our events
+    nsCOMPtr<nsIFTPChannel>         mChannel;         // our owning FTP channel we pass through our events
     nsCOMPtr<nsIProxyInfo>          mProxyInfo;
 
         // ****** connection cache vars
@@ -218,6 +259,8 @@ private:
     nsCString              mPath;       // the url's path
     nsCString              mPwd;        // login Path
 
+    nsCString              mNewPath;    // the requested new path if we rename
+
         // ****** other vars
     PRUint8                mSuspendCount;// number of times we've been suspended.
     PRUint32               mBufferSegmentSize;
@@ -225,12 +268,15 @@ private:
     PRLock                 *mLock;
     nsCOMPtr<nsIInputStream> mWriteStream; // This stream is written to the server.
     PRUint32                 mWriteCount;
-    PRPackedBool            mAddressChecked;
-    PRPackedBool            mServerIsIPv6;
+    PRPackedBool           mIPv6Checked;
+    nsCOMPtr<nsIPrompt>    mPrompter;
+    nsCOMPtr<nsIFTPEventSink>       mFTPEventSink;
+    nsCOMPtr<nsIAuthPrompt> mAuthPrompter;
+    PRUint32               mListFormat;
     
     static PRUint32         mSessionStartTime;
 
-    char                    mServerAddress[64];
+    char                   *mIPv6ServerAddress; // Server IPv6 address; null if server not IPv6
 
     // ***** control read gvars
     nsresult                mControlStatus;
@@ -238,9 +284,9 @@ private:
 
     nsCOMPtr<nsICacheEntryDescriptor> mCacheEntry;
     
-    nsUint64 mStartPos;
-    nsCString mSuppliedEntityID;
-    nsCString mEntityID;
+    PRUint32 mStartPos;
+    nsCOMPtr<nsIResumableEntityID> mSuppliedEntityID;
+    nsCOMPtr<nsIResumableEntityID> mEntityID;
 };
 
 

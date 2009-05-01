@@ -1,41 +1,37 @@
 #! /bin/sh
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
+# The contents of this file are subject to the Mozilla Public
+# License Version 1.1 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of
+# the License at http://www.mozilla.org/MPL/
+# 
+# Software distributed under the License is distributed on an "AS
+# IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# rights and limitations under the License.
+# 
 # The Original Code is the Netscape security libraries.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1994-2000
-# the Initial Developer. All Rights Reserved.
-#
+# 
+# The Initial Developer of the Original Code is Netscape
+# Communications Corporation.  Portions created by Netscape are 
+# Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+# Rights Reserved.
+# 
 # Contributor(s):
+# 
+# Alternatively, the contents of this file may be used under the
+# terms of the GNU General Public License Version 2 or later (the
+# "GPL"), in which case the provisions of the GPL are applicable 
+# instead of those above.  If you wish to allow use of your 
+# version of this file only under the terms of the GPL and not to
+# allow others to use your version of this file under the MPL,
+# indicate your decision by deleting the provisions above and
+# replace them with the notice and other provisions required by
+# the GPL.  If you do not delete the provisions above, a recipient
+# may use your version of this file under either the MPL or the
+# GPL.
 #
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
 #
-# ***** END LICENSE BLOCK *****
-
 ########################################################################
 #
 # mozilla/security/nss/tests/common/init.sh
@@ -72,7 +68,6 @@
 #    and a completely common environment
 #
 ########################################################################
-
 NSS_STRICT_SHUTDOWN=1
 export NSS_STRICT_SHUTDOWN
 
@@ -82,7 +77,7 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     Exit()
     {
         if [ -n "$1" ] ; then
-            echo "$SCRIPTNAME: Exit: $* - FAILED"
+            echo "$SCRIPTNAME: Exit: $*"
             html_failed "<TR><TD>$*"
         fi
         echo "</TABLE><BR>" >> ${RESULTS}
@@ -102,19 +97,6 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
         esac
     }
 
-    detect_core()
-    {
-        [ ! -f $CORELIST_FILE ] && touch $CORELIST_FILE
-        mv $CORELIST_FILE ${CORELIST_FILE}.old
-        coreStr=`find $HOSTDIR -type f -name '*core*'`
-        res=0
-        if [ -n "$coreStr" ]; then
-            sum $coreStr > $CORELIST_FILE
-            res=`cat $CORELIST_FILE ${CORELIST_FILE}.old | sort | uniq -u | wc -l`
-        fi
-        return $res
-    }
-
 #html functions to give the resultfiles a consistant look
     html() #########################    write the results.html file
     {      # 3 functions so we can put targets in the output.log easier
@@ -122,23 +104,11 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     }
     html_passed()
     {
-        html_detect_core "$@" || return
         html "$* ${HTML_PASSED}"
     }
     html_failed()
     {
-        html_detect_core "$@" || return
         html "$* ${HTML_FAILED}"
-    }
-    html_detect_core()
-    {
-        detect_core
-        if [ $? -ne 0 ]; then
-            echo "$*. Core file is detected."
-            html "$* ${HTML_FAILED_CORE}"
-            return 1
-        fi
-        return 0
     }
     html_head()
     {
@@ -161,7 +131,6 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
         fi
     }
     HTML_FAILED='</TD><TD bgcolor=red>Failed</TD><TR>'
-    HTML_FAILED_CORE='</TD><TD bgcolor=red>Failed Core</TD><TR>'
     HTML_PASSED='</TD><TD bgcolor=lightGreen>Passed</TD><TR>'
 
 
@@ -178,65 +147,32 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     COMMON=${TEST_COMMON-$common}
     export COMMON
 
-    MAKE=`which gmake`
-    if [ -z "$MAKE" ]; then
-		MAKE=`which make`
-    fi
-    if [ -z "$MAKE" ]; then
-		You are missing make.
-		exit 5
-    fi
-
     DIST=${DIST-${MOZILLA_ROOT}/dist}
     SECURITY_ROOT=${SECURITY_ROOT-${MOZILLA_ROOT}/security/nss}
     TESTDIR=${TESTDIR-${MOZILLA_ROOT}/tests_results/security}
-    OBJDIR=`(cd $COMMON; $MAKE objdir_name)`
-    OS_ARCH=`(cd $COMMON; $MAKE os_arch)`
-    DLL_PREFIX=`(cd $COMMON; $MAKE dll_prefix)`
-    DLL_SUFFIX=`(cd $COMMON; $MAKE dll_suffix)`
-    OS_NAME=`uname -s | sed -e "s/-[0-9]*\.[0-9]*//" | sed -e "s/-WOW64//"`
-
-    # Pathnames constructed from ${TESTDIR} are passed to NSS tools
-    # such as certutil, which don't understand Cygwin pathnames.
-    # So we need to convert ${TESTDIR} to a Windows pathname (with
-    # regular slashes).
-    if [ "${OS_ARCH}" = "WINNT" -a "$OS_NAME" = "CYGWIN_NT" ]; then
-        TESTDIR=`cygpath -m ${TESTDIR}`
-        QADIR=`cygpath -m ${QADIR}`
-    fi
-
-    # Same problem with MSYS/Mingw, except we need to start over with pwd -W
-    if [ "${OS_ARCH}" = "WINNT" -a "$OS_NAME" = "MINGW32_NT" ]; then
-		mingw_mozilla_root=`(cd ../../../..; pwd -W)`
-		MINGW_MOZILLA_ROOT=${MINGW_MOZILLA_ROOT-$mingw_mozilla_root}
-		TESTDIR=${MINGW_TESTDIR-${MINGW_MOZILLA_ROOT}/tests_results/security}
-    fi
-
-    # Same problem with MSYS/Mingw, except we need to start over with pwd -W
-    if [ "${OS_ARCH}" = "WINNT" -a "$OS_NAME" = "MINGW32_NT" ]; then
-		mingw_mozilla_root=`(cd ../../../..; pwd -W)`
-		MINGW_MOZILLA_ROOT=${MINGW_MOZILLA_ROOT-$mingw_mozilla_root}
-		TESTDIR=${MINGW_TESTDIR-${MINGW_MOZILLA_ROOT}/tests_results/security}
-    fi
-    echo testdir is $TESTDIR
+    OBJDIR=`(cd $COMMON; gmake objdir_name)`
+    OS_ARCH=`(cd $COMMON; gmake os_arch)`
+    DLL_PREFIX=`(cd $COMMON; gmake dll_prefix)`
+    DLL_SUFFIX=`(cd $COMMON; gmake dll_suffix)`
+    OS_NAME=`uname -s | sed -e "s/-[0-9]*\.[0-9]*//"`
 
 #in case of backward comp. tests the calling scripts set the
 #PATH and LD_LIBRARY_PATH and do not want them to be changed
     if [ -z "${DON_T_SET_PATHS}" -o "${DON_T_SET_PATHS}" != "TRUE" ] ; then
-        if [ "${OS_ARCH}" = "WINNT" -a "$OS_NAME"  != "CYGWIN_NT" -a "$OS_NAME" != "MINGW32_NT" ]; then
+        if [ "${OS_ARCH}" = "WINNT" -a "$OS_NAME"  != "CYGWIN_NT" ]; then
             PATH=.\;${DIST}/${OBJDIR}/bin\;${DIST}/${OBJDIR}/lib\;$PATH
             PATH=`perl ../path_uniq -d ';' "$PATH"`
         else
-            PATH=.:${DIST}/${OBJDIR}/bin:${DIST}/${OBJDIR}/lib:/bin:/usr/bin:$PATH
+            PATH=.:/bin:/usr/bin:${DIST}/${OBJDIR}/bin:${DIST}/${OBJDIR}/lib:$PATH
             # added /bin and /usr/bin in the beginning so a local perl will 
             # be used
             PATH=`perl ../path_uniq -d ':' "$PATH"`
         fi
 
-        LD_LIBRARY_PATH=${DIST}/${OBJDIR}/lib:$LD_LIBRARY_PATH
-        SHLIB_PATH=${DIST}/${OBJDIR}/lib:$SHLIB_PATH
-        LIBPATH=${DIST}/${OBJDIR}/lib:$LIBPATH
-        DYLD_LIBRARY_PATH=${DIST}/${OBJDIR}/lib:$DYLD_LIBRARY_PATH
+        LD_LIBRARY_PATH=${DIST}/${OBJDIR}/lib
+        SHLIB_PATH=${DIST}/${OBJDIR}/lib
+        LIBPATH=${DIST}/${OBJDIR}/lib
+        DYLD_LIBRARY_PATH=${DIST}/${OBJDIR}/lib
     fi
 
     if [ ! -d "${TESTDIR}" ]; then
@@ -244,18 +180,9 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
         mkdir -p ${TESTDIR}
     fi
 
-#HOST and DOMSUF are needed for the server cert
-
-    DOMAINNAME=`which domainname`
-    if [ -z "${DOMSUF}" -a $? -eq 0 -a -n "${DOMAINNAME}" ]; then
-        DOMSUF=`domainname`
-    fi
-
+#HOST and DOMSUF are needed for the server cert 
     case $HOST in
         *\.*)
-            if [ -z "${DOMSUF}" ]; then
-                DOMSUF=`echo $HOST | sed -e "s/^[^.]*\.//"`
-            fi
             HOST=`echo $HOST | sed -e "s/\..*//"`
             ;;
         ?*)
@@ -264,9 +191,6 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
             HOST=`uname -n`
             case $HOST in
                 *\.*)
-                    if [ -z "${DOMSUF}" ]; then
-                        DOMSUF=`echo $HOST | sed -e "s/^[^.]*\.//"`
-                    fi
                     HOST=`echo $HOST | sed -e "s/\..*//"`
                     ;;
                 ?*)
@@ -280,10 +204,12 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     esac
 
     if [ -z "${DOMSUF}" ]; then
-        echo "$SCRIPTNAME: Fatal DOMSUF env. variable is not defined."
-        exit 1 #does not need to be Exit, very early in script
+        DOMSUF=`domainname`
+        if  [ -z "${DOMSUF}" ]; then
+            echo "$SCRIPTNAME: Fatal DOMSUF env. variable is not defined."
+            exit 1 #does not need to be Exit, very early in script
+        fi
     fi
-
 #HOSTADDR was a workaround for the dist. stress test, and is probably 
 #not needed anymore (purpose: be able to use IP address for the server 
 #cert instead of PC name which was not in the DNS because of dyn IP address
@@ -356,24 +282,23 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
         html "<HR><BR>" 
         html "<HTML><BODY>" 
 
-        echo "********************************************" | tee -a ${LOGFILE}
-        echo "   Platform: ${OBJDIR}"                       | tee -a ${LOGFILE}
-        echo "   Results: ${HOST}.$version"                 | tee -a ${LOGFILE}
-        echo "********************************************" | tee -a ${LOGFILE}
-	echo "$BC_ACTION"                                   | tee -a ${LOGFILE}
-#if running remote side of the distributed stress test 
-# let the user know who it is...
+        echo "********************************************" | tee ${LOGFILE}
+        echo "   Platform: ${OBJDIR}" | tee ${LOGFILE}
+        echo "   Results: ${HOST}.$version" | tee ${LOGFILE}
+        echo "********************************************" | tee ${LOGFILE}
+	echo "$BC_ACTION" | tee ${LOGFILE}
+    #if running remote side of the distributed stress test let the user know who it is...
     elif [ -n "$DO_REM_ST" -a "$DO_REM_ST" = "TRUE" ] ; then
-        echo "********************************************" | tee -a ${LOGFILE}
-        echo "   Platform: ${OBJDIR}"                       | tee -a ${LOGFILE}
-        echo "   Results: ${HOST}.$version"                 | tee -a ${LOGFILE}
-        echo "   remote side of distributed stress test "   | tee -a ${LOGFILE}
-        echo "   `uname -n -s`"                             | tee -a ${LOGFILE}
-        echo "********************************************" | tee -a ${LOGFILE}
+        echo "********************************************" | tee ${LOGFILE}
+        echo "   Platform: ${OBJDIR}" | tee ${LOGFILE}
+        echo "   Results: ${HOST}.$version" | tee ${LOGFILE}
+        echo "   remote side of distributed stress test " | tee ${LOGFILE}
+        echo "   `uname -n -s`" | tee ${LOGFILE}
+        echo "********************************************" | tee ${LOGFILE}
     fi
 
-    echo "$SCRIPTNAME init: Testing PATH $PATH against LIB $LD_LIBRARY_PATH" |\
-        tee -a ${LOGFILE}
+    echo "$SCRIPTNAME init: Testing PATH $PATH against LIB $LD_LIBRARY_PATH" |
+        tee ${LOGFILE}
 
     KILL="kill"
 
@@ -416,28 +341,19 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     DAVEDIR=${HOSTDIR}/dave
     EVEDIR=${HOSTDIR}/eve
     FIPSDIR=${HOSTDIR}/fips
-    ECCURVES_DIR=${HOSTDIR}/eccurves
 
     SERVER_CADIR=${HOSTDIR}/serverCA
     CLIENT_CADIR=${HOSTDIR}/clientCA
     EXT_SERVERDIR=${HOSTDIR}/ext_server
     EXT_CLIENTDIR=${HOSTDIR}/ext_client
 
-    IOPR_CADIR=${HOSTDIR}/CA_iopr
-    IOPR_SSL_SERVERDIR=${HOSTDIR}/server_ssl_iopr
-    IOPR_SSL_CLIENTDIR=${HOSTDIR}/client_ssl_iopr
-    IOPR_OCSP_CLIENTDIR=${HOSTDIR}/client_ocsp_iopr
-
-    CERT_EXTENSIONS_DIR=${HOSTDIR}/cert_extensions
-
     PWFILE=${TMP}/tests.pw.$$
     NOISE_FILE=${TMP}/tests_noise.$$
-    CORELIST_FILE=${TMP}/clist.$$
 
     FIPSPWFILE=${TMP}/tests.fipspw.$$
     FIPSBADPWFILE=${TMP}/tests.fipsbadpw.$$
     FIPSP12PWFILE=${TMP}/tests.fipsp12pw.$$
-    FIPSCERTNICK="FIPS_PUB_140_Test_Certificate"
+    FIPSCERTNICK="FIPS_PUB_140-1_Test_Certificate"
 
     # domains to handle ipc based access to databases
     D_CA="TestCA.$version"
@@ -450,10 +366,8 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     D_SERVER="Server.$version"
     D_CLIENT="Client.$version"
     D_FIPS="FIPS.$version"
-    D_ECCURVES="ECCURVES.$version"
     D_EXT_SERVER="ExtendedServer.$version"
     D_EXT_CLIENT="ExtendedClient.$version"
-    D_CERT_EXTENSTIONS="CertExtensions.$version"
 
     # we need relative pathnames of these files abd directories, since our 
     # tools can't handle the unix style absolut pathnames on cygnus
@@ -461,17 +375,12 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     R_CADIR=../CA
     R_SERVERDIR=../server
     R_CLIENTDIR=../client
-    R_IOPR_CADIR=../CA_iopr
-    R_IOPR_SSL_SERVERDIR=../server_ssl_iopr
-    R_IOPR_SSL_CLIENTDIR=../client_ssl_iopr
-    R_IOPR_OCSP_CLIENTDIR=../client_ocsp_iopr
     R_ALICEDIR=../alicedir
     R_BOBDIR=../bobdir
     R_DAVEDIR=../dave
     R_EVEDIR=../eve
     R_EXT_SERVERDIR=../ext_server
     R_EXT_CLIENTDIR=../ext_client
-    R_CERT_EXT=../cert_extensions
 
     #
     # profiles are either paths or domains depending on the setting of
@@ -509,9 +418,9 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     R_FIPSBADPWFILE=../tests.fipsbadpw.$$
     R_FIPSP12PWFILE=../tests.fipsp12pw.$$
 
-    echo "fIps140" > ${FIPSPWFILE}
+    echo "fips140" > ${FIPSPWFILE}
     echo "fips104" > ${FIPSBADPWFILE}
-    echo "pKcs12fips140" > ${FIPSP12PWFILE}
+    echo "pkcs12fips140" > ${FIPSP12PWFILE}
 
     # a new log file, short - fast to search, mostly for tools to
     # see if their portion of the cert has succeeded, also for me -
@@ -544,44 +453,6 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     if [ -z "$MAX_CERT" ] ; then
         MAX_CERT=$GLOB_MAX_CERT
     fi
-
-    #################################################
-    # CRL SSL testing constatnts
-    #
-
-
-    CRL_GRP_1_BEGIN=40
-    CRL_GRP_1_RANGE=3
-    UNREVOKED_CERT_GRP_1=41
-
-    CRL_GRP_2_BEGIN=43
-    CRL_GRP_2_RANGE=6
-    UNREVOKED_CERT_GRP_2=46
-
-    CRL_GRP_3_BEGIN=49
-    CRL_GRP_3_RANGE=4
-    UNREVOKED_CERT_GRP_3=51
-
-    TOTAL_CRL_RANGE=`expr ${CRL_GRP_1_RANGE} + ${CRL_GRP_2_RANGE} + \
-                     ${CRL_GRP_3_RANGE}`
-
-    TOTAL_GRP_NUM=3
-    
-    RELOAD_CRL=1
-
-    #################################################
-    # Interoperability testing constatnts
-    #
-    # if suite is setup for testing, IOPR_HOSTADDR_LIST should have
-    # at least one host name(FQDN)
-    # Example   IOPR_HOSTADDR_LIST="goa1.SFBay.Sun.COM"
-
-    if [ -z "`echo ${IOPR_HOSTADDR_LIST} | grep '[A-Za-z]'`" ]; then
-        IOPR=0
-    else
-        IOPR=1
-    fi
-    #################################################
 
     SCRIPTNAME=$0
     INIT_SOURCED=TRUE   #whatever one does - NEVER export this one please

@@ -40,7 +40,6 @@ var type;
 var hostname;
 var port;
 var database;
-var priority;
 
 function init() {
   sqlService = Components.classes["@mozilla.org/sql/service;1"]
@@ -51,12 +50,11 @@ function init() {
   hostname = document.getElementById("hostname");
   port = document.getElementById("port");
   database = document.getElementById("database");
-  priority = document.getElementById("priority");
 
   if (window.arguments) {
     // get original values
     var alias = window.arguments[0];
-    sqlService.fetchAlias(alias, name, type, hostname, port, database, priority);
+    sqlService.fetchAlias(alias, name, type, hostname, port, database);
   }
 }
 
@@ -65,11 +63,11 @@ function onAccept() {
     // update an existing alias
     var alias = window.arguments[0];
     sqlService.updateAlias(alias, name.value, type.value, hostname.value,
-                           port.value, database.value, priority.value);
+                           port.value, database.value);
   }
   else {
     // add a new database
     sqlService.addAlias(name.value, type.value, hostname.value,
-                        port.value, database.value, priority.value);
+                        port.value, database.value);
   }
 }

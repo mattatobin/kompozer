@@ -1,39 +1,36 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1998-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
  * prtime.c --
@@ -569,8 +566,6 @@ PR_NormalizeTime(PRExplodedTime *time, PRTimeParamFn params)
 extern struct tm *Maclocaltime(const time_t * t);
 #endif
 
-#define HAVE_LOCALTIME_MONITOR 1  /* We use 'monitor' to serialize our calls
-                                   * to localtime(). */
 static PRLock *monitor = NULL;
 
 static struct tm *MT_safe_localtime(const time_t *clock, struct tm *result)
@@ -580,7 +575,12 @@ static struct tm *MT_safe_localtime(const time_t *clock, struct tm *result)
                                        * against NSPR threads only when the
                                        * NSPR thread system is activated. */
 
-    if (needLock) PR_Lock(monitor);
+    if (needLock) {
+        if (monitor == NULL) {
+            monitor = PR_NewLock();
+        }
+        PR_Lock(monitor);
+    }
 
     /*
      * Microsoft (all flavors) localtime() returns a NULL pointer if 'clock'
@@ -624,23 +624,6 @@ static struct tm *MT_safe_localtime(const time_t *clock, struct tm *result)
 }
 
 #endif  /* definition of MT_safe_localtime() */
-
-void _PR_InitTime(void)
-{
-#ifdef HAVE_LOCALTIME_MONITOR
-    monitor = PR_NewLock();
-#endif
-}
-
-void _PR_CleanupTime(void)
-{
-#ifdef HAVE_LOCALTIME_MONITOR
-    if (monitor) {
-        PR_DestroyLock(monitor);
-        monitor = NULL;
-    }
-#endif
-}
 
 #if defined(XP_UNIX) || defined(XP_PC) || defined(XP_BEOS)
 
@@ -789,53 +772,9 @@ PR_LocalTimeParameters(const PRExplodedTime *gmt)
  *------------------------------------------------------------------------
  */
 
-/*
- * Returns the mday of the first sunday of the month, where
- * mday and wday are for a given day in the month.
- * mdays start with 1 (e.g. 1..31).  
- * wdays start with 0 and are in the range 0..6.  0 = Sunday.
- */
-#define firstSunday(mday, wday) (((mday - wday + 7 - 1) % 7) + 1)
-
-/*
- * Returns the mday for the N'th Sunday of the month, where 
- * mday and wday are for a given day in the month.
- * mdays start with 1 (e.g. 1..31).  
- * wdays start with 0 and are in the range 0..6.  0 = Sunday.
- * N has the following values: 0 = first, 1 = second (etc), -1 = last.
- * ndays is the number of days in that month, the same value as the 
- * mday of the last day of the month.
- */
-static PRInt32 
-NthSunday(PRInt32 mday, PRInt32 wday, PRInt32 N, PRInt32 ndays) 
-{
-    PRInt32 firstSun = firstSunday(mday, wday);
-
-    if (N < 0) 
-        N = (ndays - firstSun) / 7;
-    return firstSun + (7 * N);
-}
-
-typedef struct DSTParams {
-    PRInt8 dst_start_month;       /* 0 = January */
-    PRInt8 dst_start_Nth_Sunday;  /* N as defined above */
-    PRInt8 dst_start_month_ndays; /* ndays as defined above */
-    PRInt8 dst_end_month;         /* 0 = January */
-    PRInt8 dst_end_Nth_Sunday;    /* N as defined above */
-    PRInt8 dst_end_month_ndays;   /* ndays as defined above */
-} DSTParams;
-
-static const DSTParams dstParams[2] = {
-    /* year < 2007:  First April Sunday - Last October Sunday */
-    { 3, 0, 30, 9, -1, 31 },
-    /* year >= 2007: Second March Sunday - First November Sunday */
-    { 2, 1, 31, 10, 0, 30 }
-};
-
 PR_IMPLEMENT(PRTimeParameters)
 PR_USPacificTimeParameters(const PRExplodedTime *gmt)
 {
-    const DSTParams *dst;
     PRTimeParameters retVal;
     PRExplodedTime st;
 
@@ -865,51 +804,61 @@ PR_USPacificTimeParameters(const PRExplodedTime *gmt)
     /* Apply the offset to GMT to obtain the local standard time */
     ApplySecOffset(&st, retVal.tp_gmt_offset);
 
-    if (st.tm_year < 2007) { /* first April Sunday - Last October Sunday */
-	dst = &dstParams[0];
-    } else {                 /* Second March Sunday - First November Sunday */
-	dst = &dstParams[1];
-    }
-
     /*
      * Apply the rules on standard time or GMT to obtain daylight saving
      * time offset.  In this implementation, we use the US DST rule.
      */
-    if (st.tm_month < dst->dst_start_month) {
+    if (st.tm_month < 3) {
         retVal.tp_dst_offset = 0L;
-    } else if (st.tm_month == dst->dst_start_month) {
-	int NthSun = NthSunday(st.tm_mday, st.tm_wday, 
-			       dst->dst_start_Nth_Sunday, 
-			       dst->dst_start_month_ndays);
-	if (st.tm_mday < NthSun) {              /* Before starting Sunday */
-	    retVal.tp_dst_offset = 0L;
-        } else if (st.tm_mday == NthSun) {      /* Starting Sunday */
-	    /* 01:59:59 PST -> 03:00:00 PDT */
-	    if (st.tm_hour < 2) {
-		retVal.tp_dst_offset = 0L;
-	    } else {
-		retVal.tp_dst_offset = 3600L;
-	    }
-	} else {                                /* After starting Sunday */
-	    retVal.tp_dst_offset = 3600L;
+    } else if (st.tm_month == 3) {
+        if (st.tm_wday == 0) {
+            /* A Sunday */
+            if (st.tm_mday <= 7) {
+                /* First Sunday */
+                /* 01:59:59 PST -> 03:00:00 PDT */
+                if (st.tm_hour < 2) {
+                    retVal.tp_dst_offset = 0L;
+                } else {
+                    retVal.tp_dst_offset = 3600L;
+                }
+            } else {
+                /* Not first Sunday */
+                retVal.tp_dst_offset = 3600L;
+            }
+        } else {
+            /* Not a Sunday.  See if before first Sunday or after */
+            if (st.tm_wday + 1 <= st.tm_mday) {
+                /* After first Sunday */
+                retVal.tp_dst_offset = 3600L;
+            } else {
+                /* Before first Sunday */
+                retVal.tp_dst_offset = 0L;
+            } 
         }
-    } else if (st.tm_month < dst->dst_end_month) {
+    } else if (st.tm_month < 9) {
         retVal.tp_dst_offset = 3600L;
-    } else if (st.tm_month == dst->dst_end_month) {
-	int NthSun = NthSunday(st.tm_mday, st.tm_wday, 
-			       dst->dst_end_Nth_Sunday, 
-			       dst->dst_end_month_ndays);
-	if (st.tm_mday < NthSun) {              /* Before ending Sunday */
-	    retVal.tp_dst_offset = 3600L;
-        } else if (st.tm_mday == NthSun) {      /* Ending Sunday */
-	    /* 01:59:59 PDT -> 01:00:00 PST */
-	    if (st.tm_hour < 1) {
-		retVal.tp_dst_offset = 3600L;
-	    } else {
-		retVal.tp_dst_offset = 0L;
-	    }
-	} else {                                /* After ending Sunday */
-	    retVal.tp_dst_offset = 0L;
+    } else if (st.tm_month == 9) {
+        if (st.tm_wday == 0) {
+            if (31 - st.tm_mday < 7) {
+                /* Last Sunday */
+                /* 01:59:59 PDT -> 01:00:00 PST */
+                if (st.tm_hour < 1) {
+                    retVal.tp_dst_offset = 3600L;
+                } else {
+                    retVal.tp_dst_offset = 0L;
+                }
+            } else {
+                /* Not last Sunday */
+                retVal.tp_dst_offset = 3600L;
+            }
+        } else {
+            /* See if before or after last Sunday */
+            if (7 - st.tm_wday <= 31 - st.tm_mday) {
+                /* before last Sunday */
+                retVal.tp_dst_offset = 3600L;
+            } else {
+                retVal.tp_dst_offset = 0L;
+            }
         }
     } else {
         retVal.tp_dst_offset = 0L;
@@ -1290,9 +1239,13 @@ PR_ParseTimeString(
                                 else
                                   tmp_hour = (rest[0]-'0');
 
+                                while (*rest && *rest != ':')
+                                  rest++;
+                                rest++;
+
                                 /* move over the colon, and parse minutes */
 
-                                rest = ++end;
+                                end = rest + 1;
                                 while (*end >= '0' && *end <= '9')
                                   end++;
 

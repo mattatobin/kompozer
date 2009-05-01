@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,17 +22,18 @@
  * Contributor(s):
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include <stdio.h>
@@ -55,6 +56,7 @@
 #include "nsString.h"
 
 NS_DEFINE_CID(kUnicharUtilCID, NS_UNICHARUTIL_CID);
+NS_DEFINE_IID(kCaseConversionIID, NS_ICASECONVERSION_IID);
 NS_DEFINE_CID(kEntityConverterCID, NS_ENTITYCONVERTER_CID);
 NS_DEFINE_CID(kSaveAsCharsetCID, NS_SAVEASCHARSET_CID);
 NS_DEFINE_CID(kUnicodeNormalizerCID, NS_UNICODE_NORMALIZER_CID);
@@ -197,7 +199,7 @@ static PRUnichar t3result[T3LEN+1] =  {
   0x00  
 };
 // test data for ToTitle 
-static PRUnichar t4data  [T4LEN+2] =  {
+static PRUnichar t4data  [T4LEN+1] =  {
   0x0031 ,  //  0
   0x0019 ,  //  1
   0x0043 ,  //  2
@@ -227,11 +229,10 @@ static PRUnichar t4data  [T4LEN+2] =  {
   0x01F1 ,  // 26
   0x01F2 ,  // 27
   0x01F3 ,  // 28
-  0x0041 ,  // Dummy entry to prevent overflow
   0x00  
 };
 // expected result for ToTitle 
-static PRUnichar t4result[T4LEN+2] =  {
+static PRUnichar t4result[T4LEN+1] =  {
   0x0031 ,  //  0
   0x0019 ,  //  1
   0x0043 ,  //  2
@@ -239,7 +240,7 @@ static PRUnichar t4result[T4LEN+2] =  {
   0x00C8 ,  //  4
   0x00C9 ,  //  5
   0x0147 ,  //  6
-  0x01C4 ,  //  7
+  0x01C5 ,  //  7
   0x01C5 ,  //  8
   0x01C5 ,  //  9
   0x03A0 ,  // 10
@@ -252,16 +253,15 @@ static PRUnichar t4result[T4LEN+2] =  {
   0x5189 ,  // 17
   0xC013 ,  // 18
   0xFF32 ,  // 19
-  0x01C7 ,  // 20
+  0x01C8 ,  // 20
   0x01C8 ,  // 21
   0x01C8 ,  // 22
-  0x01CA ,  // 23
+  0x01CB ,  // 23
   0x01CB ,  // 24
   0x01CB ,  // 25
-  0x01F1 ,  // 26
+  0x01F2 ,  // 26
   0x01F2 ,  // 27
   0x01F2 ,  // 28
-  0x0041 ,  // Dummy entry to prevent overflow
   0x00  
 };
 
@@ -272,16 +272,20 @@ void TestCaseConversion()
    printf("==============================\n");
    nsICaseConversion *t = NULL;
    nsresult res;
-   res = CallGetService(kUnicharUtilCID, &t);
+   res = nsServiceManager::GetService(kUnicharUtilCID,
+                                kCaseConversionIID,
+                                (nsISupports**) &t);
            
    printf("Test 1 - GetService():\n");
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t1st GetService failed\n");
    } else {
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kUnicharUtilCID, t);
    }
 
-   res = CallGetService(kUnicharUtilCID, &t);
+   res = nsServiceManager::GetService(kUnicharUtilCID,
+                                kCaseConversionIID,
+                                (nsISupports**) &t);
            
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t2nd GetService failed\n");
@@ -359,30 +363,10 @@ void TestCaseConversion()
        }
     }
 
-    /* 
-     * It would be pointless to test ToTitle() with the whole buffer, since
-     *  the expected result would be that only the first character would be
-     *  transformed. Instead, pass a series of 2-character buffers starting
-     *  with each character of the test cases, and check that the first
-     *  character is transformed as expected and the second remains unchanged
-     */
      printf("Test 7 - ToTitle(PRUnichar*, PRUnichar*, PRUint32):\n");
-     for (i = 0; i < T4LEN; i++)
-     {
-       PRUnichar* titleTest = t4data + i;
-       res = t->ToTitle(titleTest, buf, 2);
-       if(NS_FAILED(res)) {
-         printf("\tFailed!! return value != NS_OK\n");
-       } else {
-         if (buf[0] != t4result[i] || buf[1] != t4data[i + 1])
-         {
-           printf("\tFailed!! result unexpected %d\n", i);
-           break;
-         }
-       }
-     }
+     printf("!!! To Be Implemented !!!\n");
 
-   NS_RELEASE(t);
+   res = nsServiceManager::ReleaseService(kUnicharUtilCID, t);
    }
    printf("==============================\n");
    printf("Finish nsICaseConversion Test \n");
@@ -408,8 +392,10 @@ static void TestEntityConversion(PRUint32 version)
   uChar = (PRUnichar) 9830; //
   inString.Append(&uChar, 1);
 
-  nsCOMPtr <nsIEntityConverter> entityConv = do_CreateInstance(kEntityConverterCID, &res);;
+  nsCOMPtr <nsIEntityConverter> entityConv;
+  res = nsComponentManager::CreateInstance(kEntityConverterCID, NULL, NS_GET_IID(nsIEntityConverter), getter_AddRefs(entityConv));
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n"); return;}
+
 
   // convert char by char
   for (i = 0; i < inString.Length(); i++) {
@@ -456,7 +442,8 @@ static void TestSaveAsCharset()
   }
   printf("\n");
 
-  nsCOMPtr <nsISaveAsCharset> saveAsCharset = do_CreateInstance(kSaveAsCharsetCID, &res);
+  nsCOMPtr <nsISaveAsCharset> saveAsCharset;
+  res = nsComponentManager::CreateInstance(kSaveAsCharsetCID, NULL, NS_GET_IID(nsISaveAsCharset), getter_AddRefs(saveAsCharset));
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   
   printf("ISO-8859-1 attr_plainTextDefault entityNone\n");
@@ -562,16 +549,20 @@ void TestNormalization()
    printf("==============================\n");
    nsIUnicodeNormalizer *t = NULL;
    nsresult res;
-   res = CallGetService(kUnicodeNormalizerCID, &t);
+   res = nsServiceManager::GetService(kUnicodeNormalizerCID,
+                                      NS_GET_IID(nsIUnicodeNormalizer),
+                                      (nsISupports**) &t);
            
    printf("Test 1 - GetService():\n");
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t1st Norm GetService failed\n");
    } else {
-     NS_RELEASE(t);
+     res = nsServiceManager::ReleaseService(kUnicodeNormalizerCID, t);
    }
 
-   res = CallGetService(kUnicodeNormalizerCID, &t);
+   res = nsServiceManager::GetService(kUnicodeNormalizerCID,
+                                NS_GET_IID(nsIUnicodeNormalizer),
+                                (nsISupports**) &t);
            
    if(NS_FAILED(res) || ( t == NULL ) ) {
      printf("\t2nd GetService failed\n");
@@ -585,7 +576,8 @@ void TestNormalization()
       printf(" Failed in NFD UnicodeNormalizer test. \n");
     }
 
-    NS_RELEASE(t);
+
+    res = nsServiceManager::ReleaseService(kUnicodeNormalizerCID, t);
    }
    printf("==============================\n");
    printf("Finish nsIUnicodeNormalizer Test \n");
@@ -620,6 +612,13 @@ int main(int argc, char** argv) {
 
    // --------------------------------------------
    printf("Finish All The Test Cases\n");
+   nsresult res = NS_OK;
+   res = nsComponentManager::FreeLibraries();
 
+   if(NS_FAILED(res))
+      printf("nsComponentManager failed\n");
+   else
+      printf("nsComponentManager FreeLibraries Done\n");
    return 0;
 }
+

@@ -1,39 +1,36 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1998-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "primpl.h"
 
@@ -47,7 +44,7 @@
 PRBool IsValidNetAddr(const PRNetAddr *addr)
 {
     if ((addr != NULL)
-#if defined(XP_UNIX) || defined(XP_OS2_EMX)
+#if defined(XP_UNIX) || defined(XP_OS2)
 	    && (addr->raw.family != PR_AF_LOCAL)
 #endif
 	    && (addr->raw.family != PR_AF_INET6)
@@ -64,7 +61,7 @@ static PRBool IsValidNetAddrLen(const PRNetAddr *addr, PRInt32 addr_len)
      * is not uniform, so we don't check it.
      */
     if ((addr != NULL)
-#if defined(XP_UNIX) || defined(XP_OS2_EMX)
+#if defined(XP_UNIX) || defined(XP_OS2)
             && (addr->raw.family != AF_UNIX)
 #endif
             && (PR_NETADDR_SIZE(addr) != addr_len)) {
@@ -199,13 +196,6 @@ PRFileDesc *fd;
 	if (fd != NULL) {
 		_PR_MD_MAKE_NONBLOCK(fd);
 		_PR_MD_INIT_FD_INHERITABLE(fd, PR_TRUE);
-#ifdef _PR_NEED_SECRET_AF
-		/* this means we can only import IPv4 sockets here.
-		 * but this is what the function in ptio.c does.
-		 * We need a way to import IPv6 sockets, too.
-		 */
-		fd->secret->af = AF_INET;
-#endif
 	} else
 		_PR_MD_CLOSE_SOCKET(osfd);
 	return(fd);
@@ -520,9 +510,6 @@ PRIntervalTime timeout)
 #ifdef _PR_INET6
 		if (AF_INET6 == addr->raw.family)
         	addr->raw.family = PR_AF_INET6;
-#endif
-#ifdef _PR_NEED_SECRET_AF
-		fd2->secret->af = fd->secret->af;
 #endif
 	}
 	return fd2;
@@ -953,9 +940,6 @@ PRIntervalTime timeout)
 			if (AF_INET6 == *raddr->raw.family)
         		*raddr->raw.family = PR_AF_INET6;
 #endif
-#ifdef _PR_NEED_SECRET_AF
-			(*nd)->secret->af = sd->secret->af;
-#endif
 		}
 	}
 	return rv;
@@ -1006,9 +990,6 @@ void *callbackArg)
 #ifdef _PR_INET6
 			if (AF_INET6 == *raddr->raw.family)
         		*raddr->raw.family = PR_AF_INET6;
-#endif
-#ifdef _PR_NEED_SECRET_AF
-			(*nd)->secret->af = sd->secret->af;
 #endif
 		}
 	}
@@ -1292,7 +1273,7 @@ PR_IMPLEMENT(PRFileDesc*) PR_Socket(PRInt32 domain, PRInt32 type, PRInt32 proto)
 	if (!_pr_initialized) _PR_ImplicitInitialization();
 	if (PR_AF_INET != domain
 			&& PR_AF_INET6 != domain
-#if defined(XP_UNIX) || defined(XP_OS2_EMX)
+#if defined(XP_UNIX) || defined(XP_OS2)
 			&& PR_AF_LOCAL != domain
 #endif
 			) {
@@ -1328,9 +1309,6 @@ PR_IMPLEMENT(PRFileDesc*) PR_Socket(PRInt32 domain, PRInt32 type, PRInt32 proto)
 	if (fd != NULL) {
 		_PR_MD_MAKE_NONBLOCK(fd);
 		_PR_MD_INIT_FD_INHERITABLE(fd, PR_FALSE);
-#ifdef _PR_NEED_SECRET_AF
-		fd->secret->af = domain;
-#endif
 #if defined(_PR_INET6_PROBE) || !defined(_PR_INET6)
 		/*
 		 * For platforms with no support for IPv6 

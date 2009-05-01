@@ -60,7 +60,7 @@ static const nsModuleComponentInfo components[] = {
   {
     "Download",
     NS_DOWNLOAD_CID,
-    NS_TRANSFER_CONTRACTID,
+    NS_DOWNLOAD_CONTRACTID,
     CDownloadConstructor
   },
   {

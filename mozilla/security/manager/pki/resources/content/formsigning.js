@@ -65,6 +65,8 @@ function onLoad()
   }
   setDetails();
   document.getElementById("pw").focus();
+  window.sizeToContent();
+  doSetOKCancel(doOK, doCancel, null, null);
 }
 
 function setDetails()
@@ -89,11 +91,11 @@ function doOK()
   dialogParams.SetInt(1, index);
   var password = document.getElementById("pw").value;
   dialogParams.SetString(0, password);
-  return true;
+  window.close();
 }
 
 function doCancel()
 {
   dialogParams.SetInt(0, 0);
-  return true;
+  window.close();
 }

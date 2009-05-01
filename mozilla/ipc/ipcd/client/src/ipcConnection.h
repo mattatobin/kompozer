@@ -42,14 +42,9 @@
 
 class ipcMessage;
 
-#define IPC_METHOD_PRIVATE_(type)   NS_HIDDEN_(type)
-#define IPC_METHOD_PRIVATE          IPC_METHOD_PRIVATE_(nsresult)
-
 /* ------------------------------------------------------------------------- */
 /* Platform specific IPC connection API.
  */
-
-typedef void (* ipcCallbackFunc)(void *);
 
 /**
  * IPC_Connect
@@ -62,7 +57,7 @@ typedef void (* ipcCallbackFunc)(void *);
  *
  * NOTE: This function must be called on the main thread.
  */
-IPC_METHOD_PRIVATE IPC_Connect(const char *daemonPath);
+nsresult IPC_Connect(const char *daemonPath);
 
 /**
  * IPC_Disconnect
@@ -73,7 +68,7 @@ IPC_METHOD_PRIVATE IPC_Connect(const char *daemonPath);
  *
  * NOTE: This function must be called on the main thread.
  */
-IPC_METHOD_PRIVATE IPC_Disconnect();
+nsresult IPC_Disconnect();
 
 /**
  * IPC_SendMsg
@@ -87,21 +82,7 @@ IPC_METHOD_PRIVATE IPC_Disconnect();
  *
  * NOTE: This function may be called on any thread.
  */
-IPC_METHOD_PRIVATE IPC_SendMsg(ipcMessage *msg);
-
-/**
- * IPC_DoCallback
- *
- * This function executes a callback function on the same background thread
- * that calls IPC_OnConnectionEnd and IPC_OnMessageAvailable.
- *
- * If this function succeeds, then the caller is guaranteed that |func| will
- * be called.  This guarantee is important because it allows the caller to
- * free any memory associated with |arg| once |func| has been called.
- *
- * NOTE: This function may be called on any thread.
- */
-IPC_METHOD_PRIVATE IPC_DoCallback(ipcCallbackFunc func, void *arg);
+nsresult IPC_SendMsg(ipcMessage *msg);
 
 /* ------------------------------------------------------------------------- */
 /* Cross-platform IPC connection methods.
@@ -111,13 +92,14 @@ IPC_METHOD_PRIVATE IPC_DoCallback(ipcCallbackFunc func, void *arg);
  * IPC_SpawnDaemon
  *
  * This function launches the IPC daemon process.  It is called by the platform
- * specific IPC_Connect implementation.  It should not return until the daemon
- * process is ready to receive a client connection or an error occurs.
+ * specific IPC_Connect implementation.  This function may be called on any
+ * thread.  It should not return until the daemon process is ready to receive
+ * a client connection or an error occurs.
  *
  * @param daemonPath
  *        Specifies the path to the IPC daemon executable.
  */
-IPC_METHOD_PRIVATE IPC_SpawnDaemon(const char *daemonPath);
+nsresult IPC_SpawnDaemon(const char *daemonPath);
 
 /* ------------------------------------------------------------------------- */
 /* IPC connection callbacks (not implemented by the connection code).
@@ -133,7 +115,7 @@ IPC_METHOD_PRIVATE IPC_SpawnDaemon(const char *daemonPath);
  * described by the |error| parameter.  If |error| is NS_OK, then it means the
  * connection was closed in response to a call to IPC_Disconnect.
  */
-IPC_METHOD_PRIVATE_(void) IPC_OnConnectionEnd(nsresult error);
+void IPC_OnConnectionEnd(nsresult error);
 
 /**
  * IPC_OnMessageAvailable
@@ -142,6 +124,6 @@ IPC_METHOD_PRIVATE_(void) IPC_OnConnectionEnd(nsresult error);
  * daemon.  The ipcMessage object, |msg|, must be deleted by the implementation
  * of IPC_OnMessageAvailable when the object is no longer needed.
  */
-IPC_METHOD_PRIVATE_(void) IPC_OnMessageAvailable(ipcMessage *msg);
+void IPC_OnMessageAvailable(ipcMessage *msg);
 
 #endif // ipcConnection_h__

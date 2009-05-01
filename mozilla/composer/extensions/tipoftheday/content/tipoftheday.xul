@@ -74,9 +74,9 @@
     <checkbox id="tipoftheday-bottom-checkbox" label="&startupCheckbox.label;"
               flex="1" oncommand="doCheckbox(this);"/>
     <spacer flex="1"/>
-    <button id="tipoftheday-previous-button" label="« &previousTipButton.label;"
+    <button id="tipoftheday-previous-button" label="&previousTipButton.label;"
             oncommand="doNextTip(-1);"/>
-    <button id="tipoftheday-next-button" label="&nextTipButton.label; »"
+    <button id="tipoftheday-next-button" label="&nextTipButton.label;"
             oncommand="doNextTip(1);"/>
     <button id="tipoftheday-close-button" label="&closeTipButton.label;"
             oncommand="CloseTip();"/>

@@ -134,13 +134,13 @@ nsCOMArray_base::RemoveObject(nsISupports *aObject)
 PRBool
 nsCOMArray_base::RemoveObjectAt(PRInt32 aIndex)
 {
-    if (PRUint32(aIndex) < PRUint32(Count())) {
-        nsISupports* element = ObjectAt(aIndex);
-        NS_IF_RELEASE(element);
-
-        return mArray.RemoveElementAt(aIndex);
+    nsISupports* element = ObjectAt(aIndex);
+    if (element) {
+        PRBool result = mArray.RemoveElementAt(aIndex);
+        if (result)
+            NS_IF_RELEASE(element);
+        return result;
     }
-
     return PR_FALSE;
 }
 

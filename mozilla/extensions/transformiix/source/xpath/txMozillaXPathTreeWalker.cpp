@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is mozilla.org code.
  *
  * The Initial Developer of the Original Code is
  * Netscape Communications Corporation.
@@ -20,7 +20,8 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
+ *   Peter Van der Beken <peterv@netscape.com>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -532,6 +533,7 @@ txXPathNodeUtils::getNamespaceID(const txXPathNode& aNode)
 void
 txXPathNodeUtils::getNamespaceURI(const txXPathNode& aNode, nsAString& aURI)
 {
+    extern nsINameSpaceManager* gTxNameSpaceManager;
     gTxNameSpaceManager->GetNameSpaceURI(getNamespaceID(aNode), aURI);
 }
 
@@ -633,7 +635,9 @@ txXPathNodeUtils::isWhitespace(const txXPathNode& aNode)
     if (!textCont) {
         return PR_TRUE;
     }
-    return textCont->IsOnlyWhitespace();
+    PRBool onlyWhitespace;
+    textCont->IsOnlyWhitespace(&onlyWhitespace);
+    return onlyWhitespace;
 }
 
 /* static */
@@ -886,25 +890,61 @@ txXPathNativeNode::createXPathNode(nsIDOMNode* aNode)
 
     if (nodeType == nsIDOMNode::ATTRIBUTE_NODE) {
         nsCOMPtr<nsIAttribute> attr = do_QueryInterface(aNode);
-        NS_ASSERTION(attr, "doesn't implement nsIAttribute");
+        if (attr) {
+            nsIContent *parent = attr->GetContent();
+            nsINodeInfo *nodeInfo = attr->NodeInfo();
 
-        nsINodeInfo *nodeInfo = attr->NodeInfo();
-        nsIContent *parent = attr->GetContent();
-        if (!parent) {
-            return nsnull;
-        }
-
-        nsCOMPtr<nsIAtom> attName, attPrefix;
-        PRInt32 attNS;
-
-        PRUint32 i, total = parent->GetAttrCount();
-        for (i = 0; i < total; ++i) {
-            parent->GetAttrNameAt(i, &attNS, getter_AddRefs(attName),
-                                  getter_AddRefs(attPrefix));
-            if (nodeInfo->Equals(attName, attNS)) {
-                return new txXPathNode(parent, i);
+            nsCOMPtr<nsIAtom> attName, attPrefix;
+            PRInt32 attNS;
+    
+            PRUint32 i, total = parent->GetAttrCount();
+            for (i = 0; i < total; ++i) {
+                parent->GetAttrNameAt(i, &attNS, getter_AddRefs(attName),
+                                      getter_AddRefs(attPrefix));
+                if (nodeInfo->Equals(attName, attNS)) {
+                    return new txXPathNode(parent, i);
+                }
             }
         }
+        else {
+            // XUL attributes don't implement nsIAttribute, so this sucks.
+            nsCOMPtr<nsIDOMAttr> attrNode = do_QueryInterface(aNode);
+            NS_ENSURE_TRUE(attrNode, nsnull);
+
+            nsCOMPtr<nsIDOMElement> element;
+            attrNode->GetOwnerElement(getter_AddRefs(element));
+            nsCOMPtr<nsIContent> parent = do_QueryInterface(element);
+            NS_ENSURE_TRUE(parent, nsnull);
+
+            nsAutoString name, namespaceURI;
+
+            nsresult rv = aNode->GetLocalName(name);
+            NS_ENSURE_SUCCESS(rv, nsnull);
+
+            nsCOMPtr<nsIAtom> nameAtom = do_GetAtom(name);
+            NS_ENSURE_TRUE(nameAtom, nsnull);
+
+            rv = aNode->GetNamespaceURI(namespaceURI);
+            NS_ENSURE_SUCCESS(rv, nsnull);
+
+            PRInt32 namespaceID;
+            rv = gTxNameSpaceManager->GetNameSpaceID(namespaceURI,
+                                                     &namespaceID);
+            NS_ENSURE_SUCCESS(rv, nsnull);
+
+            nsCOMPtr<nsIAtom> attName, attPrefix;
+            PRInt32 attNS;
+
+            PRUint32 i, total = parent->GetAttrCount();
+            for (i = 0; i < total; ++i) {
+                parent->GetAttrNameAt(i, &attNS, getter_AddRefs(attName),
+                                      getter_AddRefs(attPrefix));
+                if (attName == nameAtom && attNS == namespaceID) {
+                    return new txXPathNode(parent, i);
+                }
+            }
+        }
+
 
         NS_ERROR("Couldn't find the attribute in its parent!");
 
@@ -947,6 +987,7 @@ txXPathNativeNode::getNode(const txXPathNode& aNode, nsIDOMNode** aResult)
                                   getter_AddRefs(prefix));
 
     nsAutoString namespaceURI, localname;
+    extern nsINameSpaceManager* gTxNameSpaceManager;
     gTxNameSpaceManager->GetNameSpaceURI(namespaceID, namespaceURI);
     name->ToString(localname);
 

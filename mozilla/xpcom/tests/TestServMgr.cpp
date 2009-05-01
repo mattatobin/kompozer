@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -23,16 +23,16 @@
  *   Pierre Phaneuf <pp@ludusdesign.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -53,7 +53,8 @@ BeginTest(int testNumber)
 {
     nsresult err;
     NS_ASSERTION(myServ == NULL, "myServ not reset");
-    err = CallGetService(kIMyServiceCID, &myServ);
+    err = nsServiceManager::GetService(kIMyServiceCID, NS_GET_IID(IMyService),
+                                       (nsISupports**)&myServ);
     return err;
 }
 
@@ -66,7 +67,9 @@ EndTest(int testNumber)
         err = myServ->Doit();
         if (err != NS_OK) return err;
 
-        NS_RELEASE(myServ);
+        err = nsServiceManager::ReleaseService(kIMyServiceCID, myServ);
+        if (err != NS_OK) return err;
+        myServ = NULL;
     }
     
     printf("test %d succeeded\n", testNumber);
@@ -90,22 +93,17 @@ SimpleTest(int testNumber)
 nsresult
 AsyncShutdown(int testNumber)
 {
-    nsresult err = NS_OK;
+    nsresult err;
 
     // If the AsyncShutdown was truly asynchronous and happened on another
     // thread, we'd have to protect all accesses to myServ throughout this
     // code with a monitor.
 
-    // XXX-darin: say what?!?
-
-    /*
     err = nsServiceManager::UnregisterService(kIMyServiceCID);
     if (err == NS_ERROR_SERVICE_NOT_AVAILABLE) {
         printf("async shutdown -- service not found\n");
         return NS_OK;
     }
-    */
-
     return err;
 }
 
@@ -127,7 +125,8 @@ AsyncNoShutdownTest(int testNumber)
     // Create some other user of kIMyServiceCID, preventing it from
     // really going away:
     IMyService* otherClient;
-    err = CallGetService(kIMyServiceCID, &otherClient);
+    err = nsServiceManager::GetService(kIMyServiceCID, NS_GET_IID(IMyService),
+                                       (nsISupports**)&otherClient);
     if (err != NS_OK) return err;
 
     err = AsyncShutdown(testNumber);
@@ -135,7 +134,7 @@ AsyncNoShutdownTest(int testNumber)
     err = EndTest(testNumber);
 
     // Finally, release the other client.
-    NS_RELEASE(otherClient);
+    err = nsServiceManager::ReleaseService(kIMyServiceCID, otherClient);
 
     return err;
 }

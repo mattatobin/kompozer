@@ -14,7 +14,7 @@
  *
  * The Original Code is XPCOM Array implementation.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code
  * Netscape Communications Corp.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.

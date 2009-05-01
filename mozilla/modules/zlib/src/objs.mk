@@ -21,20 +21,22 @@
 
 MODULES_ZLIB_SRC_LCSRCS = \
 		adler32.c \
-		compress.c \
 		crc32.c \
-		deflate.c \
-		gzio.c \
-		infback.c \
-		inffast.c \
-		inflate.c \
-		inftrees.c \
-		trees.c \
+		compress.c \
 		uncompr.c \
+		deflate.c \
+		trees.c \
+		gzio.c \
 		zutil.c \
+		inflate.c \
+		infblock.c \
+		inftrees.c \
+		infcodes.c \
+		infutil.c \
+		inffast.c \
 		$(NULL)
 
-MODULES_ZLIB_SRC_LEXPORTS = zlib.h zconf.h mozzconf.h
+MODULES_ZLIB_SRC_LEXPORTS = zlib.h zconf.h
 
 MODULES_ZLIB_SRC_CSRCS := $(addprefix $(topsrcdir)/modules/zlib/src/, $(MODULES_ZLIB_SRC_LCSRCS))
 MODULES_ZLIB_SRC_EXPORTS := $(addprefix $(topsrcdir)/modules/zlib/src/, $(MODULES_ZLIB_SRC_LEXPORTS))

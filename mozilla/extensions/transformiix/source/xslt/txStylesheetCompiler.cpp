@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -45,25 +45,24 @@
 #include "txInstructions.h"
 #include "txToplevelItems.h"
 #include "ExprParser.h"
-#include "TxLog.h"
 #include "txPatternParser.h"
 #include "txStringUtils.h"
 #include "XSLTFunctions.h"
 
-txStylesheetCompiler::txStylesheetCompiler(const nsAString& aStylesheetURI,
+txStylesheetCompiler::txStylesheetCompiler(const nsAString& aBaseURI,
                                            txACompileObserver* aObserver)
     : txStylesheetCompilerState(aObserver)
 {
-    mStatus = init(aStylesheetURI, nsnull, nsnull);
+    mStatus = init(aBaseURI, nsnull, nsnull);
 }
 
-txStylesheetCompiler::txStylesheetCompiler(const nsAString& aStylesheetURI,
+txStylesheetCompiler::txStylesheetCompiler(const nsAString& aBaseURI,
                                            txStylesheet* aStylesheet,
                                            txListIterator* aInsertPosition,
                                            txACompileObserver* aObserver)
     : txStylesheetCompilerState(aObserver)
 {
-    mStatus = init(aStylesheetURI, aStylesheet, aInsertPosition);
+    mStatus = init(aBaseURI, aStylesheet, aInsertPosition);
 }
 
 nsrefcnt
@@ -81,19 +80,6 @@ txStylesheetCompiler::Release()
         return 0;
     }
     return mRefCnt;
-}
-
-void
-txStylesheetCompiler::setBaseURI(const nsString& aBaseURI)
-{
-    NS_ASSERTION(mObjectStack.size() == 1 && !mObjectStack.peek(),
-                 "Execution already started");
-
-    if (NS_FAILED(mStatus)) {
-        return;
-    }
-
-    mElementContext->mBaseURI = aBaseURI;
 }
 
 nsresult
@@ -129,11 +115,11 @@ txStylesheetCompiler::startElement(PRInt32 aNamespaceID, nsIAtom* aLocalName,
             }
 
             if (attr->mLocalName == txXMLAtoms::xmlns) {
-                mElementContext->mMappings->mapNamespace(nsnull, attr->mValue);
+                mElementContext->mMappings->addNamespace(nsnull, attr->mValue);
             }
             else {
                 mElementContext->mMappings->
-                    mapNamespace(attr->mLocalName, attr->mValue);
+                    addNamespace(attr->mLocalName, attr->mValue);
             }
         }
     }
@@ -165,10 +151,9 @@ txStylesheetCompiler::startElement(const PRUnichar *aName,
     PRBool hasOwnNamespaceMap = PR_FALSE;
     PRInt32 i;
     for (i = 0; i < aAttrCount; ++i) {
-        rv = XMLUtils::splitExpatName(aAttrs[i * 2],
-                                      getter_AddRefs(atts[i].mPrefix),
-                                      getter_AddRefs(atts[i].mLocalName),
-                                      &atts[i].mNamespaceID);
+        rv = XMLUtils::splitXMLName(nsDependentString(aAttrs[i * 2]),
+                                    getter_AddRefs(atts[i].mPrefix),
+                                    getter_AddRefs(atts[i].mLocalName));
         NS_ENSURE_SUCCESS(rv, rv);
         atts[i].mValue.Append(aAttrs[i * 2 + 1]);
 
@@ -176,7 +161,7 @@ txStylesheetCompiler::startElement(const PRUnichar *aName,
         if (atts[i].mPrefix == txXMLAtoms::xmlns) {
             prefixToBind = atts[i].mLocalName;
         }
-        else if (atts[i].mNamespaceID == kNameSpaceID_XMLNS) {
+        else if (!atts[i].mPrefix && atts[i].mLocalName == txXMLAtoms::xmlns) {
             prefixToBind = txXMLAtoms::_empty;
         }
 
@@ -193,16 +178,37 @@ txStylesheetCompiler::startElement(const PRUnichar *aName,
             }
 
             rv = mElementContext->mMappings->
-                mapNamespace(prefixToBind, atts[i].mValue);
+                addNamespace(prefixToBind, atts[i].mValue);
             NS_ENSURE_SUCCESS(rv, rv);
         }
     }
 
+    for (i = 0; i < aAttrCount; ++i) {
+        if (atts[i].mPrefix && atts[i].mPrefix != txXMLAtoms::xmlns) {
+            atts[i].mNamespaceID =
+                mElementContext->mMappings->lookupNamespace(atts[i].mPrefix);
+            NS_ENSURE_TRUE(atts[i].mNamespaceID != kNameSpaceID_Unknown,
+                           NS_ERROR_FAILURE);
+        }
+        else if (atts[i].mPrefix == txXMLAtoms::xmlns || 
+                 (!atts[i].mPrefix && 
+                  atts[i].mLocalName == txXMLAtoms::xmlns)) {
+            atts[i].mNamespaceID = kNameSpaceID_XMLNS;
+        }
+        else {
+            atts[i].mNamespaceID = kNameSpaceID_None;
+        }
+    }
+
     nsCOMPtr<nsIAtom> prefix, localname;
-    PRInt32 namespaceID;
-    rv = XMLUtils::splitExpatName(aName, getter_AddRefs(prefix),
-                                  getter_AddRefs(localname), &namespaceID);
+    rv = XMLUtils::splitXMLName(nsDependentString(aName),
+                                getter_AddRefs(prefix),
+                                getter_AddRefs(localname));
     NS_ENSURE_SUCCESS(rv, rv);
+
+    PRInt32 namespaceID = mElementContext->mMappings->lookupNamespace(prefix);
+
+    NS_ENSURE_TRUE(namespaceID != kNameSpaceID_Unknown, NS_ERROR_FAILURE);
 
     PRInt32 idOffset = aIDOffset;
     if (idOffset > 0) {
@@ -298,7 +304,7 @@ txStylesheetCompiler::startElementInternal(PRInt32 aNamespaceID,
             rv = ensureNewElementContext();
             NS_ENSURE_SUCCESS(rv, rv);
 
-            if (attr->mValue.EqualsLiteral("1.0")) {
+            if (attr->mValue.Equals(NS_LITERAL_STRING("1.0"))) {
                 mElementContext->mForwardsCompatibleParsing = MB_FALSE;
             }
             else {
@@ -407,7 +413,7 @@ txStylesheetCompiler::doneLoading()
 {
     PR_LOG(txLog::xslt, PR_LOG_ALWAYS,
            ("Compiler::doneLoading: %s\n",
-            NS_LossyConvertUCS2toASCII(mStylesheetURI).get()));
+            NS_LossyConvertUCS2toASCII(mURI).get()));
     if (NS_FAILED(mStatus)) {
         return mStatus;
     }
@@ -423,7 +429,7 @@ txStylesheetCompiler::cancel(nsresult aError, const PRUnichar *aErrorText,
 {
     PR_LOG(txLog::xslt, PR_LOG_ALWAYS,
            ("Compiler::cancel: %s, module: %d, code %d\n",
-            NS_LossyConvertUCS2toASCII(mStylesheetURI).get(),
+            NS_LossyConvertUCS2toASCII(mURI).get(),
             NS_ERROR_GET_MODULE(aError),
             NS_ERROR_GET_CODE(aError)));
     if (NS_SUCCEEDED(mStatus)) {
@@ -446,18 +452,16 @@ txStylesheetCompiler::getStylesheet()
 
 nsresult
 txStylesheetCompiler::loadURI(const nsAString& aUri,
-                              const nsAString& aReferrerUri,
                               txStylesheetCompiler* aCompiler)
 {
     PR_LOG(txLog::xslt, PR_LOG_ALWAYS,
            ("Compiler::loadURI forwards %s thru %s\n",
             NS_LossyConvertUCS2toASCII(aUri).get(),
-            NS_LossyConvertUCS2toASCII(mStylesheetURI).get()));
-    if (mStylesheetURI.Equals(aUri)) {
+            NS_LossyConvertUCS2toASCII(mURI).get()));
+    if (mURI.Equals(aUri)) {
         return NS_ERROR_XSLT_LOAD_RECURSION;
     }
-    return mObserver ? mObserver->loadURI(aUri, aReferrerUri, aCompiler) :
-                       NS_ERROR_FAILURE;
+    return mObserver ? mObserver->loadURI(aUri, aCompiler) : NS_ERROR_FAILURE;
 }
 
 void
@@ -567,21 +571,21 @@ txStylesheetCompilerState::txStylesheetCompilerState(txACompileObserver* aObserv
 }
 
 nsresult
-txStylesheetCompilerState::init(const nsAString& aStylesheetURI,
+txStylesheetCompilerState::init(const nsAString& aBaseURI,
                                 txStylesheet* aStylesheet,
                                 txListIterator* aInsertPosition)
 {
     NS_ASSERTION(!aStylesheet || aInsertPosition,
                  "must provide insertposition if loading subsheet");
-    mStylesheetURI = aStylesheetURI;
+    mURI = aBaseURI;
     // Check for fragment identifier of an embedded stylesheet.
-    PRInt32 fragment = aStylesheetURI.FindChar('#') + 1;
+    PRInt32 fragment = aBaseURI.FindChar('#') + 1;
     if (fragment > 0) {
-        PRInt32 fragmentLength = aStylesheetURI.Length() - fragment;
+        PRInt32 fragmentLength = aBaseURI.Length() - fragment;
         if (fragmentLength > 0) {
             // This is really an embedded stylesheet, not just a
             // "url#". We may want to unescape the fragment.
-            mTarget = Substring(aStylesheetURI, (PRUint32)fragment,
+            mTarget = Substring(aBaseURI, (PRUint32)fragment,
                                 fragmentLength);
             mEmbedStatus = eNeedEmbed;
             mHandlerTable = gTxEmbedHandler;
@@ -606,7 +610,7 @@ txStylesheetCompilerState::init(const nsAString& aStylesheetURI,
         mIsTopCompiler = PR_TRUE;
     }
    
-    mElementContext = new txElementContext(aStylesheetURI);
+    mElementContext = new txElementContext(aBaseURI);
     NS_ENSURE_TRUE(mElementContext && mElementContext->mMappings,
                    NS_ERROR_OUT_OF_MEMORY);
 
@@ -715,6 +719,12 @@ txStylesheetCompilerState::popPtr()
     return value;
 }
 
+MBool
+txStylesheetCompilerState::fcp()
+{
+    return mElementContext->mForwardsCompatibleParsing;
+}
+
 nsresult
 txStylesheetCompilerState::addToplevelItem(txToplevelItem* aItem)
 {
@@ -763,7 +773,7 @@ txStylesheetCompilerState::loadIncludedStylesheet(const nsAString& aURI)
     PR_LOG(txLog::xslt, PR_LOG_ALWAYS,
            ("CompilerState::loadIncludedStylesheet: %s\n",
             NS_LossyConvertUCS2toASCII(aURI).get()));
-    if (mStylesheetURI.Equals(aURI)) {
+    if (mURI.Equals(aURI)) {
         return NS_ERROR_XSLT_LOAD_RECURSION;
     }
     NS_ENSURE_TRUE(mObserver, NS_ERROR_NOT_IMPLEMENTED);
@@ -793,12 +803,13 @@ txStylesheetCompilerState::loadIncludedStylesheet(const nsAString& aURI)
         return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    rv = mObserver->loadURI(aURI, mStylesheetURI, compiler);
+    rv = mObserver->loadURI(aURI, compiler);
     if (NS_FAILED(rv)) {
         mChildCompilerList.RemoveElement(compiler);
+        return rv;
     }
 
-    return rv;
+    return NS_OK;
 }
 
 nsresult
@@ -808,7 +819,7 @@ txStylesheetCompilerState::loadImportedStylesheet(const nsAString& aURI,
     PR_LOG(txLog::xslt, PR_LOG_ALWAYS,
            ("CompilerState::loadImportedStylesheet: %s\n",
             NS_LossyConvertUCS2toASCII(aURI).get()));
-    if (mStylesheetURI.Equals(aURI)) {
+    if (mURI.Equals(aURI)) {
         return NS_ERROR_XSLT_LOAD_RECURSION;
     }
     NS_ENSURE_TRUE(mObserver, NS_ERROR_NOT_IMPLEMENTED);
@@ -826,12 +837,13 @@ txStylesheetCompilerState::loadImportedStylesheet(const nsAString& aURI,
         return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    nsresult rv = mObserver->loadURI(aURI, mStylesheetURI, compiler);
+    nsresult rv = mObserver->loadURI(aURI, compiler);
     if (NS_FAILED(rv)) {
         mChildCompilerList.RemoveElement(compiler);
+        return rv;
     }
 
-    return rv;  
+    return NS_OK;  
 }
 
 nsresult
@@ -868,115 +880,72 @@ txStylesheetCompilerState::resolveNamespacePrefix(nsIAtom* aPrefix,
     return (aID != kNameSpaceID_Unknown) ? NS_OK : NS_ERROR_FAILURE;
 }
 
-/**
- * Error Function to be used for unknown extension functions.
- *
- */
-class txErrorFunctionCall : public FunctionCall
-{
-public:
-    txErrorFunctionCall(nsIAtom* aName, const PRInt32 aID)
-        : mName(aName),
-          mID(aID)
-    {
-    }
-
-    TX_DECL_FUNCTION;
-
-private:
-    nsCOMPtr<nsIAtom> mName;
-    PRInt32 mID;
-};
-
-nsresult
-txErrorFunctionCall::evaluate(txIEvalContext* aContext,
-                              txAExprResult** aResult)
-{
-    *aResult = nsnull;
-
-    return NS_ERROR_XPATH_BAD_EXTENSION_FUNCTION;
-}
-
-#ifdef TX_TO_STRING
-nsresult
-txErrorFunctionCall::getNameAtom(nsIAtom** aAtom)
-{
-    NS_IF_ADDREF(*aAtom = mName);
-
-    return NS_OK;
-}
-#endif
-
 nsresult
 txStylesheetCompilerState::resolveFunctionCall(nsIAtom* aName, PRInt32 aID,
                                                FunctionCall*& aFunction)
 {
-    aFunction = nsnull;
+   aFunction = nsnull;
 
-    if (aID == kNameSpaceID_None) {
-        if (aName == txXSLTAtoms::document) {
-            aFunction = new DocumentFunctionCall(mElementContext->mBaseURI);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::key) {
-            aFunction = new txKeyFunctionCall(mElementContext->mMappings);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::formatNumber) {
-            aFunction = new txFormatNumberFunctionCall(mStylesheet,
-                                                       mElementContext->mMappings);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::current) {
-            aFunction = new CurrentFunctionCall();
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::unparsedEntityUri) {
-    
-            return NS_ERROR_NOT_IMPLEMENTED;
-        }
-        if (aName == txXSLTAtoms::generateId) {
-            aFunction = new GenerateIdFunctionCall();
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::systemProperty) {
-            aFunction = new SystemPropertyFunctionCall(mElementContext->mMappings);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::elementAvailable) {
-            aFunction =
-                new ElementAvailableFunctionCall(mElementContext->mMappings);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (aName == txXSLTAtoms::functionAvailable) {
-            aFunction =
-                new FunctionAvailableFunctionCall(mElementContext->mMappings);
-            NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
-    
-            return NS_OK;
-        }
-        if (!fcp()) {
-            return NS_ERROR_XPATH_UNKNOWN_FUNCTION;
-        }
-    }
+   if (aID != kNameSpaceID_None) {
+       return NS_ERROR_XPATH_UNKNOWN_FUNCTION;
+   }
+   if (aName == txXSLTAtoms::document) {
+       aFunction = new DocumentFunctionCall(mElementContext->mBaseURI);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
 
-    aFunction = new txErrorFunctionCall(aName, aID);
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::key) {
+       aFunction = new txKeyFunctionCall(mElementContext->mMappings);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
 
-    return aFunction ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::formatNumber) {
+       aFunction = new txFormatNumberFunctionCall(mStylesheet,
+                                                  mElementContext->mMappings);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::current) {
+       aFunction = new CurrentFunctionCall();
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::unparsedEntityUri) {
+
+       return NS_ERROR_NOT_IMPLEMENTED;
+   }
+   if (aName == txXSLTAtoms::generateId) {
+       aFunction = new GenerateIdFunctionCall();
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::systemProperty) {
+       aFunction = new SystemPropertyFunctionCall(mElementContext->mMappings);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::elementAvailable) {
+       aFunction =
+          new ElementAvailableFunctionCall(mElementContext->mMappings);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+   if (aName == txXSLTAtoms::functionAvailable) {
+       aFunction =
+          new FunctionAvailableFunctionCall(mElementContext->mMappings);
+       NS_ENSURE_TRUE(aFunction, NS_ERROR_OUT_OF_MEMORY);
+
+       return NS_OK;
+   }
+
+   return NS_ERROR_XPATH_UNKNOWN_FUNCTION;
 }
 
 PRBool

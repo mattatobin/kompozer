@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,22 +22,23 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include <stdio.h>
 #include "nscore.h"
 #include "nsCRT.h"
 #include "nsHTMLParts.h"
+#include "nsIHTMLContent.h"
 #include "nsIDocument.h"
 #include "nsVoidArray.h"
 #include "nsDocument.h"
@@ -45,7 +46,7 @@
 #include "nsCoord.h"
 #include "nsSplittableFrame.h"
 #include "nsIContentDelegate.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsInlineFrame.h"
 #include "nsIAtom.h"
 #include "nsAutoPtr.h"
@@ -88,7 +89,7 @@ public:
   FixedSizeFrame(nsIContent* aContent,
                  nsIFrame* aParentFrame);
 
-  NS_IMETHOD Reflow(nsPresContext* aPresContext,
+  NS_IMETHOD Reflow(nsIPresContext* aPresContext,
                     nsReflowMetrics& aDesiredSize,
                     const nsReflowState& aReflowState,
                     nsReflowStatus& aStatus);
@@ -127,7 +128,7 @@ FixedSizeFrame::FixedSizeFrame(nsIContent* aContent,
 {
 }
 
-NS_METHOD FixedSizeFrame::Reflow(nsPresContext*      aPresContext,
+NS_METHOD FixedSizeFrame::Reflow(nsIPresContext*      aPresContext,
                                  nsReflowMetrics&     aDesiredSize,
                                  const nsReflowState& aReflowState,
                                  nsReflowStatus&      aStatus)
@@ -277,10 +278,10 @@ LengthOf(nsIFrame* aChildList)
 // - each child frame is placed and sized properly
 // - the inline frame's desired width and  height are correct
 static PRBool
-TestReflowUnmapped(nsPresContext* presContext)
+TestReflowUnmapped(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Append three fixed width elements.
@@ -373,10 +374,10 @@ TestReflowUnmapped(nsPresContext* presContext)
 // 3. reflow mapped when the height's too small
 // 4. reflow mapped with a max width narrower than the first child
 static PRBool
-TestChildrenThatDontFit(nsPresContext* presContext)
+TestChildrenThatDontFit(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Add one fixed width element.
@@ -544,10 +545,10 @@ TestChildrenThatDontFit(nsPresContext* presContext)
 // 2. frames use their own overflow list when reflowing mapped children
 // 3. continuing frames should use the overflow list from their prev-in-flow
 static PRBool
-TestOverflow(nsPresContext* presContext)
+TestOverflow(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Append three fixed width elements.
@@ -657,10 +658,10 @@ TestOverflow(nsPresContext* presContext)
 // 7. pulling up only some of the children across an empty frame
 // 8. partially pulling up a child from a next-in-flow
 static PRBool
-TestPushingPulling(nsPresContext* presContext)
+TestPushingPulling(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Append three fixed width elements.
@@ -1079,10 +1080,10 @@ TestPushingPulling(nsPresContext* presContext)
 // 6. reflow mapped correctly handles child frames that need to be continued
 // 7. pulling up across empty frames resulting from deleting a child's next-in-flows
 static PRBool
-TestSplittableChildren(nsPresContext* presContext)
+TestSplittableChildren(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Append three fixed width elements that can split
@@ -1439,10 +1440,10 @@ TestSplittableChildren(nsPresContext* presContext)
 // 3. reflow mapped/unmapped work together to compute the correct result
 // 4. pulling-up children code computes the correct result
 static PRBool
-TestMaxElementSize(nsPresContext* presContext)
+TestMaxElementSize(nsIPresContext* presContext)
 {
   // Create an HTML container
-  nsIContent* b;
+  nsIHTMLContent* b;
   NS_NewHTMLContainer(&b, NS_NewAtom("span"));
 
   // Append three fixed width elements.
@@ -1598,12 +1599,12 @@ int main(int argc, char** argv)
 #if 0
   // Create test document and presentation context
   MyDocument *myDoc = new MyDocument();
-  nsPresContext* presContext;
+  nsIPresContext* presContext;
   nsIDeviceContext *dx;
   
   static NS_DEFINE_IID(kDeviceContextCID, NS_DEVICE_CONTEXT_CID);
 
-  nsresult rv = CallCreateInstance(kDeviceContextCID, &dx);
+  nsresult rv = nsComponentManager::CreateInstance(kDeviceContextCID, nsnull, NS_GET_IID(nsIDeviceContext), (void **)&dx);
 
   if (NS_OK == rv) {
     dx->Init(nsull);

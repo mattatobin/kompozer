@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,34 +14,36 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsCOMPtr.h"
 #include "nsIDOMHTMLLabelElement.h"
 #include "nsIDOMHTMLFormElement.h"
 #include "nsIDOMEventReceiver.h"
+#include "nsIHTMLContent.h"
 #include "nsGenericHTMLElement.h"
 #include "nsHTMLAtoms.h"
 #include "nsStyleConsts.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIFormControl.h"
 #include "nsIForm.h"
 #include "nsIDOMHTMLDocument.h"
@@ -51,13 +53,13 @@
 #include "nsIPresShell.h"
 #include "nsGUIEvent.h"
 #include "nsIEventStateManager.h"
-#include "nsIDOMHTMLInputElement.h"
+
 
 class nsHTMLLabelElement : public nsGenericHTMLFormElement,
                            public nsIDOMHTMLLabelElement
 {
 public:
-  nsHTMLLabelElement(nsINodeInfo *aNodeInfo);
+  nsHTMLLabelElement();
   virtual ~nsHTMLLabelElement();
 
   // nsISupports
@@ -72,29 +74,23 @@ public:
   // nsIDOMHTMLElement
   NS_FORWARD_NSIDOMHTMLELEMENT(nsGenericHTMLFormElement::)
 
-  // nsIDOMNSHTMLElement
-  NS_IMETHOD Focus();
-
   // nsIDOMHTMLLabelElement
   NS_DECL_NSIDOMHTMLLABELELEMENT
 
   // nsIFormControl
-  NS_IMETHOD_(PRInt32) GetType() const { return NS_FORM_LABEL; }
+  NS_IMETHOD_(PRInt32) GetType() { return NS_FORM_LABEL; }
   NS_IMETHOD Reset();
   NS_IMETHOD SubmitNamesValues(nsIFormSubmission* aFormSubmission,
                                nsIContent* aSubmitElement);
 
   // nsIContent
-  virtual nsresult BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                              nsIContent* aBindingParent,
-                              PRBool aCompileEventHandlers);
-  virtual void UnbindFromTree(PRBool aDeep = PR_TRUE,
-                              PRBool aNullParent = PR_TRUE);
-  virtual nsresult HandleDOMEvent(nsPresContext* aPresContext,
+  virtual void SetDocument(nsIDocument* aDocument, PRBool aDeep,
+                           PRBool aCompileEventHandlers);
+  virtual nsresult HandleDOMEvent(nsIPresContext* aPresContext,
                                   nsEvent* aEvent, nsIDOMEvent** aDOMEvent,
                                   PRUint32 aFlags,
                                   nsEventStatus* aEventStatus);
-  virtual void SetFocus(nsPresContext* aContext);
+  virtual void SetFocus(nsIPresContext* aContext);
   nsresult SetAttr(PRInt32 aNameSpaceID, nsIAtom* aName,
                    const nsAString& aValue, PRBool aNotify)
   {
@@ -111,20 +107,39 @@ protected:
   already_AddRefed<nsIContent> GetFirstFormControl(nsIContent *current);
 
   // XXX It would be nice if we could use an event flag instead.
-  PRPackedBool mHandlingEvent;
-  PRPackedBool mFocusCalled;
+  PRBool mHandlingEvent;
 };
 
 // construction, destruction
+nsresult
+NS_NewHTMLLabelElement(nsIHTMLContent** aInstancePtrResult,
+                       nsINodeInfo *aNodeInfo, PRBool aFromParser)
+{
+  NS_ENSURE_ARG_POINTER(aInstancePtrResult);
+
+  nsHTMLLabelElement* it = new nsHTMLLabelElement();
+
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsresult rv = NS_STATIC_CAST(nsGenericElement *, it)->Init(aNodeInfo);
+
+  if (NS_FAILED(rv)) {
+    delete it;
+
+    return rv;
+  }
+
+  *aInstancePtrResult = NS_STATIC_CAST(nsIHTMLContent *, it);
+  NS_ADDREF(*aInstancePtrResult);
+
+  return NS_OK;
+}
 
 
-NS_IMPL_NS_NEW_HTML_ELEMENT(Label)
-
-
-nsHTMLLabelElement::nsHTMLLabelElement(nsINodeInfo *aNodeInfo)
-  : nsGenericHTMLFormElement(aNodeInfo),
-    mHandlingEvent(PR_FALSE),
-    mFocusCalled(PR_FALSE)
+nsHTMLLabelElement::nsHTMLLabelElement()
+  : mHandlingEvent(PR_FALSE)
 {
 }
 
@@ -149,9 +164,33 @@ NS_HTML_CONTENT_INTERFACE_MAP_END
 
 // nsIDOMHTMLLabelElement
 
+nsresult
+nsHTMLLabelElement::CloneNode(PRBool aDeep, nsIDOMNode** aReturn)
+{
+  NS_ENSURE_ARG_POINTER(aReturn);
+  *aReturn = nsnull;
 
-NS_IMPL_DOM_CLONENODE(nsHTMLLabelElement)
+  nsHTMLLabelElement* it = new nsHTMLLabelElement();
 
+  if (!it) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  nsCOMPtr<nsIDOMNode> kungFuDeathGrip(it);
+
+  nsresult rv = NS_STATIC_CAST(nsGenericElement *, it)->Init(mNodeInfo);
+
+  if (NS_FAILED(rv))
+    return rv;
+
+  CopyInnerTo(it, aDeep);
+
+  *aReturn = NS_STATIC_CAST(nsIDOMNode *, it);
+
+  NS_ADDREF(*aReturn);
+
+  return NS_OK;
+}
 
 NS_IMETHODIMP
 nsHTMLLabelElement::GetForm(nsIDOMHTMLFormElement** aForm)
@@ -163,35 +202,28 @@ nsHTMLLabelElement::GetForm(nsIDOMHTMLFormElement** aForm)
 NS_IMPL_STRING_ATTR(nsHTMLLabelElement, AccessKey, accesskey)
 NS_IMPL_STRING_ATTR(nsHTMLLabelElement, HtmlFor, _for)
 
-nsresult
-nsHTMLLabelElement::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
-                               nsIContent* aBindingParent,
-                               PRBool aCompileEventHandlers)
-{
-  nsresult rv = nsGenericHTMLFormElement::BindToTree(aDocument, aParent,
-                                                     aBindingParent,
-                                                     aCompileEventHandlers);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  if (aDocument) {
-    RegUnRegAccessKey(PR_TRUE);
-  }
-
-  return rv;
-}
-
 void
-nsHTMLLabelElement::UnbindFromTree(PRBool aDeep, PRBool aNullParent)
+nsHTMLLabelElement::SetDocument(nsIDocument* aDocument, PRBool aDeep,
+                                PRBool aCompileEventHandlers)
 {
-  if (IsInDoc()) {
+  PRBool documentChanging = (aDocument != mDocument);
+
+  // Unregister the access key for the old document.
+  if (documentChanging && mDocument) {
     RegUnRegAccessKey(PR_FALSE);
   }
 
-  nsGenericHTMLFormElement::UnbindFromTree(aDeep, aNullParent);
+  nsGenericHTMLFormElement::SetDocument(aDocument, aDeep,
+                                        aCompileEventHandlers);
+
+  // Register the access key for the new document.
+  if (documentChanging && mDocument) {
+    RegUnRegAccessKey(PR_TRUE);
+  }
 }
 
 static PRBool
-EventTargetIn(nsPresContext *aPresContext, nsEvent *aEvent,
+EventTargetIn(nsIPresContext *aPresContext, nsEvent *aEvent,
               nsIContent *aChild, nsIContent *aStop)
 {
   nsCOMPtr<nsIContent> c;
@@ -213,7 +245,7 @@ EventTargetIn(nsPresContext *aPresContext, nsEvent *aEvent,
 }
 
 nsresult
-nsHTMLLabelElement::HandleDOMEvent(nsPresContext* aPresContext,
+nsHTMLLabelElement::HandleDOMEvent(nsIPresContext* aPresContext,
                                    nsEvent* aEvent,
                                    nsIDOMEvent** aDOMEvent,
                                    PRUint32 aFlags,
@@ -231,8 +263,7 @@ nsHTMLLabelElement::HandleDOMEvent(nsPresContext* aPresContext,
       *aEventStatus == nsEventStatus_eConsumeNoDefault ||
       (aEvent->message != NS_MOUSE_LEFT_CLICK &&
        aEvent->message != NS_FOCUS_CONTENT) ||
-      aFlags & NS_EVENT_FLAG_CAPTURE ||
-      !(aFlags & NS_EVENT_FLAG_SYSTEM_EVENT))
+      aFlags & NS_EVENT_FLAG_CAPTURE)
     return NS_OK;
 
   nsCOMPtr<nsIContent> content = GetForContent();
@@ -240,26 +271,25 @@ nsHTMLLabelElement::HandleDOMEvent(nsPresContext* aPresContext,
     mHandlingEvent = PR_TRUE;
     switch (aEvent->message) {
       case NS_MOUSE_LEFT_CLICK:
-        if (aEvent->eventStructType == NS_MOUSE_EVENT) {
-          if (ShouldFocus(this)) {
-            PRBool oldFocusCalled = mFocusCalled;
-            mFocusCalled = PR_TRUE;
-            // Focus the for content.
-            SetFocus(aPresContext);
-            mFocusCalled = oldFocusCalled;
-          }
-
-          // Dispatch a new click event to |content|
-          //    (For compatibility with IE, we do only left click.  If
-          //    we wanted to interpret the HTML spec very narrowly, we
-          //    would do nothing.  If we wanted to do something
-          //    sensible, we might send more events through like
-          //    this.)  See bug 7554, bug 49897, and bug 96813.
-          nsEventStatus status = *aEventStatus;
-          rv = DispatchClickEvent(aPresContext, NS_STATIC_CAST(nsInputEvent*, aEvent),
-                                  content, PR_FALSE, &status);
-          // Do we care about the status this returned?  I don't think we do...
+        if (ShouldFocus(this)) {
+          // Focus the for content.
+          content->SetFocus(aPresContext);
         }
+
+        // This sends the event twice down parts of its path.  Oh well.
+        // This is needed for:
+        //  * Making radio buttons and checkboxes get checked.
+        //  * Triggering user event handlers. (For compatibility with IE,
+        //    we do only left click.  If we wanted to interpret the HTML
+        //    spec very narrowly, we would do nothing.  If we wanted to
+        //    do something sensible, we might send more events through
+        //    like this.)  See bug 7554, bug 49897, and bug 96813.
+        // XXX The event should probably have its target modified.  See
+        // bug 146066.  (But what if |aDOMEvent| is null and it gets
+        // created later?  If we forced the existence of an event and
+        // modified its target, we could replace |mHandlingEvent|.)
+        rv = content->HandleDOMEvent(aPresContext, aEvent, aDOMEvent,
+                                     aFlags, aEventStatus);
         break;
       case NS_FOCUS_CONTENT:
         // Since we don't have '-moz-user-focus: normal', the only time
@@ -268,12 +298,8 @@ nsHTMLLabelElement::HandleDOMEvent(nsPresContext* aPresContext,
         // case.
         // Since focus doesn't bubble, this is basically the second part
         // of redirecting |SetFocus|.
-        {
-          nsEvent event(NS_IS_TRUSTED_EVENT(aEvent), NS_FOCUS_CONTENT);
-          nsEventStatus status = *aEventStatus;
-          rv = DispatchEvent(aPresContext, &event, content, PR_TRUE, &status);
-          // Do we care about the status this returned?  I don't think we do...
-        }
+        rv = content->HandleDOMEvent(aPresContext, aEvent, aDOMEvent,
+                                     aFlags, aEventStatus);
         break;
     }
     mHandlingEvent = PR_FALSE;
@@ -281,38 +307,14 @@ nsHTMLLabelElement::HandleDOMEvent(nsPresContext* aPresContext,
   return rv;
 }
 
-nsresult
-nsHTMLLabelElement::Focus()
-{
-  PRBool oldFocusCalled = mFocusCalled;
-  mFocusCalled = PR_TRUE;
-  nsresult rv = nsGenericHTMLFormElement::Focus();
-  mFocusCalled = oldFocusCalled;
-  return rv;
-}
-
 void
-nsHTMLLabelElement::SetFocus(nsPresContext* aContext)
+nsHTMLLabelElement::SetFocus(nsIPresContext* aContext)
 {
   // Since we don't have '-moz-user-focus: normal', the only time
   // |SetFocus| will be called is when the accesskey is activated.
   nsCOMPtr<nsIContent> content = GetForContent();
-  if (content) {
-    if (mFocusCalled) {
-      // Handle input element in a special way, so that focusing
-      // <input type="file"> doesn't focus the input field but the
-      // 'browse...' button.
-      nsCOMPtr<nsIFormControl> control = do_QueryInterface(content);
-      if (control && control->GetType() == NS_FORM_INPUT_FILE) {
-        nsCOMPtr<nsIDOMHTMLInputElement> input = do_QueryInterface(content);
-        if (input) {
-          input->Focus();
-          return;
-        }
-      }
-    }
+  if (content)
     content->SetFocus(aContext);
-  }
 }
 
 nsresult

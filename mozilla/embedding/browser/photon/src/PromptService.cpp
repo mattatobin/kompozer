@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,12 +14,13 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2001
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -27,11 +28,11 @@
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -148,8 +149,7 @@ CPromptService::InvokeDialogCallback(PtWidget_t *w, int type, char *title, char 
     return (ret);
 }
 
-NS_IMETHODIMP CPromptService::Alert(nsIDOMWindow *parent,
-									const PRUnichar *dialogTitle,
+NS_IMETHODIMP CPromptService::Alert(nsIDOMWindow *parent, const PRUnichar *dialogTitle,
                                     const PRUnichar *text)
 {
 	nsString 			mTitle(dialogTitle);
@@ -253,39 +253,21 @@ NS_IMETHODIMP CPromptService::Prompt(nsIDOMWindow *parent,
 {
 	nsString 	mTitle(dialogTitle);
 	nsString 	mText(text);
-	nsString 	mDefaultResponse(*value);
 	nsString 	mMsg(checkboxMsg);
-	PtCallbackList_t *cb;
-	PtCallbackInfo_t cbinfo;
-	PtMozillaPromptCb_t prompt;
+	int				ret = 0;
 	PtWidget_t *w = GetWebBrowser( parent );
-	PtMozillaWidget_t *moz = (PtMozillaWidget_t *) w;
+	char *title = ToNewCString(mTitle), *ptext = ToNewCString(mText), *msg = ToNewCString(mMsg);
 
-	if (!moz->prompt_cb)
-	    return NS_OK;
-
-	cb = moz->prompt_cb;
-	memset(&cbinfo, 0, sizeof(cbinfo));
-	cbinfo.reason = Pt_CB_MOZ_PROMPT;
-	cbinfo.cbdata = &prompt;
-
-	memset(&prompt, 0, sizeof(PtMozillaPromptCb_t));
-	prompt.title = ToNewCString(mTitle);
-	prompt.text = ToNewCString(mText);
-	prompt.dflt_resp = ToNewCString(mDefaultResponse);
-
-	if (PtInvokeCallbackList(cb, (PtWidget_t *)moz, &cbinfo) == Pt_CONTINUE)
-	{
-		nsCString   mResponse(prompt.response);
-		*value = ToNewUnicode(mResponse);
+	if(InvokeDialogCallback(w, Pt_MOZ_DIALOG_CONFIRM, title, ptext, msg, &ret) == Pt_CONTINUE)
 		*_retval = PR_TRUE;
-	}
 	else
-	    *_retval = PR_FALSE;
+		*_retval = PR_FALSE;
+	if (checkValue)
+		*checkValue = ret;
 
-	free( prompt.title );
-	free( prompt.text );
-	free( prompt.dflt_resp );
+	if( title ) nsMemory::Free( (void*)title );
+	if( ptext ) nsMemory::Free( (void*)ptext );
+	if( msg ) nsMemory::Free( (void*)msg );
 
 	return NS_OK;
 }

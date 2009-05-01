@@ -1,43 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
- * Brian Ryner.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is Brian Ryner.
+ * Portions created by Brian Ryner are Copyright (C) 2000 Brian Ryner.
+ * All Rights Reserved.
  *
- * Contributor(s):
- *   Scott MacGregor          <mscott@mozilla.org>
+ * Contributor(s): 
+ *   Scott MacGregor          <mscott@netscape.com>
  *   Robert John Churchill    <rjc@netscape.com>
- *   Josh Aas                 <josh@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 
 #include "nsIconChannel.h"
@@ -56,9 +38,7 @@
 #include "plstr.h"
 #include "nsILocalFileMac.h"
 #include "nsIFileURL.h"
-#include "nsInt64.h"
 
-#include <Icons.h>
 #include <Files.h>
 #include <Folders.h>
 #include <Icons.h>
@@ -68,25 +48,21 @@
 // nsIconChannel methods
 nsIconChannel::nsIconChannel()
 {
+  mStatus = NS_OK;
 }
 
 nsIconChannel::~nsIconChannel() 
 {}
 
-NS_IMPL_THREADSAFE_ISUPPORTS4(nsIconChannel, 
+NS_IMPL_THREADSAFE_ISUPPORTS2(nsIconChannel, 
                               nsIChannel, 
-                              nsIRequest,
-			       nsIRequestObserver,
-			       nsIStreamListener)
+                              nsIRequest)
 
 nsresult nsIconChannel::Init(nsIURI* uri)
 {
   NS_ASSERTION(uri, "no uri");
   mUrl = uri;
-  
-  nsresult rv;
-  mPump = do_CreateInstance(NS_INPUTSTREAMPUMP_CONTRACTID, &rv);
-  return rv;
+  return NS_OK;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,66 +70,40 @@ nsresult nsIconChannel::Init(nsIURI* uri)
 
 NS_IMETHODIMP nsIconChannel::GetName(nsACString &result)
 {
-  return mUrl->GetSpec(result);
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsIconChannel::IsPending(PRBool *result)
 {
-  return mPump->IsPending(result);
+  NS_NOTREACHED("nsIconChannel::IsPending");
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsIconChannel::GetStatus(nsresult *status)
 {
-  return mPump->GetStatus(status);
+  *status = mStatus;
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsIconChannel::Cancel(nsresult status)
 {
-  return mPump->Cancel(status);
+  NS_ASSERTION(NS_FAILED(status), "shouldn't cancel with a success code");
+  nsresult rv = NS_ERROR_FAILURE;
+
+  mStatus = status;
+  return rv;
 }
 
 NS_IMETHODIMP nsIconChannel::Suspend(void)
 {
-  return mPump->Suspend();
+  NS_NOTREACHED("nsIconChannel::Suspend");
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsIconChannel::Resume(void)
 {
-  return mPump->Resume();
-}
-
-// nsIRequestObserver methods
-NS_IMETHODIMP nsIconChannel::OnStartRequest(nsIRequest* aRequest, nsISupports* aContext)
-{
-  if (mListener)
-    return mListener->OnStartRequest(this, aContext);
-  return NS_OK;
-}
-
-NS_IMETHODIMP nsIconChannel::OnStopRequest(nsIRequest* aRequest, nsISupports* aContext, nsresult aStatus)
-{
-  if (mListener) {
-    mListener->OnStopRequest(this, aContext, aStatus);
-    mListener = nsnull;
-  }
-
-  // Remove from load group
-  if (mLoadGroup)
-    mLoadGroup->RemoveRequest(this, nsnull, aStatus);
-
-  return NS_OK;
-}
-
-// nsIStreamListener methods
-NS_IMETHODIMP nsIconChannel::OnDataAvailable(nsIRequest* aRequest,
-                                             nsISupports* aContext,
-                                             nsIInputStream* aStream,
-                                             PRUint32 aOffset,
-                                             PRUint32 aCount)
-{
-  if (mListener)
-    return mListener->OnDataAvailable(this, aContext, aStream, aOffset, aCount);
-  return NS_OK;
+  NS_NOTREACHED("nsIconChannel::Resume");
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -182,7 +132,7 @@ NS_IMETHODIMP nsIconChannel::GetURI(nsIURI* *aURI)
 NS_IMETHODIMP
 nsIconChannel::Open(nsIInputStream **_retval)
 {
-  return MakeInputStream(_retval, PR_FALSE);
+  return NS_ERROR_FAILURE;
 }
 
 nsresult nsIconChannel::ExtractIconInfoFromUrl(nsIFile ** aLocalFile, PRUint32 * aDesiredImageSize, nsACString &aContentType, nsACString &aFileExtension)
@@ -216,7 +166,7 @@ nsresult nsIconChannel::ExtractIconInfoFromUrl(nsIFile ** aLocalFile, PRUint32 *
 }
 
 nsresult
-GetLockedIconData(IconFamilyHandle iconFamilyH, PRUint32 iconType,
+nsIconChannel::GetLockedIconData(IconFamilyHandle iconFamilyH, PRUint32 iconType,
                            Handle iconDataH, PRUint32 *iconDataSize)
 {
   *iconDataSize = 0;
@@ -234,9 +184,9 @@ GetLockedIconData(IconFamilyHandle iconFamilyH, PRUint32 iconType,
 
 
 nsresult
-GetLockedIcons(IconFamilyHandle icnFamily, PRUint32 desiredImageSize,
+nsIconChannel::GetLockedIcons(IconFamilyHandle icnFamily, PRUint32 desiredImageSize,
             Handle iconH, PRUint32 *dataCount, PRBool *isIndexedData,
-            Handle iconMaskH, PRUint32 *maskCount, PRUint8 *alphaBitCount)
+            Handle iconMaskH, PRUint32 *maskCount)
 {
   // note: this code could be improved by:
   //
@@ -279,98 +229,77 @@ GetLockedIcons(IconFamilyHandle icnFamily, PRUint32 desiredImageSize,
   // if we have an icon, try getting a mask too
   if (NS_SUCCEEDED(rv) && (*dataCount > 0))
   {
-    // try to get an 8-bit alpha mask first
-    *alphaBitCount = 8;
+    // moz-icons are RGB_A1, so get 1-bit icon mask
     rv = GetLockedIconData(icnFamily, (desiredImageSize > 16) ?
-                           kLarge8BitMask : kSmall8BitMask,
+                           kLarge1BitMask : kSmall1BitMask,
                            iconMaskH, maskCount);
-    if (NS_FAILED(rv) || (*maskCount == 0)) {
-      // oh well, try to get a 1-bit mask
-      *alphaBitCount = 1;
-      rv = GetLockedIconData(icnFamily, (desiredImageSize > 16) ?
-                             kLarge1BitMask : kSmall1BitMask,
-                             iconMaskH, maskCount);
-      if (NS_FAILED(rv) || (*maskCount == 0))
-      {
-        // if we can't get a mask, the file's BNDL might be
-        // messed up, etc.  Let's just fake a 1-bit mask
-        // which will blit the entire icon... its not perfect,
-        // but its better than no icon at all
-        *maskCount = (desiredImageSize > 16) ? 256 : 64;
-        rv = NS_OK;
-      }
+    if (NS_FAILED(rv) || (*maskCount == 0))
+    {
+      // if we can't get a mask, the file's BNDL might be
+      // messed up, etc.  Let's just fake a 1-bit mask
+      // which will blit the entire icon... its not perfect,
+      // but its better than no icon at all
+      *maskCount = (desiredImageSize > 16) ? 256 : 64;
+      rv = NS_OK;
     }
   }
-  return rv;
+  return(rv);
 }
 
 
 NS_IMETHODIMP nsIconChannel::AsyncOpen(nsIStreamListener *aListener, nsISupports *ctxt)
 {
-  nsCOMPtr<nsIInputStream> inStream;
-  nsresult rv = MakeInputStream(getter_AddRefs(inStream), PR_TRUE);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // Init our stream pump
-  rv = mPump->Init(inStream, nsInt64(-1), nsInt64(-1), 0, 0, PR_FALSE);
-  NS_ENSURE_SUCCESS(rv, rv);
-  
-  rv = mPump->AsyncRead(this, ctxt);
-  if (NS_SUCCEEDED(rv)) 
-  {
-    // Store our real listener
-    mListener = aListener;
-    // Add ourself to the load group, if available
-    if (mLoadGroup)
-      mLoadGroup->AddRequest(this, nsnull);
-  }
-
-  return rv;
-}
-
-nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBlocking)
-  {
-  nsXPIDLCString contentType;
-  nsCAutoString fileExt;
-  nsCOMPtr<nsIFile> fileloc; // file we want an icon for
-  PRUint32 desiredImageSize;
-  nsresult rv = ExtractIconInfoFromUrl(getter_AddRefs(fileloc), &desiredImageSize, contentType, fileExt);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIFile> localFile; // file we want an icon for
+  nsCAutoString     contentType;
+  nsCAutoString     fileExtension;
+  PRUint32          desiredImageSize;
+  nsresult rv = ExtractIconInfoFromUrl(getter_AddRefs(localFile), &desiredImageSize,
+                contentType, fileExtension);
+  if (NS_FAILED(rv))  return(rv);
 
   // ensure that we DO NOT resolve aliases, very important for file views
-  nsCOMPtr<nsILocalFile>  localFile = do_QueryInterface(fileloc);
-  if (localFile)
-    localFile->SetFollowLinks(PR_FALSE);
+  nsCOMPtr<nsILocalFile>  aFileLocal = do_QueryInterface(localFile);
+  if (aFileLocal)
+  {
+    aFileLocal->SetFollowLinks(PR_FALSE);
+  }
 
   PRBool fileExists = PR_FALSE;
-  if (fileloc)
+  if (localFile)
+  {
     localFile->Exists(&fileExists);
+  }
 
   IconRef icnRef = nsnull;
   if (fileExists)
   {
     // if the file exists, first try getting icons via Icon Services
-    nsCOMPtr<nsILocalFileMac> localFileMac (do_QueryInterface(fileloc, &rv));
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsILocalFileMac> localFileMac (do_QueryInterface(localFile, &rv));
+    if (NS_FAILED(rv))  return(rv);
 
     FSSpec spec;
     if (NS_FAILED(localFileMac->GetFSSpec(&spec)))
-      return NS_ERROR_FAILURE;
+      return(NS_ERROR_FAILURE);
 
     SInt16  label;
     if (::GetIconRefFromFile (&spec, &icnRef, &label) != noErr)
-      return NS_ERROR_FAILURE;
+      return(NS_ERROR_FAILURE);
   }
 
   // note: once we have an IconRef,
   // we MUST release it before exiting this method!
 
   // start with zero-sized icons which ::GetIconFamilyData will resize
-  PRUint32 dataCount = 0L;
-  PRUint32 maskCount = 0L;
-  PRUint8 alphaBitsCount = 1;
-  Handle iconH = ::NewHandle(dataCount);
-  Handle iconMaskH = ::NewHandle(maskCount);
+  PRUint32  dataCount = 0L, maskCount = 0L;
+  Handle    iconH = ::NewHandle(dataCount);
+  Handle    iconMaskH = ::NewHandle(maskCount);
+  if (!iconH || !iconMaskH)
+  {
+    // sigh; REALLY low-mem, bail
+    if (iconH)      ::DisposeHandle(iconH);
+    if (iconMaskH)  ::DisposeHandle(iconMaskH);
+    return(NS_ERROR_OUT_OF_MEMORY);
+  }
 
   PRUint8 *iconBitmapData = nsnull, *maskBitmapData = nsnull;
 
@@ -380,7 +309,7 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
       kSelectorAllAvailableData, &icnFamily) == noErr))
   {
     GetLockedIcons(icnFamily, desiredImageSize, iconH,  &dataCount,
-                   &isIndexedData, iconMaskH, &maskCount, &alphaBitsCount);
+                   &isIndexedData, iconMaskH, &maskCount);
     if (dataCount > 0)
     {
       iconBitmapData = (PRUint8 *)*iconH;
@@ -401,10 +330,10 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
 
     // if we were given an explicit content type, use it....
     nsCOMPtr<nsIMIMEInfo> mimeInfo;
-    if (mimeService && (!contentType.IsEmpty() || !fileExt.IsEmpty()))
+    if (mimeService && (!contentType.IsEmpty() || !fileExtension.IsEmpty()))
     {
-      mimeService->GetFromTypeAndExtension(contentType,
-                                           fileExt,
+      mimeService->GetFromTypeAndExtension(contentType.get(),
+                                           fileExtension.get(),
                                            getter_AddRefs(mimeInfo));
     }
 
@@ -432,7 +361,7 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
     if (::IconRefToIconFamily(icnRef, kSelectorAllAvailableData, &icnFamily) == noErr)
     {
       GetLockedIcons(icnFamily, desiredImageSize, iconH, &dataCount,
-                     &isIndexedData, iconMaskH, &maskCount, &alphaBitsCount);
+                     &isIndexedData, iconMaskH, &maskCount);
       if (dataCount > 0)
       {
         iconBitmapData = (PRUint8 *)*iconH;
@@ -459,7 +388,6 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
   nsCString iconBuffer;
   iconBuffer.Assign((char) numPixelsInRow);
   iconBuffer.Append((char) numPixelsInRow);
-  iconBuffer.Append((char) alphaBitsCount); // alpha bits per pixel
 
   CTabHandle cTabHandle = nsnull;
   CTabPtr colTable = nsnull;
@@ -519,11 +447,11 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
   iconH = nsnull;
 
   bitmapData = (PRUint8 *)maskBitmapData;
-  if (maskBitmapData && alphaBitsCount == 1)
+  if (maskBitmapData)
   {
     // skip over ICN# data to get to mask
     // which is half way into data
-    index = maskCount / 2;
+    index = maskCount/2;
     while (index < maskCount)
     {
       iconBuffer.Append((char) bitmapData[index]);
@@ -543,13 +471,6 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
       }
     }
   }
-  else if (maskBitmapData && alphaBitsCount == 8) {
-    index = 0;
-    while (index < maskCount) {
-      iconBuffer.Append((char)bitmapData[index]);
-      index++;
-    }
-  }
   else
   {
     index = 0L;
@@ -566,39 +487,37 @@ nsresult nsIconChannel::MakeInputStream(nsIInputStream** _retval, PRBool nonBloc
     iconMaskH = nsnull;
   }
 
-  // Now, create a pipe and stuff our data into it
-  nsCOMPtr<nsIInputStream> inStream;
-  nsCOMPtr<nsIOutputStream> outStream;
-  PRUint32 iconSize = iconBuffer.Length();
-  rv = NS_NewPipe(getter_AddRefs(inStream), getter_AddRefs(outStream), iconSize, iconSize, nonBlocking);  
+  // turn our nsString into a stream looking object...
+  aListener->OnStartRequest(this, ctxt);
+
+  // turn our string into a stream...
+  nsCOMPtr<nsIInputStream> inputStr;
+  rv = NS_NewByteInputStream(getter_AddRefs(inputStr), iconBuffer.get(),
+                             iconBuffer.Length());
 
   if (NS_SUCCEEDED(rv))
   {
-    PRUint32 written;
-    rv = outStream->Write(iconBuffer.get(), iconSize, &written);
-    if (NS_SUCCEEDED(rv))
-      NS_IF_ADDREF(*_retval = inStream);
+      aListener->OnDataAvailable(this, ctxt, inputStr, 0, iconBuffer.Length());
   }
-
-  // Drop notification callbacks to prevent cycles.
-  mCallbacks = nsnull;
-
+  aListener->OnStopRequest(this, ctxt, rv);
   return NS_OK;
 }
 
 NS_IMETHODIMP nsIconChannel::GetLoadFlags(PRUint32 *aLoadAttributes)
 {
-  return mPump->GetLoadFlags(aLoadAttributes);
+  *aLoadAttributes = mLoadAttributes;
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsIconChannel::SetLoadFlags(PRUint32 aLoadAttributes)
 {
-  return mPump->SetLoadFlags(aLoadAttributes);
+  mLoadAttributes = aLoadAttributes;
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsIconChannel::GetContentType(nsACString &aContentType) 
 {
-  aContentType.AssignLiteral("image/icon");
+  aContentType = NS_LITERAL_CSTRING("image/icon");
   return NS_OK;
 }
 
@@ -612,7 +531,7 @@ nsIconChannel::SetContentType(const nsACString &aContentType)
 
 NS_IMETHODIMP nsIconChannel::GetContentCharset(nsACString &aContentCharset) 
 {
-  aContentCharset.AssignLiteral("image/icon");
+  aContentCharset = NS_LITERAL_CSTRING("image/icon");
   return NS_OK;
 }
 

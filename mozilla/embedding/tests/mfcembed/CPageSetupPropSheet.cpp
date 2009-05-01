@@ -35,7 +35,6 @@
 #include "stdafx.h"
 #include "resource.h"
 #include "CPageSetupPropSheet.h"
-#include "nsMemory.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -101,12 +100,11 @@ static float GetFloatFromStr(const TCHAR * aStr, float aMaxVal = 1.0)
 static PRUnichar* GetUnicodeFromCString(const CString& aStr)
 {
 #ifdef _UNICODE
-    nsEmbedString str(aStr);
+    nsString str(aStr);
 #else
-    nsEmbedString str;
-    NS_CStringToUTF16(nsEmbedCString(aStr), NS_CSTRING_ENCODING_ASCII, str);
+    nsString str; str.AssignWithConversion(aStr);
 #endif
-    return NS_StringCloneData(str);
+    return ToNewUnicode(str);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -148,27 +146,27 @@ void CPageSetupPropSheet::SetPrintSettingsValues(nsIPrintSettings* aPrintSetting
 
     PRUnichar* uStr;
     aPrintSettings->GetHeaderStrLeft(&uStr);
-		m_MarginHeaderFooterTab.m_HeaderLeftText = uStr;
+		m_MarginHeaderFooterTab.m_HeaderLeftText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
 
     aPrintSettings->GetHeaderStrCenter(&uStr);
-		m_MarginHeaderFooterTab.m_HeaderCenterText = uStr;
+		m_MarginHeaderFooterTab.m_HeaderCenterText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
 
     aPrintSettings->GetHeaderStrRight(&uStr);
-		m_MarginHeaderFooterTab.m_HeaderRightText = uStr;
+		m_MarginHeaderFooterTab.m_HeaderRightText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
 
     aPrintSettings->GetFooterStrLeft(&uStr);
-		m_MarginHeaderFooterTab.m_FooterLeftText = uStr;
+		m_MarginHeaderFooterTab.m_FooterLeftText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
 
     aPrintSettings->GetFooterStrCenter(&uStr);
-		m_MarginHeaderFooterTab.m_FooterCenterText = uStr;
+		m_MarginHeaderFooterTab.m_FooterCenterText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
 
     aPrintSettings->GetFooterStrRight(&uStr);
-		m_MarginHeaderFooterTab.m_FooterRightText = uStr;
+		m_MarginHeaderFooterTab.m_FooterRightText = NS_LossyConvertUCS2toASCII(uStr).get();
     if (uStr != nsnull) nsMemory::Free(uStr);
   }
 }

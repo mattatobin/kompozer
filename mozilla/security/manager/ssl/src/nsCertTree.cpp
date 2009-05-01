@@ -1,43 +1,40 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *   Ian McGreer <mcgreer@netscape.com>
+ *  Ian McGreer <mcgreer@netscape.com>
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "nsNSSComponent.h" // for PIPNSS string bundle calls.
 #include "nsCertTree.h"
-#include "nsITreeColumns.h"
 #include "nsIX509Cert.h"
 #include "nsIX509CertValidity.h"
 #include "nsIX509CertDB.h"
@@ -66,18 +63,6 @@ struct treeArrayElStr {
   PRInt32    numChildren; /* number of chidren (certs) for thread */
 };
 
-CompareCacheHashEntryPtr::CompareCacheHashEntryPtr()
-{
-  entry = new CompareCacheHashEntry;
-}
-
-CompareCacheHashEntryPtr::~CompareCacheHashEntryPtr()
-{
-  if (entry) {
-    delete entry;
-  }
-}
-
 CompareCacheHashEntry::CompareCacheHashEntry()
 :key(nsnull)
 {
@@ -89,36 +74,33 @@ CompareCacheHashEntry::CompareCacheHashEntry()
 PR_STATIC_CALLBACK(const void *)
 CompareCacheGetKey(PLDHashTable *table, PLDHashEntryHdr *hdr)
 {
-  CompareCacheHashEntryPtr *entryPtr = NS_STATIC_CAST(CompareCacheHashEntryPtr*, hdr);
-  return entryPtr->entry->key;
+  CompareCacheHashEntry *entry = NS_STATIC_CAST(CompareCacheHashEntry*, hdr);
+  return entry->key;
 }
 
 PR_STATIC_CALLBACK(PRBool)
 CompareCacheMatchEntry(PLDHashTable *table, const PLDHashEntryHdr *hdr,
                          const void *key)
 {
-  const CompareCacheHashEntryPtr *entryPtr = NS_STATIC_CAST(const CompareCacheHashEntryPtr*, hdr);
-  return entryPtr->entry->key == key;
+  const CompareCacheHashEntry *entry = NS_STATIC_CAST(const CompareCacheHashEntry*, hdr);
+  return entry->key == key;
 }
 
 PR_STATIC_CALLBACK(PRBool)
 CompareCacheInitEntry(PLDHashTable *table, PLDHashEntryHdr *hdr,
                      const void *key)
 {
-  new (hdr) CompareCacheHashEntryPtr();
-  CompareCacheHashEntryPtr *entryPtr = NS_STATIC_CAST(CompareCacheHashEntryPtr*, hdr);
-  if (!entryPtr->entry) {
-    return PR_FALSE;
-  }
-  entryPtr->entry->key = (void*)key;
+  new (hdr) CompareCacheHashEntry();
+  CompareCacheHashEntry *entry = NS_STATIC_CAST(CompareCacheHashEntry*, hdr);
+  entry->key = (void*)key;
   return PR_TRUE;
 }
 
 PR_STATIC_CALLBACK(void)
 CompareCacheClearEntry(PLDHashTable *table, PLDHashEntryHdr *hdr)
 {
-  CompareCacheHashEntryPtr *entryPtr = NS_STATIC_CAST(CompareCacheHashEntryPtr*, hdr);
-  entryPtr->~CompareCacheHashEntryPtr();
+  CompareCacheHashEntry *entry = NS_STATIC_CAST(CompareCacheHashEntry*, hdr);
+  entry->~CompareCacheHashEntry();
 }
 
 static PLDHashTableOps gMapOps = {
@@ -155,7 +137,7 @@ nsresult nsCertTree::InitCompareHash()
 {
   ClearCompareHash();
   if (!PL_DHashTableInit(&mCompareCache, &gMapOps, nsnull,
-                         sizeof(CompareCacheHashEntryPtr), 128)) {
+                         sizeof(CompareCacheHashEntry), 128)) {
     mCompareCache.ops = nsnull;
     return NS_ERROR_OUT_OF_MEMORY;
   }
@@ -191,10 +173,9 @@ CompareCacheHashEntry *
 nsCertTree::getCacheEntry(void *cache, void *aCert)
 {
   PLDHashTable &aCompareCache = *NS_REINTERPRET_CAST(PLDHashTable*, cache);
-  CompareCacheHashEntryPtr *entryPtr = 
-    NS_STATIC_CAST(CompareCacheHashEntryPtr*,
-                   PL_DHashTableOperate(&aCompareCache, aCert, PL_DHASH_ADD));
-  return entryPtr ? entryPtr->entry : NULL;
+  return NS_STATIC_CAST(CompareCacheHashEntry*,
+                        PL_DHashTableOperate(&aCompareCache, aCert,
+                                             PL_DHASH_ADD));
 }
 
 void nsCertTree::RemoveCacheEntry(void *key)
@@ -312,22 +293,24 @@ nsCertTree::GetCertsByTypeFromCertList(CERTCertList *aCertList,
   nsresult rv = NS_NewISupportsArray(getter_AddRefs(certarray));
   if (NS_FAILED(rv)) return PR_FALSE;
   CERTCertListNode *node;
-  int count = 0;
+  int i, count = 0;
   for (node = CERT_LIST_HEAD(aCertList);
        !CERT_LIST_END(node, aCertList);
        node = CERT_LIST_NEXT(node)) {
     if (getCertType(node->cert) == aType) {
       nsCOMPtr<nsIX509Cert> pipCert = new nsNSSCertificate(node->cert);
       if (pipCert) {
-        int i;
-        for (i = 0; i < count; ++i) {
-          nsCOMPtr<nsIX509Cert> cert = do_QueryElementAt(certarray, i);
+        for (i=0; i<count; i++) {
+          nsCOMPtr<nsISupports> isupport = 
+            dont_AddRef(certarray->ElementAt(i));
+          nsCOMPtr<nsIX509Cert> cert = do_QueryInterface(isupport);
           if ((*aCertCmpFn)(aCertCmpFnArg, pipCert, cert) < 0) {
+            certarray->InsertElementAt(pipCert, i);
             break;
           }
         }
-        certarray->InsertElementAt(pipCert, i);
-        ++count;
+        if (i == count) certarray->AppendElement(pipCert);
+          count++;
       }
     }
   }
@@ -541,22 +524,24 @@ nsCertTree::GetRowProperties(PRInt32 index, nsISupportsArray *properties)
   return NS_OK;
 }
 
-/* void getCellProperties (in long row, in nsITreeColumn col, 
- *                         in nsISupportsArray properties); 
+/* void getCellProperties (in long row, in wstring colID, 
+ *                           in nsISupportsArray properties); 
  */
 NS_IMETHODIMP 
-nsCertTree::GetCellProperties(PRInt32 row, nsITreeColumn* col, 
-                              nsISupportsArray* properties)
+nsCertTree::GetCellProperties(PRInt32 row, const PRUnichar *colID, 
+                                  nsISupportsArray *properties)
 {
   return NS_OK;
 }
 
-/* void getColumnProperties (in nsITreeColumn col, 
+/* void getColumnProperties (in wstring colID, 
+ *                           in nsIDOMElement colElt, 
  *                           in nsISupportsArray properties); 
  */
 NS_IMETHODIMP 
-nsCertTree::GetColumnProperties(nsITreeColumn* col, 
-                                nsISupportsArray* properties)
+nsCertTree::GetColumnProperties(const PRUnichar *colID, 
+                                    nsIDOMElement *colElt, 
+                                    nsISupportsArray *properties)
 {
   return NS_OK;
 }
@@ -664,34 +649,34 @@ nsCertTree::GetLevel(PRInt32 index, PRInt32 *_retval)
   return NS_OK;
 }
 
-/* Astring getImageSrc (in long row, in nsITreeColumn col); */
+/* Astring getImageSrc (in long row, in wstring colID); */
 NS_IMETHODIMP 
-nsCertTree::GetImageSrc(PRInt32 row, nsITreeColumn* col, 
-                        nsAString& _retval)
+nsCertTree::GetImageSrc(PRInt32 row, const PRUnichar *colID, 
+                            nsAString& _retval)
 {
   _retval.Truncate();
   return NS_OK;
 }
 
-/* long getProgressMode (in long row, in nsITreeColumn col); */
+/* long getProgressMode (in long row, in wstring colID); */
 NS_IMETHODIMP
-nsCertTree::GetProgressMode(PRInt32 row, nsITreeColumn* col, PRInt32* _retval)
+nsCertTree::GetProgressMode(PRInt32 row, const PRUnichar *colID, PRInt32* _retval)
 {
   return NS_OK;
 }
 
-/* Astring getCellValue (in long row, in nsITreeColumn col); */
+/* Astring getCellValue (in long row, in wstring colID); */
 NS_IMETHODIMP 
-nsCertTree::GetCellValue(PRInt32 row, nsITreeColumn* col, 
-                         nsAString& _retval)
+nsCertTree::GetCellValue(PRInt32 row, const PRUnichar *colID, 
+                             nsAString& _retval)
 {
   _retval.Truncate();
   return NS_OK;
 }
 
-/* Astring getCellText (in long row, in nsITreeColumn col); */
+/* Astring getCellText (in long row, in wstring colID); */
 NS_IMETHODIMP 
-nsCertTree::GetCellText(PRInt32 row, nsITreeColumn* col, 
+nsCertTree::GetCellText(PRInt32 row, const PRUnichar *colID, 
                         nsAString& _retval)
 {
   if (!mTreeArray)
@@ -699,13 +684,11 @@ nsCertTree::GetCellText(PRInt32 row, nsITreeColumn* col,
 
   nsresult rv;
   _retval.Truncate();
-
-  const PRUnichar* colID;
-  col->GetIdConst(&colID);
-
+  NS_ConvertUCS2toUTF8 aUtf8ColID(colID);
+  const char *col = aUtf8ColID.get();
   treeArrayEl *el = GetThreadDescAtIndex(row);
   if (el != nsnull) {
-    if (NS_LITERAL_STRING("certcol").Equals(colID))
+    if (strcmp(col, "certcol") == 0)
       _retval.Assign(el->orgName);
     else
       _retval.SetCapacity(0);
@@ -713,7 +696,7 @@ nsCertTree::GetCellText(PRInt32 row, nsITreeColumn* col,
   }
   nsCOMPtr<nsIX509Cert> cert = dont_AddRef(GetCertAtIndex(row));
   if (cert == nsnull) return NS_ERROR_FAILURE;
-  if (NS_LITERAL_STRING("certcol").Equals(colID)) {
+  if (strcmp(col, "certcol") == 0) {
     rv = cert->GetCommonName(_retval);
     if (NS_FAILED(rv) || _retval.IsEmpty()) {
       // kaie: I didn't invent the idea to cut off anything before 
@@ -735,11 +718,11 @@ nsCertTree::GetCellText(PRInt32 row, nsITreeColumn* col,
         _retval = nick;
       }
     }
-  } else if (NS_LITERAL_STRING("tokencol").Equals(colID)) {
+  } else if (strcmp(col, "tokencol") == 0) {
     rv = cert->GetTokenName(_retval);
-  } else if (NS_LITERAL_STRING("emailcol").Equals(colID)) {
+  } else if (strcmp(col, "emailcol") == 0) {
     rv = cert->GetEmailAddress(_retval);
-  } else if (NS_LITERAL_STRING("purposecol").Equals(colID) && mNSSComponent) {
+  } else if (strcmp(col, "purposecol") == 0 && mNSSComponent) {
     PRUint32 verified;
 
     nsAutoString theUsages;
@@ -777,21 +760,21 @@ nsCertTree::GetCellText(PRInt32 row, nsITreeColumn* col,
         rv = mNSSComponent->GetPIPNSSBundleString("VerifyUnknown", _retval);
         break;
     }
-  } else if (NS_LITERAL_STRING("issuedcol").Equals(colID)) {
+  } else if (strcmp(col, "issuedcol") == 0) {
     nsCOMPtr<nsIX509CertValidity> validity;
 
     rv = cert->GetValidity(getter_AddRefs(validity));
     if (NS_SUCCEEDED(rv)) {
       validity->GetNotBeforeLocalDay(_retval);
     }
-  } else if (NS_LITERAL_STRING("expiredcol").Equals(colID)) {
+  } else if (strcmp(col, "expiredcol") == 0) {
     nsCOMPtr<nsIX509CertValidity> validity;
 
     rv = cert->GetValidity(getter_AddRefs(validity));
     if (NS_SUCCEEDED(rv)) {
       validity->GetNotAfterLocalDay(_retval);
     }
-  } else if (NS_LITERAL_STRING("serialnumcol").Equals(colID)) {
+  } else if (strcmp(col, "serialnumcol") == 0) {
     rv = cert->GetSerialNumber(_retval);
   } else {
     return NS_ERROR_FAILURE;
@@ -821,9 +804,9 @@ nsCertTree::ToggleOpenState(PRInt32 index)
   return NS_OK;
 }
 
-/* void cycleHeader (in nsITreeColumn); */
+/* void cycleHeader (in wstring colID, in nsIDOMElement elt); */
 NS_IMETHODIMP 
-nsCertTree::CycleHeader(nsITreeColumn* col)
+nsCertTree::CycleHeader(const PRUnichar *colID, nsIDOMElement *elt)
 {
   return NS_OK;
 }
@@ -835,33 +818,25 @@ nsCertTree::SelectionChanged()
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-/* void cycleCell (in long row, in nsITreeColumn col); */
+/* void cycleCell (in long row, in wstring colID); */
 NS_IMETHODIMP 
-nsCertTree::CycleCell(PRInt32 row, nsITreeColumn* col)
+nsCertTree::CycleCell(PRInt32 row, const PRUnichar *colID)
 {
   return NS_OK;
 }
 
-/* boolean isEditable (in long row, in nsITreeColumn col); */
+/* boolean isEditable (in long row, in wstring colID); */
 NS_IMETHODIMP 
-nsCertTree::IsEditable(PRInt32 row, nsITreeColumn* col, PRBool *_retval)
+nsCertTree::IsEditable(PRInt32 row, const PRUnichar *colID, PRBool *_retval)
 {
   *_retval = PR_FALSE;
   return NS_OK;
 }
 
-/* void setCellValue (in long row, in nsITreeColumn col, in AString value); */
+/* void setCellText (in long row, in wstring colID, in wstring value); */
 NS_IMETHODIMP 
-nsCertTree::SetCellValue(PRInt32 row, nsITreeColumn* col, 
-                         const nsAString& value)
-{
-  return NS_OK;
-}
-
-/* void setCellText (in long row, in nsITreeColumn col, in AString value); */
-NS_IMETHODIMP 
-nsCertTree::SetCellText(PRInt32 row, nsITreeColumn* col, 
-                        const nsAString& value)
+nsCertTree::SetCellText(PRInt32 row, const PRUnichar *colID, 
+                            const PRUnichar *value)
 {
   return NS_OK;
 }
@@ -885,7 +860,7 @@ nsCertTree::PerformActionOnRow(const PRUnichar *action, PRInt32 row)
  */
 NS_IMETHODIMP 
 nsCertTree::PerformActionOnCell(const PRUnichar *action, PRInt32 row, 
-                                nsITreeColumn* col)
+                                    const PRUnichar *colID)
 {
   return NS_OK;
 }
@@ -919,9 +894,24 @@ nsCertTree::dumpMap()
 #endif
 
 //
-// CanDrop
+// CanDropOn
 //
-NS_IMETHODIMP nsCertTree::CanDrop(PRInt32 index, PRInt32 orientation, PRBool *_retval)
+// Can't drop on the thread pane.
+//
+NS_IMETHODIMP nsCertTree::CanDropOn(PRInt32 index, PRBool *_retval)
+{
+  NS_ENSURE_ARG_POINTER(_retval);
+  *_retval = PR_FALSE;
+  
+  return NS_OK;
+}
+
+//
+// CanDropBeforeAfter
+//
+// Can't drop on the thread pane.
+//
+NS_IMETHODIMP nsCertTree::CanDropBeforeAfter(PRInt32 index, PRBool before, PRBool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = PR_FALSE;
@@ -932,6 +922,8 @@ NS_IMETHODIMP nsCertTree::CanDrop(PRInt32 index, PRInt32 orientation, PRBool *_r
 
 //
 // Drop
+//
+// Can't drop on the thread pane.
 //
 NS_IMETHODIMP nsCertTree::Drop(PRInt32 row, PRInt32 orient)
 {
@@ -950,14 +942,10 @@ NS_IMETHODIMP nsCertTree::IsSorted(PRBool *_retval)
   return NS_OK;
 }
 
-#define RETURN_NOTHING
-
 void 
 nsCertTree::CmpInitCriterion(nsIX509Cert *cert, CompareCacheHashEntry *entry,
                              sortCriterion crit, PRInt32 level)
 {
-  NS_ENSURE_TRUE( (cert!=0 && entry!=0), RETURN_NOTHING );
-
   entry->mCritInit[level] = PR_TRUE;
   nsXPIDLString &str = entry->mCrit[level];
   
@@ -1009,8 +997,6 @@ nsCertTree::CmpByCrit(nsIX509Cert *a, CompareCacheHashEntry *ace,
                       nsIX509Cert *b, CompareCacheHashEntry *bce, 
                       sortCriterion crit, PRInt32 level)
 {
-  NS_ENSURE_TRUE( (a!=0 && ace!=0 && b!=0 && bce!=0), 0 );
-
   if (!ace->mCritInit[level]) {
     CmpInitCriterion(a, ace, crit, level);
   }
@@ -1038,8 +1024,6 @@ PRInt32
 nsCertTree::CmpBy(void *cache, nsIX509Cert *a, nsIX509Cert *b, 
                   sortCriterion c0, sortCriterion c1, sortCriterion c2)
 {
-  NS_ENSURE_TRUE( (cache!=0 && a!=0 && b!=0), 0 );
-
   if (a == b)
     return 0;
 

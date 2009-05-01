@@ -54,7 +54,7 @@
 #include "nsIDOMDocument.h"
 #include "nsIDOMElement.h"
 #include "nsIWindowWatcher.h"
-#include "nsServiceManagerUtils.h"
+#include "nsIServiceManagerUtils.h"
 
 #include "UMacUnicode.h"
 #include "ApplIDs.h"

@@ -44,7 +44,6 @@
 #include "nsIServiceManager.h"
 
 #include "nsWidgetsCID.h"
-#include <stdio.h>
 
 NS_IMPL_ISUPPORTS1(nsAppShell, nsIAppShell) 
 

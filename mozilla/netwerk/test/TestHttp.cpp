@@ -115,9 +115,9 @@ MyNotifications::OnStatus(nsIRequest *req, nsISupports *ctx,
 
 NS_IMETHODIMP
 MyNotifications::OnProgress(nsIRequest *req, nsISupports *ctx,
-                            PRUint64 progress, PRUint64 progressMax)
+                            PRUint32 progress, PRUint32 progressMax)
 {
-    printf("progress: %llu/%llu\n", progress, progressMax);
+    printf("progress: %u/%u\n", progress, progressMax);
     return NS_OK;
 }
 

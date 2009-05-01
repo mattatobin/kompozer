@@ -61,17 +61,15 @@ JS_BEGIN_EXTERN_C
  */
 
 #if defined(__arm) || defined(__arm32__) || defined(__arm26__) || defined(__arm__)
-#ifndef __QNXNTO__
 #define CPU_IS_ARM
-#endif
 #endif
 
 typedef union jsdpun {
     struct {
 #if defined(IS_LITTLE_ENDIAN) && !defined(CPU_IS_ARM)
-        uint32 lo, hi;
+	uint32 lo, hi;
 #else
-        uint32 hi, lo;
+	uint32 hi, lo;
 #endif
     } s;
     jsdouble d;
@@ -126,7 +124,7 @@ typedef union jsdpun {
     ((JSDOUBLE_HI32(x) & JSDOUBLE_HI32_EXPMASK) != JSDOUBLE_HI32_EXPMASK)
 
 #define JSDOUBLE_IS_NEGZERO(d)  (JSDOUBLE_HI32(d) == JSDOUBLE_HI32_SIGNBIT && \
-                                 JSDOUBLE_LO32(d) == 0)
+				 JSDOUBLE_LO32(d) == 0)
 
 /*
  * JSDOUBLE_IS_INT first checks that d is neither NaN nor infinite, to avoid
@@ -136,16 +134,7 @@ typedef union jsdpun {
  */
 #define JSDOUBLE_IS_INT(d, i) (JSDOUBLE_IS_FINITE(d)                          \
                                && !JSDOUBLE_IS_NEGZERO(d)                     \
-                               && ((d) == (i = (jsint)(d))))
-
-#if defined(XP_WIN)
-#define JSDOUBLE_COMPARE(LVAL, OP, RVAL, IFNAN)                               \
-    ((JSDOUBLE_IS_NaN(LVAL) || JSDOUBLE_IS_NaN(RVAL))                         \
-     ? (IFNAN)                                                                \
-     : (LVAL) OP (RVAL))
-#else
-#define JSDOUBLE_COMPARE(LVAL, OP, RVAL, IFNAN) ((LVAL) OP (RVAL))
-#endif
+			       && ((d) == (i = (jsint)(d))))
 
 /* Initialize number constants and runtime state for the first context. */
 extern JSBool
@@ -155,8 +144,6 @@ extern void
 js_FinishRuntimeNumberState(JSContext *cx);
 
 /* Initialize the Number class, returning its prototype object. */
-extern JSClass js_NumberClass;
-
 extern JSObject *
 js_InitNumberClass(JSContext *cx, JSObject *obj);
 
@@ -172,7 +159,7 @@ extern const char js_parseInt_str[];
 
 /* GC-allocate a new JS number. */
 extern jsdouble *
-js_NewDouble(JSContext *cx, jsdouble d, uintN gcflag);
+js_NewDouble(JSContext *cx, jsdouble d);
 
 extern void
 js_FinalizeDouble(JSContext *cx, jsdouble *dp);

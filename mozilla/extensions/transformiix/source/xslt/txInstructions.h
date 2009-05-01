@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -39,8 +39,9 @@
 #ifndef TRANSFRMX_TXINSTRUCTIONS_H
 #define TRANSFRMX_TXINSTRUCTIONS_H
 
+#include "txError.h"
 #include "nsCOMPtr.h"
-#include "txCore.h"
+#include "TxObject.h"
 #include "nsString.h"
 #include "XMLUtils.h"
 #include "txNamespaceMap.h"

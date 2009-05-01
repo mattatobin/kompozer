@@ -89,14 +89,14 @@ pres_shell(nsIDocShell *aDocShell)
 }
 
 #if 0 // not currently needed
-static already_AddRefed<nsPresContext>
+static already_AddRefed<nsIPresContext>
 pres_context(nsIDocShell *aDocShell)
 {
     nsCOMPtr<nsIDocumentViewer> dv =
         do_QueryInterface(nsCOMPtr<nsIContentViewer>(doc_viewer(aDocShell)));
     if (!dv)
         return nsnull;
-    nsPresContext *result = nsnull;
+    nsIPresContext *result = nsnull;
     dv->GetPresContext(result);
     return result;
 }
@@ -426,11 +426,15 @@ DumpFramesRecur(nsIDocShell* aDocShell, FILE* out)
         fprintf(out, "webshell=%p \n", NS_STATIC_CAST(void*, aDocShell));
         nsCOMPtr<nsIPresShell> shell(pres_shell(aDocShell));
         if (shell) {
-            nsIFrame* root = shell->GetRootFrame();
+            nsIFrame* root;
+            shell->GetRootFrame(&root);
             if (root) {
+                nsCOMPtr<nsIPresContext> presContext;
+                shell->GetPresContext(getter_AddRefs(presContext));
+
                 nsIFrameDebug* fdbg;
                 if (NS_SUCCEEDED(CallQueryInterface(root, &fdbg))) {
-                    fdbg->List(shell->GetPresContext(), out, 0);
+                    fdbg->List(presContext, out, 0);
                 }
             }
         }
@@ -523,7 +527,8 @@ nsLayoutDebuggingTools::DumpStyleContexts()
     FILE *out = stdout;
     nsCOMPtr<nsIPresShell> shell(pres_shell(mDocShell)); 
     if (shell) {
-        nsIFrame* root = shell->GetRootFrame();
+        nsIFrame* root;
+        shell->GetRootFrame(&root);
         if (!root) {
             fputs("null root frame\n", out);
         } else {

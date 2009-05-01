@@ -67,8 +67,7 @@
 //-----------------------------------------------------------------------------
 
 #define IPC_WM_SENDMSG    (WM_USER + 0x1)
-#define IPC_WM_CALLBACK   (WM_USER + 0x2)
-#define IPC_WM_SHUTDOWN   (WM_USER + 0x3)
+#define IPC_WM_SHUTDOWN   (WM_USER + 0x2)
 
 static nsresult       ipcThreadStatus = NS_OK;
 static PRThread      *ipcThread = NULL;
@@ -116,13 +115,6 @@ ipcThreadWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             LOG(("  done.\n"));
             delete msg;
         }
-        return 0;
-    }
-
-    if (uMsg == IPC_WM_CALLBACK) {
-        ipcCallbackFunc func = (ipcCallbackFunc) wParam;
-        void *arg = (void *) lParam;
-        (func)(arg);
         return 0;
     }
 
@@ -313,20 +305,4 @@ IPC_SendMsg(ipcMessage *msg)
 loser:
     delete msg;
     return NS_ERROR_FAILURE;
-}
-
-nsresult
-IPC_DoCallback(ipcCallbackFunc func, void *arg)
-{
-    LOG(("IPC_DoCallback\n"));
-
-    if (ipcShutdown) {
-        LOG(("unable to send message b/c message thread is shutdown\n"));
-        return NS_ERROR_FAILURE;
-    }
-    if (!PostMessage(ipcLocalHwnd, IPC_WM_CALLBACK, (WPARAM) func, (LPARAM) arg)) {
-        LOG(("  PostMessage failed w/ error = %u\n", GetLastError()));
-        return NS_ERROR_FAILURE;
-    }
-    return NS_OK;
 }

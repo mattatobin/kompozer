@@ -1,58 +1,53 @@
 /*
  * NSS utility functions
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: dbinit.c,v 1.28.2.1 2006/09/22 00:21:03 julien.pierre.bugs%sun.com Exp $ */
+ # $Id: dbinit.c,v 1.20 2003/05/30 23:31:30 wtc%netscape.com Exp $
+ */
 
 #include <ctype.h>
 #include "seccomon.h"
 #include "prinit.h"
 #include "prprf.h"
 #include "prmem.h"
-#include "pratom.h"
 #include "pcertt.h"
 #include "lowkeyi.h"
 #include "pcert.h"
 #include "cdbhdl.h"
-#include "keydbi.h"
 #include "pkcs11i.h"
 
 static char *
-sftk_certdb_name_cb(void *arg, int dbVersion)
+pk11_certdb_name_cb(void *arg, int dbVersion)
 {
     const char *configdir = (const char *)arg;
     const char *dbver;
@@ -89,7 +84,7 @@ sftk_certdb_name_cb(void *arg, int dbVersion)
 }
     
 static char *
-sftk_keydb_name_cb(void *arg, int dbVersion)
+pk11_keydb_name_cb(void *arg, int dbVersion)
 {
     const char *configdir = (const char *)arg;
     const char *dbver;
@@ -120,8 +115,13 @@ sftk_keydb_name_cb(void *arg, int dbVersion)
     return dbname;
 }
 
+/* for now... we need to define vendor specific codes here.
+ */
+#define CKR_CERTDB_FAILED	CKR_DEVICE_ERROR
+#define CKR_KEYDB_FAILED	CKR_DEVICE_ERROR
+
 const char *
-sftk_EvaluateConfigDir(const char *configdir,char **appName)
+pk11_EvaluateConfigDir(const char *configdir,char **appName)
 {
     if (PORT_Strncmp(configdir, MULTIACCESS, sizeof(MULTIACCESS)-1) == 0) {
 	char *cdir;
@@ -144,11 +144,11 @@ sftk_EvaluateConfigDir(const char *configdir,char **appName)
 }
 
 static CK_RV
-sftk_OpenCertDB(const char * configdir, const char *prefix, PRBool readOnly,
+pk11_OpenCertDB(const char * configdir, const char *prefix, PRBool readOnly,
     					    NSSLOWCERTCertDBHandle **certdbPtr)
 {
     NSSLOWCERTCertDBHandle *certdb = NULL;
-    CK_RV        crv = CKR_NETSCAPE_CERTDB_FAILED;
+    CK_RV        crv = CKR_CERTDB_FAILED;
     SECStatus    rv;
     char * name = NULL;
     char * appName = NULL;
@@ -157,7 +157,7 @@ sftk_OpenCertDB(const char * configdir, const char *prefix, PRBool readOnly,
 	prefix = "";
     }
 
-    configdir = sftk_EvaluateConfigDir(configdir, &appName);
+    configdir = pk11_EvaluateConfigDir(configdir, &appName);
 
     name = PR_smprintf("%s" PATH_SEPARATOR "%s",configdir,prefix);
     if (name == NULL) goto loser;
@@ -166,10 +166,9 @@ sftk_OpenCertDB(const char * configdir, const char *prefix, PRBool readOnly,
     if (certdb == NULL) 
     	goto loser;
 
-    certdb->ref = 1;
 /* fix when we get the DB in */
     rv = nsslowcert_OpenCertDB(certdb, readOnly, appName, prefix,
-				sftk_certdb_name_cb, (void *)name, PR_FALSE);
+				pk11_certdb_name_cb, (void *)name, PR_FALSE);
     if (rv == SECSuccess) {
 	crv = CKR_OK;
 	*certdbPtr = certdb;
@@ -183,7 +182,7 @@ loser:
 }
 
 static CK_RV
-sftk_OpenKeyDB(const char * configdir, const char *prefix, PRBool readOnly,
+pk11_OpenKeyDB(const char * configdir, const char *prefix, PRBool readOnly,
     						NSSLOWKEYDBHandle **keydbPtr)
 {
     NSSLOWKEYDBHandle *keydb;
@@ -193,17 +192,17 @@ sftk_OpenKeyDB(const char * configdir, const char *prefix, PRBool readOnly,
     if (prefix == NULL) {
 	prefix = "";
     }
-    configdir = sftk_EvaluateConfigDir(configdir, &appName);
+    configdir = pk11_EvaluateConfigDir(configdir, &appName);
 
     name = PR_smprintf("%s" PATH_SEPARATOR "%s",configdir,prefix);	
     if (name == NULL) 
-	return CKR_HOST_MEMORY;
+	return SECFailure;
     keydb = nsslowkey_OpenKeyDB(readOnly, appName, prefix, 
-					sftk_keydb_name_cb, (void *)name);
+					pk11_keydb_name_cb, (void *)name);
     PR_smprintf_free(name);
     if (appName) PORT_Free(appName);
     if (keydb == NULL)
-	return CKR_NETSCAPE_KEYDB_FAILED;
+	return CKR_KEYDB_FAILED;
     *keydbPtr = keydb;
 
     return CKR_OK;
@@ -228,7 +227,7 @@ sftk_OpenKeyDB(const char * configdir, const char *prefix, PRBool readOnly,
  * 			be opened.
  */
 CK_RV
-sftk_DBInit(const char *configdir, const char *certPrefix, 
+pk11_DBInit(const char *configdir, const char *certPrefix, 
 	    const char *keyPrefix, PRBool readOnly, 
 	    PRBool noCertDB, PRBool noKeyDB, PRBool forceOpen,
 	    NSSLOWCERTCertDBHandle **certdbPtr, NSSLOWKEYDBHandle **keydbPtr)
@@ -237,7 +236,7 @@ sftk_DBInit(const char *configdir, const char *certPrefix,
 
 
     if (!noCertDB) {
-	crv = sftk_OpenCertDB(configdir, certPrefix, readOnly, certdbPtr);
+	crv = pk11_OpenCertDB(configdir, certPrefix, readOnly, certdbPtr);
 	if (crv != CKR_OK) {
 	    if (!forceOpen) goto loser;
 	    crv = CKR_OK;
@@ -245,7 +244,7 @@ sftk_DBInit(const char *configdir, const char *certPrefix,
     }
     if (!noKeyDB) {
 
-	crv = sftk_OpenKeyDB(configdir, keyPrefix, readOnly, keydbPtr);
+	crv = pk11_OpenKeyDB(configdir, keyPrefix, readOnly, keydbPtr);
 	if (crv != CKR_OK) {
 	    if (!forceOpen) goto loser;
 	    crv = CKR_OK;
@@ -257,57 +256,26 @@ loser:
     return crv;
 }
 
-NSSLOWCERTCertDBHandle *
-sftk_getCertDB(SFTKSlot *slot)
-{
-    NSSLOWCERTCertDBHandle *certHandle;
 
-    PZ_Lock(slot->slotLock);
-    certHandle = slot->certDB;
+void
+pk11_DBShutdown(NSSLOWCERTCertDBHandle *certHandle, 
+		NSSLOWKEYDBHandle *keyHandle)
+{
     if (certHandle) {
-	PR_AtomicIncrement(&certHandle->ref);
-    }
-    PZ_Unlock(slot->slotLock);
-    return certHandle;
-}
-
-NSSLOWKEYDBHandle *
-sftk_getKeyDB(SFTKSlot *slot)
-{
-    NSSLOWKEYDBHandle *keyHandle;
-
-    PZ_Lock(slot->slotLock);
-    keyHandle = slot->keyDB;
-    if (keyHandle) {
-	PR_AtomicIncrement(&keyHandle->ref);
-    }
-    PZ_Unlock(slot->slotLock);
-    return keyHandle;
-}
-
-void
-sftk_freeCertDB(NSSLOWCERTCertDBHandle *certHandle)
-{
-   PRInt32 ref = PR_AtomicDecrement(&certHandle->ref);
-   if (ref == 0) {
-	nsslowcert_ClosePermCertDB(certHandle);
+    	nsslowcert_ClosePermCertDB(certHandle);
 	PORT_Free(certHandle);
-   }
-}
+	certHandle= NULL;
+    }
 
-void
-sftk_freeKeyDB(NSSLOWKEYDBHandle *keyHandle)
-{
-   PRInt32 ref = PR_AtomicDecrement(&keyHandle->ref);
-   if (ref == 0) {
-	nsslowkey_CloseKeyDB(keyHandle);
-   }
+    if (keyHandle) {
+    	nsslowkey_CloseKeyDB(keyHandle);
+	keyHandle= NULL;
+    }
 }
-   
 
 static int rdbmapflags(int flags);
-static rdbfunc sftk_rdbfunc = NULL;
-static rdbstatusfunc sftk_rdbstatusfunc = NULL;
+static rdbfunc pk11_rdbfunc = NULL;
+static rdbstatusfunc pk11_rdbstatusfunc = NULL;
 
 /* NOTE: SHLIB_SUFFIX is defined on the command line */
 #define RDBLIB SHLIB_PREFIX"rdb."SHLIB_SUFFIX
@@ -318,10 +286,10 @@ DB * rdbopen(const char *appName, const char *prefix,
     PRLibrary *lib;
     DB *db;
 
-    if (sftk_rdbfunc) {
-	db = (*sftk_rdbfunc)(appName,prefix,type,rdbmapflags(flags));
-	if (!db && status && sftk_rdbstatusfunc) {
-	    *status = (*sftk_rdbstatusfunc)();
+    if (pk11_rdbfunc) {
+	db = (*pk11_rdbfunc)(appName,prefix,type,rdbmapflags(flags));
+	if (!db && status && pk11_rdbstatusfunc) {
+	    *status = (*pk11_rdbstatusfunc)();
 	}
 	return db;
     }
@@ -336,12 +304,12 @@ DB * rdbopen(const char *appName, const char *prefix,
     }
 
     /* get the entry points */
-    sftk_rdbstatusfunc = (rdbstatusfunc) PR_FindSymbol(lib,"rdbstatus");
-    sftk_rdbfunc = (rdbfunc) PR_FindSymbol(lib,"rdbopen");
-    if (sftk_rdbfunc) {
-	db = (*sftk_rdbfunc)(appName,prefix,type,rdbmapflags(flags));
-	if (!db && status && sftk_rdbstatusfunc) {
-	    *status = (*sftk_rdbstatusfunc)();
+    pk11_rdbstatusfunc = (rdbstatusfunc) PR_FindSymbol(lib,"rdbstatus");
+    pk11_rdbfunc = (rdbfunc) PR_FindSymbol(lib,"rdbopen");
+    if (pk11_rdbfunc) {
+	db = (*pk11_rdbfunc)(appName,prefix,type,rdbmapflags(flags));
+	if (!db && status && pk11_rdbstatusfunc) {
+	    *status = (*pk11_rdbstatusfunc)();
 	}
 	return db;
     }
@@ -421,7 +389,7 @@ db_InitComplete(DB *db)
     /* we should have addes a version number to the RDBS structure. Since we
      * didn't, we detect that we have and 'extended' structure if the rdbstatus
      * func exists */
-    if (!sftk_rdbstatusfunc) {
+    if (!pk11_rdbstatusfunc) {
 	return 0;
     }
 

@@ -34,14 +34,10 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "TestCommon.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "nsIServiceManager.h"
-#include "nsPIDNSService.h"
-#include "nsIDNSListener.h"
-#include "nsIDNSRecord.h"
-#include "nsICancelable.h"
+#include "nsIDNSService.h"
 #include "nsCOMPtr.h"
 #include "nsString.h"
 #include "nsNetCID.h"
@@ -60,7 +56,7 @@ public:
         , mIndex(index) {}
     virtual ~myDNSListener() {}
 
-    NS_IMETHOD OnLookupComplete(nsICancelable *request,
+    NS_IMETHOD OnLookupComplete(nsIDNSRequest *request,
                                 nsIDNSRecord  *rec,
                                 nsresult       status)
     {
@@ -92,9 +88,6 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(myDNSListener, nsIDNSListener)
 
 int main(int argc, char **argv)
 {
-    if (test_common_init(&argc, &argv) != 0)
-        return -1;
-
     int sleepLen = 10; // default: 10 seconds
 
     if (argc == 1) {
@@ -102,7 +95,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    nsCOMPtr<nsPIDNSService> dns = do_GetService(NS_DNSSERVICE_CONTRACTID);
+    nsCOMPtr<nsIDNSService> dns = do_GetService(NS_DNSSERVICE_CONTRACTID);
     if (!dns)
         return -1;
 
@@ -123,7 +116,7 @@ int main(int argc, char **argv)
 
             nsCOMPtr<nsIDNSListener> listener = new myDNSListener(argv[i], i);
 
-            nsCOMPtr<nsICancelable> req;
+            nsCOMPtr<nsIDNSRequest> req;
             nsresult rv = dns->AsyncResolve(hostBuf,
                                             nsIDNSService::RESOLVE_CANONICAL_NAME,
                                             listener, nsnull, getter_AddRefs(req));

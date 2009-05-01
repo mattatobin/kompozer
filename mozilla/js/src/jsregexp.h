@@ -53,8 +53,8 @@
 struct JSRegExpStatics {
     JSString    *input;         /* input string to match (perl $_, GC root) */
     JSBool      multiline;      /* whether input contains newlines (perl $*) */
-    uint16      parenCount;     /* number of valid elements in parens[] */
-    uint16      moreLength;     /* number of allocated elements in moreParens */
+    uintN       parenCount;     /* number of valid elements in parens[] */
+    uintN       moreLength;     /* number of allocated elements in moreParens */
     JSSubString parens[9];      /* last set of parens matched (perl $1, $2) */
     JSSubString *moreParens;    /* null or realloc'd vector for $10, etc. */
     JSSubString lastMatch;      /* last string matched (perl $&) */
@@ -65,21 +65,21 @@ struct JSRegExpStatics {
 
 /*
  * This struct holds a bitmap representation of a class from a regexp.
- * There's a list of these referenced by the classList field in the JSRegExp
+ * There's a list of these referenced by the classList field in the JSRegExp 
  * struct below. The initial state has startIndex set to the offset in the
- * original regexp source of the beginning of the class contents. The first
+ * original regexp source of the beginning of the class contents. The first 
  * use of the class converts the source representation into a bitmap.
  *
  */
 typedef struct RECharSet {
-    JSPackedBool    converted;
-    JSPackedBool    sense;
-    uint16          length;
+    JSBool converted;
+    JSBool sense;
+    uint16 length;
     union {
-        uint8       *bits;
+        uint8 *bits;
         struct {
-            size_t  startIndex;
-            size_t  length;
+            uint16 startIndex;
+            uint16 length;
         } src;
     } u;
 } RECharSet;
@@ -99,14 +99,12 @@ typedef struct RENode RENode;
 
 struct JSRegExp {
     jsrefcount   nrefs;         /* reference count */
-    uint16       flags;         /* flags, see jsapi.h's JSREG_* defines */
-    uint16       cloneIndex;    /* index in fp->vars or funobj->slots of
-                                   cloned regexp object */
-    size_t       parenCount;    /* number of parenthesized submatches */
-    size_t       classCount;    /* count [...] bitmaps */
+    uint32       parenCount:24, /* number of parenthesized submatches */
+                 flags:8;       /* flags, see jsapi.h's JSREG_* defines */
+    uint32       classCount;    /* count [...] bitmaps */
     RECharSet    *classList;    /* list of [...] bitmaps */
     JSString     *source;       /* locked source string, sans // */
-    jsbytecode   program[1];    /* regular expression bytecode */
+    jsbytecode  program[1];     /* regular expression bytecode */
 };
 
 extern JSRegExp *
@@ -116,9 +114,6 @@ js_NewRegExp(JSContext *cx, JSTokenStream *ts,
 extern JSRegExp *
 js_NewRegExpOpt(JSContext *cx, JSTokenStream *ts,
                 JSString *str, JSString *opt, JSBool flat);
-
-#define HOLD_REGEXP(cx, re) JS_ATOMIC_INCREMENT(&(re)->nrefs)
-#define DROP_REGEXP(cx, re) js_DestroyRegExp(cx, re)
 
 extern void
 js_DestroyRegExp(JSContext *cx, JSRegExp *re);
@@ -130,7 +125,7 @@ js_DestroyRegExp(JSContext *cx, JSRegExp *re);
  */
 extern JSBool
 js_ExecuteRegExp(JSContext *cx, JSRegExp *re, JSString *str, size_t *indexp,
-                 JSBool test, jsval *rval);
+		 JSBool test, jsval *rval);
 
 /*
  * These two add and remove GC roots, respectively, so their calls must be
@@ -152,14 +147,7 @@ extern JSObject *
 js_InitRegExpClass(JSContext *cx, JSObject *obj);
 
 /*
- * Export js_regexp_toString to the decompiler.
- */
-extern JSBool
-js_regexp_toString(JSContext *cx, JSObject *obj, uintN argc, jsval *argv,
-                   jsval *rval);
-
-/*
- * Create, serialize/deserialize, or clone a RegExp object.
+ * Create a new RegExp object.
  */
 extern JSObject *
 js_NewRegExpObject(JSContext *cx, JSTokenStream *ts,
@@ -171,9 +159,6 @@ js_XDRRegExp(JSXDRState *xdr, JSObject **objp);
 extern JSObject *
 js_CloneRegExpObject(JSContext *cx, JSObject *obj, JSObject *parent);
 
-/*
- * Get and set the per-object (clone or clone-parent) lastIndex slot.
- */
 extern JSBool
 js_GetLastIndex(JSContext *cx, JSObject *obj, jsdouble *lastIndex);
 

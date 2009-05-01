@@ -23,7 +23,6 @@
  *
  * Contributor(s):
  *   John Bandhauer <jband@netscape.com> (original author)
- *   Nate Nielsen <nielsen@memberwebs.com> 
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either of the GNU General Public License Version 2 or later (the "GPL"),
@@ -49,8 +48,6 @@
 #include "nsIInterfaceInfo.idl"
 #include "nsIInterfaceInfoManager.idl"
 #include "nsIExceptionService.idl"
-#include "nsIVariant.idl"
-#include "nsIWeakReference.idl"
 
 %{ C++
 #include "jspubtd.h"
@@ -147,7 +144,6 @@ interface nsIXPConnect;
 interface nsIXPConnectWrappedNative;
 interface nsIInterfaceInfo;
 interface nsIXPCSecurityManager;
-interface nsIPrincipal;
 
 /***************************************************************************/
 [uuid(8916a320-d118-11d3-8f3a-0010a4e73d9a)]
@@ -180,37 +176,7 @@ interface nsIXPConnectWrappedNative : nsIXPConnectJSObjectHolder
      * object it points into.
      */
     voidPtrPtr GetSecurityInfoAddress();
-
-%{C++
-    /**
-     * Faster access to the native object from C++.  Will never return null.
-     */
-    nsISupports* Native() const { return mIdentity; }
-
-protected:
-    nsISupports *mIdentity;
-public:
-%}
 };
-
-%{C++
-inline
-const nsQueryInterface
-do_QueryWrappedNative(nsIXPConnectWrappedNative *aWrappedNative)
-{
-    return nsQueryInterface(aWrappedNative->Native());
-}
-
-inline
-const nsQueryInterfaceWithError
-do_QueryWrappedNative(nsIXPConnectWrappedNative *aWrappedNative,
-                      nsresult *aError)
-
-{
-    return nsQueryInterfaceWithError(aWrappedNative->Native(), aError);
-}
-
-%}
 
 [uuid(BED52030-BCA6-11d2-BA79-00805F8A5DD7)]
 interface nsIXPConnectWrappedJS : nsIXPConnectJSObjectHolder
@@ -223,31 +189,6 @@ interface nsIXPConnectWrappedJS : nsIXPConnectJSObjectHolder
 
     void aggregatedQueryInterface(in nsIIDRef uuid,
                                   [iid_is(uuid),retval] out nsQIResult result);
-};
-
-[uuid(0f1799d3-13d3-45f7-8361-0a6f211183f4)]
-interface nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH : nsIXPConnectWrappedJS
-{
-    /* This method has the same signature and the same semantics as the
-     * one method on nsISupportsWeakReference.  However, it exists here
-     * so that callers who need to manage JS garbage collection for
-     * wrapped objects themselves can get a weak reference to the
-     * wrapped JS object:  in other words, it's for callers who know
-     * that they're dealing with a wrapper, and want a weak reference to
-     * the wrapper rather than the wrapped object.
-     */
-    nsIWeakReference GetWeakReference();
-};
-
-/**
- * This interface is a complete hack.  It is used by the DOM code to
- * call QueryReferent on a weak reference to a wrapped JS object without
- * causing reference counting, which would add and remove GC roots
- * (which can't be done in the middle of GC).
- */
-[uuid(3f32871c-d014-4f91-b358-3ece74cbebaa)]
-interface nsWeakRefToIXPConnectWrappedJS : nsIXPConnectWrappedJS_MOZILLA_1_8_BRANCH
-{
 };
 
 /***************************************************************************/
@@ -425,7 +366,7 @@ interface nsIXPCWrappedJSObjectGetter : nsISupports
  *
  */
 
-[uuid(039ef260-2a0d-11d5-90a7-0010a4e73d9a)]
+[scriptable, uuid(039ef260-2a0d-11d5-90a7-0010a4e73d9a)]
 interface nsIXPCFunctionThisTranslator : nsISupports
 {
     nsISupports TranslateThis(in nsISupports        aInitialThis,
@@ -445,7 +386,7 @@ interface nsIXPCFunctionThisTranslator : nsISupports
     { 0xbd, 0xd6, 0x0, 0x0, 0x64, 0x65, 0x73, 0x74 } }
 %}
 
-[uuid(DEB1D48E-7469-4B01-B186-D9854C7D3F2D)]
+[uuid(EFAE37B0-946D-11d2-BA58-00805F8A5DD7)]
 interface nsIXPConnect : nsISupports
 {
 %{ C++
@@ -461,10 +402,7 @@ interface nsIXPConnect : nsISupports
                   in JSContextPtr aJSContext,
                   in nsISupports  aCOMObj,
                   in nsIIDRef     aIID,
-                  in PRUint32     aFlags);
-
-    const PRUint32 INIT_JS_STANDARD_CLASSES  = 1 << 0;
-    const PRUint32 FLAG_SYSTEM_GLOBAL_OBJECT = 1 << 1;
+                  in PRBool       aCallJS_InitStandardClasses);
 
     /**
     * wrapNative will create a new JSObject or return an existing one.
@@ -489,9 +427,6 @@ interface nsIXPConnect : nsISupports
     * It *might* be possible to QueryInterface the nsIXPConnectJSObjectHolder
     * returned by the method into a nsIXPConnectWrappedNative or a
     * nsIXPConnectWrappedJS.
-    *
-    * This method will never wrap the JSObject involved in an
-    * XPCNativeWrapper before returning.
     *
     * Returns:
     *    success:
@@ -657,92 +592,4 @@ interface nsIXPConnect : nsISupports
     attribute PRBool deferReleasesUntilAfterGarbageCollection;
 
     void releaseJSContext(in JSContextPtr aJSContext, in PRBool noGC);
-
-    JSVal variantToJS(in JSContextPtr ctx, in JSObjectPtr scope, in nsIVariant value);
-    nsIVariant JSToVariant(in JSContextPtr ctx, in JSVal value);
-
-    /**
-     * Preconfigure XPCNativeWrapper automation so that when a scripted
-     * caller whose filename starts with filenamePrefix accesses a wrapped
-     * native that is not flagged as "system", the wrapped native will be
-     * automatically wrapped with an XPCNativeWrapper.
-     *
-     * @param aFilenamePrefix the UTF-8 filename prefix to match, which
-     *                        should end with a slash (/) character
-     */
-    void flagSystemFilenamePrefix(in string aFilenamePrefix);
-
-    /**
-     * Restore an old prototype for wrapped natives of type
-     * aClassInfo. This should be used only when restoring an old
-     * scope into a state close to where it was prior to
-     * being reinitialized.
-     */
-    void restoreWrappedNativePrototype(in JSContextPtr aJSContext,
-                                       in JSObjectPtr  aScope,
-                                       in nsIClassInfo aClassInfo,
-                                       in nsIXPConnectJSObjectHolder aPrototype);
-};
-
-[uuid(4b61f818-d260-45ab-ac4e-d27790b5be5e)]
-interface nsIXPConnect_MOZILLA_1_8_BRANCH : nsIXPConnect
-{
-    void
-    reparentScopeAwareWrappers(in JSContextPtr aJSContext,
-                               in JSObjectPtr  aOldScope,
-                               in JSObjectPtr  aNewScope);
-
-   /**
-    * Create a sandbox for evaluating code in isolation using
-    * evalInSandboxObject().
-    *
-    * @param cx A context to use when creating the sandbox object.
-    * @param principal The principal (or NULL to use the null principal)
-    *                  to use when evaluating code in this sandbox.
-    */
-   nsIXPConnectJSObjectHolder createSandbox(in JSContextPtr cx,
-                                            in nsIPrincipal principal);
-
-   /**
-    * Evaluate script in a sandbox, completely isolated from all
-    * other running scripts.
-    *
-    * @param source The source of the script to evaluate.
-    * @param cx The context to use when setting up the evaluation of
-    *           the script. The actual evaluation will happen on a new
-    *           temporary context.
-    * @param sandbox The sandbox object to evaluate the script in.
-    * @return The result of the evaluation as a jsval. If the caller
-    *         intends to use the return value from this call the caller
-    *         is responsible for rooting the jsval before making a call
-    *         to this method.
-    */
-   JSVal evalInSandboxObject(in AString source, in JSContextPtr cx,
-                             in nsIXPConnectJSObjectHolder sandbox);
-};
-
-[uuid(f4bec7f9-256b-4acd-b32c-2c3d37615190)]
-interface nsIXPConnect_MOZILLA_1_8_BRANCH2 : nsIXPConnect_MOZILLA_1_8_BRANCH
-{
-   /**
-    * Evaluate script in a sandbox, completely isolated from all
-    * other running scripts.
-    *
-    * @param source The source of the script to evaluate.
-    * @param cx The context to use when setting up the evaluation of
-    *           the script. The actual evaluation will happen on a new
-    *           temporary context.
-    * @param sandbox The sandbox object to evaluate the script in.
-    * @param returnStringOnly The only results to come out of the
-    *                         computation (including exceptions) will
-    *                         be coerced into strings created in the
-    *                         sandbox.
-    * @return The result of the evaluation as a jsval. If the caller
-    *         intends to use the return value from this call the caller
-    *         is responsible for rooting the jsval before making a call
-    *         to this method.
-    */
-   JSVal evalInSandboxObject2(in AString source, in JSContextPtr cx,
-                              in nsIXPConnectJSObjectHolder sandbox,
-                              in PRBool returnStringOnly);
 };

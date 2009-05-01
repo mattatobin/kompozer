@@ -43,10 +43,10 @@ var gIOService = null;
 function initTopDocAndWin()
 {
   if ("arguments" in window && window.arguments.length > 0 && 
-      window.arguments[0] && window.arguments[0].doc)
+      window.arguments[0])
   {
     gTopWin = null;
-    gTopDoc = window.arguments[0].doc;
+    gTopDoc = window.arguments[0];
   }
   else 
   {
@@ -67,7 +67,7 @@ function initP3PTab()
   
   // now select the main link
   var tree = document.getElementById("linkList");
-  tree.view.selection.select(0);
+  tree.treeBoxObject.selection.select(0);
 
   var linkTypes = 
   [
@@ -136,7 +136,7 @@ function getLinksFor(aTagName, aAttrName, aWin, aDoc)
   length = elts.length;
   for (i = 0; i < length; ++i)
   {
-    var url = elts[i].getAttribute(aAttrName);
+    var url = elts[i][aAttrName];
     if (url) {
       try {
         // The user sees the links as absolute when mousing over.

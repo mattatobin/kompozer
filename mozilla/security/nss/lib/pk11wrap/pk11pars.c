@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 2001 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 /*
  * The following handles the loading, unloading and management of
  * various PCKS #11 modules
@@ -43,7 +40,6 @@
 #include "seccomon.h"
 #include "secmod.h"
 #include "secmodi.h"
-#include "secmodti.h"
 #include "pki3hack.h"
 #include "secerr.h"
    
@@ -98,11 +94,15 @@ secmod_NewModule(void)
     newMod->trustOrder = 0;
     newMod->cipherOrder = 0;
     newMod->evControlMask = 0;
-    newMod->refLock = PZ_NewLock(nssILockRefLock);
+#ifdef PKCS11_USE_THREADS
+    newMod->refLock = (void *)PZ_NewLock(nssILockRefLock);
     if (newMod->refLock == NULL) {
 	PORT_FreeArena(arena,PR_FALSE);
 	return NULL;
     }
+#else
+    newMod->refLock = NULL;
+#endif
     return newMod;
     
 }
@@ -128,26 +128,26 @@ SECMOD_CreateModule(const char *library, const char *moduleName,
     if (parameters) {
 	mod->libraryParams = PORT_ArenaStrdup(mod->arena,parameters);
     }
-    mod->internal   = secmod_argHasFlag("flags","internal",nssc);
-    mod->isFIPS     = secmod_argHasFlag("flags","FIPS",nssc);
-    mod->isCritical = secmod_argHasFlag("flags","critical",nssc);
-    slotParams      = secmod_argGetParamValue("slotParams",nssc);
-    mod->slotInfo   = secmod_argParseSlotInfo(mod->arena,slotParams,
+    mod->internal = pk11_argHasFlag("flags","internal",nssc);
+    mod->isFIPS = pk11_argHasFlag("flags","FIPS",nssc);
+    mod->isCritical = pk11_argHasFlag("flags","critical",nssc);
+    slotParams = pk11_argGetParamValue("slotParams",nssc);
+    mod->slotInfo = pk11_argParseSlotInfo(mod->arena,slotParams,
 							&mod->slotInfoCount);
     if (slotParams) PORT_Free(slotParams);
     /* new field */
-    mod->trustOrder  = secmod_argReadLong("trustOrder",nssc,
-						SECMOD_DEFAULT_TRUST_ORDER,NULL);
+    mod->trustOrder = pk11_argReadLong("trustOrder",nssc,
+						PK11_DEFAULT_TRUST_ORDER,NULL);
     /* new field */
-    mod->cipherOrder = secmod_argReadLong("cipherOrder",nssc,
-						SECMOD_DEFAULT_CIPHER_ORDER,NULL);
+    mod->cipherOrder = pk11_argReadLong("cipherOrder",nssc,
+						PK11_DEFAULT_CIPHER_ORDER,NULL);
     /* new field */
-    mod->isModuleDB   = secmod_argHasFlag("flags","moduleDB",nssc);
-    mod->moduleDBOnly = secmod_argHasFlag("flags","moduleDBOnly",nssc);
+    mod->isModuleDB = pk11_argHasFlag("flags","moduleDB",nssc);
+    mod->moduleDBOnly = pk11_argHasFlag("flags","moduleDBOnly",nssc);
     if (mod->moduleDBOnly) mod->isModuleDB = PR_TRUE;
 
-    ciphers = secmod_argGetParamValue("ciphers",nssc);
-    secmod_argSetNewCipherFlags(&mod->ssl[0],ciphers);
+    ciphers = pk11_argGetParamValue("ciphers",nssc);
+    pk11_argSetNewCipherFlags(&mod->ssl[0],ciphers);
     if (ciphers) PORT_Free(ciphers);
 
     secmod_PrivateModuleCount++;
@@ -156,7 +156,7 @@ SECMOD_CreateModule(const char *library, const char *moduleName,
 }
 
 static char *
-secmod_mkModuleSpec(SECMODModule * module)
+pk11_mkModuleSpec(SECMODModule * module)
 {
     char *nss = NULL, *modSpec = NULL, **slotStrings = NULL;
     int slotCount, i, si;
@@ -189,7 +189,7 @@ secmod_mkModuleSpec(SECMODModule * module)
 	    if (module->slots[i]->defaultFlags) {
 		PORT_Assert(si < slotCount);
 		if (si >= slotCount) break;
-		slotStrings[si] = secmod_mkSlotString(module->slots[i]->slotID,
+		slotStrings[si] = pk11_mkSlotString(module->slots[i]->slotID,
 			module->slots[i]->defaultFlags,
 			module->slots[i]->timeout,
 			module->slots[i]->askpw,
@@ -200,7 +200,7 @@ secmod_mkModuleSpec(SECMODModule * module)
 	}
      } else {
 	for (i=0; i < slotCount; i++) {
-		slotStrings[i] = secmod_mkSlotString(module->slotInfo[i].slotID,
+		slotStrings[i] = pk11_mkSlotString(module->slotInfo[i].slotID,
 			module->slotInfo[i].defaultFlags,
 			module->slotInfo[i].timeout,
 			module->slotInfo[i].askpw,
@@ -210,11 +210,10 @@ secmod_mkModuleSpec(SECMODModule * module)
     }
 
     SECMOD_ReleaseReadLock(moduleLock);
-    nss = secmod_mkNSS(slotStrings,slotCount,module->internal, module->isFIPS,
-		       module->isModuleDB, module->moduleDBOnly, 
-		       module->isCritical, module->trustOrder,
-		       module->cipherOrder,module->ssl[0],module->ssl[1]);
-    modSpec= secmod_mkNewModuleSpec(module->dllName,module->commonName,
+    nss = pk11_mkNSS(slotStrings,slotCount,module->internal, module->isFIPS,
+	module->isModuleDB, module->moduleDBOnly, module->isCritical,
+	module->trustOrder,module->cipherOrder,module->ssl[0],module->ssl[1]);
+    modSpec= pk11_mkNewModuleSpec(module->dllName,module->commonName,
 						module->libraryParams,nss);
     PORT_Free(slotStrings);
     PR_smprintf_free(nss);
@@ -245,7 +244,7 @@ SECMOD_AddPermDB(SECMODModule *module)
 
     func  = (SECMODModuleDBFunc) module->parent->moduleDBFunc;
     if (func) {
-	moduleSpec = secmod_mkModuleSpec(module);
+	moduleSpec = pk11_mkModuleSpec(module);
 	retString = (*func)(SECMOD_MODULE_DB_FUNCTION_ADD,
 		module->parent->libraryParams,moduleSpec);
 	PORT_Free(moduleSpec);
@@ -265,7 +264,7 @@ SECMOD_DeletePermDB(SECMODModule *module)
 
     func  = (SECMODModuleDBFunc) module->parent->moduleDBFunc;
     if (func) {
-	moduleSpec = secmod_mkModuleSpec(module);
+	moduleSpec = pk11_mkModuleSpec(module);
 	retString = (*func)(SECMOD_MODULE_DB_FUNCTION_DEL,
 		module->parent->libraryParams,moduleSpec);
 	PORT_Free(moduleSpec);
@@ -301,7 +300,7 @@ SECMOD_LoadModule(char *modulespec,SECMODModule *parent, PRBool recurse)
     /* initialize the underlying module structures */
     SECMOD_Init();
 
-    status = secmod_argParseModuleSpec(modulespec, &library, &moduleName, 
+    status = pk11_argParseModuleSpec(modulespec, &library, &moduleName, 
 							&parameters, &nss);
     if (status != SECSuccess) {
 	goto loser;

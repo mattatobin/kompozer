@@ -43,7 +43,6 @@ VPATH	  = @srcdir@
 include $(DEPTH)/config/autoconf.mk
 
 MODULE		= mozgnome
-MOZILLA_INTERNAL_API = 1
 
 XPIDLSRCS = \
 	nsIGConfService.idl \
@@ -77,7 +76,6 @@ EXTRA_DSO_LDOPTS += \
 		$(MOZ_GCONF_LIBS) \
 		$(MOZ_GNOMEVFS_LIBS) \
 		$(MOZ_LIBGNOME_LIBS) \
-		$(MOZ_GTK2_LIBS) \
 		$(NULL)
 
 endif

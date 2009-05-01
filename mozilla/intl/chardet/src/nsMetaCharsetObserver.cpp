@@ -1,11 +1,11 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,24 +14,25 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1999
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 #include "nsDeque.h"
@@ -44,6 +45,7 @@
 #include "nsISupports.h"
 #include "nsCRT.h"
 #include "nsIParser.h"
+#include "nsIAppStartupNotifier.h"
 #include "pratom.h"
 #include "nsCharDetDll.h"
 #include "nsIServiceManager.h"
@@ -56,6 +58,7 @@
 #include "nsUnicharUtils.h"
 
 static NS_DEFINE_CID(kCharsetAliasCID, NS_CHARSETALIAS_CID);
+static NS_DEFINE_CID(kParserServiceCID, NS_PARSERSERVICE_CID);
  
 static const eHTMLTags gWatchTags[] = 
 { eHTMLTag_meta,
@@ -98,7 +101,8 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
                      const PRUnichar* valueArray[])
 {
   
-    if(!nsDependentString(aTag).LowerCaseEqualsLiteral("meta")) 
+    if(!nsDependentString(aTag).Equals(NS_LITERAL_STRING("META"),
+                                       nsCaseInsensitiveStringComparator())) 
         return NS_ERROR_ILLEGAL_VALUE;
     else
         return Notify(aDocumentID, numOfAttributes, nameArray, valueArray);
@@ -144,7 +148,8 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
   nsresult result = NS_OK;
   // bug 125317 - document.write content is already an unicode content.
   if (!(aFlags & nsIElementObserver::IS_DOCUMENT_WRITE)) {
-    if(!nsDependentString(aTag).LowerCaseEqualsLiteral("meta")) {
+    if(!nsDependentString(aTag).Equals(NS_LITERAL_STRING("META"),
+                                       nsCaseInsensitiveStringComparator())) {
         result = NS_ERROR_ILLEGAL_VALUE;
     }
     else {
@@ -198,7 +203,7 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
           return NS_ERROR_ILLEGAL_VALUE;
 
       if(kCharsetFromMetaTag <= src)
-          return NS_OK; // current charset has higher priority. don't bother to do the following
+          return NS_OK; // current charset have higher priority. do bother to do the following
 
       PRInt32 i;
       const PRUnichar *httpEquivValue=nsnull;
@@ -215,11 +220,14 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
         while(IS_SPACE_CHARS(*keyStr)) 
           keyStr++;
 
-        if(Substring(keyStr, keyStr+10).LowerCaseEqualsLiteral("http-equiv"))
+        if(Substring(keyStr, keyStr+10).Equals(NS_LITERAL_STRING("HTTP-EQUIV"),
+                                               nsCaseInsensitiveStringComparator()))
               httpEquivValue = values->StringAt(i)->get();
-        else if(Substring(keyStr, keyStr+7).LowerCaseEqualsLiteral("content"))
+        else if(Substring(keyStr, keyStr+7).Equals(NS_LITERAL_STRING("content"),
+                                                   nsCaseInsensitiveStringComparator()))
               contentValue = values->StringAt(i)->get();
-        else if (Substring(keyStr, keyStr+7).LowerCaseEqualsLiteral("charset"))
+        else if (Substring(keyStr, keyStr+7).Equals(NS_LITERAL_STRING("charset"),
+                                                    nsCaseInsensitiveStringComparator()))
               charsetValue = values->StringAt(i)->get();
       }
       NS_NAMED_LITERAL_STRING(contenttype, "Content-Type");
@@ -293,11 +301,11 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
                      if(NS_SUCCEEDED(res2))
                      {
                         // following charset should have been detected by parser
-                        if (!preferred.EqualsLiteral("UTF-16") &&
-                            !preferred.EqualsLiteral("UTF-16BE") &&
-                            !preferred.EqualsLiteral("UTF-16LE") &&
-                            !preferred.EqualsLiteral("UTF-32BE") &&
-                            !preferred.EqualsLiteral("UTF-32LE")) {
+                        if (!preferred.Equals(NS_LITERAL_CSTRING("UTF-16")) &&
+                            !preferred.Equals(NS_LITERAL_CSTRING("UTF-16BE")) &&
+                            !preferred.Equals(NS_LITERAL_CSTRING("UTF-16LE")) &&
+                            !preferred.Equals(NS_LITERAL_CSTRING("UTF-32BE")) &&
+                            !preferred.Equals(NS_LITERAL_CSTRING("UTF-32LE"))) {
                           // Propagate the error message so that the parser can
                           // shutdown correctly. - Ref. Bug 96440
                           res = NotifyWebShell(aWebShell,
@@ -307,9 +315,6 @@ NS_IMETHODIMP nsMetaCharsetObserver::Notify(
                         }
                      } // if(NS_SUCCEEDED(res)
                  }
-             }
-             else {
-               res = NS_HTMLPARSER_VALID_META_CHARSET;
              } // if EqualIgnoreCase 
          } // if !newCharset.IsEmpty()
       } // if
@@ -347,7 +352,8 @@ NS_IMETHODIMP nsMetaCharsetObserver::GetCharsetFromCompatibilityTag(
     // e.g. <META charset="ISO-8859-1">
     PRInt32 numOfAttributes = keys->Count();
     if ((numOfAttributes >= 3) &&
-        (keys->StringAt(0)->LowerCaseEqualsLiteral("charset")))
+        (keys->StringAt(0)->Equals(NS_LITERAL_STRING("charset"),
+                                   nsCaseInsensitiveStringComparator())))
     {
       nsAutoString srcStr((values->StringAt(numOfAttributes-2))->get());
       PRInt32 err;
@@ -372,11 +378,11 @@ NS_IMETHODIMP nsMetaCharsetObserver::GetCharsetFromCompatibilityTag(
               // the BOM detection.
               nsString* currentCharset = values->StringAt(numOfAttributes-3);
               if (!preferred.Equals(NS_LossyConvertUCS2toASCII(*currentCharset)) &&
-                  !preferred.EqualsLiteral("UTF-16") &&
-                  !preferred.EqualsLiteral("UTF-16BE") &&
-                  !preferred.EqualsLiteral("UTF-16LE") &&
-                  !preferred.EqualsLiteral("UTF-32BE") &&
-                  !preferred.EqualsLiteral("UTF-32LE"))
+                  !preferred.Equals(NS_LITERAL_CSTRING("UTF-16")) &&
+                  !preferred.Equals(NS_LITERAL_CSTRING("UTF-16BE")) &&
+                  !preferred.Equals(NS_LITERAL_CSTRING("UTF-16LE")) &&
+                  !preferred.Equals(NS_LITERAL_CSTRING("UTF-32BE")) &&
+                  !preferred.Equals(NS_LITERAL_CSTRING("UTF-32LE")))
                   AppendASCIItoUTF16(preferred, aCharset);
           }
       }
@@ -405,7 +411,7 @@ NS_IMETHODIMP nsMetaCharsetObserver::Start()
   if (bMetaCharsetObserverStarted == PR_FALSE)  {
     bMetaCharsetObserverStarted = PR_TRUE;
 
-    nsCOMPtr<nsIParserService> parserService(do_GetService(NS_PARSERSERVICE_CONTRACTID, &rv));
+    nsCOMPtr<nsIParserService> parserService(do_GetService(kParserServiceCID, &rv));
 
     if (NS_FAILED(rv))
       return rv;
@@ -424,7 +430,7 @@ NS_IMETHODIMP nsMetaCharsetObserver::End()
   if (bMetaCharsetObserverStarted == PR_TRUE)  {
     bMetaCharsetObserverStarted = PR_FALSE;
 
-    nsCOMPtr<nsIParserService> parserService(do_GetService(NS_PARSERSERVICE_CONTRACTID, &rv));
+    nsCOMPtr<nsIParserService> parserService(do_GetService(kParserServiceCID, &rv));
 
     if (NS_FAILED(rv))
       return rv;

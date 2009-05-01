@@ -12,12 +12,12 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT processor.
  *
  * The Initial Developer of the Original Code is
  * Jonas Sicking.
  * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
+ * Jonas Sicking. All Rights Reserved.
  *
  * Contributor(s):
  *   Jonas Sicking <jonas@sicking.cc>
@@ -39,12 +39,16 @@
 #ifndef TRANSFRMX_TXSTYLESHEETCOMPILER_H
 #define TRANSFRMX_TXSTYLESHEETCOMPILER_H
 
+#include "baseutils.h"
+#include "txError.h"
 #include "txStack.h"
 #include "txXSLTPatterns.h"
 #include "Expr.h"
+#include "XMLUtils.h"
 #include "txIXPathContext.h"
 #include "nsAutoPtr.h"
 #include "txStylesheet.h"
+#include "TxLog.h"
 
 class txHandlerTable;
 class txElementContext;
@@ -76,7 +80,6 @@ public:
     virtual nsrefcnt Release() = 0;
 
     virtual nsresult loadURI(const nsAString& aUri,
-                             const nsAString& aReferrerUri,
                              txStylesheetCompiler* aCompiler) = 0;
     virtual void onDoneCompiling(txStylesheetCompiler* aCompiler,
                                  nsresult aResult,
@@ -87,8 +90,7 @@ public:
 #define TX_DECL_ACOMPILEOBSERVER \
   nsrefcnt AddRef(); \
   nsrefcnt Release(); \
-  nsresult loadURI(const nsAString& aUri, const nsAString& aReferrerUri, \
-                   txStylesheetCompiler* aCompiler); \
+  nsresult loadURI(const nsAString& aUri, txStylesheetCompiler* aCompiler); \
   void onDoneCompiling(txStylesheetCompiler* aCompiler, nsresult aResult, \
                        const PRUnichar *aErrorText = nsnull, \
                        const PRUnichar *aParam = nsnull)
@@ -99,7 +101,7 @@ public:
     txStylesheetCompilerState(txACompileObserver* aObserver);
     ~txStylesheetCompilerState();
     
-    nsresult init(const nsAString& aStylesheetURI, txStylesheet* aStylesheet,
+    nsresult init(const nsAString& aBaseURI, txStylesheet* aStylesheet,
                   txListIterator* aInsertPosition);
 
     // Embedded stylesheets state
@@ -124,6 +126,9 @@ public:
     nsresult pushPtr(void* aPtr);
     void* popPtr();
 
+    // State-checking functions
+    MBool fcp();
+    
     // stylesheet functions
     nsresult addToplevelItem(txToplevelItem* aItem);
     nsresult openInstructionContainer(txInstructionContainer* aContainer);
@@ -142,15 +147,6 @@ public:
     nsresult resolveFunctionCall(nsIAtom* aName, PRInt32 aID,
                                  FunctionCall*& aFunction);
     PRBool caseInsensitiveNameTests();
-
-    /**
-     * Should the stylesheet be parsed in forwards compatible parsing mode.
-     */
-    PRBool fcp()
-    {
-        return mElementContext->mForwardsCompatibleParsing;
-    }
-
     void SetErrorOffset(PRUint32 aOffset);
 
 
@@ -175,13 +171,13 @@ protected:
         eInEmbed,
         eHasEmbed
     } mEmbedStatus;
-    nsString mStylesheetURI;
+    nsString mURI;
     PRPackedBool mIsTopCompiler;
     PRPackedBool mDoneWithThisStylesheet;
-    txStack mObjectStack;
-    txStack mOtherStack;
 
 private:
+    txStack mObjectStack;
+    txStack mOtherStack;
     txInstruction** mNextInstrPtr;
     txListIterator mToplevelIterator;
     nsVoidArray mGotoTargetPointers;
@@ -200,16 +196,14 @@ class txStylesheetCompiler : private txStylesheetCompilerState,
 {
 public:
     friend class txStylesheetCompilerState;
-    txStylesheetCompiler(const nsAString& aStylesheetURI,
+    txStylesheetCompiler(const nsAString& aBaseURI,
                          txACompileObserver* aObserver);
-    txStylesheetCompiler(const nsAString& aStylesheetURI,
+    txStylesheetCompiler(const nsAString& aBaseURI,
                          txStylesheet* aStylesheet,
                          txListIterator* aInsertPosition,
                          txACompileObserver* aObserver);
     virtual nsrefcnt AddRef();
     virtual nsrefcnt Release();
-
-    void setBaseURI(const nsString& aBaseURI);
 
     nsresult startElement(PRInt32 aNamespaceID, nsIAtom* aLocalName,
                           nsIAtom* aPrefix, txStylesheetAttr* aAttributes,
@@ -227,8 +221,7 @@ public:
     txStylesheet* getStylesheet();
 
     // txACompileObserver
-    nsresult loadURI(const nsAString& aUri, const nsAString& aReferrerUri,
-                     txStylesheetCompiler* aCompiler);
+    nsresult loadURI(const nsAString& aUri, txStylesheetCompiler* aCompiler);
     void onDoneCompiling(txStylesheetCompiler* aCompiler, nsresult aResult,
                          const PRUnichar *aErrorText = nsnull,
                          const PRUnichar *aParam = nsnull);

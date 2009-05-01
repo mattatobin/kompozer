@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode:nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1999
  * the Initial Developer. All Rights Reserved.
@@ -22,16 +22,16 @@
  * Contributor(s):
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -77,8 +77,6 @@
 
 #include "nsMimeTypes.h"
 
-#include "nsDocLoader.h"
-
 static NS_DEFINE_CID(kStreamConverterServiceCID, NS_STREAMCONVERTERSERVICE_CID);
 #ifdef PR_LOGGING
 PRLogModuleInfo* nsURILoader::mLog = nsnull;
@@ -101,7 +99,7 @@ public:
   nsDocumentOpenInfo();
 
   // Real constructor
-  nsDocumentOpenInfo(nsIInterfaceRequestor* aWindowContext,
+  nsDocumentOpenInfo(nsISupports* aWindowContext,
                      PRBool aIsContentPreferred,
                      nsURILoader* aURILoader);
 
@@ -137,7 +135,7 @@ public:
   NS_DECL_NSISTREAMLISTENER
 
 protected:
-  ~nsDocumentOpenInfo();
+  virtual ~nsDocumentOpenInfo();
 
 protected:
   /**
@@ -153,10 +151,11 @@ protected:
   nsCOMPtr<nsIStreamListener> m_targetStreamListener;
 
   /**
-   * A pointer to the entity that originated the load. We depend on getting
-   * things like nsIURIContentListeners, nsIDOMWindows, etc off of it.
+   * A pointer to the entity that originated the load.  This should
+   * implement nsIInterfaceRequestor; we depend on getting things like
+   * nsIURIContentListeners, nsIDOMWindows, etc off of it.
    */
-  nsCOMPtr<nsIInterfaceRequestor> m_originalContext;
+  nsCOMPtr<nsISupports> m_originalContext;
 
   /**
    * Boolean to pass to CanHandleContent (also determines whether we
@@ -190,7 +189,7 @@ nsDocumentOpenInfo::nsDocumentOpenInfo()
   NS_NOTREACHED("This should never be called\n");
 }
 
-nsDocumentOpenInfo::nsDocumentOpenInfo(nsIInterfaceRequestor* aWindowContext,
+nsDocumentOpenInfo::nsDocumentOpenInfo(nsISupports* aWindowContext,
                                        PRBool aIsContentPreferred,
                                        nsURILoader* aURILoader)
   : m_originalContext(aWindowContext),
@@ -241,12 +240,11 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStartRequest(nsIRequest *request, nsISupport
 
   //
   // Deal with "special" HTTP responses:
-  // 
-  // - In the case of a 204 (No Content) or 205 (Reset Content) response, do
-  //   not try to find a content handler.  Return NS_BINDING_ABORTED to cancel
-  //   the request.  This has the effect of ensuring that the DocLoader does
-  //   not try to interpret this as a real request.
-  // 
+  //
+  // - In the case of a 204 (No Content)  or 205 (Reset Content) response, do not try to find a
+  //   content handler.  Just return.  This causes the request to be
+  //   ignored.
+  //
   nsCOMPtr<nsIHttpChannel> httpChannel(do_QueryInterface(request, &rv));
 
   if (NS_SUCCEEDED(rv)) {
@@ -264,7 +262,7 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStartRequest(nsIRequest *request, nsISupport
     LOG(("  HTTP response status: %d", responseCode));
 
     if (204 == responseCode || 205 == responseCode) {
-      return NS_BINDING_ABORTED;
+      return NS_OK;
     }
   }
 
@@ -291,24 +289,20 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStartRequest(nsIRequest *request, nsISupport
   if (httpChannel && mContentType.IsEmpty()) {
     // This is our initial dispatch, and this is an HTTP channel.  Check for
     // the text/plain mess.
-    nsCAutoString contentTypeHdr;
-    httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("Content-Type"),
-                                   contentTypeHdr);
     nsCAutoString contentType;
-    httpChannel->GetContentType(contentType);
-    
+    httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("Content-Type"),
+                                   contentType);
     // Make sure to do a case-sensitive exact match comparison here.  Apache
     // 1.x just sends text/plain for "unknown", while Apache 2.x sends
     // text/plain with a ISO-8859-1 charset.  Debian's Apache version, just to
     // be different, sends text/plain with iso-8859-1 charset.  Don't do
     // general case-insensitive comparison, since we really want to apply this
     // crap as rarely as we can.
-    if (contentType.EqualsLiteral("text/plain") &&
-        (contentTypeHdr.EqualsLiteral("text/plain") ||
-         contentTypeHdr.Equals(
+    if (contentType.Equals(NS_LITERAL_CSTRING("text/plain")) ||
+        contentType.Equals(
              NS_LITERAL_CSTRING("text/plain; charset=ISO-8859-1")) ||
-         contentTypeHdr.Equals(
-             NS_LITERAL_CSTRING("text/plain; charset=iso-8859-1")))) {
+        contentType.Equals(
+             NS_LITERAL_CSTRING("text/plain; charset=iso-8859-1"))) {
       // Check whether we have content-encoding.  If we do, don't try to detect
       // the type, since that will lead to the content being automatically
       // decompressed....
@@ -318,39 +312,16 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStartRequest(nsIRequest *request, nsISupport
       if (contentEncoding.IsEmpty()) {
         // OK, this is initial dispatch of an HTTP response and its Content-Type
         // header is exactly "text/plain".  We need to check whether this is
-        // really text....  Note that some of our listeners will actually
-        // accept all types, including the APPLICATION_MAYBE_TEXT internal
-        // type, so we need to call ConvertData here manually instead of
-        // relying on DispatchContent to do it.
-        LOG(("  Possibly bogus text/plain; trying to sniff for real type"));
-        rv = ConvertData(request, m_contentListener,
-                         NS_LITERAL_CSTRING(APPLICATION_MAYBE_TEXT),
-                         NS_LITERAL_CSTRING("*/*"));
-        if (NS_FAILED(rv)) {
-          // We failed to convert.  Just go ahead and handle as the original
-          // type.  If ConvertData happened to set our m_targetStreamListener,
-          // we don't want it!
-          m_targetStreamListener = nsnull;
-        }
-        else {
-          LOG((APPLICATION_MAYBE_TEXT " converter taking over now"));
-        }
+        // really text....
+        LOG(("  Possibly bogus text/plain; resetting type to " APPLICATION_MAYBE_TEXT));
+        httpChannel->SetContentType(NS_LITERAL_CSTRING(APPLICATION_MAYBE_TEXT));
       }
     }
   }
+  
+  rv = DispatchContent(request, aCtxt);
 
-  // If we sniffed text/plain above, m_targetStreamListener may already be
-  // non-null.
-  if (!m_targetStreamListener) {
-    rv = DispatchContent(request, aCtxt);
-  }
-
-  LOG(("  After dispatch, m_targetStreamListener: 0x%p, rv: 0x%08X", m_targetStreamListener.get(), rv));
-
-  NS_ASSERTION(NS_SUCCEEDED(rv) || !m_targetStreamListener,
-               "Must not have an m_targetStreamListener with a failure return!");
-
-  NS_ENSURE_SUCCESS(rv, rv);
+  LOG(("  After dispatch, m_targetStreamListener: 0x%p", m_targetStreamListener.get()));
   
   if (m_targetStreamListener)
     rv = m_targetStreamListener->OnStartRequest(request, aCtxt);
@@ -417,15 +388,6 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
     LOG(("  Got type from channel: '%s'", mContentType.get()));
   }
 
-  PRBool isGuessFromExt =
-    mContentType.LowerCaseEqualsASCII(APPLICATION_GUESS_FROM_EXT);
-  if (isGuessFromExt) {
-    // Reset to application/octet-stream for now; no one other than the
-    // external helper app service should see APPLICATION_GUESS_FROM_EXT.
-    mContentType = APPLICATION_OCTET_STREAM;
-    aChannel->SetContentType(NS_LITERAL_CSTRING(APPLICATION_OCTET_STREAM));
-  }
-
   // Check whether the data should be forced to be handled externally.  This
   // could happen because the Content-Disposition header is set so, or, in the
   // future, because the user has specified external handling for the MIME
@@ -433,12 +395,10 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
   PRBool forceExternalHandling = PR_FALSE;
   nsCAutoString disposition;
   nsCOMPtr<nsIHttpChannel> httpChannel(do_QueryInterface(request));
-  nsCOMPtr<nsIURI> uri;
   if (httpChannel)
   {
     rv = httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("content-disposition"),
                                         disposition);
-    httpChannel->GetURI(getter_AddRefs(uri));
   }
   else
   {
@@ -456,23 +416,14 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
     nsCOMPtr<nsIMIMEHeaderParam> mimehdrpar = do_GetService(NS_MIMEHEADERPARAM_CONTRACTID, &rv);
     if (NS_SUCCEEDED(rv))
     {
-      nsCAutoString fallbackCharset;
-      if (uri)
-        uri->GetOriginCharset(fallbackCharset);
       nsAutoString dispToken;
       // Get the disposition type
-      rv = mimehdrpar->GetParameter(disposition, "", fallbackCharset,
-                                    PR_TRUE, nsnull, dispToken);
+      rv = mimehdrpar->GetParameter(disposition, "", EmptyCString(), 
+                                    PR_FALSE, nsnull, dispToken);
       // RFC 2183, section 2.8 says that an unknown disposition
       // value should be treated as "attachment"
-      // XXXbz this code is duplicated in GetFilenameAndExtensionFromChannel in
-      // nsExternalHelperAppService.  Factor it out!
       if (NS_FAILED(rv) || 
-          (// Some broken sites just send
-           // Content-Disposition: ; filename="file"
-           // screen those out here.
-           !dispToken.IsEmpty() &&
-           !dispToken.LowerCaseEqualsLiteral("inline") &&
+          (!dispToken.EqualsIgnoreCase("inline") &&
           // Broken sites just send
           // Content-Disposition: filename="file"
           // without a disposition token... screen those out.
@@ -559,7 +510,7 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
       do_CreateInstance(handlerContractID.get());
     if (contentHandler) {
       LOG(("  Content handler found"));
-      rv = contentHandler->HandleContent(mContentType.get(),
+      rv = contentHandler->HandleContent(mContentType.get(), "view",
                                          m_originalContext, request);
       // XXXbz returning an error code to represent handling the
       // content is just bizarre!
@@ -626,12 +577,7 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
     request->SetLoadFlags(loadFlags | nsIChannel::LOAD_RETARGETED_DOCUMENT_URI
                                     | nsIChannel::LOAD_TARGETED);
 
-    if (isGuessFromExt) {
-      mContentType = APPLICATION_GUESS_FROM_EXT;
-      aChannel->SetContentType(NS_LITERAL_CSTRING(APPLICATION_GUESS_FROM_EXT));
-    }
-
-    rv = helperAppService->DoContent(mContentType,
+    rv = helperAppService->DoContent(mContentType.get(),
                                      request,
                                      m_originalContext,
                                      getter_AddRefs(m_targetStreamListener));
@@ -666,6 +612,9 @@ nsDocumentOpenInfo::ConvertData(nsIRequest *request,
 
   LOG(("  Got converter service"));
   
+  NS_ConvertASCIItoUCS2 from_w(aSrcContentType);
+  NS_ConvertASCIItoUCS2 to_w(aOutContentType);
+      
   // When applying stream decoders, it is necessary to "insert" an 
   // intermediate nsDocumentOpenInfo instance to handle the targeting of
   // the "final" stream or streams.
@@ -697,8 +646,8 @@ nsDocumentOpenInfo::ConvertData(nsIRequest *request,
   // stream converter and sets the output end of the stream converter to
   // nextLink.  As we pump data into m_targetStreamListener the stream
   // converter will convert it and pass the converted data to nextLink.
-  return StreamConvService->AsyncConvertData(PromiseFlatCString(aSrcContentType).get(), 
-                                             PromiseFlatCString(aOutContentType).get(), 
+  return StreamConvService->AsyncConvertData(from_w.get(), 
+                                             to_w.get(), 
                                              nextLink, 
                                              request,
                                              getter_AddRefs(m_targetStreamListener));
@@ -847,7 +796,7 @@ NS_IMETHODIMP nsURILoader::UnRegisterContentListener(nsIURIContentListener * aCo
 
 NS_IMETHODIMP nsURILoader::OpenURI(nsIChannel *channel, 
                                    PRBool aIsContentPreferred,
-                                   nsIInterfaceRequestor *aWindowContext)
+                                   nsISupports * aWindowContext)
 {
   NS_ENSURE_ARG_POINTER(channel);
 
@@ -885,34 +834,9 @@ NS_IMETHODIMP nsURILoader::OpenURI(nsIChannel *channel,
 
   if (!loader) return NS_ERROR_OUT_OF_MEMORY;
 
-  // Set the correct loadgroup on the channel
-  nsCOMPtr<nsILoadGroup> loadGroup(do_GetInterface(aWindowContext));
+  nsCOMPtr<nsIInterfaceRequestor> loadCookie;
+  SetupLoadCookie(aWindowContext, getter_AddRefs(loadCookie));
 
-  if (!loadGroup) {
-    // XXXbz This context is violating what we'd like to be the new uriloader
-    // api.... Set up a nsDocLoader to handle the loadgroup for this context.
-    // This really needs to go away!    
-    nsCOMPtr<nsIURIContentListener> listener(do_GetInterface(aWindowContext));
-    if (listener) {
-      nsCOMPtr<nsISupports> cookie;
-      listener->GetLoadCookie(getter_AddRefs(cookie));
-      if (!cookie) {
-        nsRefPtr<nsDocLoader> newDocLoader = new nsDocLoader();
-        if (!newDocLoader)
-          return NS_ERROR_OUT_OF_MEMORY;
-        nsresult rv = newDocLoader->Init();
-        if (NS_FAILED(rv))
-          return rv;
-        rv = nsDocLoader::AddDocLoaderAsChildOfRoot(newDocLoader);
-        if (NS_FAILED(rv))
-          return rv;
-        listener->SetLoadCookie(nsDocLoader::GetAsSupports(newDocLoader));
-      }
-    }
-  }        
-    
-  channel->SetLoadGroup(loadGroup);
-  
   // now instruct the loader to go ahead and open the url
   return loader->Open(channel);
 }
@@ -928,6 +852,115 @@ NS_IMETHODIMP nsURILoader::Stop(nsISupports* aLoadCookie)
   if (docLoader) {
     rv = docLoader->Stop();
   }
+  return rv;
+}
+
+NS_IMETHODIMP
+nsURILoader::GetLoadGroupForContext(nsISupports * aWindowContext,
+                                    nsILoadGroup ** aLoadGroup)
+{
+  nsresult rv;
+  nsCOMPtr<nsIInterfaceRequestor> loadCookieForWindow;
+
+  // Initialize the [out] parameter...
+  *aLoadGroup= nsnull;
+
+  NS_ENSURE_ARG(aWindowContext);
+
+  rv = SetupLoadCookie(aWindowContext, getter_AddRefs(loadCookieForWindow));
+  if (NS_FAILED(rv)) return rv;
+  
+  rv = loadCookieForWindow->GetInterface(NS_GET_IID(nsILoadGroup),
+                                         (void **) aLoadGroup);
+  return rv;
+}
+
+NS_IMETHODIMP
+nsURILoader::GetDocumentLoaderForContext(nsISupports * aWindowContext,
+                                         nsIDocumentLoader ** aDocLoader)
+{
+  nsresult rv;
+  nsCOMPtr<nsIInterfaceRequestor> loadCookieForWindow;
+
+  // Initialize the [out] parameter...
+  *aDocLoader = nsnull;
+
+  NS_ENSURE_ARG(aWindowContext);
+
+  rv = SetupLoadCookie(aWindowContext, getter_AddRefs(loadCookieForWindow));
+  if (NS_FAILED(rv)) return rv;
+  
+  rv = loadCookieForWindow->GetInterface(NS_GET_IID(nsIDocumentLoader), 
+                                         (void **) aDocLoader);
+  return rv;
+}
+
+nsresult nsURILoader::SetupLoadCookie(nsISupports * aWindowContext, 
+                                      nsIInterfaceRequestor ** aLoadCookie)
+{
+  // first, see if we have already set a load cookie on the cnt listener..
+  // i.e. if this isn't the first time we've tried to run a url through this window
+  // context then we don't need to create another load cookie, we can reuse the first one.
+  nsresult rv = NS_OK;
+  nsCOMPtr<nsISupports> loadCookie;
+
+  // Initialize the [out] parameter...
+  *aLoadCookie = nsnull;
+
+  nsCOMPtr<nsIURIContentListener> cntListener (do_GetInterface(aWindowContext));
+  if (cntListener) {
+    // Get the load cookie for the requested window context...
+    rv = cntListener->GetLoadCookie(getter_AddRefs(loadCookie));
+
+    //
+    // If we don't have a load cookie for this window context yet, then 
+    // go create one! In order to create a load cookie, we need to get
+    // the parent's load cookie if there is one...
+    //
+    if (!loadCookie) {
+      nsCOMPtr<nsIURIContentListener> parentListener;
+      nsCOMPtr<nsIDocumentLoader>     parentDocLoader;
+      nsCOMPtr<nsIDocumentLoader>     newDocLoader;
+
+      // Try to get the parent's load cookie...
+      cntListener->GetParentContentListener(getter_AddRefs(parentListener));
+      if (parentListener) {
+        rv = parentListener->GetLoadCookie(getter_AddRefs(loadCookie));
+
+        // if we had a parent cookie use it to help with the creation process      
+        if (loadCookie) {
+          parentDocLoader = do_GetInterface(loadCookie);
+        }
+      }
+      // If there is no parent DocLoader, then use the global DocLoader
+      // service as the parent...
+      if (!parentDocLoader) {
+        parentDocLoader = do_GetService(NS_DOCUMENTLOADER_SERVICE_CONTRACTID, &rv);
+      }
+      if (NS_FAILED(rv)) return rv;
+
+      //
+      // Create a new document loader.  The document loader represents
+      // the load cookie which the uriloader hands out...
+      //
+      rv = parentDocLoader->CreateDocumentLoader(getter_AddRefs(newDocLoader));
+      if (NS_FAILED(rv)) return rv;
+
+      newDocLoader->QueryInterface(NS_GET_IID(nsIInterfaceRequestor), 
+                                   getter_AddRefs(loadCookie)); 
+      rv = cntListener->SetLoadCookie(loadCookie);
+    } // if we don't have  a load cookie already
+  } // if we have a cntListener
+
+  // loadCookie may be null - for example, <a target="popupWin"> if popupWin is
+  // not a defined window.  The following prevents a crash (Bug 32898)
+  if (loadCookie) {
+    rv = loadCookie->QueryInterface(NS_GET_IID(nsIInterfaceRequestor),
+                                  (void**)aLoadCookie);
+  } else {
+    rv = NS_ERROR_UNEXPECTED;
+  }
+
   return rv;
 }
 

@@ -1,38 +1,35 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 /*
  * The following handles the loading, unloading and management of
  * various PCKS #11 modules
@@ -43,10 +40,7 @@
 #include "prlink.h"
 #include "pk11func.h"
 #include "secmodi.h"
-#include "secmodti.h"
 #include "nssilock.h"
-#include "secerr.h"
-#include "prenv.h"
 
 extern void FC_GetFunctionList(void);
 extern void NSC_GetFunctionList(void);
@@ -92,52 +86,15 @@ static const CK_C_INITIALIZE_ARGS secmodLockFunctions = {
     ,NULL
 };
 
-static PRBool loadSingleThreadedModules = PR_TRUE;
-static PRBool enforceAlreadyInitializedError = PR_TRUE;
-static PRBool finalizeModules = PR_TRUE;
-
-/* set global options for NSS PKCS#11 module loader */
-SECStatus pk11_setGlobalOptions(PRBool noSingleThreadedModules,
-                                PRBool allowAlreadyInitializedModules,
-                                PRBool dontFinalizeModules)
-{
-    if (noSingleThreadedModules) {
-        loadSingleThreadedModules = PR_FALSE;
-    } else {
-        loadSingleThreadedModules = PR_TRUE;
-    }
-    if (allowAlreadyInitializedModules) {
-        enforceAlreadyInitializedError = PR_FALSE;
-    } else {
-        enforceAlreadyInitializedError = PR_TRUE;
-    }
-    if (dontFinalizeModules) {
-        finalizeModules = PR_FALSE;
-    } else {
-        finalizeModules = PR_TRUE;
-    }
-    return SECSuccess;
-}
-
-PRBool pk11_getFinalizeModulesOption(void)
-{
-    return finalizeModules;
-}
-
 /*
  * collect the steps we need to initialize a module in a single function
  */
 SECStatus
-secmod_ModuleInit(SECMODModule *mod, PRBool* alreadyLoaded)
+secmod_ModuleInit(SECMODModule *mod)
 {
     CK_C_INITIALIZE_ARGS moduleArgs;
     CK_VOID_PTR pInitArgs;
     CK_RV crv;
-
-    if (!mod || !alreadyLoaded) {
-        PORT_SetError(SEC_ERROR_INVALID_ARGS);
-        return SECFailure;
-    }
 
     if (mod->isThreadSafe == PR_FALSE) {
 	pInitArgs = NULL;
@@ -149,29 +106,13 @@ secmod_ModuleInit(SECMODModule *mod, PRBool* alreadyLoaded)
 	pInitArgs = &moduleArgs;
     }
     crv = PK11_GETTAB(mod)->C_Initialize(pInitArgs);
-    if ((CKR_CRYPTOKI_ALREADY_INITIALIZED == crv) &&
-        (!enforceAlreadyInitializedError)) {
-        *alreadyLoaded = PR_TRUE;
-        return SECSuccess;
-    }
     if (crv != CKR_OK) {
-	if (pInitArgs == NULL ||
-		crv == CKR_NETSCAPE_CERTDB_FAILED ||
-		crv == CKR_NETSCAPE_KEYDB_FAILED) {
+	if (pInitArgs == NULL) {
 	    PORT_SetError(PK11_MapError(crv));
-	    return SECFailure;
-	}
-	if (!loadSingleThreadedModules) {
-	    PORT_SetError(SEC_ERROR_INCOMPATIBLE_PKCS11);
 	    return SECFailure;
 	}
 	mod->isThreadSafe = PR_FALSE;
     	crv = PK11_GETTAB(mod)->C_Initialize(NULL);
-	if ((CKR_CRYPTOKI_ALREADY_INITIALIZED == crv) &&
-	    (!enforceAlreadyInitializedError)) {
-	    *alreadyLoaded = PR_TRUE;
-	    return SECSuccess;
-	}
     	if (crv != CKR_OK)  {
 	    PORT_SetError(PK11_MapError(crv));
 	    return SECFailure;
@@ -233,8 +174,6 @@ SECMOD_LoadPKCS11Module(SECMODModule *mod) {
     CK_INFO info;
     CK_ULONG slotCount = 0;
     SECStatus rv;
-    PRBool alreadyLoaded = PR_FALSE;
-    char *disableUnload = NULL;
 
     if (mod->loaded) return SECSuccess;
 
@@ -321,24 +260,16 @@ SECMOD_LoadPKCS11Module(SECMODModule *mod) {
     mod->isThreadSafe = PR_TRUE;
 
     /* Now we initialize the module */
-    rv = secmod_ModuleInit(mod, &alreadyLoaded);
+    rv = secmod_ModuleInit(mod);
     if (rv != SECSuccess) {
 	goto fail;
     }
-
     /* check the version number */
     if (PK11_GETTAB(mod)->C_GetInfo(&info) != CKR_OK) goto fail2;
     if (info.cryptokiVersion.major != 2) goto fail2;
     /* all 2.0 are a priori *not* thread safe */
-    if (info.cryptokiVersion.minor < 1) {
-        if (!loadSingleThreadedModules) {
-            PORT_SetError(SEC_ERROR_INCOMPATIBLE_PKCS11);
-            goto fail2;
-        } else {
-            mod->isThreadSafe = PR_FALSE;
-        }
-    }
-    mod->cryptokiVersion = info.cryptokiVersion;
+    if (info.cryptokiVersion.minor < 1) mod->isThreadSafe = PR_FALSE;
+
 
     /* If we don't have a common name, get it from the PKCS 11 module */
     if ((mod->commonName == NULL) || (mod->commonName[0] == 0)) {
@@ -385,29 +316,22 @@ SECMOD_LoadPKCS11Module(SECMODModule *mod) {
     mod->moduleID = nextModuleID++;
     return SECSuccess;
 fail2:
-    if (enforceAlreadyInitializedError || (!alreadyLoaded)) {
-        PK11_GETTAB(mod)->C_Finalize(NULL);
-    }
+    PK11_GETTAB(mod)->C_Finalize(NULL);
 fail:
     mod->functionList = NULL;
-    disableUnload = PR_GetEnv("NSS_DISABLE_UNLOAD");
-    if (library && !disableUnload) {
-        PR_UnloadLibrary(library);
-    }
+    if (library) PR_UnloadLibrary(library);
     return SECFailure;
 }
 
 SECStatus
 SECMOD_UnloadModule(SECMODModule *mod) {
     PRLibrary *library;
-    char *disableUnload = NULL;
 
     if (!mod->loaded) {
 	return SECFailure;
     }
-    if (finalizeModules) {
-        if (!mod->moduleDBOnly) PK11_GETTAB(mod)->C_Finalize(NULL);
-    }
+
+    if (!mod->moduleDBOnly) PK11_GETTAB(mod)->C_Finalize(NULL);
     mod->moduleID = 0;
     mod->loaded = PR_FALSE;
     
@@ -424,10 +348,7 @@ SECMOD_UnloadModule(SECMODModule *mod) {
 	return SECFailure;
     }
 
-    disableUnload = PR_GetEnv("NSS_DISABLE_UNLOAD");
-    if (!disableUnload) {
-        PR_UnloadLibrary(library);
-    }
+    PR_UnloadLibrary(library);
     return SECSuccess;
 }
 

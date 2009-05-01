@@ -1,39 +1,21 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+/*
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
  * http://www.mozilla.org/MPL/
  *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+ * License for the specific language governing rights and limitations
+ * under the License.
  *
  * The Original Code is the Mozilla OS/2 libraries.
  *
- * The Initial Developer of the Original Code is
- * John Fairhurst, <john_fairhurst@iname.com>.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
+ * The Initial Developer of the Original Code is John Fairhurst,
+ * <john_fairhurst@iname.com>.  Portions created by John Fairhurst are
+ * Copyright (C) 1999 John Fairhurst. All Rights Reserved.
  *
- * Contributor(s):
- *   Rich Walsh <dragtext@e-vertise.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * Contributor(s): 
  * This Original Code has been modified by IBM Corporation.
  * Modifications made by IBM described herein are
  * Copyright (c) International Business Machines
@@ -49,6 +31,7 @@
  * 06/15/2000       IBM Corp.      Added NS2PM for rectangles
  * 06/21/2000       IBM Corp.      Added CaptureMouse
  *
+ * Rich Walsh <dragtext@e-vertise.com>
  */
 
 #ifndef _nswindow_h
@@ -59,15 +42,7 @@
 #include "nsToolkit.h"
 #include "nsSwitchToUIThread.h"
 
-class imgIContainer;
-
 //#define DEBUG_FOCUS
-
-#ifdef DEBUG_FOCUS
-  #define DEBUGFOCUS(what) printf("[%x] "#what" (%d)\n", (int)this, mWindowIdentifier)
-#else
-  #define DEBUGFOCUS(what)
-#endif
 
 // Base widget class.
 // This is abstract.  Controls (labels, radio buttons, listboxen) derive
@@ -148,10 +123,8 @@ class nsWindow : public nsBaseWidget,
    NS_IMETHOD SetFocus(PRBool aRaise);
    NS_IMETHOD GetBounds(nsRect &aRect);
    NS_IMETHOD IsVisible( PRBool &aState);
-   PRBool     IsShown();
    NS_IMETHOD PlaceBehind(nsTopLevelWidgetZPlacement aPlacement,
                           nsIWidget *aWidget, PRBool aActivate);
-   NS_IMETHOD SetZIndex(PRInt32 aZIndex);
 
    NS_IMETHOD CaptureMouse(PRBool aCapture);
 
@@ -175,10 +148,8 @@ class nsWindow : public nsBaseWidget,
    NS_IMETHOD              SetFont( const nsFont &aFont);
    NS_IMETHOD              SetColorMap( nsColorMap *aColorMap);
    NS_IMETHOD              SetCursor( nsCursor aCursor);
-   NS_IMETHOD              SetCursor(imgIContainer* aCursor,
-                                     PRUint32 aHotspotX, PRUint32 aHotspotY);
    NS_IMETHOD              HideWindowChrome(PRBool aShouldHide);
-   NS_IMETHOD              SetTitle( const nsAString& aTitle); 
+   NS_IMETHOD              SetTitle( const nsString& aTitle); 
    NS_IMETHOD              SetIcon(const nsAString& aIconSpec); 
    NS_IMETHOD              SetMenuBar(nsIMenuBar * aMenuBar) { return NS_ERROR_FAILURE; } 
    NS_IMETHOD              ShowMenuBar(PRBool aShow)         { return NS_ERROR_FAILURE; } 
@@ -226,6 +197,7 @@ protected:
 
    // hooks subclasses may wish to override!
    virtual void     PostCreateWidget()            {}
+   virtual PRInt32  GetHeight( PRInt32 aHeight)   { return aHeight; }
    virtual PRInt32  GetClientHeight()             { return mBounds.height; }
    virtual ULONG    GetSWPFlags( ULONG flags)     { return flags; }
    virtual void     SetupForPrint( HWND /*hwnd*/) {}
@@ -282,9 +254,6 @@ protected:
    nsContentType mContentType;
    HPS       mDragHps;        // retrieved by DrgGetPS() during a drag
    PRUint32  mDragStatus;     // set while this object is being dragged over
-   HPOINTER  mCssCursorHPtr;  // created by SetCursor(imgIContainer*)
-   nsCOMPtr<imgIContainer> mCssCursorImg;  // saved by SetCursor(imgIContainer*)
-   BOOL      mIsVisible;
 
    HWND      GetParentHWND() const;
    HWND      GetHWND() const   { return mWnd; }
@@ -323,7 +292,6 @@ protected:
    virtual PRBool DispatchWindowEvent(nsGUIEvent*event, nsEventStatus &aStatus);
    PRBool  DispatchStandardEvent( PRUint32 aMsg);
    PRBool  DispatchAppCommandEvent(PRUint32 aEventCommand);
-   PRBool  DispatchDragDropEvent(PRUint32 aMsg);
    virtual PRBool DispatchMouseEvent( PRUint32 aEventType, MPARAM mp1, MPARAM mp2);
    virtual PRBool DispatchResizeEvent( PRInt32 aClientX, PRInt32 aClientY);
    void GetNonClientBounds(nsRect &aRect);
@@ -332,14 +300,6 @@ protected:
 
    PRBool   CheckDragStatus(PRUint32 aAction, HPS * oHps);
    PRBool   ReleaseIfDragHPS(HPS aHps);
-
-   HBITMAP DataToBitmap(PRUint8* aImageData, PRUint32 aWidth,
-                        PRUint32 aHeight, PRUint32 aDepth);
-   // 'format' should be 'gfx_format' which is a PRInt32
-   HBITMAP CreateTransparencyMask(PRInt32  format, PRUint8* aImageData,
-                                  PRUint32 aWidth, PRUint32 aHeight);
-
-   BOOL NotifyForeignChildWindows(HWND aWnd);
 
    // Enumeration of the methods which are accessable on the PM thread
    enum {
@@ -360,7 +320,6 @@ protected:
 #define PM2NS_PARENT NS2PM_PARENT
 #define PM2NS NS2PM
 
-#define PMSCAN_PADMULT      0x37
 #define PMSCAN_PAD7         0x47
 #define PMSCAN_PAD8         0x48
 #define PMSCAN_PAD9         0x49
@@ -374,15 +333,11 @@ protected:
 #define PMSCAN_PAD3         0x51
 #define PMSCAN_PAD0         0x52
 #define PMSCAN_PADPERIOD    0x53
-#define PMSCAN_PADDIV       0x5c
 
 #define isNumPadScanCode(scanCode) !( (scanCode < PMSCAN_PAD7) ||      \
                                       (scanCode > PMSCAN_PADPERIOD) || \
-                                      (scanCode == PMSCAN_PADMULT) ||  \
-                                      (scanCode == PMSCAN_PADDIV) ||   \
                                       (scanCode == PMSCAN_PADMINUS) || \
                                       (scanCode == PMSCAN_PADPLUS) )
-#define isNumlockOn (BOOL)WinGetKeyState(HWND_DESKTOP, VK_NUMLOCK) & 0x0001
 
 extern PRUint32 WMChar2KeyCode( MPARAM mp1, MPARAM mp2);
 

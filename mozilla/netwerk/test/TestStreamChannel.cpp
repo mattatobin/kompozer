@@ -35,7 +35,6 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "TestCommon.h"
 #include "nsIComponentRegistrar.h"
 #include "nsIStreamTransportService.h"
 #include "nsIAsyncInputStream.h"
@@ -184,9 +183,9 @@ public:
     }
 
     NS_IMETHOD OnProgress(nsIRequest *req, nsISupports *ctx,
-                          PRUint64 progress, PRUint64 progressMax)
+                          PRUint32 progress, PRUint32 progressMax)
     {
-        LOG(("MyCallbacks::OnProgress [progress=%llu/%llu]\n", progress, progressMax));
+        LOG(("MyCallbacks::OnProgress [progress=%u/%u]\n", progress, progressMax));
         return NS_OK;
     }
 };
@@ -215,8 +214,11 @@ RunTest(nsIFile *file)
     if (uri)
         uri->SetSpec(NS_LITERAL_CSTRING("foo://bar"));
 
+    const nsAFlatCString& empty = EmptyCString();
+
     nsCOMPtr<nsIChannel> chan;
-    rv = NS_NewInputStreamChannel(getter_AddRefs(chan), uri, stream);
+    rv = NS_NewInputStreamChannel(getter_AddRefs(chan), uri, stream, empty,
+				  empty);
     if (NS_FAILED(rv)) return rv;
 
     rv = chan->SetNotificationCallbacks(new MyCallbacks());
@@ -242,9 +244,6 @@ RunTest(nsIFile *file)
 int
 main(int argc, char* argv[])
 {
-    if (test_common_init(&argc, &argv) != 0)
-        return -1;
-
     nsresult rv;
 
     if (argc < 2) {

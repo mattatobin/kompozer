@@ -1,39 +1,39 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/*
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
+ * Portions created by Sun Microsystems, Inc. are Copyright (C) 2003
+ * Sun Microsystems, Inc. All Rights Reserved.
  *
  * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ *	Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 #include "secoid.h"
 #include "pkcs11t.h"
@@ -41,7 +41,6 @@
 #include "secitem.h"
 #include "secerr.h"
 #include "plhash.h"
-#include "nssrwlk.h"
 
 /* MISSI Mosaic Object ID space */
 #define USGOV                   0x60, 0x86, 0x48, 0x01, 0x65
@@ -149,7 +148,6 @@
 #define PKIX_KEY_USAGE 		PKIX, 3
 #define PKIX_ACCESS_DESCRIPTION PKIX, 0x30
 #define PKIX_OCSP 		PKIX_ACCESS_DESCRIPTION, 1
-#define PKIX_CA_ISSUERS		PKIX_ACCESS_DESCRIPTION, 2
 
 #define PKIX_ID_PKIP     	PKIX, 5
 #define PKIX_ID_REGCTRL  	PKIX_ID_PKIP, 1 
@@ -166,8 +164,6 @@
 #define ANSI_X962_CURVE_OID     ANSI_X962_OID, 0x03
 #define ANSI_X962_GF2m_OID      ANSI_X962_CURVE_OID, 0x00
 #define ANSI_X962_GFp_OID       ANSI_X962_CURVE_OID, 0x01
-#define ANSI_X962_SIGNATURE_OID ANSI_X962_OID, 0x04
-#define ANSI_X962_SPECIFY_OID   ANSI_X962_SIGNATURE_OID, 0x03
 
 #define CONST_OID static const unsigned char
 
@@ -221,7 +217,6 @@ CONST_OID pkcs9CounterSignature[]              = { PKCS9, 0x06 };
 CONST_OID pkcs9ChallengePassword[]             = { PKCS9, 0x07 };
 CONST_OID pkcs9UnstructuredAddress[]           = { PKCS9, 0x08 };
 CONST_OID pkcs9ExtendedCertificateAttributes[] = { PKCS9, 0x09 };
-CONST_OID pkcs9ExtensionRequest[]              = { PKCS9, 14 };
 CONST_OID pkcs9SMIMECapabilities[]             = { PKCS9, 15 };
 CONST_OID pkcs9FriendlyName[]                  = { PKCS9, 20 };
 CONST_OID pkcs9LocalKeyID[]                    = { PKCS9, 21 };
@@ -315,7 +310,7 @@ CONST_OID netscapeAOLScreenname[] 	= { NETSCAPE_NAME_COMPONENTS, 0x02 };
 CONST_OID netscapeRecoveryRequest[] 	= { NETSCAPE_CERT_SERVER_CRMF, 0x01 };
 
 
-/* Standard x.509 v3 Certificate & CRL Extensions */
+/* Standard x.509 v3 Certificate Extensions */
 CONST_OID x509SubjectDirectoryAttr[]  		= { ID_CE_OID,  9 };
 CONST_OID x509SubjectKeyID[]          		= { ID_CE_OID, 14 };
 CONST_OID x509KeyUsage[]              		= { ID_CE_OID, 15 };
@@ -323,25 +318,19 @@ CONST_OID x509PrivateKeyUsagePeriod[] 		= { ID_CE_OID, 16 };
 CONST_OID x509SubjectAltName[]        		= { ID_CE_OID, 17 };
 CONST_OID x509IssuerAltName[]         		= { ID_CE_OID, 18 };
 CONST_OID x509BasicConstraints[]      		= { ID_CE_OID, 19 };
-CONST_OID x509CRLNumber[]                    	= { ID_CE_OID, 20 };
-CONST_OID x509ReasonCode[]                   	= { ID_CE_OID, 21 };
-CONST_OID x509HoldInstructionCode[]             = { ID_CE_OID, 23 };
-CONST_OID x509InvalidDate[]                     = { ID_CE_OID, 24 };
-CONST_OID x509DeltaCRLIndicator[]               = { ID_CE_OID, 27 };
-CONST_OID x509IssuingDistributionPoint[]        = { ID_CE_OID, 28 };
-CONST_OID x509CertIssuer[]                      = { ID_CE_OID, 29 };
 CONST_OID x509NameConstraints[]       		= { ID_CE_OID, 30 };
 CONST_OID x509CRLDistPoints[]         		= { ID_CE_OID, 31 };
 CONST_OID x509CertificatePolicies[]   		= { ID_CE_OID, 32 };
 CONST_OID x509PolicyMappings[]        		= { ID_CE_OID, 33 };
+CONST_OID x509PolicyConstraints[]     		= { ID_CE_OID, 34 };
 CONST_OID x509AuthKeyID[]             		= { ID_CE_OID, 35 };
-CONST_OID x509PolicyConstraints[]     		= { ID_CE_OID, 36 };
 CONST_OID x509ExtKeyUsage[]           		= { ID_CE_OID, 37 };
-CONST_OID x509FreshestCRL[]           		= { ID_CE_OID, 46 };
-CONST_OID x509InhibitAnyPolicy[]           	= { ID_CE_OID, 54 };
+CONST_OID x509AuthInfoAccess[]        		= { PKIX_CERT_EXTENSIONS, 1 };
 
-CONST_OID x509AuthInfoAccess[]        		= { PKIX_CERT_EXTENSIONS,  1 };
-CONST_OID x509SubjectInfoAccess[]               = { PKIX_CERT_EXTENSIONS, 11 };
+/* Standard x.509 v3 CRL Extensions */
+CONST_OID x509CrlNumber[]                    	= { ID_CE_OID, 20};
+CONST_OID x509ReasonCode[]                   	= { ID_CE_OID, 21};
+CONST_OID x509InvalidDate[]                  	= { ID_CE_OID, 24};
 
 /* pkcs 12 additions */
 CONST_OID pkcs12[]                           = { PKCS12 };
@@ -387,9 +376,6 @@ CONST_OID pkcs12V1CRLBag[]              	= { PKCS12_V1_BAG_IDS, 0x04 };
 CONST_OID pkcs12V1SecretBag[]           	= { PKCS12_V1_BAG_IDS, 0x05 };
 CONST_OID pkcs12V1SafeContentsBag[]     	= { PKCS12_V1_BAG_IDS, 0x06 };
 
-/* The following encoding is INCORRECT, but correcting it would create a
- * duplicate OID in the table.  So, we will leave it alone.
- */
 CONST_OID pkcs12KeyUsageAttr[]          	= { 2, 5, 29, 15 };
 
 CONST_OID ansix9DSASignature[]               	= { ANSI_X9_ALGORITHM, 0x01 };
@@ -410,8 +396,6 @@ CONST_OID pkixOCSPResponse[]			= { PKIX_OCSP, 4 };
 CONST_OID pkixOCSPNoCheck[]			= { PKIX_OCSP, 5 };
 CONST_OID pkixOCSPArchiveCutoff[]		= { PKIX_OCSP, 6 };
 CONST_OID pkixOCSPServiceLocator[]		= { PKIX_OCSP, 7 };
-
-CONST_OID pkixCAIssuers[]			= { PKIX_CA_ISSUERS };
 
 CONST_OID pkixRegCtrlRegToken[]       		= { PKIX_ID_REGCTRL, 1};
 CONST_OID pkixRegCtrlAuthenticator[]  		= { PKIX_ID_REGCTRL, 2};
@@ -464,14 +448,8 @@ CONST_OID sha256[]                              = { SHAXXX, 1 };
 CONST_OID sha384[]                              = { SHAXXX, 2 };
 CONST_OID sha512[]                              = { SHAXXX, 3 };
 
-CONST_OID ansix962ECPublicKey[]             = { ANSI_X962_OID, 0x02, 0x01 };
-CONST_OID ansix962SignaturewithSHA1Digest[] = { ANSI_X962_SIGNATURE_OID, 0x01 };
-CONST_OID ansix962SignatureRecommended[]    = { ANSI_X962_SIGNATURE_OID, 0x02 };
-CONST_OID ansix962SignatureSpecified[]      = { ANSI_X962_SPECIFY_OID };
-CONST_OID ansix962SignaturewithSHA224Digest[] = { ANSI_X962_SPECIFY_OID, 0x01 };
-CONST_OID ansix962SignaturewithSHA256Digest[] = { ANSI_X962_SPECIFY_OID, 0x02 };
-CONST_OID ansix962SignaturewithSHA384Digest[] = { ANSI_X962_SPECIFY_OID, 0x03 };
-CONST_OID ansix962SignaturewithSHA512Digest[] = { ANSI_X962_SPECIFY_OID, 0x04 };
+CONST_OID ansix962ECPublicKey[]                 = { ANSI_X962_OID, 0x02, 0x01 };
+CONST_OID ansix962ECDSASignaturewithSHA1Digest[] = { ANSI_X962_OID, 0x04, 0x01 };
 
 /* ANSI X9.62 prime curve OIDs */
 /* NOTE: prime192v1 is the same as secp192r1, prime256v1 is the
@@ -547,12 +525,6 @@ CONST_OID secgECsect571r1[] = {SECG_OID, 0x27 };
 #define OD(oid,tag,desc,mech,ext) { OI(oid), tag, desc, mech, ext }
 #else
 #define OD(oid,tag,desc,mech,ext) { OI(oid), tag, 0, mech, ext }
-#endif
-
-#if defined(NSS_ALLOW_UNSUPPORTED_CRITICAL)
-#define FAKE_SUPPORTED_CERT_EXTENSION   SUPPORTED_CERT_EXTENSION
-#else
-#define FAKE_SUPPORTED_CERT_EXTENSION UNSUPPORTED_CERT_EXTENSION
 #endif
 
 /*
@@ -795,7 +767,7 @@ const static SECOidData oids[] = {
         CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
     OD( x509IssuerAltName, SEC_OID_X509_ISSUER_ALT_NAME, 
 	"Certificate Issuer Alt Name",
-        CKM_INVALID_MECHANISM, FAKE_SUPPORTED_CERT_EXTENSION ),
+        CKM_INVALID_MECHANISM, UNSUPPORTED_CERT_EXTENSION ),
     OD( x509BasicConstraints, SEC_OID_X509_BASIC_CONSTRAINTS, 
 	"Certificate Basic Constraints",
 	CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
@@ -804,16 +776,16 @@ const static SECOidData oids[] = {
 	CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
     OD( x509CRLDistPoints, SEC_OID_X509_CRL_DIST_POINTS, 
 	"CRL Distribution Points",
-	CKM_INVALID_MECHANISM, FAKE_SUPPORTED_CERT_EXTENSION ),
+	CKM_INVALID_MECHANISM, UNSUPPORTED_CERT_EXTENSION ),
     OD( x509CertificatePolicies, SEC_OID_X509_CERTIFICATE_POLICIES,
 	"Certificate Policies",
-        CKM_INVALID_MECHANISM, FAKE_SUPPORTED_CERT_EXTENSION ),
+        CKM_INVALID_MECHANISM, UNSUPPORTED_CERT_EXTENSION ),
     OD( x509PolicyMappings, SEC_OID_X509_POLICY_MAPPINGS, 
 	"Certificate Policy Mappings",
         CKM_INVALID_MECHANISM, UNSUPPORTED_CERT_EXTENSION ),
     OD( x509PolicyConstraints, SEC_OID_X509_POLICY_CONSTRAINTS, 
 	"Certificate Policy Constraints",
-        CKM_INVALID_MECHANISM, FAKE_SUPPORTED_CERT_EXTENSION ),
+        CKM_INVALID_MECHANISM, UNSUPPORTED_CERT_EXTENSION ),
     OD( x509AuthKeyID, SEC_OID_X509_AUTH_KEY_ID, 
 	"Certificate Authority Key Identifier",
 	CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
@@ -825,7 +797,7 @@ const static SECOidData oids[] = {
         CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
 
     /* x.509 v3 CRL extensions */
-    OD( x509CRLNumber, SEC_OID_X509_CRL_NUMBER, 
+    OD( x509CrlNumber, SEC_OID_X509_CRL_NUMBER, 
 	"CRL Number", CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
     OD( x509ReasonCode, SEC_OID_X509_REASON_CODE, 
 	"CRL reason code", CKM_INVALID_MECHANISM, SUPPORTED_CERT_EXTENSION ),
@@ -1090,8 +1062,8 @@ const static SECOidData oids[] = {
     OD( pkcs9LocalKeyID, SEC_OID_PKCS9_LOCAL_KEY_ID,
 	"PKCS #9 Local Key ID", 
 	CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ), 
-    OD( pkcs12KeyUsageAttr, SEC_OID_BOGUS_KEY_USAGE,
-	"Bogus Key Usage", CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ),
+    OD( pkcs12KeyUsageAttr, SEC_OID_PKCS12_KEY_USAGE,
+	"PKCS 12 Key Usage", CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ),
     OD( dhPublicKey, SEC_OID_X942_DIFFIE_HELMAN_KEY,
 	"Diffie-Helman Public Key", CKM_DH_PKCS_DERIVE,
 	INVALID_CERT_EXTENSION ),
@@ -1173,8 +1145,8 @@ const static SECOidData oids[] = {
     OD( ansix962ECPublicKey, SEC_OID_ANSIX962_EC_PUBLIC_KEY,
 	"X9.62 elliptic curve public key", CKM_ECDH1_DERIVE,
 	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignaturewithSHA1Digest, 
-	SEC_OID_ANSIX962_ECDSA_SHA1_SIGNATURE,
+    OD( ansix962ECDSASignaturewithSHA1Digest, 
+	SEC_OID_ANSIX962_ECDSA_SIGNATURE_WITH_SHA1_DIGEST,
 	"X9.62 ECDSA signature with SHA1", CKM_ECDSA_SHA1,
 	INVALID_CERT_EXTENSION ),
 
@@ -1451,277 +1423,147 @@ const static SECOidData oids[] = {
     OD( x520Pseudonym, SEC_OID_AVA_PSEUDONYM,
     	"X520 Pseudonym",     CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ),
 
-    /* More OIDs */
-    OD( pkixCAIssuers, SEC_OID_PKIX_CA_ISSUERS,
-        "PKIX CA issuers access method", 
-        CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ),
-    OD( pkcs9ExtensionRequest, SEC_OID_PKCS9_EXTENSION_REQUEST,
-    	"PKCS #9 Extension Request",
-        CKM_INVALID_MECHANISM, INVALID_CERT_EXTENSION ),
-
-    /* more ECC Signature Oids */
-    OD( ansix962SignatureRecommended,
-	SEC_OID_ANSIX962_ECDSA_SIGNATURE_RECOMMENDED_DIGEST,
-	"X9.62 ECDSA signature with recommended digest", CKM_INVALID_MECHANISM,
-	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignatureSpecified,
-	SEC_OID_ANSIX962_ECDSA_SIGNATURE_SPECIFIED_DIGEST,
-	"X9.62 ECDSA signature with specified digest", CKM_ECDSA,
-	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignaturewithSHA224Digest,
-	SEC_OID_ANSIX962_ECDSA_SHA224_SIGNATURE,
-	"X9.62 ECDSA signature with SHA224", CKM_INVALID_MECHANISM,
-	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignaturewithSHA256Digest,
-	SEC_OID_ANSIX962_ECDSA_SHA256_SIGNATURE,
-	"X9.62 ECDSA signature with SHA256", CKM_INVALID_MECHANISM,
-	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignaturewithSHA384Digest,
-	SEC_OID_ANSIX962_ECDSA_SHA384_SIGNATURE,
-	"X9.62 ECDSA signature with SHA384", CKM_INVALID_MECHANISM,
-	INVALID_CERT_EXTENSION ),
-    OD( ansix962SignaturewithSHA512Digest,
-	SEC_OID_ANSIX962_ECDSA_SHA512_SIGNATURE,
-	"X9.62 ECDSA signature with SHA512", CKM_INVALID_MECHANISM,
-	INVALID_CERT_EXTENSION ),
-
-    /* More id-ce and id-pe OIDs from RFC 3280 */
-    OD( x509HoldInstructionCode,      SEC_OID_X509_HOLD_INSTRUCTION_CODE,
-        "CRL Hold Instruction Code",  CKM_INVALID_MECHANISM,
-	UNSUPPORTED_CERT_EXTENSION ),
-    OD( x509DeltaCRLIndicator,        SEC_OID_X509_DELTA_CRL_INDICATOR,
-        "Delta CRL Indicator",        CKM_INVALID_MECHANISM,
-	FAKE_SUPPORTED_CERT_EXTENSION ),
-    OD( x509IssuingDistributionPoint, SEC_OID_X509_ISSUING_DISTRIBUTION_POINT,
-        "Issuing Distribution Point", CKM_INVALID_MECHANISM,
-	FAKE_SUPPORTED_CERT_EXTENSION ),
-    OD( x509CertIssuer,               SEC_OID_X509_CERT_ISSUER,
-        "Certificate Issuer Extension",CKM_INVALID_MECHANISM,
-	FAKE_SUPPORTED_CERT_EXTENSION ),
-    OD( x509FreshestCRL,              SEC_OID_X509_FRESHEST_CRL,
-        "Freshest CRL",               CKM_INVALID_MECHANISM,
-	UNSUPPORTED_CERT_EXTENSION ),
-    OD( x509InhibitAnyPolicy,         SEC_OID_X509_INHIBIT_ANY_POLICY,
-        "Inhibit Any Policy",         CKM_INVALID_MECHANISM,
-	FAKE_SUPPORTED_CERT_EXTENSION ),
-    OD( x509SubjectInfoAccess,        SEC_OID_X509_SUBJECT_INFO_ACCESS,
-        "Subject Info Access",        CKM_INVALID_MECHANISM,
-	UNSUPPORTED_CERT_EXTENSION ),
-
 };
 
 /*
  * now the dynamic table. The dynamic table gets build at init time.
- * and conceivably gets modified if the user loads new crypto modules.
- * All this static data, and the allocated data to which it points,
- * is protected by a global reader/writer lock.  
- * The c language guarantees that global and static data that is not 
- * explicitly initialized will be initialized with zeros.  If we 
- * initialize it with zeros, the data goes into the initialized data
- * secment, and increases the size of the library.  By leaving it 
- * uninitialized, it is allocated in BSS, and does NOT increase the 
- * library size. 
+ *  and gets modified if the user loads new crypto modules.
  */
-static NSSRWLock   * dynOidLock;
-static PLArenaPool * dynOidPool;
-static PLHashTable * dynOidHash;
-static SECOidData ** dynOidTable;	/* not in the pool */
-static int           dynOidEntriesAllocated;
-static int           dynOidEntriesUsed;
 
-/* Creates NSSRWLock and dynOidPool, if they don't exist.
-** This function MIGHT create the lock, but not the pool, so
-** code should test for dynOidPool, not dynOidLock, when deciding
-** whether or not to call this function.
-*/
+static PLHashTable *oid_d_hash = 0;
+static SECOidData **secoidDynamicTable = NULL;
+static int secoidDynamicTableSize = 0;
+static int secoidLastDynamicEntry = 0;
+static int secoidLastHashEntry = 0;
+
 static SECStatus
-secoid_InitDynOidData(void)
+secoid_DynamicRehash(void)
 {
-    SECStatus   rv = SECSuccess;
-    NSSRWLock * lock;
-
-    /* This function will create the lock if it doesn't exist,
-    ** and will return the address of the lock, whether it was 
-    ** previously created, or was created by the function.
-    */
-    lock = nssRWLock_AtomicCreate(&dynOidLock, 1, "dynamic OID data");
-    if (!lock) {
-    	return SECFailure; /* Error code should already be set. */
-    }
-    PORT_Assert(lock == dynOidLock);
-    NSSRWLock_LockWrite(lock);
-    if (!dynOidPool) {
-    	dynOidPool = PORT_NewArena(2048);
-	if (!dynOidPool) {
-	    rv = SECFailure /* Error code should already be set. */;
-	}
-    }
-    NSSRWLock_UnlockWrite(lock);
-    return rv;
-}
-
-/* Add oidData to hash table.  Caller holds write lock dynOidLock. */
-static SECStatus
-secoid_HashDynamicOiddata(const SECOidData * oid)
-{
+    SECOidData *oid;
     PLHashEntry *entry;
+    int i;
+    int last = secoidLastDynamicEntry;
 
-    if (!dynOidHash) {
-        dynOidHash = PL_NewHashTable(0, SECITEM_Hash, SECITEM_HashCompare,
+    if (!oid_d_hash) {
+        oid_d_hash = PL_NewHashTable(0, SECITEM_Hash, SECITEM_HashCompare,
 			PL_CompareValues, NULL, NULL);
-	if ( !dynOidHash ) {
-	    return SECFailure;
-	}
     }
 
-    entry = PL_HashTableAdd( dynOidHash, &oid->oid, (void *)oid );
-    return entry ? SECSuccess : SECFailure;
+
+    if ( !oid_d_hash ) {
+	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
+	return(SECFailure);
+    }
+
+    for ( i = secoidLastHashEntry; i < last; i++ ) {
+	oid = secoidDynamicTable[i];
+
+	entry = PL_HashTableAdd( oid_d_hash, &oid->oid, oid );
+	if ( entry == NULL ) {
+	    return(SECFailure);
+	}
+    }
+    secoidLastHashEntry = last;
+    return(SECSuccess);
 }
+
 
 
 /*
  * Lookup a Dynamic OID. Dynamic OID's still change slowly, so it's
  * cheaper to rehash the table when it changes than it is to do the loop
- * each time. 
+ * each time. Worry: what about thread safety here? Global Static data with
+ * no locks.... (sigh).
  */
 static SECOidData *
-secoid_FindDynamic(const SECItem *key) 
-{
+secoid_FindDynamic(SECItem *key) {
     SECOidData *ret = NULL;
-
-    if (dynOidHash) {
-	NSSRWLock_LockRead(dynOidLock);
-	if (dynOidHash) { /* must check it again with lock held. */
-	    ret = (SECOidData *)PL_HashTableLookup(dynOidHash, key);
+    if (secoidDynamicTable == NULL) {
+	/* PORT_SetError! */
+	return NULL;
+    }
+    if (secoidLastHashEntry != secoidLastDynamicEntry) {
+	SECStatus rv = secoid_DynamicRehash();
+	if ( rv != SECSuccess ) {
+	    return NULL;
 	}
-	NSSRWLock_UnlockRead(dynOidLock);
     }
-    if (ret == NULL) {
-	PORT_SetError(SEC_ERROR_UNRECOGNIZED_OID);
-    }
+    ret = (SECOidData *)PL_HashTableLookup (oid_d_hash, key);
     return ret;
+	
 }
 
 static SECOidData *
 secoid_FindDynamicByTag(SECOidTag tagnum)
 {
-    SECOidData *data = NULL;
     int tagNumDiff;
 
-    if (tagnum < SEC_OID_TOTAL) {
-	PORT_SetError(SEC_ERROR_LIBRARY_FAILURE);
+    if (secoidDynamicTable == NULL) {
 	return NULL;
     }
-    tagNumDiff = tagnum - SEC_OID_TOTAL;
 
-    if (dynOidTable) {
-	NSSRWLock_LockRead(dynOidLock);
-	if (dynOidTable != NULL && /* must check it again with lock held. */
-	    tagNumDiff < dynOidEntriesUsed) {
-	    data = dynOidTable[tagNumDiff];
-	}
-	NSSRWLock_UnlockRead(dynOidLock);
+    if (tagnum < SEC_OID_TOTAL) {
+	return NULL;
     }
-    if (data == NULL) {
-	PORT_SetError(SEC_ERROR_UNRECOGNIZED_OID);
+
+    tagNumDiff = tagnum - SEC_OID_TOTAL;
+    if (tagNumDiff >= secoidLastDynamicEntry) {
+	return NULL;
     }
-    return data;
+
+    return(secoidDynamicTable[tagNumDiff]);
 }
 
 /*
- * This routine is thread safe now.
+ * this routine is definately not thread safe. It is only called out
+ * of the UI, or at init time. If we want to call it any other time,
+ * we need to make it thread safe.
  */
-SECOidTag
-SECOID_AddEntry(const SECOidData * src)
-{
-    SECOidData * dst;
-    SECOidData **table;
-    SECOidTag    ret         = SEC_OID_UNKNOWN;
-    SECStatus    rv;
-    int          tableEntries;
-    int          used;
+SECStatus
+SECOID_AddEntry(SECItem *oid, char *description, unsigned long mech) {
+    SECOidData *oiddp = (SECOidData *)PORT_Alloc(sizeof(SECOidData));
+    int last = secoidLastDynamicEntry;
+    int tableSize = secoidDynamicTableSize;
+    int next = last++;
+    SECOidData **newTable = secoidDynamicTable;
+    SECOidData **oldTable = NULL;
 
-    if (!src || !src->oid.data || !src->oid.len || \
-        !src->desc || !strlen(src->desc)) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return ret;
-    }
-    if (src->supportedExtension != INVALID_CERT_EXTENSION     &&
-    	src->supportedExtension != UNSUPPORTED_CERT_EXTENSION &&
-    	src->supportedExtension != SUPPORTED_CERT_EXTENSION     ) {
-	PORT_SetError(SEC_ERROR_INVALID_ARGS);
-	return ret;
+    if (oid == NULL) {
+	return SECFailure;
     }
 
-    if (!dynOidPool && secoid_InitDynOidData() != SECSuccess) {
-	/* Caller has set error code. */
-    	return ret;
+    /* fill in oid structure */
+    if (SECITEM_CopyItem(NULL,&oiddp->oid,oid) != SECSuccess) {
+	PORT_Free(oiddp);
+	return SECFailure;
     }
+    oiddp->offset = (SECOidTag)(next + SEC_OID_TOTAL);
+    /* may we should just reference the copy passed to us? */
+    oiddp->desc = PORT_Strdup(description);
+    oiddp->mechanism = mech;
 
-    NSSRWLock_LockWrite(dynOidLock);
 
-    /* We've just acquired the write lock, and now we call FindOIDTag
-    ** which will acquire and release the read lock.  NSSRWLock has been
-    ** designed to allow this very case without deadlock.  This approach 
-    ** makes the test for the presence of the OID, and the subsequent 
-    ** addition of the OID to the table a single atomic write operation.
-    */
-    ret = SECOID_FindOIDTag(&src->oid);
-    if (ret != SEC_OID_UNKNOWN) {
-    	/* we could return an error here, but I chose not to do that.
-	** This way, if we add an OID to the shared library's built in
-	** list of OIDs in some future release, and that OID is the same
-	** as some OID that a program has been adding, the program will
-	** not suddenly stop working.
-	*/
-	goto done;
-    }
-
-    table        = dynOidTable;
-    tableEntries = dynOidEntriesAllocated;
-    used         = dynOidEntriesUsed;
-
-    if (used + 1 > tableEntries) {
-	SECOidData **newTable;
-	int          newTableEntries = tableEntries + 16;
-
-	newTable = (SECOidData **)PORT_Realloc(table, 
-				       newTableEntries * sizeof(SECOidData *));
+    if (last > tableSize) {
+	int oldTableSize = tableSize;
+	tableSize += 10;
+	oldTable = newTable;
+	newTable = (SECOidData **)PORT_ZAlloc(sizeof(SECOidData *)*tableSize);
 	if (newTable == NULL) {
-	    goto done;
+	   PORT_Free(oiddp->oid.data);
+	   PORT_Free(oiddp);
+	   return SECFailure;
 	}
-	dynOidTable            = table        = newTable;
-	dynOidEntriesAllocated = tableEntries = newTableEntries;
+	PORT_Memcpy(newTable,oldTable,sizeof(SECOidData *)*oldTableSize);
+	PORT_Free(oldTable);
     }
 
-    /* copy oid structure */
-    dst = PORT_ArenaNew(dynOidPool, SECOidData);
-    if (!dst) {
-    	goto done;
-    }
-    rv  = SECITEM_CopyItem(dynOidPool, &dst->oid, &src->oid);
-    if (rv != SECSuccess) {
-	goto done;
-    }
-    dst->desc = PORT_ArenaStrdup(dynOidPool, src->desc);
-    if (!dst->desc) {
-	goto done;
-    }
-    dst->offset             = (SECOidTag)(used + SEC_OID_TOTAL);
-    dst->mechanism          = src->mechanism;
-    dst->supportedExtension = src->supportedExtension;
-
-    rv = secoid_HashDynamicOiddata(dst);
-    if ( rv == SECSuccess ) {
-	table[used++] = dst;
-	dynOidEntriesUsed = used;
-	ret = dst->offset;
-    }
-done:
-    NSSRWLock_UnlockWrite(dynOidLock);
-    return ret;
+    newTable[next] = oiddp;
+    secoidDynamicTable = newTable;
+    secoidDynamicTableSize = tableSize;
+    secoidLastDynamicEntry= last;
+    return SECSuccess;
 }
-
+	
 
 /* normal static table processing */
 static PLHashTable *oidhash     = NULL;
@@ -1740,10 +1582,6 @@ secoid_Init(void)
     PLHashEntry *entry;
     const SECOidData *oid;
     int i;
-
-    if (!dynOidPool && secoid_InitDynOidData() != SECSuccess) {
-    	return SECFailure;
-    }
 
     if (oidhash) {
 	return SECSuccess;
@@ -1804,7 +1642,7 @@ SECOID_FindOIDByMechanism(unsigned long mechanism)
 }
 
 SECOidData *
-SECOID_FindOID(const SECItem *oid)
+SECOID_FindOID(SECItem *oid)
 {
     SECOidData *ret;
 
@@ -1822,7 +1660,7 @@ SECOID_FindOID(const SECItem *oid)
 }
 
 SECOidTag
-SECOID_FindOIDTag(const SECItem *oid)
+SECOID_FindOIDTag(SECItem *oid)
 {
     SECOidData *oiddata;
 
@@ -1871,6 +1709,8 @@ SECOID_FindOIDTagDescription(SECOidTag tagnum)
 SECStatus
 SECOID_Shutdown(void)
 {
+    int i;
+
     if (oidhash) {
 	PL_HashTableDestroy(oidhash);
 	oidhash = NULL;
@@ -1879,43 +1719,19 @@ SECOID_Shutdown(void)
 	PL_HashTableDestroy(oidmechhash);
 	oidmechhash = NULL;
     }
-    /* Have to handle the case where the lock was created, but
-    ** the pool wasn't. 
-    ** I'm not going to attempt to create the lock, just to protect
-    ** the destruction of data that probably isn't initialized anyway.
-    */
-    if (dynOidLock) {
-	NSSRWLock_LockWrite(dynOidLock);
-	if (dynOidHash) {
-	    PL_HashTableDestroy(dynOidHash);
-	    dynOidHash = NULL;
+    if (oid_d_hash) {
+	PL_HashTableDestroy(oid_d_hash);
+	oid_d_hash = NULL;
+    }
+    if (secoidDynamicTable) {
+	for (i=0; i < secoidLastDynamicEntry; i++) {
+	    PORT_Free(secoidDynamicTable[i]);
 	}
-	if (dynOidPool) {
-	    PORT_FreeArena(dynOidPool, PR_FALSE);
-	    dynOidPool = NULL;
-	}
-	if (dynOidTable) {
-	    PORT_Free(dynOidTable);
-	    dynOidTable = NULL;
-	}
-	dynOidEntriesAllocated = 0;
-	dynOidEntriesUsed = 0;
-
-	NSSRWLock_UnlockWrite(dynOidLock);
-	NSSRWLock_Destroy(dynOidLock);
-	dynOidLock = NULL;
-    } else {
-    	/* Since dynOidLock doesn't exist, then all the data it protects
-	** should be uninitialized.  We'll check that (in DEBUG builds),
-	** and then make sure it is so, in case NSS is reinitialized.
-	*/
-	PORT_Assert(!dynOidHash && !dynOidPool && !dynOidTable && \
-	            !dynOidEntriesAllocated && !dynOidEntriesUsed);
-	dynOidHash = NULL;
-	dynOidPool = NULL;
-	dynOidTable = NULL;
-	dynOidEntriesAllocated = 0;
-	dynOidEntriesUsed = 0;
+	PORT_Free(secoidDynamicTable);
+	secoidDynamicTable = NULL;
+	secoidDynamicTableSize = 0;
+	secoidLastDynamicEntry = 0;
+	secoidLastHashEntry = 0;
     }
     return SECSuccess;
 }

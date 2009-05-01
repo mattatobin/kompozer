@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
@@ -22,19 +22,19 @@
  * Contributor(s):
  *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
  *   Leon Sha <leon.sha@sun.com>
- *   Ken Herron <kherron@fastmail.us>
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -48,10 +48,7 @@
 #include "gfxIImageFrame.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIInterfaceRequestorUtils.h"
-#include "nsEPSObjectPS.h"
-#include "nsLocalFile.h"
 
-#include <stdio.h>
 #include <math.h>
 
 #define NS_PIXELS_TO_POINTS(x) ((x) * 10)
@@ -228,7 +225,7 @@ NS_IMETHODIMP nsRenderingContextPS :: UnlockDrawingSurface(void)
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP
-nsRenderingContextPS :: SelectOffScreenDrawingSurface(nsIDrawingSurface* aSurface)
+nsRenderingContextPS :: SelectOffScreenDrawingSurface(nsDrawingSurface aSurface)
 {
   return NS_OK;
 }
@@ -238,7 +235,7 @@ nsRenderingContextPS :: SelectOffScreenDrawingSurface(nsIDrawingSurface* aSurfac
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP
-nsRenderingContextPS :: GetDrawingSurface(nsIDrawingSurface* *aSurface)
+nsRenderingContextPS :: GetDrawingSurface(nsDrawingSurface *aSurface)
 {
   *aSurface = nsnull;
   return NS_OK;
@@ -322,8 +319,10 @@ nsRenderingContextPS :: PushState(void)
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP 
-nsRenderingContextPS :: PopState(void)
+nsRenderingContextPS :: PopState(PRBool &aClipEmpty)
 {
+  PRBool  retval = PR_FALSE;
+
   if (nsnull == mStates){
     NS_ASSERTION(!(nsnull == mStates), "state underflow");
   } else {
@@ -341,6 +340,7 @@ nsRenderingContextPS :: PopState(void)
       mTranMatrix = nsnull;
   }
 
+  aClipEmpty = retval;
   mPSObj->graphics_restore();
 
   return NS_OK;
@@ -360,9 +360,12 @@ NS_IMETHODIMP nsRenderingContextPS :: IsVisibleRect(const nsRect& aRect, PRBool 
  *  See documentation in nsIRenderingContext.h
  *	@update 12/21/98 dwc
  */
-NS_IMETHODIMP nsRenderingContextPS :: SetClipRect(const nsRect& aRect, nsClipCombine aCombine)
+NS_IMETHODIMP nsRenderingContextPS :: SetClipRect(const nsRect& aRect, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
-  nsRect  trect = aRect;
+nsRect  trect = aRect;
+#if defined(XP_WIN) || defined(XP_OS2)
+PRInt32     cliptype;
+#endif
 
   mStates->mLocalClip = aRect;
 
@@ -390,6 +393,13 @@ NS_IMETHODIMP nsRenderingContextPS :: SetClipRect(const nsRect& aRect, nsClipCom
   mPSObj->clip();
   mPSObj->newpath();
 
+#ifdef XP_WIN
+  if (cliptype == NULLREGION)
+    aClipEmpty = PR_TRUE;
+  else
+    aClipEmpty = PR_FALSE;
+#endif
+
   return NS_OK;
 }
 
@@ -415,12 +425,12 @@ nsRenderingContextPS :: GetClipRect(nsRect &aRect, PRBool &aClipValid)
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP 
-nsRenderingContextPS :: SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine)
+nsRenderingContextPS :: SetClipRegion(const nsIRegion& aRegion, nsClipCombine aCombine, PRBool &aClipEmpty)
 {
   nsRect rect;
   nsIRegion* pRegion = (nsIRegion*)&aRegion;
   pRegion->GetBoundingBox(&rect.x, &rect.y, &rect.width, &rect.height);
-  SetClipRect(rect, aCombine);
+  SetClipRect(rect, aCombine, aClipEmpty);
 
   return NS_OK; 
 }
@@ -568,7 +578,7 @@ nsRenderingContextPS :: GetCurrentTransform(nsTransform2D *&aTransform)
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP 
-nsRenderingContextPS :: CreateDrawingSurface(const nsRect& aBounds, PRUint32 aSurfFlags, nsIDrawingSurface* &aSurface)
+nsRenderingContextPS :: CreateDrawingSurface(const nsRect& aBounds, PRUint32 aSurfFlags, nsDrawingSurface &aSurface)
 {
   return NS_OK;   // offscreen test
 }
@@ -578,7 +588,7 @@ nsRenderingContextPS :: CreateDrawingSurface(const nsRect& aBounds, PRUint32 aSu
  *	@update 12/21/98 dwc
  */
 NS_IMETHODIMP 
-nsRenderingContextPS :: DestroyDrawingSurface(nsIDrawingSurface* aDS)
+nsRenderingContextPS :: DestroyDrawingSurface(nsDrawingSurface aDS)
 {
   return NS_OK;   // offscreen test
 }
@@ -1074,27 +1084,20 @@ nsRenderingContextPS :: DrawString(const char *aString, PRUint32 aLength,
   nsFontMetricsPS *metrics = NS_REINTERPRET_CAST(nsFontMetricsPS *, mFontMetrics.get());
   NS_ENSURE_TRUE(metrics, NS_ERROR_FAILURE);
 
-  // When FT2 printing is enabled, we don't need to set langgroup
-#if defined(MOZ_ENABLE_FREETYPE2) || defined(MOZ_ENABLE_XFT)
-  if (!NS_REINTERPRET_CAST(nsDeviceContextPS *, mContext.get())->mFTPEnable) {
-#endif
-    nsCOMPtr<nsIAtom> langGroup;
-    mFontMetrics->GetLangGroup(getter_AddRefs(langGroup));
-    mPSObj->setlanggroup(langGroup);
-#if defined(MOZ_ENABLE_FREETYPE2) || defined(MOZ_ENABLE_XFT)
-  }
-#endif
+  nsCOMPtr<nsIAtom> langGroup;
+  mFontMetrics->GetLangGroup(getter_AddRefs(langGroup));
+  mPSObj->setlanggroup(langGroup);
 
   if (aLength == 0)
     return NS_OK;
-  nsFontPS* fontPS = nsFontPS::FindFont(aString[0], metrics->Font(), metrics);
+  nsFontPS* fontPS = nsFontPS::FindFont(aString[0], *metrics->GetFont(), metrics);
   NS_ENSURE_TRUE(fontPS, NS_ERROR_FAILURE);
   fontPS->SetupFont(this);
 
   PRUint32 i, start = 0;
   for (i=0; i<aLength; i++) {
     nsFontPS* fontThisChar;
-    fontThisChar = nsFontPS::FindFont(aString[i], metrics->Font(), metrics);
+    fontThisChar = nsFontPS::FindFont(aString[i], *metrics->GetFont(), metrics);
     NS_ENSURE_TRUE(fontThisChar, NS_ERROR_FAILURE);
     if (fontThisChar != fontPS) {
       // draw text up to this point
@@ -1130,30 +1133,23 @@ nsRenderingContextPS :: DrawString(const PRUnichar *aString, PRUint32 aLength,
   nsFontMetricsPS *metrics = NS_REINTERPRET_CAST(nsFontMetricsPS *, mFontMetrics.get());
   NS_ENSURE_TRUE(metrics, NS_ERROR_FAILURE);
 
-#if defined(MOZ_ENABLE_FREETYPE2) || defined(MOZ_ENABLE_XFT)
-  // When FT2 printing is enabled, we don't need to set langgroup
-  if (!NS_REINTERPRET_CAST(nsDeviceContextPS *, mContext.get())->mFTPEnable) {
-#endif
-    nsCOMPtr<nsIAtom> langGroup = nsnull;
-    mFontMetrics->GetLangGroup(getter_AddRefs(langGroup));
-    mPSObj->setlanggroup(langGroup);
-#if defined(MOZ_ENABLE_FREETYPE2) || defined(MOZ_ENABLE_XFT)
-  }
-#endif
+  nsCOMPtr<nsIAtom> langGroup = nsnull;
+  mFontMetrics->GetLangGroup(getter_AddRefs(langGroup));
+  mPSObj->setlanggroup(langGroup.get());
 
   /* build up conversion table */
   mPSObj->preshow(aString, aLength);
 
   if (aLength == 0)
     return NS_OK;
-  nsFontPS* fontPS = nsFontPS::FindFont(aString[0], metrics->Font(), metrics);
+  nsFontPS* fontPS = nsFontPS::FindFont(aString[0], *metrics->GetFont(), metrics);
   NS_ENSURE_TRUE(fontPS, NS_ERROR_FAILURE);
   fontPS->SetupFont(this);
 
   PRUint32 i, start = 0;
   for (i=0; i<aLength; i++) {
     nsFontPS* fontThisChar;
-    fontThisChar = nsFontPS::FindFont(aString[i], metrics->Font(), metrics);
+    fontThisChar = nsFontPS::FindFont(aString[i], *metrics->GetFont(), metrics);
     NS_ENSURE_TRUE(fontThisChar, NS_ERROR_FAILURE);
     if (fontThisChar != fontPS) {
       // draw text up to this point
@@ -1246,16 +1242,27 @@ nsRenderingContextPS :: DrawString(const nsString& aString,nscoord aX, nscoord a
   return DrawString(aString.get(), aString.Length(), aX, aY, aFontID, aSpacing);
 }
 
+/* [noscript] void drawImage (in imgIContainer aImage, [const] in nsRect aSrcRect, [const] in nsPoint aDestPoint); */
 NS_IMETHODIMP
-nsRenderingContextPS::DrawImage(imgIContainer *aImage, const nsRect & aSrcRect, const nsRect & aDestRect)
+nsRenderingContextPS::DrawImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsPoint * aDestPoint)
 {
+  nsRect dr(aDestPoint->x, aDestPoint->y, aSrcRect->width, aSrcRect->height);
+  return DrawScaledImage(aImage, aSrcRect, &dr);
+}
+
+/* [noscript] void drawScaledImage (in imgIContainer aImage, [const] in nsRect aSrcRect, [const] in nsRect aDestRect); */
+NS_IMETHODIMP
+nsRenderingContextPS::DrawScaledImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsRect * aDestRect)
+{
+  nsRect sr, ir, dr;
+
   // Transform the destination rectangle.
-  nsRect dr = aDestRect;
+  dr = *aDestRect;
   mTranMatrix->TransformCoord(&dr.x, &dr.y, &dr.width, &dr.height);
 
   // Transform the source rectangle. We don't use the matrix for this;
   // just convert the twips back into points.
-  nsRect sr = aSrcRect;
+  sr = *aSrcRect;
   sr.x /= TWIPS_PER_POINT_INT;
   sr.y /= TWIPS_PER_POINT_INT;
   sr.width /= TWIPS_PER_POINT_INT;
@@ -1268,74 +1275,10 @@ nsRenderingContextPS::DrawImage(imgIContainer *aImage, const nsRect & aSrcRect, 
   nsCOMPtr<nsIImage> img(do_GetInterface(iframe));
   if (!img) return NS_ERROR_FAILURE;
 
-  nsRect ir;
   iframe->GetRect(ir);
   mPSObj->draw_image(img, sr, ir, dr);
   return NS_OK;
 }
-
-NS_IMETHODIMP
-nsRenderingContextPS::DrawTile(imgIContainer *aImage,
-                               nscoord aXImageStart,
-                               nscoord aYImageStart,
-                               const nsRect *aTargetRect)
-{
-  // Get image size 
-  nscoord width, height;
-  aImage->GetWidth(&width);
-  aImage->GetHeight(&height);
-  
-  // Second para for nsPostscriptObj::draw_image
-  nsRect imgRect;
-  imgRect.x = 0;
-  imgRect.y = 0;
-  imgRect.width = width;
-  imgRect.height = height;
-  
-  // Transform image's width-height into twips
-  width = NSToCoordRound(width*mP2T);
-  height = NSToCoordRound(height*mP2T);
-
-  // Get current frame
-  nsCOMPtr<gfxIImageFrame> iframe;
-  aImage->GetCurrentFrame(getter_AddRefs(iframe));
-  if (!iframe) return NS_ERROR_FAILURE;
-
-  // Third para for nsPoscriptObj::draw_image 
-  nsCOMPtr<nsIImage> img(do_GetInterface(iframe));
-  if (!img) return NS_ERROR_FAILURE;
-  nsRect ir;
-  iframe->GetRect(ir);
-   
-  // Save states
-  mPSObj->graphics_save();
-
-  // Set clip region for tile 
-  nsRect targetRect = (*aTargetRect);
-  mTranMatrix->TransformCoord(&targetRect.x, &targetRect.y, 
-                              &targetRect.width, &targetRect.height);
-  mPSObj->box(targetRect.x,targetRect.y,targetRect.width,targetRect.height);
-  mPSObj->clip();
-
-  // Begin drawing tiles
-  nsRect dstRect;
-  for(PRInt32 y = aYImageStart; y < aTargetRect->y + aTargetRect->height; y += height)
-    for(PRInt32 x = aXImageStart; x < aTargetRect->x + aTargetRect->width; x += width)
-    {
-      dstRect.x = x;
-      dstRect.y = y;
-      dstRect.width = width;
-      dstRect.height = height;
-      mTranMatrix->TransformCoord(&dstRect.x, &dstRect.y, &dstRect.width, &dstRect.height);
-      mPSObj->draw_image(img, imgRect, ir, dstRect);
-    }
-
-  // Restore states
-  mPSObj->graphics_restore();
-
-  return NS_OK;
-}
-
 
 #ifdef MOZ_MATHML
   /**
@@ -1368,7 +1311,7 @@ nsRenderingContextPS::GetBoundingMetrics(const PRUnichar*   aString,
  *  See documentation in nsIRenderingContext.h
  *	@update 12/21/98 dwc
  */
-NS_IMETHODIMP nsRenderingContextPS :: CopyOffScreenBits(nsIDrawingSurface* aSrcSurf,
+NS_IMETHODIMP nsRenderingContextPS :: CopyOffScreenBits(nsDrawingSurface aSrcSurf,
                                                          PRInt32 aSrcX, PRInt32 aSrcY,
                                                          const nsRect &aDestBounds,
                                                          PRUint32 aCopyFlags)
@@ -1376,40 +1319,11 @@ NS_IMETHODIMP nsRenderingContextPS :: CopyOffScreenBits(nsIDrawingSurface* aSrcS
   return NS_OK;
 }
 
-NS_IMETHODIMP nsRenderingContextPS::RetrieveCurrentNativeGraphicData(void** ngd)
+NS_IMETHODIMP nsRenderingContextPS::RetrieveCurrentNativeGraphicData(PRUint32 * ngd)
 {
   return NS_OK;
 }
 
-/** ---------------------------------------------------
- *  See documentation in nsRenderingContextPS.h and
- *  gfx/public/nsIRenderingContext.h.
- *    @update  3/6/2004
- *    @param   @param aRect  Rectangle in which to render the EPSF.
- *    @param   aDataFile - data stored in a file
- *    @return  NS_OK or a suitable error code.
- */
-NS_IMETHODIMP nsRenderingContextPS::RenderEPS(const nsRect& aRect, FILE *aDataFile)
-{
-  nsresult    rv;
-
-  /* EPSFs aren't supposed to have side effects, so if width or height is
-   * zero, just return. */
-  if ((aRect.width == 0) || (aRect.height == 0))
-    return NS_OK;
-
-  nsEPSObjectPS eps(aDataFile);
-  if (NS_FAILED(eps.GetStatus())) {
-    return NS_ERROR_INVALID_ARG;
-  }
- 
-  nsRect trect = aRect;
-  mTranMatrix->TransformCoord(&trect.x, &trect.y, &trect.width, &trect.height);
- 
-  rv = mPSObj->render_eps(trect, eps);
-
-  return rv;
-}
 
 #ifdef NOTNOW
 HPEN nsRenderingContextPS :: SetupSolidPen(void)

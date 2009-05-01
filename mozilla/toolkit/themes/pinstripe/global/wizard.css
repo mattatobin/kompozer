@@ -28,11 +28,11 @@ wizard {
 }
 
 .wizard-header-box-icon {
-  margin: 3px 20px 0 3px;
+  margin: 3px 20 0 3px;
 }
 
-wizard[branded="true"] .wizard-header-icon {
-  list-style-image: url("chrome://branding/content/icon48.png");
+.wizard-header-icon {
+  list-style-image: inherit;
 }
 
 .wizard-page-box {

@@ -40,17 +40,17 @@
 
 #include "nsIDOMWindowUtils.h"
 
-class nsGlobalWindow;
+class GlobalWindowImpl;
 
 class nsDOMWindowUtils : public nsIDOMWindowUtils,
                          public nsSupportsWeakReference
 {
 public:
-  nsDOMWindowUtils(nsGlobalWindow *aWindow);
+  nsDOMWindowUtils(GlobalWindowImpl *aWindow);
   ~nsDOMWindowUtils();
   NS_DECL_ISUPPORTS
   NS_DECL_NSIDOMWINDOWUTILS
 
 protected:
-  nsRefPtr<nsGlobalWindow> mWindow;
+  nsRefPtr<GlobalWindowImpl> mWindow;
 };

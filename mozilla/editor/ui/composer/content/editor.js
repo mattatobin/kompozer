@@ -1,11 +1,11 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,29 +14,29 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998-1999
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Sammy Ford (sford@swbell.net)
- *   Dan Haddix (dan6992@hotmail.com)
- *   John Ratke (jratke@owc.net)
- *   Ryan Cassin (rcassin@supernova.org)
- *   Daniel Glazman (glazman@netscape.com)
+ *    Sammy Ford (sford@swbell.net)
+ *    Dan Haddix (dan6992@hotmail.com)
+ *    John Ratke (jratke@owc.net)
+ *    Ryan Cassin (rcassin@supernova.org)
+ *    Daniel Glazman (glazman@netscape.com)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -78,8 +78,6 @@ var gColorObj = { LastTextColor:"", LastBackgroundColor:"", LastHighlightColor:"
 var gDefaultTextColor = "";
 var gDefaultBackgroundColor = "";
 var gCSSPrefListener;
-var gEditorToolbarPrefListener;
-var gReturnInParagraphPrefListener;
 var gPrefs;
 var gLocalFonts = null;
 
@@ -92,14 +90,6 @@ var gFontSizeNames = ["xx-small","x-small","small","medium","large","x-large","x
 const nsIFilePicker = Components.interfaces.nsIFilePicker;
 
 const kEditorToolbarPrefs = "editor.toolbars.showbutton.";
-const kUseCssPref         = "editor.use_css";
-const kCRInParagraphsPref = "editor.CR_creates_new_p";
-
-function getEngineWebBrowserPrint()
-{
-  return content.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-                .getInterface(Components.interfaces.nsIWebBrowserPrint);
-}
 
 function ShowHideToolbarSeparators(toolbar) {
   var childNodes = toolbar.childNodes;
@@ -133,20 +123,57 @@ function ShowHideToolbarButtons()
   ShowHideToolbarSeparators(document.getElementById("FormatToolbar"));
 }
   
-function nsPrefListener(prefName)
+function AddToolbarPrefListener()
 {
-  this.startup(prefName);
+  try {
+    var pbi = GetPrefs().QueryInterface(Components.interfaces.nsIPrefBranchInternal);
+    pbi.addObserver(kEditorToolbarPrefs, gEditorToolbarPrefListener, false);
+  } catch(ex) {
+    dump("Failed to observe prefs: " + ex + "\n");
+  }
+}
+
+function RemoveToolbarPrefListener()
+{
+  try {
+    var pbi = GetPrefs().QueryInterface(Components.interfaces.nsIPrefBranchInternal);
+    pbi.removeObserver(kEditorToolbarPrefs, gEditorToolbarPrefListener);
+  } catch(ex) {
+    dump("Failed to remove pref observer: " + ex + "\n");
+  }
+}
+
+// Pref listener constants
+const gEditorToolbarPrefListener =
+{
+  observe: function(subject, topic, prefName)
+  {
+    // verify that we're changing a button pref
+    if (topic != "nsPref:changed")
+      return;
+
+    var id = prefName.substr(kEditorToolbarPrefs.length) + "Button";
+    var button = document.getElementById(id);
+    if (button) {
+      button.hidden = !gPrefs.getBoolPref(prefName);
+      ShowHideToolbarSeparators(button.parentNode);
+    }
+  }
+};
+
+function nsButtonPrefListener()
+{
+  this.startup();
 }
 
 // implements nsIObserver
-nsPrefListener.prototype =
+nsButtonPrefListener.prototype =
 {
-  domain: "",
-  startup: function(prefName)
+  domain: "editor.use_css",
+  startup: function()
   {
-    this.domain = prefName;
     try {
-      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
+      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
       pbi.addObserver(this.domain, this, false);
     } catch(ex) {
       dump("Failed to observe prefs: " + ex + "\n");
@@ -155,7 +182,7 @@ nsPrefListener.prototype =
   shutdown: function()
   {
     try {
-      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
+      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranchInternal);
       pbi.removeObserver(this.domain, this);
     } catch(ex) {
       dump("Failed to remove pref observers: " + ex + "\n");
@@ -167,45 +194,27 @@ nsPrefListener.prototype =
       return;
     // verify that we're changing a button pref
     if (topic != "nsPref:changed") return;
-    
-    if (prefName.substr(0, kUseCssPref.length) == kUseCssPref)
-    {
-      var cmd = document.getElementById("cmd_highlight");
-      if (cmd) {
-        var prefs = GetPrefs();
-        var useCSS = prefs.getBoolPref(prefName);
-        var editor = GetCurrentEditor();
-        if (useCSS && editor) {
-          var mixedObj = {};
-          var state = editor.getHighlightColorState(mixedObj);
-          cmd.setAttribute("state", state);
-          cmd.collapsed = false;
-        }      
-        else {
-          cmd.setAttribute("state", "transparent");
-          cmd.collapsed = true;
-        }
+    if (prefName.substr(0, this.domain.length) != this.domain) return;
 
-        if (editor)
-          editor.isCSSEnabled = useCSS;
-      }
-     }
-     else if (prefName.substr(0, kEditorToolbarPrefs.length) == kEditorToolbarPrefs)
-     {
-       var id = prefName.substr(kEditorToolbarPrefs.length) + "Button";
-       var button = document.getElementById(id);
-       if (button) {
-         button.hidden = !gPrefs.getBoolPref(prefName);
-         ShowHideToolbarSeparators(button.parentNode);
-       }
-     }
-    else if (prefName.substr(0, kCRInParagraphsPref.length) == kCRInParagraphsPref)
-    {
-      var crInParagraphCreatesParagraph = gPrefs.getBoolPref(prefName);
+    var cmd = document.getElementById("cmd_highlight");
+    if (cmd) {
+      var prefs = GetPrefs();
+      var useCSS = prefs.getBoolPref(prefName);
       var editor = GetCurrentEditor();
+      if (useCSS && editor) {
+        var mixedObj = {};
+        var state = editor.getHighlightColorState(mixedObj);
+        cmd.setAttribute("state", state);
+        cmd.collapsed = false;
+      }      
+      else {
+        cmd.setAttribute("state", "transparent");
+        cmd.collapsed = true;
+      }
+
       if (editor)
-        editor.returnInParagraphCreatesNewParagraph = crInParagraphCreatesParagraph;
-    }   
+        editor.isCSSEnabled = useCSS;
+    }
   }
 }
 
@@ -409,12 +418,6 @@ var gEditorDocumentObserver =
         // Things for just the Web Composer application
         if (IsWebComposer())
         {
-          InlineSpellCheckerUI.init(editor);
-          document.getElementById('menu_inlinespellcheck').setAttribute('disabled', !InlineSpellCheckerUI.canSpellCheck);
-
-          var prefs = GetPrefs();
-          editor.returnInParagraphCreatesNewParagraph = prefs.getBoolPref(kCRInParagraphsPref);
-
           // Set focus to content window if not a mail composer
           // Race conditions prevent us from setting focus here
           //   when loading a url into blank window
@@ -536,7 +539,6 @@ function SetFocusOnStartup()
 function EditorStartup()
 {
   var ds = GetCurrentEditorElement().docShell;
-  ds.useErrorPages = false;
   var root = ds.QueryInterface(Components.interfaces.nsIDocShellTreeItem).
     rootTreeItem.QueryInterface(Components.interfaces.nsIDocShell);
 
@@ -564,17 +566,15 @@ function EditorStartup()
   SetupComposerWindowCommands();
 
   ShowHideToolbarButtons();
-  gEditorToolbarPrefListener = new nsPrefListener(kEditorToolbarPrefs);
+  AddToolbarPrefListener();
 
-  gCSSPrefListener = new nsPrefListener(kUseCssPref);
-  gReturnInParagraphPrefListener = new nsPrefListener(kCRInParagraphsPref);
+  gCSSPrefListener = new nsButtonPrefListener();
 
   // hide Highlight button if we are in an HTML editor with CSS mode off
-  // and tell the editor if a CR in a paragraph creates a new paragraph
-  var prefs = GetPrefs();
   var cmd = document.getElementById("cmd_highlight");
   if (cmd) {
-    var useCSS = prefs.getBoolPref(kUseCssPref);
+    var prefs = GetPrefs();
+    var useCSS = prefs.getBoolPref("editor.use_css");
     if (!useCSS && is_HTMLEditor) {
       cmd.collapsed = true;
     }
@@ -677,10 +677,8 @@ function EditorResetFontAndColorAttributes()
   try {  
     var editor = GetCurrentEditor();
     editor.rebuildDocumentFromSource("");
-    // Because the selection is now collapsed, the following line
-    // clears the typing state to discontinue all inline styles
     editor.removeAllInlineProperties();
-    document.getElementById("cmd_fontFace").setAttribute("state", "");
+
     gColorObj.LastTextColor = "";
     gColorObj.LastBackgroundColor = "";
     gColorObj.LastHighlightColor = "";
@@ -692,9 +690,8 @@ function EditorResetFontAndColorAttributes()
 
 function EditorShutdown()
 {
-  gEditorToolbarPrefListener.shutdown();
+  RemoveToolbarPrefListener();
   gCSSPrefListener.shutdown();
-  gReturnInParagraphPrefListener.shutdown();
 
   try {
     var commandManager = GetCurrentCommandManager();
@@ -841,6 +838,14 @@ function CheckAndSaveDocument(command, allowDontSave)
 }
 
 // --------------------------- File menu ---------------------------
+
+
+// used by openLocation. see openLocation.js for additional notes.
+function delayedOpenWindow(chrome, flags, url)
+{
+  dump("setting timeout\n");
+  setTimeout("window.openDialog('"+chrome+"','_blank','"+flags+"','"+url+"')", 10);
+}
 
 function EditorNewPlaintext()
 {
@@ -1325,7 +1330,7 @@ function GetBackgroundElementWithColor()
   else
   {
     var prefs = GetPrefs();
-    var IsCSSPrefChecked = prefs.getBoolPref(kUseCssPref);
+    var IsCSSPrefChecked = prefs.getBoolPref("editor.use_css");
     if (IsCSSPrefChecked && IsHTMLEditor())
     {
       var selection = editor.selection;
@@ -1719,7 +1724,6 @@ function SetEditMode(mode)
 
   // must have editor if here!
   var editor = GetCurrentEditor();
-  var inlineSpellCheckItem = document.getElementById('menu_inlinespellcheck');
 
   // Switch the UI mode before inserting contents
   //   so user can't type in source window while new window is being filled
@@ -1792,10 +1796,6 @@ function SetEditMode(mode)
     // Only rebuild document if a change was made in source window
     if (IsHTMLSourceChanged())
     {
-      // Disable spell checking when rebuilding source
-      InlineSpellCheckerUI.enabled = false;
-      inlineSpellCheckItem.removeAttribute('checked');
-
       // Reduce the undo count so we don't use too much memory
       //   during multiple uses of source window 
       //   (reinserting entire doc caches all nodes)
@@ -1843,20 +1843,6 @@ function SetEditMode(mode)
     gSourceTextEditor.resetModificationCount();
 
     gContentWindow.focus();
-  }
-
-  switch (mode) {
-    case kDisplayModePreview:
-      // Disable spell checking when previewing
-      InlineSpellCheckerUI.enabled = false;
-      inlineSpellCheckItem.removeAttribute('checked');
-      // fall through
-    case kDisplayModeSource:
-      inlineSpellCheckItem.setAttribute('disabled', 'true');
-      break;
-    default:
-      inlineSpellCheckItem.setAttribute('disabled', !InlineSpellCheckerUI.canSpellCheck);
-      break;
   }
 }
 
@@ -2049,8 +2035,8 @@ function UpdateWindowTitle()
     }
     // Set window title with " - Composer" appended
     var xulWin = document.documentElement;
-    document.title = windowTitle + xulWin.getAttribute("titlemenuseparator") + 
-                     xulWin.getAttribute("titlemodifier");
+    window.title = windowTitle + xulWin.getAttribute("titlemenuseparator") + 
+                   xulWin.getAttribute("titlemodifier");
   } catch (e) { dump(e); }
 }
 
@@ -2493,10 +2479,13 @@ function EditorSetDefaultPrefsAndDoctype()
     catch (ex) {}
     if ( prefCharsetString && prefCharsetString != 0)
     {
-      editor.enableUndo(false);
-      editor.documentCharacterSet = prefCharsetString;
-      editor.resetModificationCount();
-      editor.enableUndo(true);
+        element = domdoc.createElement("meta");
+        if ( element )
+        {
+          element.setAttribute("http-equiv", "content-type");
+          element.setAttribute("content", "text/html; charset=" + prefCharsetString);
+          headelement.insertBefore( element, headelement.firstChild );
+        }
     }
 
     var node = 0;
@@ -3256,9 +3245,8 @@ function UpdateStructToolbar()
   var childNodesLength = childNodes.length;
   // We need to leave the <label> to flex the buttons to the left
   // so, don't remove the last child at position length - 1
-  while (childNodes.length > 1) {
-    // Remove back to front so there's less moving about.
-    toolbar.removeChild(childNodes.item(childNodes.length - 2));
+  for (var i = childNodesLength - 2; i >= 0; i--) {
+    toolbar.removeChild(childNodes.item(i));
   }
 
   toolbar.removeAttribute("label");
@@ -3429,7 +3417,7 @@ function UpdateTOC()
 {
   window.openDialog("chrome://editor/content/EdInsertTOC.xul",
                     "_blank", "chrome,close,modal,titlebar");
-  window.content.focus();
+  window._content.focus();
 }
 
 function InitTOCMenu()

@@ -1,41 +1,37 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/ 
+ * 
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
  * for the specific language governing rights and limitations under the
- * License.
+ * License. 
  *
- * The Original Code is mozilla.org code.
- *
+ * The Original Code is mozilla.org code
+ * 
  * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
+ * Netscape Communications Corporation
+ * Portions created by Netscape are
+ * Copyright (C) 1998 Netscape Communications Corporation.
+ *
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU Public License (the "GPL"), in which case the
+ * provisions of the GPL are applicable instead of those above.
+ * If you wish to allow use of your version of this file only
+ * under the terms of the GPL and not to allow others to use your
+ * version of this file under the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice
+ * and other provisions required by the GPL.  If you do not delete
+ * the provisions above, a recipient may use your version of this
+ * file under either the MPL or the GPL.
  *
  * Contributor(s):
  *   Robert Ginda, <rginda@netscape.com>
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ */
 
 #include "jsd_xpc.h"
 #include "jsdbgapi.h"
@@ -470,35 +466,35 @@ jsds_NotifyPendingDeadScripts (JSContext *cx)
     nsCOMPtr<jsdIScriptHook> hook = 0;   
     gJsds->GetScriptHook (getter_AddRefs(hook));
 
+    DeadScript *ds;
 #ifdef CAUTIOUS_SCRIPTHOOK
     JSRuntime *rt = JS_GetRuntime(cx);
 #endif
     gJsds->Pause(nsnull);
-    DeadScript *deadScripts = gDeadScripts;
-    gDeadScripts = nsnull;
-    while (deadScripts) {
-        DeadScript *ds = deadScripts;
-        /* get next deleted script */
-        deadScripts = NS_REINTERPRET_CAST(DeadScript *,
-                                          PR_NEXT_LINK(&ds->links));
-        if (deadScripts == ds)
-            deadScripts = nsnull;
-
+    while (gDeadScripts) {
+        ds = gDeadScripts;
+        
         if (hook)
         {
             /* tell the user this script has been destroyed */
 #ifdef CAUTIOUS_SCRIPTHOOK
-            JS_UNKEEP_ATOMS(rt);
+            JS_DISABLE_GC(rt);
 #endif
             hook->OnScriptDestroyed (ds->script);
 #ifdef CAUTIOUS_SCRIPTHOOK
-            JS_KEEP_ATOMS(rt);
+            JS_ENABLE_GC(rt);
 #endif
         }
-
-        /* take it out of the circular list */
+        /* get next deleted script */
+        gDeadScripts = NS_REINTERPRET_CAST(DeadScript *,
+                                           PR_NEXT_LINK(&ds->links));
+        if (gDeadScripts == ds) {
+            /* last script in the list */
+            gDeadScripts = nsnull;
+        }
+        
+        /* take ourselves out of the circular list */
         PR_REMOVE_LINK(&ds->links);
-
         /* addref came from the FromPtr call in jsds_ScriptHookProc */
         NS_RELEASE(ds->script);
         /* free the struct! */
@@ -511,17 +507,13 @@ jsds_NotifyPendingDeadScripts (JSContext *cx)
 JS_STATIC_DLL_CALLBACK (JSBool)
 jsds_GCCallbackProc (JSContext *cx, JSGCStatus status)
 {
+    gGCStatus = status;
 #ifdef DEBUG_verbose
     printf ("new gc status is %i\n", status);
 #endif
-    if (status == JSGC_END) {
-        /* just to guard against reentering. */
-        gGCStatus = JSGC_BEGIN;
-        while (gDeadScripts)
-            jsds_NotifyPendingDeadScripts (cx);
-    }
-
-    gGCStatus = status;
+    if (status == JSGC_END && gDeadScripts)
+        jsds_NotifyPendingDeadScripts (cx);
+    
     if (gLastGCProc)
         return gLastGCProc (cx, status);
     
@@ -724,13 +716,13 @@ jsds_ScriptHookProc (JSDContext* jsdc, JSDScript* jsdscript, JSBool creating,
         nsCOMPtr<jsdIScript> script = 
             getter_AddRefs(jsdScript::FromPtr(jsdc, jsdscript));
 #ifdef CAUTIOUS_SCRIPTHOOK
-        JS_UNKEEP_ATOMS(rt);
+        JS_DISABLE_GC(rt);
 #endif
         gJsds->Pause(nsnull);
         hook->OnScriptCreated (script);
         gJsds->UnPause(nsnull);
 #ifdef CAUTIOUS_SCRIPTHOOK
-        JS_KEEP_ATOMS(rt);
+        JS_ENABLE_GC(rt);
 #endif
     } else {
         /* a script is being destroyed.  even if there is no registered hook
@@ -749,14 +741,14 @@ jsds_ScriptHookProc (JSDContext* jsdc, JSDScript* jsdscript, JSBool creating,
             /* if GC *isn't* running, we can tell the user about the script
              * delete now. */
 #ifdef CAUTIOUS_SCRIPTHOOK
-            JS_UNKEEP_ATOMS(rt);
+            JS_DISABLE_GC(rt);
 #endif
                 
             gJsds->Pause(nsnull);
             hook->OnScriptDestroyed (jsdis);
             gJsds->UnPause(nsnull);
 #ifdef CAUTIOUS_SCRIPTHOOK
-            JS_KEEP_ATOMS(rt);
+            JS_ENABLE_GC(rt);
 #endif
         } else {
             /* if a GC *is* running, we've got to wait until it's done before
@@ -1333,30 +1325,6 @@ jsdScript::GetTotalExecutionTime(double *_rval)
 {
     ASSERT_VALID_EPHEMERAL;
     *_rval = JSD_GetScriptTotalExecutionTime (mCx, mScript);
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-jsdScript::GetMinOwnExecutionTime(double *_rval)
-{
-    ASSERT_VALID_EPHEMERAL;
-    *_rval = JSD_GetScriptMinOwnExecutionTime (mCx, mScript);
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-jsdScript::GetMaxOwnExecutionTime(double *_rval)
-{
-    ASSERT_VALID_EPHEMERAL;
-    *_rval = JSD_GetScriptMaxOwnExecutionTime (mCx, mScript);
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-jsdScript::GetTotalOwnExecutionTime(double *_rval)
-{
-    ASSERT_VALID_EPHEMERAL;
-    *_rval = JSD_GetScriptTotalOwnExecutionTime (mCx, mScript);
     return NS_OK;
 }
 
@@ -2197,20 +2165,18 @@ NS_IMETHODIMP
 jsdValue::GetProperties (jsdIProperty ***propArray, PRUint32 *length)
 {
     ASSERT_VALID_EPHEMERAL;
-    *propArray = nsnull;
-    if (length)
+    if (!JSD_IsValueObject(mCx, mValue)) {
         *length = 0;
+        *propArray = 0;
+        return NS_OK;
+    }
 
-    PRUint32 prop_count = JSD_IsValueObject(mCx, mValue)
-        ? JSD_GetCountOfProperties (mCx, mValue)
-        : 0;
-    NS_ENSURE_TRUE(prop_count, NS_OK);
-
-    jsdIProperty **pa_temp =
-        NS_STATIC_CAST(jsdIProperty **,
-                       nsMemory::Alloc(sizeof (jsdIProperty *) * 
-                                       prop_count));
-    NS_ENSURE_TRUE(pa_temp, NS_ERROR_OUT_OF_MEMORY);
+    jsdIProperty **pa_temp;
+    PRUint32 prop_count = JSD_GetCountOfProperties (mCx, mValue);
+    
+    pa_temp = NS_STATIC_CAST(jsdIProperty **,
+                             nsMemory::Alloc(sizeof (jsdIProperty *) * 
+                                             prop_count));
 
     PRUint32     i    = 0;
     JSDProperty *iter = NULL;
@@ -2590,9 +2556,6 @@ jsdService::GetPauseDepth(PRUint32 *_rval)
 NS_IMETHODIMP
 jsdService::Pause(PRUint32 *_rval)
 {
-    if (!mCx)
-        return NS_ERROR_NOT_INITIALIZED;
-
     if (++mPauseLevel == 1) {
         JSD_SetErrorReporter (mCx, NULL, NULL);
         JSD_ClearThrowHook (mCx);
@@ -2612,9 +2575,6 @@ jsdService::Pause(PRUint32 *_rval)
 NS_IMETHODIMP
 jsdService::UnPause(PRUint32 *_rval)
 {
-    if (!mCx)
-        return NS_ERROR_NOT_INITIALIZED;
-
     if (mPauseLevel == 0)
         return NS_ERROR_NOT_AVAILABLE;
 

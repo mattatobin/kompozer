@@ -87,8 +87,8 @@ public:
     nsTransportStatusEvent(nsTransportEventSinkProxy *proxy,
                            nsITransport *transport,
                            nsresult status,
-                           PRUint64 progress,
-                           PRUint64 progressMax)
+                           PRUint32 progress,
+                           PRUint32 progressMax)
         : mTransport(transport)
         , mStatus(status)
         , mProgress(progress)
@@ -133,8 +133,8 @@ public:
     // parameters to OnTransportStatus
     nsCOMPtr<nsITransport> mTransport;
     nsresult               mStatus;
-    PRUint64               mProgress;
-    PRUint64               mProgressMax;
+    PRUint32               mProgress;
+    PRUint32               mProgressMax;
 };
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsTransportEventSinkProxy, nsITransportEventSink)
@@ -142,8 +142,8 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(nsTransportEventSinkProxy, nsITransportEventSink)
 NS_IMETHODIMP
 nsTransportEventSinkProxy::OnTransportStatus(nsITransport *transport,
                                              nsresult status,
-                                             PRUint64 progress,
-                                             PRUint64 progressMax)
+                                             PRUint32 progress,
+                                             PRUint32 progressMax)
 {
     nsresult rv = NS_OK;
     PLEvent *event;

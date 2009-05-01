@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,47 +14,60 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Dave Hyatt <hyatt@mozilla.org> (Original Author)
- *   Brian Ryner <bryner@brianryner.com>
+ * Original Author: David W. Hyatt (hyatt@netscape.com)
+ *  Brian Ryner <bryner@brianryner.com>
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
-#include "nsTreeBoxObject.h"
 #include "nsCOMPtr.h"
-#include "nsPresContext.h"
+#include "nsIPresContext.h"
 #include "nsIPresShell.h"
-#include "nsPITreeBoxObject.h"
-#include "nsITreeView.h"
-#include "nsITreeSelection.h"
+#include "nsITreeBoxObject.h"
+#include "nsTreeSelection.h"
 #include "nsBoxObject.h"
 #include "nsIFrame.h"
+#include "nsTreeBodyFrame.h"
 #include "nsIAtom.h"
 #include "nsINodeInfo.h"
 #include "nsXULAtoms.h"
 #include "nsChildIterator.h"
-#include "nsContentUtils.h"
-#include "nsDOMError.h"
+
+class nsTreeBoxObject : public nsITreeBoxObject, public nsBoxObject
+{
+public:
+  NS_DECL_ISUPPORTS_INHERITED
+  NS_DECL_NSITREEBOXOBJECT
+
+  nsTreeBoxObject();
+  virtual ~nsTreeBoxObject();
+
+  nsITreeBoxObject* GetTreeBody();
+
+  //NS_PIBOXOBJECT interfaces
+  NS_IMETHOD Init(nsIContent* aContent, nsIPresShell* aPresShell);
+  NS_IMETHOD SetDocument(nsIDocument* aDocument);
+  NS_IMETHOD InvalidatePresentationStuff();
+};
 
 /* Implementation file */
-NS_IMPL_ISUPPORTS_INHERITED2(nsTreeBoxObject, nsBoxObject, nsITreeBoxObject,
-                             nsPITreeBoxObject)
+NS_IMPL_ISUPPORTS_INHERITED1(nsTreeBoxObject, nsBoxObject, nsITreeBoxObject)
 
 
 NS_IMETHODIMP
@@ -83,14 +96,13 @@ nsTreeBoxObject::SetDocument(nsIDocument* aDocument)
 NS_IMETHODIMP
 nsTreeBoxObject::InvalidatePresentationStuff()
 {
-  ClearCachedTreeBody();
+  SetPropertyAsSupports(NS_LITERAL_STRING("treebody").get(), nsnull);
   SetPropertyAsSupports(NS_LITERAL_STRING("view").get(), nsnull);
 
   return nsBoxObject::InvalidatePresentationStuff();
 }
   
 nsTreeBoxObject::nsTreeBoxObject()
-  : mTreeBody(nsnull)
 {
 }
 
@@ -119,11 +131,8 @@ static void FindBodyElement(nsIContent* aParent, nsIContent** aResult)
       *aResult = content;
       NS_ADDREF(*aResult);
       break;
-    } else if (ni && ni->Equals(nsXULAtoms::tree, kNameSpaceID_XUL)) {
-      // There are nesting tree elements. Only the innermost should
-      // find the treechilren.
-      break;
-    } else if (ni && !ni->Equals(nsXULAtoms::templateAtom, kNameSpaceID_XUL)) {
+    }
+    else if (ni && !ni->Equals(nsXULAtoms::templateAtom, kNameSpaceID_XUL)) {
       FindBodyElement(content, aResult);
       if (*aResult)
         break;
@@ -131,11 +140,15 @@ static void FindBodyElement(nsIContent* aParent, nsIContent** aResult)
   }
 }
 
-nsITreeBoxObject*
+inline nsITreeBoxObject*
 nsTreeBoxObject::GetTreeBody()
 {
-  if (mTreeBody) {
-    return mTreeBody;
+  nsCOMPtr<nsISupports> supp;
+  GetPropertyAsSupports(NS_LITERAL_STRING("treebody").get(), getter_AddRefs(supp));
+
+  if (supp) {
+    nsCOMPtr<nsITreeBoxObject> body(do_QueryInterface(supp));
+    return body;
   }
 
   nsIFrame* frame = GetFrame();
@@ -146,18 +159,15 @@ nsTreeBoxObject::GetTreeBody()
   nsCOMPtr<nsIContent> content;
   FindBodyElement(frame->GetContent(), getter_AddRefs(content));
 
-  nsCOMPtr<nsIPresShell> shell = GetPresShell();
-  if (!shell) {
-    return nsnull;
-  }
-
-  shell->GetPrimaryFrameFor(content, &frame);
+  mPresShell->GetPrimaryFrameFor(content, &frame);
   if (!frame)
      return nsnull;
 
   // It's a frame. Refcounts are irrelevant.
-  CallQueryInterface(frame, &mTreeBody);
-  return mTreeBody;
+  nsCOMPtr<nsITreeBoxObject> body;
+  frame->QueryInterface(NS_GET_IID(nsITreeBoxObject), getter_AddRefs(body));
+  SetPropertyAsSupports(NS_LITERAL_STRING("treebody").get(), body);
+  return body;
 }
 
 NS_IMETHODIMP nsTreeBoxObject::GetView(nsITreeView * *aView)
@@ -168,37 +178,8 @@ NS_IMETHODIMP nsTreeBoxObject::GetView(nsITreeView * *aView)
   return NS_OK;
 }
 
-static PRBool
-CanTrustView(nsISupports* aValue)
-{
-  // Untrusted content is only allowed to specify known-good views
-  if (nsContentUtils::IsCallerTrustedForWrite())
-    return PR_TRUE;
-  nsCOMPtr<nsINativeTreeView> nativeTreeView = do_QueryInterface(aValue);
-  if (!nativeTreeView || NS_FAILED(nativeTreeView->EnsureNative())) {
-    // XXX ERRMSG need a good error here for developers
-    return PR_FALSE;
-  }
-  return PR_TRUE;
-}
-
-NS_IMETHODIMP
-nsTreeBoxObject::SetPropertyAsSupports(const PRUnichar* aPropertyName, nsISupports* aValue)
-{
-  NS_ENSURE_ARG(aPropertyName);
-  
-  if (nsDependentString(aPropertyName).EqualsLiteral("view") &&
-      !CanTrustView(aValue))
-    return NS_ERROR_DOM_SECURITY_ERR;
-
-  return nsBoxObject::SetPropertyAsSupports(aPropertyName, aValue);
-}
-
 NS_IMETHODIMP nsTreeBoxObject::SetView(nsITreeView * aView)
 {
-  if (!CanTrustView(aView))
-    return NS_ERROR_DOM_SECURITY_ERR;
-  
   nsITreeBoxObject* body = GetTreeBody();
   if (body) {
     body->SetView(aView);
@@ -244,11 +225,11 @@ NS_IMETHODIMP nsTreeBoxObject::GetTreeBody(nsIDOMElement** aElement)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTreeBoxObject::GetColumns(nsITreeColumns** aColumns)
+NS_IMETHODIMP nsTreeBoxObject::GetSelection(nsITreeSelection * *aSelection)
 {
   nsITreeBoxObject* body = GetTreeBody();
-  if (body) 
-    return body->GetColumns(aColumns);
+  if (body)
+    return body->GetSelection(aSelection);
   return NS_OK;
 }
 
@@ -257,6 +238,32 @@ NS_IMETHODIMP nsTreeBoxObject::GetRowHeight(PRInt32* _retval)
   nsITreeBoxObject* body = GetTreeBody();
   if (body) 
     return body->GetRowHeight(_retval);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::GetColumnIndex(const PRUnichar *aColID, PRInt32 *_retval)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->GetColumnIndex(aColID, _retval);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::GetColumnID(PRInt32 colIndex, nsAString & _retval)
+{
+  _retval.Truncate();
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->GetColumnID(colIndex, _retval);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::GetKeyColumnIndex(PRInt32 *_retval)
+{
+  *_retval = 0;
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->GetKeyColumnIndex(_retval);
   return NS_OK;
 }
 
@@ -276,11 +283,11 @@ NS_IMETHODIMP nsTreeBoxObject::GetLastVisibleRow(PRInt32 *_retval)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTreeBoxObject::GetPageLength(PRInt32 *_retval)
+NS_IMETHODIMP nsTreeBoxObject::GetPageCount(PRInt32 *_retval)
 {
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->GetPageLength(_retval);
+    return body->GetPageCount(_retval);
   return NS_OK;
 }
 
@@ -329,11 +336,11 @@ NS_IMETHODIMP nsTreeBoxObject::Invalidate()
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTreeBoxObject::InvalidateColumn(nsITreeColumn* aCol)
+NS_IMETHODIMP nsTreeBoxObject::InvalidateColumn(const PRUnichar *aColID)
 {
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->InvalidateColumn(aCol);
+    return body->InvalidateColumn(aColID);
   return NS_OK;
 }
 
@@ -345,11 +352,19 @@ NS_IMETHODIMP nsTreeBoxObject::InvalidateRow(PRInt32 aIndex)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTreeBoxObject::InvalidateCell(PRInt32 aRow, nsITreeColumn* aCol)
+NS_IMETHODIMP nsTreeBoxObject::InvalidateCell(PRInt32 aRow, const PRUnichar *aColID)
 {
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->InvalidateCell(aRow, aCol);
+    return body->InvalidateCell(aRow, aColID);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::InvalidatePrimaryCell(PRInt32 aIndex)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->InvalidatePrimaryCell(aIndex);
   return NS_OK;
 }
 
@@ -369,31 +384,31 @@ NS_IMETHODIMP nsTreeBoxObject::GetRowAt(PRInt32 x, PRInt32 y, PRInt32 *_retval)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsTreeBoxObject::GetCellAt(PRInt32 x, PRInt32 y, PRInt32 *row, nsITreeColumn** col,
-                                         nsACString& childElt)
+NS_IMETHODIMP nsTreeBoxObject::GetCellAt(PRInt32 x, PRInt32 y, PRInt32 *row, PRUnichar **colID,
+                                             PRUnichar** childElt)
 {
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->GetCellAt(x, y, row, col, childElt);
+    return body->GetCellAt(x, y, row, colID, childElt);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsTreeBoxObject::GetCoordsForCellItem(PRInt32 aRow, nsITreeColumn* aCol, const nsACString& aElement, 
-                                      PRInt32 *aX, PRInt32 *aY, PRInt32 *aWidth, PRInt32 *aHeight)
+nsTreeBoxObject::GetCoordsForCellItem(PRInt32 aRow, const PRUnichar *aColID, const PRUnichar *aCellItem, 
+                                          PRInt32 *aX, PRInt32 *aY, PRInt32 *aWidth, PRInt32 *aHeight)
 {
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->GetCoordsForCellItem(aRow, aCol, aElement, aX, aY, aWidth, aHeight);
+    return body->GetCoordsForCellItem(aRow, aColID, aCellItem, aX, aY, aWidth, aHeight);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsTreeBoxObject::IsCellCropped(PRInt32 aRow, nsITreeColumn* aCol, PRBool *_retval)
+nsTreeBoxObject::IsCellCropped(PRInt32 aRow, const nsAString& aColID, PRBool *_retval)
 {  
   nsITreeBoxObject* body = GetTreeBody();
   if (body)
-    return body->IsCellCropped(aRow, aCol, _retval);
+    return body->IsCellCropped(aRow, aColID, _retval);
   return NS_OK;
 }
 
@@ -421,6 +436,38 @@ NS_IMETHODIMP nsTreeBoxObject::EndUpdateBatch()
   return NS_OK;
 }
 
+NS_IMETHODIMP nsTreeBoxObject::OnDragEnter(nsIDOMEvent* inEvent)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->OnDragEnter(inEvent);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::OnDragExit(nsIDOMEvent* inEvent)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->OnDragExit(inEvent);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::OnDragOver(nsIDOMEvent* inEvent)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->OnDragOver(inEvent);
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsTreeBoxObject::OnDragDrop(nsIDOMEvent* inEvent)
+{
+  nsITreeBoxObject* body = GetTreeBody();
+  if (body)
+    return body->OnDragDrop(inEvent);
+  return NS_OK;
+}
+
 NS_IMETHODIMP nsTreeBoxObject::ClearStyleAndImageCaches()
 {
   nsITreeBoxObject* body = GetTreeBody();
@@ -428,12 +475,6 @@ NS_IMETHODIMP nsTreeBoxObject::ClearStyleAndImageCaches()
     return body->ClearStyleAndImageCaches();
   return NS_OK;
 }
-
-void
-nsTreeBoxObject::ClearCachedTreeBody()
-{
-  mTreeBody = nsnull;
-}    
 
 // Creation Routine ///////////////////////////////////////////////////////////////////////
 

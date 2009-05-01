@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,31 +14,32 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
  *
+ *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #ifndef nsRenderingContextImpl_h___
 #define nsRenderingContextImpl_h___
 
-#include "gfxCore.h"
+#include "nsComObsolete.h"
 #include "nsIRenderingContext.h"
 #include "nsPoint.h"
 #include "nsSize.h"
@@ -62,6 +63,7 @@ public:
 
 protected:
   nsTransform2D		  *mTranMatrix;				// The rendering contexts transformation matrix
+  nsLineStyle       mLineStyle;					// The current linestyle, currenly used on mac, other platfroms to follow
   int               mAct;		        		// number of active edges 
   Edge              *mActive;	      		// active edge list:edges crossing scanline y
 
@@ -89,178 +91,58 @@ public:
    */
   NS_IMETHOD SetPenMode(nsPenMode aPenMode) { return NS_ERROR_FAILURE;};
 
-  NS_IMETHOD GetBackbuffer(const nsRect &aRequestedSize, const nsRect &aMaxSize, PRBool aForBlending, nsIDrawingSurface* &aBackbuffer); 
+
+  /** ---------------------------------------------------
+   *  See documentation in nsIRenderingContext.h
+   *	@update 03/29/00 dwc
+   */
+  NS_IMETHOD DrawPath(nsPathPoint aPointArray[],PRInt32 aNumPts);
+
+    /** ---------------------------------------------------
+   *  See documentation in nsIRenderingContext.h
+   *	@update 03/29/00 dwc
+   */
+  NS_IMETHOD FillPath(nsPathPoint aPointArray[],PRInt32 aNumPts);
+
+  /**
+   * Fill a poly in the current foreground color
+   * @param aPoints points to use for the drawing, last must equal first
+   * @param aNumPonts number of points in the polygon
+   */
+  NS_IMETHOD RasterPolygon(const nsPoint aPoints[], PRInt32 aNumPoints);
+
+  /** ---------------------------------------------------
+   *  See documentation in nsIRenderingContext.h
+   *	@update 05/01/00 dwc
+   */
+  NS_IMETHOD DrawStdLine(nscoord aX0, nscoord aY0, nscoord aX1, nscoord aY1) { return NS_OK;}
+
+  /** ---------------------------------------------------
+   *  See documentation in nsIRenderingContext.h
+   *	@update 05/01/00 dwc
+   */
+  NS_IMETHOD FillStdPolygon(const nsPoint aPoints[], PRInt32 aNumPoints) { return NS_OK; }
+
+  NS_IMETHOD GetBackbuffer(const nsRect &aRequestedSize, const nsRect &aMaxSize, nsDrawingSurface &aBackbuffer); 
   NS_IMETHOD ReleaseBackbuffer(void);
   NS_IMETHOD DestroyCachedBackbuffer(void);
   NS_IMETHOD UseBackbuffer(PRBool* aUseBackbuffer);
   
-  NS_IMETHOD PushTranslation(PushedTranslation* aState);
-  NS_IMETHOD PopTranslation(PushedTranslation* aState);
-
-  /**
-   * Return the maximum length of a string that can be handled by the platform
-   * using the current font metrics.
-   * The implementation here is just a stub; classes that don't override
-   * the safe string methods need to implement this.
-   */
-  virtual PRInt32 GetMaxStringLength() { return 1; }
-
   /**
    * Let the device context know whether we want text reordered with
    * right-to-left base direction
    */
   NS_IMETHOD SetRightToLeftText(PRBool aIsRTL);
-  NS_IMETHOD GetRightToLeftText(PRBool* aIsRTL);
 
-  NS_IMETHOD DrawImage(imgIContainer *aImage, const nsRect & aSrcRect, const nsRect & aDestRect);
+  NS_IMETHOD DrawImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsPoint * aDestPoint);
+  NS_IMETHOD DrawScaledImage(imgIContainer *aImage, const nsRect * aSrcRect, const nsRect * aDestRect);
   NS_IMETHOD DrawTile(imgIContainer *aImage, nscoord aXOffset, nscoord aYOffset, const nsRect * aTargetRect);
-
-  NS_IMETHOD GetClusterInfo(const PRUnichar *aText,
-                            PRUint32 aLength,
-                            PRUint8 *aClusterStarts);
-  virtual PRInt32 GetPosition(const PRUnichar *aText,
-                              PRUint32 aLength,
-                              nsPoint aPt);
-  NS_IMETHOD GetRangeWidth(const PRUnichar *aText,
-                           PRUint32 aLength,
-                           PRUint32 aStart,
-                           PRUint32 aEnd,
-                           PRUint32 &aWidth);
-  NS_IMETHOD GetRangeWidth(const char *aText,
-                           PRUint32 aLength,
-                           PRUint32 aStart,
-                           PRUint32 aEnd,
-                           PRUint32 &aWidth);
-
-  // Silence C++ hiding warnings
-  NS_IMETHOD GetWidth(char aC, nscoord &aWidth) = 0;
-  NS_IMETHOD GetWidth(PRUnichar aC, nscoord &aWidth,
-                      PRInt32 *aFontID = nsnull) = 0;
-
-  // Safe string method variants: by default, these defer to the more
-  // elaborate methods below
-  NS_IMETHOD GetWidth(const nsString& aString, nscoord &aWidth,
-                      PRInt32 *aFontID = nsnull);
-  NS_IMETHOD GetWidth(const char* aString, nscoord& aWidth);
-  NS_IMETHOD DrawString(const nsString& aString, nscoord aX, nscoord aY,
-                        PRInt32 aFontID = -1,
-                        const nscoord* aSpacing = nsnull);
-
-  // Safe string methods
-  NS_IMETHOD GetWidth(const char* aString, PRUint32 aLength,
-                      nscoord& aWidth);
-  NS_IMETHOD GetWidth(const PRUnichar *aString, PRUint32 aLength,
-                      nscoord &aWidth, PRInt32 *aFontID = nsnull);
-
-  NS_IMETHOD GetTextDimensions(const char* aString, PRUint32 aLength,
-                               nsTextDimensions& aDimensions);
-  NS_IMETHOD GetTextDimensions(const PRUnichar* aString, PRUint32 aLength,
-                               nsTextDimensions& aDimensions, PRInt32* aFontID = nsnull);
-
-#if defined(_WIN32) || defined(XP_OS2) || defined(MOZ_X11) || defined(XP_BEOS)
-  NS_IMETHOD GetTextDimensions(const char*       aString,
-                               PRInt32           aLength,
-                               PRInt32           aAvailWidth,
-                               PRInt32*          aBreaks,
-                               PRInt32           aNumBreaks,
-                               nsTextDimensions& aDimensions,
-                               PRInt32&          aNumCharsFit,
-                               nsTextDimensions& aLastWordDimensions,
-                               PRInt32*          aFontID = nsnull);
-
-  NS_IMETHOD GetTextDimensions(const PRUnichar*  aString,
-                               PRInt32           aLength,
-                               PRInt32           aAvailWidth,
-                               PRInt32*          aBreaks,
-                               PRInt32           aNumBreaks,
-                               nsTextDimensions& aDimensions,
-                               PRInt32&          aNumCharsFit,
-                               nsTextDimensions& aLastWordDimensions,
-                               PRInt32*          aFontID = nsnull);
-#endif
-#ifdef MOZ_MATHML
-  NS_IMETHOD
-  GetBoundingMetrics(const char*        aString,
-                     PRUint32           aLength,
-                     nsBoundingMetrics& aBoundingMetrics);
-  NS_IMETHOD
-  GetBoundingMetrics(const PRUnichar*   aString,
-                     PRUint32           aLength,
-                     nsBoundingMetrics& aBoundingMetrics,
-                     PRInt32*           aFontID = nsnull);
-#endif
-  NS_IMETHOD DrawString(const char *aString, PRUint32 aLength,
-                        nscoord aX, nscoord aY,
-                        const nscoord* aSpacing = nsnull);
-  NS_IMETHOD DrawString(const PRUnichar *aString, PRUint32 aLength,
-                        nscoord aX, nscoord aY,
-                        PRInt32 aFontID = -1,
-                        const nscoord* aSpacing = nsnull);
-
-  // Unsafe platform-specific implementations
-  NS_IMETHOD GetWidthInternal(const char* aString, PRUint32 aLength,
-                              nscoord& aWidth)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-  NS_IMETHOD GetWidthInternal(const PRUnichar *aString, PRUint32 aLength,
-                              nscoord &aWidth, PRInt32 *aFontID = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-  NS_IMETHOD GetTextDimensionsInternal(const char* aString, PRUint32 aLength,
-                                       nsTextDimensions& aDimensions)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-  NS_IMETHOD GetTextDimensionsInternal(const PRUnichar* aString, PRUint32 aLength,
-                                       nsTextDimensions& aDimensions, PRInt32* aFontID = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-
-#if defined(_WIN32) || defined(XP_OS2) || defined(MOZ_X11) || defined(XP_BEOS)
-  NS_IMETHOD GetTextDimensionsInternal(const char*       aString,
-                                       PRInt32           aLength,
-                                       PRInt32           aAvailWidth,
-                                       PRInt32*          aBreaks,
-                                       PRInt32           aNumBreaks,
-                                       nsTextDimensions& aDimensions,
-                                       PRInt32&          aNumCharsFit,
-                                       nsTextDimensions& aLastWordDimensions,
-                                       PRInt32*          aFontID = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-
-  NS_IMETHOD GetTextDimensionsInternal(const PRUnichar*  aString,
-                                       PRInt32           aLength,
-                                       PRInt32           aAvailWidth,
-                                       PRInt32*          aBreaks,
-                                       PRInt32           aNumBreaks,
-                                       nsTextDimensions& aDimensions,
-                                       PRInt32&          aNumCharsFit,
-                                       nsTextDimensions& aLastWordDimensions,
-                                       PRInt32*          aFontID = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-#endif
-#ifdef MOZ_MATHML
-  NS_IMETHOD
-  GetBoundingMetricsInternal(const char*        aString,
-                             PRUint32           aLength,
-                             nsBoundingMetrics& aBoundingMetrics)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-  NS_IMETHOD
-  GetBoundingMetricsInternal(const PRUnichar*   aString,
-                             PRUint32           aLength,
-                             nsBoundingMetrics& aBoundingMetrics,
-                             PRInt32*           aFontID = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-#endif
-  NS_IMETHOD DrawStringInternal(const char *aString, PRUint32 aLength,
-                                nscoord aX, nscoord aY,
-                                const nscoord* aSpacing = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-  NS_IMETHOD DrawStringInternal(const PRUnichar *aString, PRUint32 aLength,
-                                nscoord aX, nscoord aY,
-                                PRInt32 aFontID = -1,
-                                const nscoord* aSpacing = nsnull)
-  { return NS_ERROR_NOT_IMPLEMENTED; }
-
-  NS_IMETHOD RenderEPS(const nsRect& aRect, FILE *aDataFile);
 
 protected:
   virtual ~nsRenderingContextImpl();
+
+  void cdelete(int i);
+  void cinsert(int i,int y,const nsPoint aPointArray[],PRInt32 aNumPts);
 
   /**
    * Determine if a rect's width and height will fit within a specified width and height
@@ -311,16 +193,15 @@ protected:
    * @param aMaxSize maximum size that may be requested for the backbuffer
    * @param aBackbuffer drawing surface used as the backbuffer
    * @param aCacheBackbuffer PR_TRUE then the backbuffer will be cached, if PR_FALSE it is created each time
-   * @param aSurfFlags flags passed to CreateDrawingSurface()
    */
-  nsresult AllocateBackbuffer(const nsRect &aRequestedSize, const nsRect &aMaxSize, nsIDrawingSurface* &aBackbuffer, PRBool aCacheBackbuffer, PRUint32 aSurfFlags);
+  nsresult AllocateBackbuffer(const nsRect &aRequestedSize, const nsRect &aMaxSize, nsDrawingSurface &aBackbuffer, PRBool aCacheBackbuffer);
 
 public:
 
 protected:
   nsPenMode   mPenMode;
 private:
-  static nsIDrawingSurface*  gBackbuffer;         //singleton backbuffer 
+  static nsDrawingSurface  gBackbuffer;         //singleton backbuffer 
   static nsRect            gBackbufferBounds;   //backbuffer bounds
     // Largest requested offscreen size if larger than a full screen.
   static nsSize            gLargestRequestedSize;
@@ -329,5 +210,74 @@ private:
 
 #undef  IMETHOD_VISIBILITY
 #define IMETHOD_VISIBILITY NS_VISIBILITY_HIDDEN
+
+/** ---------------------------------------------------
+ *  Class QBezierCurve, a quadratic bezier curve
+ *	@update 4/27/2000 dwc
+ */
+class QBezierCurve
+{
+
+public:
+	nsFloatPoint	mAnc1;
+	nsFloatPoint	mCon;
+	nsFloatPoint  mAnc2;
+
+  QBezierCurve() {mAnc1.x=0;mAnc1.y=0;mCon=mAnc2=mAnc1;}
+  void SetControls(nsFloatPoint &aAnc1,nsFloatPoint &aCon,nsFloatPoint &aAnc2) { mAnc1 = aAnc1; mCon = aCon; mAnc2 = aAnc2;}
+  void SetPoints(nscoord a1x,nscoord a1y,nscoord acx,nscoord acy,nscoord a2x,nscoord a2y) {mAnc1.MoveTo(a1x,a1y),mCon.MoveTo(acx,acy),mAnc2.MoveTo(a2x,a2y);}
+  void SetPoints(float a1x,float a1y,float acx,float acy,float a2x,float a2y) {mAnc1.MoveTo(a1x,a1y),mCon.MoveTo(acx,acy),mAnc2.MoveTo(a2x,a2y);}
+  void DebugPrint();
+/** ---------------------------------------------------
+ *  Divide a Quadratic curve into line segments if it is not smaller than a certain size
+ *  else it is so small that it can be approximated by 2 lineto calls
+ *  @param aRenderingContext -- The RenderingContext to use to draw with
+ *	@update 3/26/99 dwc
+ */
+  void SubDivide(nsIRenderingContext *aRenderingContext);
+
+/** ---------------------------------------------------
+ *  Divide a Quadratic curve into line segments if it is not smaller than a certain size
+ *  else it is so small that it can be approximated by 2 lineto calls
+ *  @param nsPoint* -- The points array to rasterize into
+ *  @param aNumPts* -- Current number of points in this array
+ *	@update 3/26/99 dwc
+ */
+  void SubDivide(nsPoint aThePoints[],PRInt16 *aNumPts);
+
+/** ---------------------------------------------------
+ *  Divide a Quadratic Bezier curve at the mid-point
+ *	@update 3/26/99 dwc
+ *  @param aCurve1 -- Curve 1 as a result of the division
+ *  @param aCurve2 -- Curve 2 as a result of the division
+ */
+  void MidPointDivide(QBezierCurve *A,QBezierCurve *B);
+};
+
+  enum eSegType {eUNDEF,eLINE,eQCURVE,eCCURVE};
+
+
+/** ---------------------------------------------------
+ *  A class to iterate through a nsPathPoint array and return segments
+ *	@update 04/27/00 dwc
+ */
+class nsPathIter {
+
+public:
+  enum eSegType {eUNDEF,eLINE,eQCURVE,eCCURVE};
+
+private:
+  PRUint32    mCurPoint;
+  PRUint32    mNumPoints;
+  nsPathPoint *mThePath;
+
+public:
+  nsPathIter();
+  nsPathIter(nsPathPoint* aThePath,PRUint32 aNumPts);
+
+  PRBool  NextSeg(QBezierCurve& TheSegment,eSegType& aCurveType);
+
+};
+
 
 #endif /* nsRenderingContextImpl */

@@ -38,12 +38,9 @@ CurrentFunctionCall::evaluate(txIEvalContext* aContext, txAExprResult** aResult)
           es->getEvalContext()->getContextNode(), aResult);
 }
 
-#ifdef TX_TO_STRING
-nsresult
-CurrentFunctionCall::getNameAtom(nsIAtom** aAtom)
+nsresult CurrentFunctionCall::getNameAtom(nsIAtom** aAtom)
 {
     *aAtom = txXSLTAtoms::current;
     NS_ADDREF(*aAtom);
     return NS_OK;
 }
-#endif

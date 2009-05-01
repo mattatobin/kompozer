@@ -35,7 +35,6 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#include "TestCommon.h"
 #include "nsIComponentRegistrar.h"
 #include "nsIStreamTransportService.h"
 #include "nsIAsyncInputStream.h"
@@ -260,13 +259,11 @@ RunTest(nsIFile *srcFile, nsIFile *destFile)
     if (NS_FAILED(rv)) return rv;
 
     nsCOMPtr<nsITransport> srcTransport;
-    rv = sts->CreateInputTransport(srcStr, nsInt64(-1), nsInt64(-1), PR_TRUE,
-                                   getter_AddRefs(srcTransport));
+    rv = sts->CreateInputTransport(srcStr, -1, -1, PR_TRUE, getter_AddRefs(srcTransport));
     if (NS_FAILED(rv)) return rv;
 
     nsCOMPtr<nsITransport> destTransport;
-    rv = sts->CreateOutputTransport(destStr, nsInt64(-1), nsInt64(-1), PR_TRUE,
-                                    getter_AddRefs(destTransport));
+    rv = sts->CreateOutputTransport(destStr, -1, -1, PR_TRUE, getter_AddRefs(destTransport));
     if (NS_FAILED(rv)) return rv;
 
     MyCopier *copier = new MyCopier();
@@ -313,8 +310,7 @@ RunBlockingTest(nsIFile *srcFile, nsIFile *destFile)
     if (NS_FAILED(rv)) return rv;
     
     nsCOMPtr<nsITransport> destTransport;
-    rv = sts->CreateOutputTransport(fileOut, nsInt64(-1), nsInt64(-1),
-                                    PR_TRUE, getter_AddRefs(destTransport));
+    rv = sts->CreateOutputTransport(fileOut, -1, -1, PR_TRUE, getter_AddRefs(destTransport));
     if (NS_FAILED(rv)) return rv;
 
     nsCOMPtr<nsIOutputStream> destOut;
@@ -339,9 +335,6 @@ RunBlockingTest(nsIFile *srcFile, nsIFile *destFile)
 int
 main(int argc, char* argv[])
 {
-    if (test_common_init(&argc, &argv) != 0)
-        return -1;
-
     nsresult rv;
 
     if (argc < 2) {

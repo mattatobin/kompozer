@@ -12,7 +12,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is TransforMiiX XSLT processor code.
+ * The Original Code is TransforMiiX XSLT Processor.
  *
  * The Initial Developer of the Original Code is
  * Axel Hecht.
@@ -20,7 +20,7 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   Axel Hecht <axel@pike.org>
+ *  Axel Hecht <axel@pike.org>
  *
  * Alternatively, the contents of this file may be used under the terms of
  * either the GNU General Public License Version 2 or later (the "GPL"), or
@@ -65,17 +65,6 @@ public:
     virtual double getDefaultPriority() = 0;
 
     /*
-     * Adds the simple Patterns to the List.
-     * For union patterns, add all sub patterns,
-     * all other (simple) patterns just add themselves.
-     * This cuts the ownership of the union pattern and it's
-     * simple patterns, leaving union patterns empty after a call
-     * to this function.
-     */
-    virtual nsresult getSimplePatterns(txList &aList);
-
-#ifdef TX_TO_STRING
-    /*
      * Returns the String representation of this Pattern.
      * @param dest the String to use when creating the String
      * representation. The String representation will be appended to
@@ -84,21 +73,22 @@ public:
      * @return the String representation of this Pattern.
      */
     virtual void toString(nsAString& aDest) = 0;
-#endif
+
+    /*
+     * Adds the simple Patterns to the List.
+     * For union patterns, add all sub patterns,
+     * all other (simple) patterns just add themselves.
+     * This cuts the ownership of the union pattern and it's
+     * simple patterns, leaving union patterns empty after a call
+     * to this function.
+     */
+    virtual nsresult getSimplePatterns(txList &aList);
 };
 
-#define TX_DECL_PATTERN_BASE \
-    MBool matches(const txXPathNode& aNode, txIMatchContext* aContext); \
-    double getDefaultPriority()
-
-#ifndef TX_TO_STRING
-#define TX_DECL_PATTERN TX_DECL_PATTERN_BASE
-#else
 #define TX_DECL_PATTERN \
-    TX_DECL_PATTERN_BASE; \
+    MBool matches(const txXPathNode& aNode, txIMatchContext* aContext); \
+    double getDefaultPriority(); \
     void toString(nsAString& aDest)
-#endif
-
 #define TX_DECL_PATTERN2 \
     TX_DECL_PATTERN; \
     nsresult getSimplePatterns(txList &aList)
@@ -157,28 +147,16 @@ private:
 class txRootPattern : public txPattern
 {
 public:
-    txRootPattern()
-#ifdef TX_TO_STRING
-        : mSerialize(PR_TRUE)
-#endif
+    txRootPattern(MBool aSerialize) : mSerialize(aSerialize)
     {
     }
 
     ~txRootPattern();
 
     TX_DECL_PATTERN;
-
-#ifdef TX_TO_STRING
-public:
-    void setSerialize(PRBool aSerialize)
-    {
-        mSerialize = aSerialize;
-    }
-
 private:
     // Don't serialize txRootPattern if it's used in a txLocPathPattern
-    PRBool mSerialize;
-#endif
+    MBool mSerialize;
 };
 
 class txIdPattern : public txPattern

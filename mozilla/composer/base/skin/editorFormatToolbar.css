@@ -40,9 +40,12 @@
 
 /* ::::: formatting buttons ::::: */
 
-/*#FormatToolbar > .toolbar-holder > .toolbar-primary-icon {*/
-  /*[>min-width: 32px;<]*/
-/*}*/
+#FormatToolbar > .toolbar-holder > .toolbar-primary-icon {
+  /*min-width: 32px;*/
+}
+
+
+
 
 #DecreaseFontSizeButton {
   list-style-image: url("chrome://editor/skin/icons/btn2.png");

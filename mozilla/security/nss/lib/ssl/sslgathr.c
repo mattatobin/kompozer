@@ -1,42 +1,39 @@
 /*
  * Gather (Read) entire SSL2 records from socket into buffer.  
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1994-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
  *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-/* $Id: sslgathr.c,v 1.8 2005/09/09 03:02:16 nelsonb%netscape.com Exp $ */
+ * $Id: sslgathr.c,v 1.5 2004/01/08 06:52:00 nelsonb%netscape.com Exp $
+ */
 #include "cert.h"
 #include "ssl.h"
 #include "sslimpl.h"
@@ -90,7 +87,7 @@ ssl2_GatherData(sslSocket *ss, sslGather *gs, int flags)
     unsigned char *  pBuf;
     int              nb, err, rv;
 
-    PORT_Assert( ss->opt.noLocks || ssl_HaveRecvBufLock(ss) );
+    PORT_Assert( ssl_HaveRecvBufLock(ss) );
 
     if (gs->state == GS_INIT) {
 	/* Initialize gathering engine */
@@ -141,9 +138,9 @@ ssl2_GatherData(sslSocket *ss, sslGather *gs, int flags)
 	/* Probably finished this piece */
 	switch (gs->state) {
 	case GS_HEADER: 
-	    if ((ss->opt.enableSSL3 || ss->opt.enableTLS) && !ss->firstHsDone) {
+	    if ((ss->enableSSL3 || ss->enableTLS) && !ss->firstHsDone) {
 
-		PORT_Assert( ss->opt.noLocks || ssl_Have1stHandshakeLock(ss) );
+		PORT_Assert( ssl_Have1stHandshakeLock(ss) );
 
 		/* If this looks like an SSL3 handshake record, 
 		** and we're expecting an SSL2 Hello message from our peer, 
@@ -185,7 +182,7 @@ ssl2_GatherData(sslSocket *ss, sslGather *gs, int flags)
 			return SECFailure;
 		    }
 		}
-	    }	/* ((ss->opt.enableSSL3 || ss->opt.enableTLS) && !ss->firstHsDone) */
+	    }	/* ((ss->enableSSL3 || ss->enableTLS) && !ss->firstHsDone) */
 
 	    /* we've got the first 3 bytes.  The header may be two or three. */
 	    if (gs->hdr[0] & 0x80) {
@@ -411,7 +408,7 @@ ssl2_StartGatherBytes(sslSocket *ss, sslGather *gs, unsigned int count)
 {
     int rv;
 
-    PORT_Assert( ss->opt.noLocks || ssl_HaveRecvBufLock(ss) );
+    PORT_Assert( ssl_HaveRecvBufLock(ss) );
     gs->state     = GS_DATA;
     gs->remainder = count;
     gs->count     = count;
@@ -455,8 +452,8 @@ ssl2_HandleV3HandshakeRecord(sslSocket *ss)
     SECStatus           rv;
     SSL3ProtocolVersion version = (ss->gs.hdr[1] << 8) | ss->gs.hdr[2];
 
-    PORT_Assert( ss->opt.noLocks || ssl_HaveRecvBufLock(ss) );
-    PORT_Assert( ss->opt.noLocks || ssl_Have1stHandshakeLock(ss) );
+    PORT_Assert( ssl_HaveRecvBufLock(ss) );
+    PORT_Assert( ssl_Have1stHandshakeLock(ss) );
 
     /* We've read in 3 bytes, there are 2 more to go in an ssl3 header. */
     ss->gs.remainder         = 2;

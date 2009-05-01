@@ -1,39 +1,36 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
+/* 
+ * The contents of this file are subject to the Mozilla Public
+ * License Version 1.1 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of
+ * the License at http://www.mozilla.org/MPL/
+ * 
+ * Software distributed under the License is distributed on an "AS
+ * IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * rights and limitations under the License.
+ * 
  * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
+ * 
+ * The Initial Developer of the Original Code is Netscape
+ * Communications Corporation.  Portions created by Netscape are 
+ * Copyright (C) 1998-2000 Netscape Communications Corporation.  All
+ * Rights Reserved.
+ * 
  * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * 
+ * Alternatively, the contents of this file may be used under the
+ * terms of the GNU General Public License Version 2 or later (the
+ * "GPL"), in which case the provisions of the GPL are applicable 
+ * instead of those above.  If you wish to allow use of your 
+ * version of this file only under the terms of the GPL and not to
+ * allow others to use your version of this file under the MPL,
+ * indicate your decision by deleting the provisions above and
+ * replace them with the notice and other provisions required by
+ * the GPL.  If you do not delete the provisions above, a recipient
+ * may use your version of this file under either the MPL or the
+ * GPL.
+ */
 
 /*
 ** File:            ptthread.c
@@ -209,10 +206,7 @@ static void *_pt_root(void *arg)
     thred->suspend = 0;
 
     thred->prev = pt_book.last;
-    if (pt_book.last)
-        pt_book.last->next = thred;
-    else
-        pt_book.first = thred;
+    pt_book.last->next = thred;
     thred->next = NULL;
     pt_book.last = thred;
     PR_Unlock(pt_book.ml);
@@ -236,10 +230,7 @@ static void *_pt_root(void *arg)
         pt_book.system -= 1;
     else if (--pt_book.user == pt_book.this_many)
         PR_NotifyAllCondVar(pt_book.cv);
-    if (NULL == thred->prev)
-        pt_book.first = thred->next;
-    else
-        thred->prev->next = thred->next;
+    thred->prev->next = thred->next;
     if (NULL == thred->next)
         pt_book.last = thred->prev;
     else
@@ -248,11 +239,11 @@ static void *_pt_root(void *arg)
 
     /*
     * Here we set the pthread's backpointer to the PRThread to NULL.
-    * Otherwise the destructor would get called eagerly as the thread
+    * Otherwise the desctructor would get called eagerly as the thread
     * returns to the pthread runtime. The joining thread would them be
     * the proud possessor of a dangling reference. However, this is the
     * last chance to delete the object if the thread is detached, so
-    * just let the destructor do the work.
+    * just let the destuctor do the work.
     */
     if (PR_FALSE == detached)
     {
@@ -294,10 +285,7 @@ static PRThread* pt_AttachThread(void)
 
         /* then put it into the list */
         thred->prev = pt_book.last;
-        if (pt_book.last)
-            pt_book.last->next = thred;
-        else
-            pt_book.first = thred;
+	    pt_book.last->next = thred;
         thred->next = NULL;
         pt_book.last = thred;
         PR_Unlock(pt_book.ml);
@@ -365,18 +353,17 @@ static PRThread* _PR_CreateThread(
     PR_ASSERT(0 == rv);
 #endif /* !defined(_PR_DCETHREADS) */
 
-    /*
-     * If stackSize is 0, we use the default pthread stack size.
-     */
-    if (stackSize)
-    {
+    if (0 == stackSize) stackSize = (64 * 1024);  /* default == 64K */
 #ifdef _MD_MINIMUM_STACK_SIZE
-        if (stackSize < _MD_MINIMUM_STACK_SIZE)
-            stackSize = _MD_MINIMUM_STACK_SIZE;
+    if (stackSize < _MD_MINIMUM_STACK_SIZE) stackSize = _MD_MINIMUM_STACK_SIZE;
 #endif
-        rv = pthread_attr_setstacksize(&tattr, stackSize);
-        PR_ASSERT(0 == rv);
-    }
+    /*
+     * Linux doesn't have pthread_attr_setstacksize.
+     */
+#ifndef LINUX
+    rv = pthread_attr_setstacksize(&tattr, stackSize);
+    PR_ASSERT(0 == rv);
+#endif
 
     thred = PR_NEWZAP(PRThread);
     if (NULL == thred)
@@ -583,7 +570,7 @@ PR_IMPLEMENT(PRStatus) PR_JoinThread(PRThread *thred)
          */
         PR_SetError(PR_INVALID_ARGUMENT_ERROR, 0);
         PR_LogPrint(
-            "PR_JoinThread: %p not joinable | already smashed\n", thred);
+            "PR_JoinThread: 0x%X not joinable | already smashed\n", thred);
     }
     else
     {
@@ -799,13 +786,10 @@ static void _pt_thread_death(void *arg)
 {
     PRThread *thred = (PRThread*)arg;
 
-    if (thred->state & (PT_THREAD_FOREIGN|PT_THREAD_PRIMORD))
+    if (thred->state & PT_THREAD_FOREIGN)
     {
         PR_Lock(pt_book.ml);
-        if (NULL == thred->prev)
-            pt_book.first = thred->next;
-        else
-            thred->prev->next = thred->next;
+        thred->prev->next = thred->next;
         if (NULL == thred->next)
             pt_book.last = thred->prev;
         else
@@ -927,7 +911,6 @@ void _PR_InitThreads(
 PR_IMPLEMENT(PRStatus) PR_Cleanup(void)
 {
     PRThread *me = PR_CurrentThread();
-    int rv;
     PR_LOG(_pr_thread_lm, PR_LOG_MIN, ("PR_Cleanup: shutting down NSPR"));
     PR_ASSERT(me->state & PT_THREAD_PRIMORD);
     if (me->state & PT_THREAD_PRIMORD)
@@ -938,7 +921,6 @@ PR_IMPLEMENT(PRStatus) PR_Cleanup(void)
         PR_Unlock(pt_book.ml);
 
         _PR_CleanupMW();
-        _PR_CleanupTime();
         _PR_CleanupDtoa();
         _PR_CleanupCallOnce();
         _PR_ShutdownLinker();
@@ -947,9 +929,6 @@ PR_IMPLEMENT(PRStatus) PR_Cleanup(void)
         /* Close all the fd's before calling _PR_CleanupIO */
         _PR_CleanupIO();
 
-        _pt_thread_death(me);
-        rv = pthread_setspecific(pt_book.key, NULL);
-        PR_ASSERT(0 == rv);
         /*
          * I am not sure if it's safe to delete the cv and lock here,
          * since there may still be "system" threads around. If this
@@ -961,6 +940,7 @@ PR_IMPLEMENT(PRStatus) PR_Cleanup(void)
             PR_DestroyCondVar(pt_book.cv); pt_book.cv = NULL;
             PR_DestroyLock(pt_book.ml); pt_book.ml = NULL;
         }
+        _pt_thread_death(me);
         PR_DestroyLock(_pr_sleeplock);
         _pr_sleeplock = NULL;
         _PR_CleanupLayerCache();
@@ -1148,7 +1128,7 @@ PR_IMPLEMENT(PRStatus) PR_EnumerateThreads(PREnumerator func, void *arg)
             PR_ASSERT((thred == me) || (thred->suspend & PT_THREAD_SUSPENDED));
 #endif
             PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-                   ("In PR_EnumerateThreads callback thread %p thid = %X\n", 
+                   ("In PR_EnumerateThreads callback thread %X thid = %X\n", 
                     thred, thred->id));
 
             rv = func(thred, count++, arg);
@@ -1210,7 +1190,7 @@ static void suspend_signal_handler(PRIntn sig)
 	PR_ASSERT((me->suspend & PT_THREAD_SUSPENDED) == 0);
 
 	PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-        ("Begin suspend_signal_handler thred %p thread id = %X\n", 
+        ("Begin suspend_signal_handler thred %X thread id = %X\n", 
 		me, me->id));
 
 	/*
@@ -1234,8 +1214,7 @@ static void suspend_signal_handler(PRIntn sig)
 	while (me->suspend & PT_THREAD_SUSPENDED)
 	{
 #if !defined(FREEBSD) && !defined(NETBSD) && !defined(OPENBSD) \
-    && !defined(BSDI) && !defined(VMS) && !defined(UNIXWARE) \
-    && !defined(DARWIN) && !defined(RISCOS) /*XXX*/
+    && !defined(BSDI) && !defined(VMS) && !defined(UNIXWARE) && !defined(DARWIN)  /*XXX*/
         PRIntn rv;
 	    sigwait(&sigwait_set, &rv);
 #endif
@@ -1259,7 +1238,7 @@ static void suspend_signal_handler(PRIntn sig)
      */
 
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-        ("End suspend_signal_handler thred = %p tid = %X\n", me, me->id));
+        ("End suspend_signal_handler thred = %X tid = %X\n", me, me->id));
 }  /* suspend_signal_handler */
 
 static void pt_SuspendSet(PRThread *thred)
@@ -1267,7 +1246,7 @@ static void pt_SuspendSet(PRThread *thred)
     PRIntn rv;
 
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	   ("pt_SuspendSet thred %p thread id = %X\n", thred, thred->id));
+	   ("pt_SuspendSet thred %X thread id = %X\n", thred, thred->id));
 
 
     /*
@@ -1277,7 +1256,7 @@ static void pt_SuspendSet(PRThread *thred)
     PR_ASSERT((thred->suspend & PT_THREAD_SUSPENDED) == 0);
 
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	   ("doing pthread_kill in pt_SuspendSet thred %p tid = %X\n",
+	   ("doing pthread_kill in pt_SuspendSet thred %X tid = %X\n",
 	   thred, thred->id));
 #if defined(VMS)
     rv = thread_suspend(thred);
@@ -1290,7 +1269,7 @@ static void pt_SuspendSet(PRThread *thred)
 static void pt_SuspendTest(PRThread *thred)
 {
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	   ("Begin pt_SuspendTest thred %p thread id = %X\n", thred, thred->id));
+	   ("Begin pt_SuspendTest thred %X thread id = %X\n", thred, thred->id));
 
 
     /*
@@ -1316,13 +1295,13 @@ static void pt_SuspendTest(PRThread *thred)
 #endif
 
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS,
-        ("End pt_SuspendTest thred %p tid %X\n", thred, thred->id));
+        ("End pt_SuspendTest thred %X tid %X\n", thred, thred->id));
 }  /* pt_SuspendTest */
 
 static void pt_ResumeSet(PRThread *thred)
 {
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	   ("pt_ResumeSet thred %p thread id = %X\n", thred, thred->id));
+	   ("pt_ResumeSet thred %X thread id = %X\n", thred, thred->id));
 
     /*
      * Clear the global state and set the thread state so that it will
@@ -1347,7 +1326,7 @@ static void pt_ResumeSet(PRThread *thred)
 static void pt_ResumeTest(PRThread *thred)
 {
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	   ("Begin pt_ResumeTest thred %p thread id = %X\n", thred, thred->id));
+	   ("Begin pt_ResumeTest thred %X thread id = %X\n", thred, thred->id));
 
     /*
      * Wait for the threads resume state to change
@@ -1371,7 +1350,7 @@ static void pt_ResumeTest(PRThread *thred)
     thred->suspend &= ~PT_THREAD_RESUMED;
 
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, (
-        "End pt_ResumeTest thred %p tid %X\n", thred, thred->id));
+        "End pt_ResumeTest thred %X tid %X\n", thred, thred->id));
 }  /* pt_ResumeTest */
 
 static pthread_once_t pt_gc_support_control = PTHREAD_ONCE_INIT;
@@ -1467,7 +1446,7 @@ PR_IMPLEMENT(void) PR_ResumeAll(void)
 PR_IMPLEMENT(void *)PR_GetSP(PRThread *thred)
 {
     PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, 
-	    ("in PR_GetSP thred %p thid = %X, sp = %p\n", 
+	    ("in PR_GetSP thred %X thid = %X, sp = %X \n", 
 	    thred, thred->id, thred->sp));
     return thred->sp;
 }  /* PR_GetSP */
@@ -1538,7 +1517,7 @@ PR_IMPLEMENT(void*)PR_GetSP(PRThread *thred)
 	PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, ("Begin PR_GetSP\n"));
 	thread_tcb = (char*)tid.field1;
 	top_sp = *(char**)(thread_tcb + 128);
-	PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, ("End PR_GetSP %p \n", top_sp));
+	PR_LOG(_pr_gc_lm, PR_LOG_ALWAYS, ("End PR_GetSP %X \n", top_sp));
 	return top_sp;
 }  /* PR_GetSP */
 

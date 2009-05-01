@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,7 +14,7 @@
  *
  * The Original Code is mozilla.org code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 2002
  * the Initial Developer. All Rights Reserved.
@@ -23,29 +23,29 @@
  *   Naoki Hotta <nhotta@netscape.com> (original author)
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * either the GNU General Public License Version 2 or later (the "GPL"), or 
  * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
 #include "nsIDNService.h"
+#include "nsString.h"
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
 #include "nsUnicharUtils.h"
 #include "nsIServiceManager.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranchInternal.h"
 #include "nsIObserverService.h"
-#include "nsISupportsPrimitives.h"
 #include "punycode.h"
 
 //-----------------------------------------------------------------------------
@@ -54,16 +54,8 @@ static const PRUint32 kMaxDNSNodeLen = 63;
 
 //-----------------------------------------------------------------------------
 
-#define NS_NET_PREF_IDNTESTBED      "network.IDN_testbed"
-#define NS_NET_PREF_IDNPREFIX       "network.IDN_prefix"
-#define NS_NET_PREF_IDNBLACKLIST    "network.IDN.blacklist_chars"
-
-inline PRBool isOnlySafeChars(const nsAFlatString& in,
-                              const nsAFlatString& blacklist)
-{
-  return (blacklist.IsEmpty() ||
-          in.FindCharInSet(blacklist) == kNotFound);
-}
+#define NS_NET_PREF_IDNTESTBED "network.IDN_testbed"
+#define NS_NET_PREF_IDNPREFIX  "network.IDN_prefix"
 
 //-----------------------------------------------------------------------------
 // nsIDNService
@@ -77,13 +69,12 @@ NS_IMPL_THREADSAFE_ISUPPORTS3(nsIDNService,
 
 nsresult nsIDNService::Init()
 {
-  nsCOMPtr<nsIPrefBranch2> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
+  nsCOMPtr<nsIPrefBranchInternal> prefInternal(do_GetService(NS_PREFSERVICE_CONTRACTID));
   if (prefInternal) {
     prefInternal->AddObserver(NS_NET_PREF_IDNTESTBED, this, PR_TRUE); 
     prefInternal->AddObserver(NS_NET_PREF_IDNPREFIX, this, PR_TRUE); 
-    prefInternal->AddObserver(NS_NET_PREF_IDNBLACKLIST, this, PR_TRUE);
-    prefsChanged(prefInternal, nsnull);
   }
+
   return NS_OK;
 }
 
@@ -93,35 +84,24 @@ NS_IMETHODIMP nsIDNService::Observe(nsISupports *aSubject,
 {
   if (!strcmp(aTopic, NS_PREFBRANCH_PREFCHANGE_TOPIC_ID)) {
     nsCOMPtr<nsIPrefBranch> prefBranch( do_QueryInterface(aSubject) );
-    if (prefBranch)
-      prefsChanged(prefBranch, aData);
+    if (prefBranch) {
+      // to support test environment which is a temporary testing environment
+      // until IDN is actually deployed
+      if (NS_LITERAL_STRING(NS_NET_PREF_IDNTESTBED).Equals(aData)) {
+        PRBool val;
+        if (NS_SUCCEEDED(prefBranch->GetBoolPref(NS_NET_PREF_IDNTESTBED, &val)))
+          mMultilingualTestBed = val;
+      }
+      else if (NS_LITERAL_STRING(NS_NET_PREF_IDNPREFIX).Equals(aData)) {
+        nsXPIDLCString prefix;
+        nsresult rv = prefBranch->GetCharPref(NS_NET_PREF_IDNPREFIX, getter_Copies(prefix));
+        if (NS_SUCCEEDED(rv) && prefix.Length() <= kACEPrefixLen)
+          PL_strncpyz(nsIDNService::mACEPrefix, prefix.get(), kACEPrefixLen + 1);
+      }
+    }
   }
-  return NS_OK;
-}
 
-void nsIDNService::prefsChanged(nsIPrefBranch *prefBranch, const PRUnichar *pref)
-{
-  if (!pref || NS_LITERAL_STRING(NS_NET_PREF_IDNTESTBED).Equals(pref)) {
-    PRBool val;
-    if (NS_SUCCEEDED(prefBranch->GetBoolPref(NS_NET_PREF_IDNTESTBED, &val)))
-      mMultilingualTestBed = val;
-  }
-  if (!pref || NS_LITERAL_STRING(NS_NET_PREF_IDNPREFIX).Equals(pref)) {
-    nsXPIDLCString prefix;
-    nsresult rv = prefBranch->GetCharPref(NS_NET_PREF_IDNPREFIX, getter_Copies(prefix));
-    if (NS_SUCCEEDED(rv) && prefix.Length() <= kACEPrefixLen)
-      PL_strncpyz(nsIDNService::mACEPrefix, prefix.get(), kACEPrefixLen + 1);
-  }
-  if (!pref || NS_LITERAL_STRING(NS_NET_PREF_IDNBLACKLIST).Equals(pref)) {
-    nsCOMPtr<nsISupportsString> blacklist;
-    nsresult rv = prefBranch->GetComplexValue(NS_NET_PREF_IDNBLACKLIST,
-                                              NS_GET_IID(nsISupportsString),
-                                              getter_AddRefs(blacklist));
-    if (NS_SUCCEEDED(rv))
-      blacklist->ToString(getter_Copies(mIDNBlacklist));
-    else
-      mIDNBlacklist.Truncate();
-  }
+  return NS_OK;
 }
 
 nsIDNService::nsIDNService()
@@ -151,9 +131,6 @@ nsIDNService::~nsIDNService()
 /* ACString ConvertUTF8toACE (in AUTF8String input); */
 NS_IMETHODIMP nsIDNService::ConvertUTF8toACE(const nsACString & input, nsACString & ace)
 {
-  // protect against bogus input
-  NS_ENSURE_TRUE(IsUTF8(input), NS_ERROR_UNEXPECTED);
-
   nsresult rv;
   NS_ConvertUTF8toUCS2 ustr(input);
 
@@ -178,8 +155,7 @@ NS_IMETHODIMP nsIDNService::ConvertUTF8toACE(const nsACString & input, nsACStrin
       rv = stringPrepAndACE(Substring(ustr, offset, len - 1), encodedBuf);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      ace.Append(encodedBuf);
-      ace.Append('.');
+      ace.Append(encodedBuf + NS_LITERAL_CSTRING("."));
       offset += len;
       len = 0;
     }
@@ -187,7 +163,7 @@ NS_IMETHODIMP nsIDNService::ConvertUTF8toACE(const nsACString & input, nsACStrin
 
   // add extra node for multilingual test bed
   if (mMultilingualTestBed)
-    ace.AppendLiteral("mltbd.");
+    ace.Append("mltbd.");
   // encode the last node if non ASCII
   if (len) {
     rv = stringPrepAndACE(Substring(ustr, offset, len), encodedBuf);
@@ -228,8 +204,7 @@ NS_IMETHODIMP nsIDNService::ConvertACEtoUTF8(const nsACString & input, nsACStrin
         return NS_OK;
       }
 
-      _retval.Append(decodedBuf);
-      _retval.Append('.');
+      _retval.Append(decodedBuf + NS_LITERAL_CSTRING("."));
       offset += len;
       len = 0;
     }
@@ -248,19 +223,20 @@ NS_IMETHODIMP nsIDNService::ConvertACEtoUTF8(const nsACString & input, nsACStrin
 /* boolean encodedInACE (in ACString input); */
 NS_IMETHODIMP nsIDNService::IsACE(const nsACString & input, PRBool *_retval)
 {
-  nsACString::const_iterator begin;
-  input.BeginReading(begin);
+  nsDependentCString prefix(mACEPrefix, kACEPrefixLen);
+  *_retval = StringBeginsWith(input, prefix,
+                              nsCaseInsensitiveCStringComparator());
+  // also check for the case like "www.xn--ENCODED.com"
+  // in case for this is called for an entire domain name
+  if (!*_retval) {
+      nsReadingIterator<char> begin;
+      nsReadingIterator<char> end;
+      input.BeginReading(begin);
+      input.EndReading(end);
+      *_retval = CaseInsensitiveFindInReadable(NS_LITERAL_CSTRING(".") + prefix, 
+                                               begin, end);
+  }
 
-  const char *data = begin.get();
-  PRUint32 dataLen = begin.size_forward();
-
-  // look for the ACE prefix in the input string.  it may occur
-  // at the beginning of any segment in the domain name.  for
-  // example: "www.xn--ENCODED.com"
-
-  const char *p = PL_strncasestr(data, mACEPrefix, dataLen);
-
-  *_retval = p && (p == data || *(p - 1) == '.');
   return NS_OK;
 }
 
@@ -269,19 +245,11 @@ NS_IMETHODIMP nsIDNService::Normalize(const nsACString & input, nsACString & out
   // protect against bogus input
   NS_ENSURE_TRUE(IsUTF8(input), NS_ERROR_UNEXPECTED);
 
-  NS_ConvertUTF8toUTF16 inUTF16(input);
-  normalizeFullStops(inUTF16);
-
   nsAutoString outUTF16;
-  nsresult rv = stringPrep(inUTF16, outUTF16);
-  if (NS_FAILED(rv))
-    return rv;
-
-  CopyUTF16toUTF8(outUTF16, output);
-  if (!isOnlySafeChars(outUTF16, mIDNBlacklist))
-    return ConvertUTF8toACE(output, output);
-
-  return NS_OK;
+  nsresult rv = stringPrep(NS_ConvertUTF8toUTF16(input), outUTF16);
+  if (NS_SUCCEEDED(rv))
+    CopyUTF16toUTF8(outUTF16, output);
+  return rv;
 }
 
 //-----------------------------------------------------------------------------
@@ -387,8 +355,7 @@ static nsresult encodeToRACE(const char* prefix, const nsAString& in, nsACString
   if (idn_success != result)
     return NS_ERROR_FAILURE;
 
-  out.Assign(prefix);
-  out.Append(encodedBuf);
+  out.Assign(nsDependentCString(prefix) + nsDependentCString(encodedBuf));
 
   return NS_OK;
 }
@@ -424,8 +391,8 @@ nsresult nsIDNService::stringPrep(const nsAString& in, nsAString& out)
   idn_result_t idn_err;
 
   PRUint32 namePrepBuf[kMaxDNSNodeLen * 3];   // map up to three characters
-  idn_err = idn_nameprep_map(mNamePrepHandle, (const PRUint32 *) ucs4Buf,
-		                     (PRUint32 *) namePrepBuf, kMaxDNSNodeLen * 3);
+  idn_err = idn_nameprep_map(mNamePrepHandle, (const unsigned long*) ucs4Buf,
+		                     (unsigned long*) namePrepBuf, kMaxDNSNodeLen * 3);
   NS_ENSURE_TRUE(idn_err == idn_success, NS_ERROR_FAILURE);
 
   nsAutoString namePrepStr;
@@ -440,15 +407,15 @@ nsresult nsIDNService::stringPrep(const nsAString& in, nsAString& out)
     return NS_ERROR_FAILURE;
 
   // prohibit
-  const PRUint32 *found = nsnull;
+  const unsigned long *found = nsnull;
   idn_err = idn_nameprep_isprohibited(mNamePrepHandle, 
-                                      (const PRUint32 *) ucs4Buf, &found);
+                                      (const unsigned long*) ucs4Buf, &found);
   if (idn_err != idn_success || found)
     return NS_ERROR_FAILURE;
 
   // check bidi
   idn_err = idn_nameprep_isvalidbidi(mNamePrepHandle, 
-                                     (const PRUint32 *) ucs4Buf, &found);
+                                     (const unsigned long*) ucs4Buf, &found);
   if (idn_err != idn_success || found)
     return NS_ERROR_FAILURE;
 
@@ -558,8 +525,6 @@ nsresult nsIDNService::decodeACE(const nsACString& in, nsACString& out)
   nsAutoString utf16;
   ucs4toUtf16(output, utf16);
   delete [] output;
-  if (!isOnlySafeChars(utf16, mIDNBlacklist))
-    return NS_ERROR_FAILURE;
   CopyUTF16toUTF8(utf16, out);
 
   // Validation: encode back to ACE and compare the strings

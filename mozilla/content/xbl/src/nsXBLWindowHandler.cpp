@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Version: NPL 1.1/GPL 2.0/LGPL 2.1
  *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
+ * The contents of this file are subject to the Netscape Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/NPL/
  *
  * Software distributed under the License is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
@@ -14,27 +14,28 @@
  *
  * The Original Code is Mozilla Communicator client code.
  *
- * The Initial Developer of the Original Code is
+ * The Initial Developer of the Original Code is 
  * Netscape Communications Corporation.
  * Portions created by the Initial Developer are Copyright (C) 1998
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- *   - David W. Hyatt (hyatt@netscape.com)
- *   - Mike Pinkerton (pinkerton@netscape.com)
- *   - Akkana Peck (akkana@netscape.com)
+ *  - David W. Hyatt (hyatt@netscape.com)
+ *  - Mike Pinkerton (pinkerton@netscape.com)
+ *  - Akkana Peck (akkana@netscape.com)
+ *
  *
  * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * either the GNU General Public License Version 2 or later (the "GPL"), or
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
  * in which case the provisions of the GPL or the LGPL are applicable instead
  * of those above. If you wish to allow use of your version of this file only
  * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
+ * use your version of this file under the terms of the NPL, indicate your
  * decision by deleting the provisions above and replace them with the notice
  * and other provisions required by the GPL or the LGPL. If you do not delete
  * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
+ * the terms of any one of the NPL, the GPL or the LGPL.
  *
  * ***** END LICENSE BLOCK ***** */
 
@@ -63,12 +64,10 @@
 #include "nsIXBLService.h"
 #include "nsIServiceManager.h"
 #include "nsIDOMDocument.h"
-#include "nsIDOMNSDocument.h"
 #include "nsISelectionController.h"
 #include "nsXULAtoms.h"
 #include "nsIURI.h"
 #include "nsNetUtil.h"
-#include "nsContentUtils.h"
 
 class nsXBLSpecialDocInfo
 {
@@ -93,7 +92,10 @@ public:
   nsXBLSpecialDocInfo() : mInitialized(PR_FALSE) {};
 };
 
-const char nsXBLSpecialDocInfo::sHTMLBindingStr[] = "chrome://global/content/platformHTMLBindings.xml";
+const char nsXBLSpecialDocInfo::sHTMLBindingStr[] = "resource://gre/res/builtin/platformHTMLBindings.xml";
+// Allow for a userHTMLBindings.xml.
+// XXXbsmedberg Should be in the profile chrome directory, when we have a resource mapping for that
+const char nsXBLSpecialDocInfo::sUserHTMLBindingStr[] = "resource://gre/res/builtin/userHTMLBindings.xml";
 
 void nsXBLSpecialDocInfo::LoadDocInfo()
 {
@@ -118,19 +120,16 @@ void nsXBLSpecialDocInfo::LoadDocInfo()
                                       PR_TRUE, 
                                       getter_AddRefs(mHTMLBindings));
 
-  const nsAdoptingCString& userHTMLBindingStr =
-    nsContentUtils::GetCharPref("dom.userHTMLBindings.uri");
-  if (!userHTMLBindingStr.IsEmpty()) {
-    NS_NewURI(getter_AddRefs(bindingURI), userHTMLBindingStr);
-    if (!bindingURI) {
-      return;
-    }
-
-    xblService->LoadBindingDocumentInfo(nsnull, nsnull,
-                                        bindingURI,
-                                        PR_TRUE, 
-                                        getter_AddRefs(mUserHTMLBindings));
+  rv = bindingURI->SetSpec(NS_LITERAL_CSTRING(sUserHTMLBindingStr));
+  if (NS_FAILED(rv)) {
+    NS_ERROR("Shouldn't fail to set spec here");
+    return;
   }
+  
+  xblService->LoadBindingDocumentInfo(nsnull, nsnull,
+                                      bindingURI,
+                                      PR_TRUE, 
+                                      getter_AddRefs(mUserHTMLBindings));
 }
 
 //
@@ -179,18 +178,11 @@ PRUint32 nsXBLWindowHandler::sRefCnt = 0;
 //
 nsXBLWindowHandler::nsXBLWindowHandler(nsIDOMElement* aElement,
                                        nsIDOMEventReceiver* aReceiver)
-  : mReceiver(aReceiver),
+  : mElement(aElement),
+    mReceiver(aReceiver),
     mHandler(nsnull),
     mUserHandler(nsnull)
 {
-  if (aElement) {
-    nsCOMPtr<nsIDOMDocument> domDoc;
-    aElement->GetOwnerDocument(getter_AddRefs(domDoc));
-    nsCOMPtr<nsIDOMNSDocument> nsDomDoc = do_QueryInterface(domDoc);
-    if (nsDomDoc) {
-      nsDomDoc->GetBoxObjectFor(aElement, getter_AddRefs(mBoxObjectForElement));
-    }
-  }
   ++sRefCnt;
 }
 
@@ -211,19 +203,6 @@ nsXBLWindowHandler::~nsXBLWindowHandler()
 }
 
 
-already_AddRefed<nsIDOMElement>
-nsXBLWindowHandler::GetElement()
-{
-  if (!mBoxObjectForElement) {
-    return nsnull;
-  }
-  nsCOMPtr<nsIDOMElement> element;
-  mBoxObjectForElement->GetElement(getter_AddRefs(element));
-  nsIDOMElement* el = nsnull;
-  element.swap(el);
-  return el;
-}
-
 //
 // IsEditor
 //
@@ -233,7 +212,6 @@ PRBool
 nsXBLWindowHandler :: IsEditor()
 {
   nsCOMPtr<nsPIWindowRoot> windowRoot(do_QueryInterface(mReceiver));
-  NS_ENSURE_TRUE(windowRoot, PR_FALSE);
   nsCOMPtr<nsIFocusController> focusController;
   windowRoot->GetFocusController(getter_AddRefs(focusController));
   if (!focusController) {
@@ -275,79 +253,55 @@ nsXBLWindowHandler::WalkHandlersInternal(nsIDOMEvent* aEvent,
                                          nsXBLPrototypeHandler* aHandler)
 {
   nsresult rv;
-  nsCOMPtr<nsIPrivateDOMEvent> privateEvent(do_QueryInterface(aEvent));
-  
-  // Try all of the handlers until we find one that matches the event.
-  for (nsXBLPrototypeHandler *currHandler = aHandler; currHandler;
-       currHandler = currHandler->GetNextHandler()) {
+  nsXBLPrototypeHandler* currHandler = aHandler;
+  while (currHandler) {
+
     PRBool stopped;
+    nsCOMPtr<nsIPrivateDOMEvent> privateEvent(do_QueryInterface(aEvent));
     privateEvent->IsDispatchStopped(&stopped);
-    if (stopped) {
-      // The event is finished, don't execute any more handlers
+    if (stopped)
       return NS_OK;
-    }
+ 
+    // if the handler says it wants the event, execute it
+    if ( EventMatched(currHandler, aEventType, aEvent) ) {
+      // ...but don't execute if it is disabled.
+      nsAutoString disabled;
+      
+      nsCOMPtr<nsIContent> elt = currHandler->GetHandlerElement();
+      nsCOMPtr<nsIDOMElement> commandElt(do_QueryInterface(elt));
 
-    if (!EventMatched(currHandler, aEventType, aEvent))
-      continue;  // try the next one
+      // See if we're in a XUL doc.
+      if (mElement) {
+        // We are.  Obtain our command attribute.
+        nsAutoString command;
+        elt->GetAttr(kNameSpaceID_None, nsXULAtoms::command, command);
+        if (!command.IsEmpty()) {
+          // Locate the command element in question.
+          nsCOMPtr<nsIDOMDocument> domDoc(do_QueryInterface(elt->GetDocument()));
+          if (domDoc)
+            domDoc->GetElementById(command, getter_AddRefs(commandElt));
 
-    // Before executing this handler, check that it's not disabled,
-    // and that it has something to do (oncommand of the <key> or its
-    // <command> is non-empty).
-    nsCOMPtr<nsIContent> elt = currHandler->GetHandlerElement();
-    nsCOMPtr<nsIDOMElement> commandElt;
-
-    // See if we're in a XUL doc.
-    nsCOMPtr<nsIDOMElement> el = GetElement();
-    if (el && elt) {
-      // We are.  Obtain our command attribute.
-      nsAutoString command;
-      elt->GetAttr(kNameSpaceID_None, nsXULAtoms::command, command);
-      if (!command.IsEmpty()) {
-        // Locate the command element in question.  Note that we
-        // know "elt" is in a doc if we're dealing with it here.
-        NS_ASSERTION(elt->IsInDoc(), "elt must be in document");
-        nsCOMPtr<nsIDOMDocument> domDoc(
-           do_QueryInterface(elt->GetCurrentDoc()));
-        if (domDoc)
-          domDoc->GetElementById(command, getter_AddRefs(commandElt));
-
-        if (!commandElt) {
-          NS_ERROR("A XUL <key> is observing a command that doesn't exist. Unable to execute key binding!\n");
-          continue;
+          if (!commandElt) {
+            NS_ASSERTION(PR_FALSE, "A XUL <key> is observing a command that doesn't exist. Unable to execute key binding!\n");
+            return NS_OK;
+          }
         }
       }
-    }
 
-    if (!commandElt) {
-      commandElt = do_QueryInterface(elt);
-    }
-
-    if (commandElt) {
-      nsAutoString value;
-      commandElt->GetAttribute(NS_LITERAL_STRING("disabled"), value);
-      if (value.EqualsLiteral("true")) {
-        continue;  // this handler is disabled, try the next one
-      }
-
-      // Check that there is an oncommand handler
-      commandElt->GetAttribute(NS_LITERAL_STRING("oncommand"), value);
-      if (value.IsEmpty()) {
-        continue;  // nothing to do
+      if (commandElt)
+        commandElt->GetAttribute(NS_LITERAL_STRING("disabled"), disabled);
+      if (!disabled.Equals(NS_LITERAL_STRING("true"))) {
+        nsCOMPtr<nsIDOMEventReceiver> rec = mReceiver;
+        if (mElement)
+          rec = do_QueryInterface(commandElt);
+        rv = currHandler->ExecuteHandler(rec, aEvent);
+        if (NS_SUCCEEDED(rv))
+          return NS_OK;
       }
     }
 
-    nsCOMPtr<nsIDOMEventReceiver> rec;
-    nsCOMPtr<nsIDOMElement> element = GetElement();
-    if (element) {
-      rec = do_QueryInterface(commandElt);
-    } else {
-      rec = mReceiver;
-    }
-
-    rv = currHandler->ExecuteHandler(rec, aEvent);
-    if (NS_SUCCEEDED(rv)) {
-      return NS_OK;
-    }
+    // the current handler didn't want it, try the next one.
+    currHandler = currHandler->GetNextHandler();
   }
 
   return NS_OK;
